@@ -1,0 +1,12 @@
+services:
+  backend:
+    # Puerto externo distinto del de dev (8001 ya lo usa Vinted en el mini PC).
+    # El puerto interno del contenedor se queda en 8001, sin tocar el código.
+    ports:
+      - "8002:8001"
+
+  db:
+    # No expuesto al exterior en producción (nadie fuera del contenedor
+    # backend necesita hablar directo con Postgres) — mismo patrón que
+    # Sartori. El backend sigue resolviendo "db" vía la red interna de Docker.
+    ports: []
