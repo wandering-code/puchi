@@ -1,0 +1,13 @@
+# Compose carga este archivo automáticamente junto a docker-compose.yml
+# cuando se ejecuta sin -f explícito (solo en desarrollo local).
+# Los puertos viven aquí y no en docker-compose.yml para que
+# docker-compose.prod.yml (usado en el mini PC junto al base, sin este
+# override) sea el único que decide qué se publica en producción.
+services:
+  backend:
+    ports:
+      - "8001:8001"
+
+  db:
+    ports:
+      - "5433:5432"
