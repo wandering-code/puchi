@@ -202,6 +202,7 @@ Al empezar cualquier sesión sobre Puchi, arrancar estos tres servicios sin espe
 - [ ] **Color de nombre** — se quitó de Ajustes junto con el resto de estética (2026-07-17) y todavía no tiene hueco en Pirestore ni en ningún otro sitio; de momento no hay forma de cambiarlo en la UI.
 - [ ] Sistema de monedas — placeholder pendiente de diseño
 - [ ] Citas guardadas (fragmentos de libros para compartir)
+- [ ] **Sembrar una cuenta admin ya aprobada en el seed/`_migrate()` del backend** — en este despliegue, el volumen de Postgres vacío + primera cuenta registrada en `pending` sin ningún admin aprobado dejó el sistema bloqueado (nadie podía entrar al panel Admin para aprobar a nadie); se resolvió a mano por `psql` una vez (ver sección de despliegue). Evitaría el mismo bloqueo en una reinstalación completa futura.
 
 ### Largo plazo
 
@@ -247,8 +248,10 @@ Vive en `~/apps/puchi` en el mini PC (Ubuntu Server), junto a Kokito/Sartori/Vin
 - **Backend**: contenedor propio con su propia Postgres (no comparte instancia con Kokito/Vinted/Sartori), puerto externo **8002** (el 8001 ya lo usa Vinted). BD no expuesta al host.
 - **Frontend**: `npm run build` servido como estático por nginx en el puerto **3003** (Kokito=80, Vinted=3001, Sartori=3002 → Puchi=3003, mismo convenio de "un puerto dedicado por app").
 - **nginx**: `/etc/nginx/sites-available/puchi`, con proxy a `/api/`, `/uploads/` y `/ws` (con cabeceras de upgrade para WebSocket — necesario para Diskordkito).
-- **systemd**: `puchi.service`, `ExecStart=/usr/local/bin/docker-compose ...` (ruta **correcta** del binario — Kokito y Vinted tienen sus `.service` apuntando a `/usr/bin/docker-compose`, que ya no existe en este host; sus unidades llevan tiempo fallando por eso, `puchi.service` no repite el error).
+- **systemd**: `puchi.service`, `ExecStart=/usr/local/bin/docker-compose ...` (ruta correcta del binario — ver nota siguiente).
 - **`frontend/vite.config.js`**: la carga de certs mkcert (HTTPS local) se hizo condicional (`fs.existsSync` antes de leerlos) — antes `vite build` fallaba en cualquier máquina sin `frontend/certs/` (gitignored), como el mini PC.
 - Acceso SSH del Mac al mini PC vía host `minipc` en `~/.ssh/config` (clave dedicada `id_puchi_minipc`).
 
-**Pendiente, no abordado por estar fuera de alcance de esta tarea:** arreglar el path de `docker-compose` en los `.service` de Kokito y Vinted (mismo fix de una línea que se le aplicó a Puchi desde el principio) — Vinted lleva ~4 semanas caído por este motivo. Solo se hará si el usuario lo pide explícitamente, al tocar la config compartida de otras apps.
+**Bug de otras apps encontrado y arreglado de paso (2026-07-19):** `kokito.service` y `vinted.service` tenían `ExecStart=/usr/bin/docker-compose`, ruta que ya no existe en este host (el binario real está en `/usr/local/bin/docker-compose`, probablemente se movió en una actualización del sistema). Vinted llevaba **~4 semanas totalmente caído** por esto (systemd en bucle `activating (auto-restart)`, cada intento fallaba con `203/EXEC`); Kokito seguía sirviendo de milagro con el proceso viejo ya arrancado, pero se habría caído igual en el próximo reinicio del mini PC. Corregidas ambas rutas (backups en `/etc/systemd/system/{kokito,vinted}.service.bak` en el propio mini PC), `daemon-reload` + `restart` de los dos — verificado que ambos responden por HTTPS de nuevo.
+
+**Arranque en frío de la primera cuenta (bootstrap):** el volumen de Postgres de producción se creó vacío en este despliegue. Al registrar la primera cuenta (`Wander`) por la web, quedó en `pending`/`club_member=false` como cualquier registro nuevo — pero al no existir *ningún* admin ya aprobado, nadie podía entrar al panel Admin para aprobarla (candado cerrado sin llave). Se resolvió con un `UPDATE players SET status='approved', club_member=true` + `INSERT INTO channel_members` directo por `psql` dentro del contenedor `puchi-db-1`, una única vez. **Pendiente a futuro** (no urgente): sembrar la primera cuenta admin ya aprobada en `_migrate()`/seed del backend, para no depender de este paso manual en el próximo despliegue desde cero (p. ej. otra reinstalación completa del mini PC).
