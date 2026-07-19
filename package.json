@@ -1,0 +1,10 @@
+{
+  "name": "luni",
+  "private": true,
+  "scripts": {
+    "party": "npx partykit dev"
+  },
+  "devDependencies": {
+    "partykit": "^0.0.110"
+  }
+}

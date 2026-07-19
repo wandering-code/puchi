@@ -1,0 +1,23 @@
+node_modules/
+__pycache__/
+*.pyc
+.env
+.env.local
+dist/
+venv/
+.venv/
+*.egg-info/
+.DS_Store
+
+# Config local de Claude Code (no es parte de la app) y caché de PartyKit
+# (herramienta del prototipo Phaser abandonado, no del juego actual)
+.claude/
+.partykit/
+
+# Certificados HTTPS locales (mkcert) — incluyen clave privada, nunca al repo
+frontend/certs/
+
+# Contenido subido en runtime (avatars/portadas/wallpapers) — no es código,
+# se recrea solo (os.makedirs en main.py); se conserva la carpeta con .gitkeep
+backend/uploads/*
+!backend/uploads/.gitkeep

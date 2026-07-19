@@ -1,0 +1,41 @@
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  background: #1a1a2e;
+  overflow: hidden;
+  /* El viewport meta ya bloquea el pellizco para hacer zoom; esto además
+     quita el doble-tap-para-zoom y el retraso de 300ms al tocar. */
+  touch-action: manipulation;
+}
+
+#root {
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+}
+
+/* iOS hace zoom automático al enfocar un campo de texto si su tamaño de
+   letra es menor de 16px — con el viewport bloqueado (user-scalable=no) ese
+   zoom se queda "pegado" sin forma de deshacerlo a pellizcos. Forzamos 16px
+   en los campos en móvil para que ese zoom nunca llegue a dispararse. */
+@media (max-width: 768px) {
+  input, textarea, select {
+    font-size: 16px !important;
+  }
+}
+
+canvas {
+  display: block;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
