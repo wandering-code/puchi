@@ -1,6 +1,8 @@
 # Puchi — Estado actual
 
-> Documento único de contexto para sesiones de Claude Code. Sustituye a `roadmap.md` y a `memory/*.md`. Última sesión: 2026-07-19.
+> Documento único de contexto para sesiones de Claude Code. Sustituye a `roadmap.md` y a `memory/*.md`. Última sesión: 2026-07-20.
+>
+> **2026-07-20**: backup real de producción → dev (ver sección "Backups" más abajo) para tener datos realistas de prueba. Cuatro mejoras sobre Luniteca: (1) fecha de inicio/fin visible (pequeña, gris) en la vista de lista de "Mi estantería"; (2) ningún modal de la app se cierra ya al pulsar fuera — solo con la X (afectaba a `SearchOverlay`, `CoverPicker`, `FilterModal`, `ClubFilterModal` en `LunitecaV2.jsx`; el resto de la app ya cumplía esto); (3) **sincronización en vivo**: cambios sociales (actividad de lectura, propuestas/cambios de estado del club, sesiones, perfil de otro jugador) se reflejan sin recargar en Amigos/Club/detalle de sesión, vía el WebSocket global ya existente (`_notify_luni()` en el backend, evento de navegador `luni:ws` ya emitido en `GatOS.jsx`) — no se tocó votos/reveal/logs de lectura del club porque aún no tienen UI; (4) **portadas de libro compartidas con atribución**: subir/elegir una portada ya NO sobrescribe la portada del libro para todo el mundo — cada jugador tiene su propia elección (`PersonalShelf.cover_url`, nuevo, con fallback a `Book.cover_url`), y todas las portadas subidas por cualquiera quedan en una galería nueva (`BookCover`, tabla nueva) visible en `CoverPicker` como sección "Subidas por el club" con el nombre de quién la subió; además `GET /books/search` combina resultados de Open Library con libros ya añadidos por cualquier usuario (buscando por palabra en título/autor, deduplicado en minúsculas), marcados `already_added`, y añadirlos reutiliza el mismo `book_id` (`ShelfAddRequest.book_id`) en vez de crear un libro duplicado. El libro del club (copia única compartida) sigue teniendo una sola portada elegida por el admin, sin override por jugador. Después, tres retoques más: (5) los bloques por año de "Leídos" alternan fondo (zebra) y la etiqueta del año pasa a ser una píldora con fondo, para diferenciarlos mejor al hacer scroll; (6) la búsqueda de libros ya avisa quién los tiene — "ya lo tienes" si eres tú, "añadido por &lt;nombre&gt;" (o "X y N más") si es otro jugador, usando `added_by`/`added_by_me` que devuelve `GET /books/search`; (7) nuevo factor de orden "Fecha de lectura" en Mi estantería (`finished_at`, asc/desc) junto a Título/Autor/Estado/Género.
 >
 > **2026-07-19**: sesión larga. Primero, tandas de retoques en Luniteca (`LunitecaV2.jsx`): Mi estantería reorganizada en tres secciones (Leyendo ahora / Leídos por año, colapsable / Por leer), iconos minimalistas en vez de emoji, franja de fondo por año, buscador por título dentro de `CoverPicker` (para portadas que no existen en Open Library con el título traducido), portada del detalle de libro con ancho fijo y alto automático (`HeroCover`, evita el recorte que daba `height:auto` dentro de un flex con stretch), sinopsis en popover flotante sobre la portada (`SynopsisBox`), estado del libro como desplegable en el detalle (antes solo editable desde el formulario completo), animaciones suave en toda condicional de UI y en el borrado de libros (`BOOK_DELETE_EXIT`/`BOOK_DELETE_TRANSITION`, ver convención en memoria), y cierre animado de todos los modales de Luniteca (antes abrían con transición pero cerraban de golpe). Después, **feature grande: aprobación de cuentas + pertenencia al club** (app nueva **Admin**, ver sección propia más abajo) — el registro deja de ser abierto: una cuenta nueva queda `pending` sin ningún acceso hasta que el admin la aprueba; al aprobarla arranca con acceso mínimo (**solo Luniteca** — ni Diskordkito, ni Pirestore, ni Ajustes, nada de eso tiene sentido sin ser del club); el admin decide aparte, en cualquier momento, si además es `club_member` — eso da acceso a todo el resto de apps y a la pestaña Club de Luniteca, y hace que dejen de estar ocultos para los demás (Diskordkito, "propuesto por", feed de Amigos). La pestaña Club **desaparece del todo** para quien no es miembro (no se muestra deshabilitada — ni debe saber que existe); el icono de cualquier app no-Luniteca desaparece igual del Dock/lanzador móvil/menú (criterio centralizado en `isAppVisible()`, `apps/config.js`). Nuevas columnas `Player.status`/`Player.club_member`, bloqueo en `login`/`get_current_player`/WS/endpoints de Club-sesiones-DM, filtrado de `GET /players` y del feed de actividad. Por último, **desplegado en producción** en el mini PC — `https://puchi.wanderingcode.dev`, systemd + Docker + nginx + Cloudflare Tunnel, mismo patrón que Kokito/Vinted/Sartori (ver sección propia más abajo).
 >
@@ -19,6 +21,8 @@
 ## Qué es Puchi
 
 App de club de lectura para un grupo de amigos (N personas, pensado para escalar — nunca hardcodear número de jugadores). Gamificado con estética de mini sistema operativo retro. Proyecto personal del usuario para su club de lectura real.
+
+> **⚠️ Puchi está en uso real en producción** (desde el despliegue del 2026-07-19) — el usuario lleva ahí su Luniteca real (control de sus lecturas). La BBDD de producción es **intocable**: nada de operaciones destructivas (truncar, recrear volúmenes, `docker-compose down -v`, reset de migraciones) contra `puchi-db-1` en el mini PC. Migraciones de esquema en producción deben ser aditivas/no destructivas. Ver "Backups de producción → dev" más abajo para el único flujo soportado de sacar datos de prod (siempre de solo lectura sobre prod, destructivo solo permitido sobre dev).
 
 **Naming**: todo el universo (apps, juego) lleva nombres de gatos del grupo de amigos — Kokito, Luni, Puchi, Pire.
 - Juego: **Puchi**
@@ -255,3 +259,28 @@ Vive en `~/apps/puchi` en el mini PC (Ubuntu Server), junto a Kokito/Sartori/Vin
 **Bug de otras apps encontrado y arreglado de paso (2026-07-19):** `kokito.service` y `vinted.service` tenían `ExecStart=/usr/bin/docker-compose`, ruta que ya no existe en este host (el binario real está en `/usr/local/bin/docker-compose`, probablemente se movió en una actualización del sistema). Vinted llevaba **~4 semanas totalmente caído** por esto (systemd en bucle `activating (auto-restart)`, cada intento fallaba con `203/EXEC`); Kokito seguía sirviendo de milagro con el proceso viejo ya arrancado, pero se habría caído igual en el próximo reinicio del mini PC. Corregidas ambas rutas (backups en `/etc/systemd/system/{kokito,vinted}.service.bak` en el propio mini PC), `daemon-reload` + `restart` de los dos — verificado que ambos responden por HTTPS de nuevo.
 
 **Arranque en frío de la primera cuenta (bootstrap):** el volumen de Postgres de producción se creó vacío en este despliegue. Al registrar la primera cuenta (`Wander`) por la web, quedó en `pending`/`club_member=false` como cualquier registro nuevo — pero al no existir *ningún* admin ya aprobado, nadie podía entrar al panel Admin para aprobarla (candado cerrado sin llave). Se resolvió con un `UPDATE players SET status='approved', club_member=true` + `INSERT INTO channel_members` directo por `psql` dentro del contenedor `puchi-db-1`, una única vez. **Pendiente a futuro** (no urgente): sembrar la primera cuenta admin ya aprobada en `_migrate()`/seed del backend, para no depender de este paso manual en el próximo despliegue desde cero (p. ej. otra reinstalación completa del mini PC).
+
+---
+
+## Backups de producción → dev (Puchi está en uso real, ver nota al principio)
+
+Puchi ya no es solo desarrollo: el usuario lleva en producción su Luniteca real (control de lecturas). La BBDD de producción es intocable — cualquier backup/restauración es de solo lectura sobre prod, y solo se aplica destructivamente sobre **dev**.
+
+Proceso probado el 2026-07-20, dump completo (no solo tablas de libros, ya que el resto de prod estaba vacío — sin club/sesiones):
+
+```bash
+# 1) Dump completo de la BBDD de prod (solo lectura, no toca nada en el mini PC)
+ssh minipc "docker exec puchi-db-1 pg_dump -U luni -Fc luni" > backend/backups/puchi_prod_<fecha>.dump
+
+# 2) Portadas/avatares subidos a mano — el pg_dump NO los incluye (son ficheros,
+#    no filas de BBDD); sin este paso, cover_url apunta a /uploads/covers/*.ext
+#    que no existen en local y las portadas salen rotas.
+rsync -avz minipc:/home/wander/apps/puchi/backend/uploads/covers/  backend/uploads/covers/
+rsync -avz minipc:/home/wander/apps/puchi/backend/uploads/avatars/ backend/uploads/avatars/
+
+# 3) Restaurar en dev (destruye lo que hubiera en dev)
+docker exec puchi-db-1 psql -U luni -d luni -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
+PGPASSWORD=luni pg_restore -h localhost -p 5433 -U luni -d luni --no-owner --no-privileges backend/backups/puchi_prod_<fecha>.dump
+```
+
+`backend/backups/` y `backend/uploads/` están gitignored (datos personales reales) — el dump vive solo en el Mac, no en el repo.

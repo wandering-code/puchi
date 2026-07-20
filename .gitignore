@@ -21,3 +21,6 @@ frontend/certs/
 # se recrea solo (os.makedirs en main.py); se conserva la carpeta con .gitkeep
 backend/uploads/*
 !backend/uploads/.gitkeep
+
+# Backups de BBDD (datos personales reales de producción) — nunca al repo
+backend/backups/

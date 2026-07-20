@@ -38,6 +38,20 @@ const NAV = [
 ]
 
 const STARS = [1, 2, 3, 4, 5]
+
+const fmtShortDate = (iso) => new Date(iso).toLocaleDateString('es', { day: 'numeric', month: 'short', year: 'numeric' })
+
+// Texto de atribución para un resultado de búsqueda ya presente en la
+// biblioteca — prioriza avisar que el propio jugador ya lo tiene sobre
+// listar a los demás que también lo tengan.
+function addedByLabel(book) {
+  if (book.added_by_me) return 'ya lo tienes'
+  const others = book.added_by || []
+  if (!others.length) return 'ya en la biblioteca'
+  if (others.length === 1) return `añadido por ${others[0]}`
+  if (others.length === 2) return `añadido por ${others[0]} y ${others[1]}`
+  return `añadido por ${others[0]} y ${others.length - 1} más`
+}
 const EMPTY_FILTERS = { status: 'all', author: '', folder: '', maxPages: '', genre: '' }
 const EMPTY_CLUB_FILTERS = { author: '', genre: '', proposedBy: '' }
 
@@ -226,6 +240,9 @@ function SearchResult({ book, onAdd }) {
           <p style={{ fontSize: 11, color: C.sub, marginTop: 2 }}>
             {draft.author || book.author}
             {book.year ? <span style={{ color: C.muted }}> · {book.year}</span> : null}
+            {book.already_added && (
+              <span style={{ color: C.accent }}> · {addedByLabel(book)}</span>
+            )}
           </p>
         </div>
         <div style={{ display: 'flex', gap: 5, flexShrink: 0 }}>
@@ -281,7 +298,7 @@ function SearchOverlay({ onClose, onAdd, hint }) {
   }
 
   return (
-    <motion.div onClick={onClose}
+    <motion.div
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.18 }}
       style={{
         position: 'absolute', inset: 0, zIndex: 100,
@@ -290,7 +307,7 @@ function SearchOverlay({ onClose, onAdd, hint }) {
         alignItems: 'center', justifyContent: 'flex-start',
         padding: '48px 16px 16px',
       }}>
-      <motion.div onClick={ev => ev.stopPropagation()}
+      <motion.div
         initial={{ opacity: 0, scale: 0.95, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 10, transition: { duration: 0.15 } }}
         transition={{ type: 'spring', damping: 24, stiffness: 320 }}
@@ -326,6 +343,7 @@ function SearchOverlay({ onClose, onAdd, hint }) {
                 opacity: (q.trim().length > 0 && q.trim().length < 3) ? 0.4 : 1,
               }}>Buscar</button>
           }
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer', fontSize: 18, lineHeight: 1, padding: '0 0 0 2px', flexShrink: 0 }}>×</button>
         </div>
         <div style={{ overflowY: 'auto', flex: 1 }}>
           {!loading && !error && results.length === 0 && (
@@ -343,9 +361,10 @@ function SearchOverlay({ onClose, onAdd, hint }) {
 
 // ─── Cover picker ─────────────────────────────────────────────────────────────
 function CoverPicker({ book, currentUrl, onSelectUrl, onSelectFile, onClose }) {
-  const [covers,  setCovers]  = useState([])
-  const [loading, setLoading] = useState(true)
-  const [broken,  setBroken]  = useState(new Set())
+  const [covers,      setCovers]      = useState([])
+  const [userUploads, setUserUploads] = useState([])
+  const [loading,     setLoading]     = useState(true)
+  const [broken,      setBroken]      = useState(new Set())
 
   // Buscar por título — para libros cuyo título guardado (p.ej. una traducción)
   // no existe como tal en Open Library y por eso no aparece ninguna portada
@@ -357,8 +376,8 @@ function CoverPicker({ book, currentUrl, onSelectUrl, onSelectFile, onClose }) {
 
   useEffect(() => {
     fetch(`/api/books/${book.id}/covers`, { credentials: 'include' })
-      .then(r => r.ok ? r.json() : { covers: [] })
-      .then(data => { setCovers(data.covers); setLoading(false) })
+      .then(r => r.ok ? r.json() : { covers: [], user_uploads: [] })
+      .then(data => { setCovers(data.covers); setUserUploads(data.user_uploads || []); setLoading(false) })
       .catch(() => setLoading(false))
   }, [book.id])
 
@@ -379,7 +398,7 @@ function CoverPicker({ book, currentUrl, onSelectUrl, onSelectFile, onClose }) {
   const visible = covers.filter(u => !broken.has(u))
 
   return (
-    <motion.div onClick={onClose}
+    <motion.div
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.18 }}
       style={{
       position: 'absolute', inset: 0, zIndex: 200,
@@ -387,7 +406,7 @@ function CoverPicker({ book, currentUrl, onSelectUrl, onSelectFile, onClose }) {
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       padding: 20,
     }}>
-      <motion.div onClick={e => e.stopPropagation()}
+      <motion.div
         initial={{ opacity: 0, scale: 0.95, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 10, transition: { duration: 0.15 } }}
         transition={{ type: 'spring', damping: 24, stiffness: 320 }}
@@ -473,8 +492,37 @@ function CoverPicker({ book, currentUrl, onSelectUrl, onSelectFile, onClose }) {
             )}
           </div>
 
+          {!loading && userUploads.length > 0 && (
+            <div style={{ marginBottom: 16 }}>
+              <p style={{ fontSize: 10, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.7, fontWeight: 600, marginBottom: 10 }}>Subidas por el club ({userUploads.length})</p>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+                {userUploads.map((u, i) => (
+                  <button key={i} onClick={() => { onSelectUrl(u.url); onClose() }} title={u.uploaded_by ? `Subida por ${u.uploaded_by}` : undefined} style={{
+                    position: 'relative',
+                    border: u.url === currentUrl ? `2px solid ${C.accent}` : '2px solid transparent',
+                    borderRadius: 7, padding: 0, cursor: 'pointer', background: C.surfaceHi,
+                    overflow: 'hidden', aspectRatio: '2/3', display: 'block', transition: 'border-color 0.15s',
+                  }}
+                    onMouseEnter={ev => { if (u.url !== currentUrl) ev.currentTarget.style.borderColor = C.accentBd }}
+                    onMouseLeave={ev => { if (u.url !== currentUrl) ev.currentTarget.style.borderColor = 'transparent' }}
+                  >
+                    <img src={u.url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                    {u.uploaded_by && (
+                      <span style={{
+                        position: 'absolute', left: 0, right: 0, bottom: 0,
+                        background: 'rgba(0,0,0,0.65)', color: 'white',
+                        fontSize: 9, padding: '2px 4px', textAlign: 'center',
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      }}>{u.uploaded_by}</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {loading && <p style={{ fontSize: 12, color: C.muted, textAlign: 'center', padding: 24 }}>Buscando portadas…</p>}
-          {!loading && visible.length === 0 && (
+          {!loading && visible.length === 0 && userUploads.length === 0 && (
             <p style={{ fontSize: 12, color: C.muted, textAlign: 'center', padding: 16, fontStyle: 'italic' }}>No se encontraron portadas para este libro — prueba a buscar por título arriba.</p>
           )}
           {!loading && visible.length > 0 && (
@@ -553,7 +601,7 @@ function FilterModal({ filters, onApply, onClose, shelf }) {
   const hasChanges = Object.keys(EMPTY_FILTERS).some(k => draft[k] !== EMPTY_FILTERS[k])
 
   return (
-    <motion.div onClick={onClose}
+    <motion.div
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.18 }}
       style={{
       position: 'absolute', inset: 0, zIndex: 100,
@@ -562,7 +610,7 @@ function FilterModal({ filters, onApply, onClose, shelf }) {
       alignItems: 'center', justifyContent: 'flex-start',
       padding: '44px 16px 16px',
     }}>
-      <motion.div onClick={ev => ev.stopPropagation()}
+      <motion.div
         initial={{ opacity: 0, scale: 0.95, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 10, transition: { duration: 0.15 } }}
         transition={{ type: 'spring', damping: 24, stiffness: 320 }}
@@ -679,7 +727,7 @@ function ClubFilterModal({ filters, onApply, onClose, items }) {
   const hasChanges = Object.keys(EMPTY_CLUB_FILTERS).some(k => draft[k] !== EMPTY_CLUB_FILTERS[k])
 
   return (
-    <motion.div onClick={onClose}
+    <motion.div
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.18 }}
       style={{
       position: 'absolute', inset: 0, zIndex: 100,
@@ -688,7 +736,7 @@ function ClubFilterModal({ filters, onApply, onClose, items }) {
       alignItems: 'center', justifyContent: 'flex-start',
       padding: '44px 16px 16px',
     }}>
-      <motion.div onClick={ev => ev.stopPropagation()}
+      <motion.div
         initial={{ opacity: 0, scale: 0.95, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 10, transition: { duration: 0.15 } }}
         transition={{ type: 'spring', damping: 24, stiffness: 320 }}
@@ -867,7 +915,7 @@ function SynopsisBox({ synopsis, loading, expanded, onToggle }) {
 }
 
 // ─── Detalle completo ─────────────────────────────────────────────────────────
-function BookDetailFull({ entry, shelf, onBack, onUpdateEntry, onUpdateBook, onSyncBook, onDelete }) {
+function BookDetailFull({ entry, shelf, onBack, onUpdateEntry, onUpdateBook, onDelete }) {
   const isMobile = useIsMobile()
   const [editing,          setEditing]          = useState(false)
   const [draft,            setDraft]            = useState({})
@@ -948,23 +996,28 @@ function BookDetailFull({ entry, shelf, onBack, onUpdateEntry, onUpdateBook, onS
   }
 
   async function saveEdit() {
+    // La portada es una elección personal de esta copia (PersonalShelf.cover_url),
+    // no un dato del libro compartido — así, elegir/subir una portada distinta
+    // no se la cambia a nadie más que ya tenga este libro en su estantería.
+    let newCoverUrl = draft.coverUrl
     if (draft.coverFile) {
       const fd = new FormData()
       fd.append('file', draft.coverFile)
       const r = await fetch(`/api/books/${entry.book.id}/cover`, {
         method: 'POST', credentials: 'include', body: fd,
       })
-      if (r.ok) onSyncBook(await r.json())
+      if (r.ok) newCoverUrl = (await r.json()).url
+    }
+    if (newCoverUrl && newCoverUrl !== entry.own_cover_url) {
+      await onUpdateEntry(entry.id, { cover_url: newCoverUrl })
     }
 
     const bookChanged = draft.title    !== entry.book.title
       || draft.author   !== (entry.book.author   || '')
       || draft.genre    !== (entry.book.genre    || '')
-      || (draft.coverUrl && draft.coverUrl !== entry.book.cover_url)
     if (bookChanged) {
       await onUpdateBook(entry.book.id, {
         title: draft.title, author: draft.author, genre: draft.genre,
-        ...(draft.coverUrl ? { cover_url: draft.coverUrl } : {}),
       })
     }
     if (draft.status !== status) {
@@ -1338,6 +1391,14 @@ function ListRows({ books, onSelect, renderActions, isHighlighted = () => false 
                     <div style={{ height: '100%', borderRadius: 1, background: C.accent, width: `${pct}%` }} />
                   </div>
                 )}
+                {e.status === 'reading' && e.started_at && (
+                  <p style={{ fontSize: 10, color: C.muted, marginTop: 4 }}>Empezado el {fmtShortDate(e.started_at)}</p>
+                )}
+                {e.status === 'read' && (e.started_at || e.finished_at) && (
+                  <p style={{ fontSize: 10, color: C.muted, marginTop: 4 }}>
+                    {e.started_at ? fmtShortDate(e.started_at) : '?'} – {e.finished_at ? fmtShortDate(e.finished_at) : '?'}
+                  </p>
+                )}
               </div>
             </button>
             {highlighted && <span style={{ marginRight: 10, flexShrink: 0, display: 'flex' }}><IconBookmark size={12} color={C.accent} /></span>}
@@ -1490,7 +1551,10 @@ function ShelfYearHeader({ label, count, collapsed, onToggle }) {
       }}>
         <IconChevronDown size={9} color={C.muted} />
       </span>
-      <span style={{ fontSize: 12, color: C.sub, fontWeight: 700 }}>{label}</span>
+      <span style={{
+        fontSize: 12, color: C.text, fontWeight: 700,
+        background: C.surfaceHi, borderRadius: 20, padding: '2px 9px',
+      }}>{label}</span>
       <span style={{ fontSize: 11, color: C.muted }}>{count}</span>
     </button>
   )
@@ -1560,8 +1624,11 @@ function PersonalShelfSections({ entries, viewMode, sort, onSelect, renderAction
                 initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
                 transition={{ duration: 0.2, ease: 'easeInOut' }}
               >
-                {years.map(y => (
-                  <div key={y} style={{ background: 'rgba(255,255,255,0.025)', borderRadius: 10, marginBottom: 6, overflow: 'hidden' }}>
+                {years.map((y, i) => (
+                  <div key={y} style={{
+                    background: i % 2 === 0 ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.065)',
+                    borderRadius: 10, marginBottom: 6, overflow: 'hidden',
+                  }}>
                     <ShelfYearHeader
                       label={y === 'sin-fecha' ? 'Sin fecha' : y}
                       count={yearGroups[y].length}
@@ -1817,12 +1884,17 @@ function ClubBookEditForm({ entry, onSave, onCancel }) {
 
   async function save() {
     setSaving(true)
+    // El libro del club tiene una única copia compartida — la portada que
+    // elige el admin aquí sí se aplica para todos (a diferencia de la
+    // estantería personal, donde cada uno elige la suya).
+    let effectiveCoverUrl = coverUrl
     if (coverFile) {
       const fd = new FormData()
       fd.append('file', coverFile)
-      await fetch(`/api/books/${book.id}/cover`, {
+      const r = await fetch(`/api/books/${book.id}/cover`, {
         method: 'POST', credentials: 'include', body: fd,
       })
+      if (r.ok) effectiveCoverUrl = (await r.json()).url
     }
     await fetch(`/api/books/${book.id}`, {
       method: 'PATCH', credentials: 'include',
@@ -1832,7 +1904,7 @@ function ClubBookEditForm({ entry, onSave, onCancel }) {
         author:   author   || null,
         genre:    genre    || null,
         synopsis: synopsis || null,
-        ...(coverUrl ? { cover_url: coverUrl } : {}),
+        ...(effectiveCoverUrl ? { cover_url: effectiveCoverUrl } : {}),
       }),
     })
     const clubPatch = {
@@ -2125,6 +2197,19 @@ function ClubBookDetail({ entry, isAdmin, onBack, onEntryUpdated }) {
 
   useEffect(() => { loadSessions() }, [entry.id])
 
+  // Sincronización en vivo: sesiones creadas/editadas/borradas por el admin
+  // (viendo esta misma ficha desde otro dispositivo) refrescan sin recargar.
+  useEffect(() => {
+    function onWs(ev) {
+      const msg = ev.detail
+      if (msg.type === 'luni_update' && msg.scope === 'sessions' && msg.club_shelf_id === entry.id) {
+        loadSessions()
+      }
+    }
+    window.addEventListener('luni:ws', onWs)
+    return () => window.removeEventListener('luni:ws', onWs)
+  }, [entry.id])
+
   async function saveSession(data) {
     const url    = editSession ? `/api/sessions/${editSession.id}` : '/api/sessions'
     const method = editSession ? 'PATCH' : 'POST'
@@ -2329,6 +2414,20 @@ function ClubTab({ player }) {
 
   useEffect(() => { loadSection(section) }, [section])
   useEffect(() => { refreshHistory() }, [])
+
+  // Sincronización en vivo: libros propuestos/activados/finalizados o
+  // borrados por cualquiera (o cambios de perfil) refrescan la lista sola.
+  useEffect(() => {
+    function onWs(ev) {
+      const msg = ev.detail
+      if (msg.type === 'luni_update' && (msg.scope === 'club' || msg.scope === 'players')) {
+        loadSection(section)
+        refreshHistory()
+      }
+    }
+    window.addEventListener('luni:ws', onWs)
+    return () => window.removeEventListener('luni:ws', onWs)
+  }, [section])
 
   function openAdd(type) {
     setShowAddMenu(false)
@@ -2699,6 +2798,19 @@ function AmigosTab({ player }) {
 
   useEffect(() => { fetchPage(0, false) }, [])
 
+  // Sincronización en vivo: actividad de lectura o de perfil de cualquier
+  // jugador (otra pestaña/dispositivo) refresca este feed sin recargar.
+  useEffect(() => {
+    function onWs(ev) {
+      const msg = ev.detail
+      if (msg.type === 'luni_update' && (msg.scope === 'activity' || msg.scope === 'players')) {
+        fetchPage(0, false)
+      }
+    }
+    window.addEventListener('luni:ws', onWs)
+    return () => window.removeEventListener('luni:ws', onWs)
+  }, [])
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
       {/* Cabecera */}
@@ -2902,8 +3014,15 @@ export default function LunitecaV2({ player }) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     })
-    setShelf(s => s.map(e => e.id === id ? { ...e, ...data } : e))
-    setSelected(s => s?.id === id ? { ...s, ...data } : s)
+    // cover_url vive en la portada efectiva embebida en `book` (ver
+    // _shelf_entry_out) además de en `own_cover_url` — hay que reflejarlo ahí.
+    const merge = e => {
+      const next = { ...e, ...data }
+      if (data.cover_url) next.book = { ...e.book, cover_url: data.cover_url }
+      return next
+    }
+    setShelf(s => s.map(e => e.id === id ? merge(e) : e))
+    setSelected(s => s?.id === id ? merge(s) : s)
   }
 
   async function updateBook(bookId, data) {
@@ -2916,11 +3035,6 @@ export default function LunitecaV2({ player }) {
     const updated = await r.json()
     setShelf(s => s.map(e => e.book.id === bookId ? { ...e, book: updated } : e))
     setSelected(s => s ? { ...s, book: updated } : s)
-  }
-
-  function syncBook(bookObj) {
-    setShelf(s => s.map(e => e.book.id === bookObj.id ? { ...e, book: bookObj } : e))
-    setSelected(s => s ? { ...s, book: bookObj } : s)
   }
 
   async function deleteEntry(id) {
@@ -2948,6 +3062,9 @@ export default function LunitecaV2({ player }) {
     if (sort.field === 'author') { va = a.book.author?.toLowerCase() || ''; vb = b.book.author?.toLowerCase() || '' }
     if (sort.field === 'status') { va = STATUS_ORDER[a.status] ?? 9;  vb = STATUS_ORDER[b.status] ?? 9 }
     if (sort.field === 'genre')  { va = a.book.genre?.toLowerCase()  || ''; vb = b.book.genre?.toLowerCase()  || '' }
+    // Fecha de lectura terminada — libros sin terminar (por leer/leyendo) quedan
+    // al principio en ascendente y al final en descendente, sin mezclarse entre sí.
+    if (sort.field === 'date')   { va = a.finished_at || ''; vb = b.finished_at || '' }
     if (va < vb) return sort.dir === 'asc' ? -1 : 1
     if (va > vb) return sort.dir === 'asc' ?  1 : -1
     return 0
@@ -3047,7 +3164,6 @@ export default function LunitecaV2({ player }) {
                 onBack={() => setSelected(null)}
                 onUpdateEntry={updateEntry}
                 onUpdateBook={updateBook}
-                onSyncBook={syncBook}
                 onDelete={() => deleteEntry(selected.id)}
               />
             </motion.div>
@@ -3108,6 +3224,7 @@ export default function LunitecaV2({ player }) {
                       { field: 'author', label: 'Autor'   },
                       { field: 'status', label: 'Estado'  },
                       { field: 'genre',  label: 'Género'  },
+                      { field: 'date',   label: 'Fecha de lectura' },
                     ].map(({ field, label }) => {
                       const active = sort.field === field
                       const arrow  = active ? (sort.dir === 'asc' ? ' ↑' : ' ↓') : ''

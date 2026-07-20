@@ -52,6 +52,23 @@ class Book(Base):
     added_at     = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
+class BookCover(Base):
+    """Galería de portadas subidas a mano para un libro — no sustituyen la
+    portada del libro, se ofrecen como opción adicional en el selector, con
+    atribución a quién la subió (para que otros jugadores que añadan el
+    mismo libro puedan elegir entre la de la API o la de cualquier jugador)."""
+    __tablename__ = "book_covers"
+
+    id          = Column(Integer, primary_key=True, index=True)
+    book_id     = Column(Integer, ForeignKey("books.id"), nullable=False)
+    uploaded_by = Column(Integer, ForeignKey("players.id"), nullable=True)
+    url         = Column(String, nullable=False)
+    created_at  = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    book     = relationship("Book")
+    uploader = relationship("Player")
+
+
 class PersonalShelf(Base):
     """Estantería personal de cada jugador."""
     __tablename__ = "personal_shelf"
@@ -66,6 +83,10 @@ class PersonalShelf(Base):
     custom_total_pages = Column(Integer, nullable=True)
     folder             = Column(String, nullable=True)
     rating             = Column(Float, nullable=True) # 0.5-5.0 con medios puntos
+    # Portada elegida por este jugador para su copia — si es NULL se usa la
+    # portada del libro (books.cover_url) como valor por defecto. Así, elegir
+    # una portada distinta a la del catálogo no se la cambia a todo el mundo.
+    cover_url   = Column(String, nullable=True)
     started_at  = Column(DateTime, nullable=True)
     finished_at = Column(DateTime, nullable=True)
     notes       = Column(Text, nullable=True)

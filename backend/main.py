@@ -3,7 +3,7 @@ from fastapi import FastAPI, Depends, HTTPException, Response, WebSocket, WebSoc
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, and_, or_
 from pydantic import BaseModel
 from typing import Optional
 from io import BytesIO
@@ -14,12 +14,19 @@ from jose import JWTError, jwt
 
 from database import (
     get_db, crear_tablas, SessionLocal, engine,
-    Player, Book, PersonalShelf, ClubShelf, ClubReadingLog, Vote,
+    Player, Book, BookCover, PersonalShelf, ClubShelf, ClubReadingLog, Vote,
     Channel, ChannelMember, Message, Activity, ShopItem,
     Session as ClubSession,
 )
 from auth import hash_pin, verify_pin, create_token, get_current_player, SECRET_KEY, ALGORITHM
 from ws_manager import manager
+
+
+async def _notify_luni(scope: str, **extra):
+    """Avisa por WebSocket a todos los clientes conectados de un cambio en datos
+    de Luniteca visibles para otros jugadores (actividad, club, sesiones), para
+    que las pestañas correspondientes se refresquen solas sin recargar."""
+    await manager.broadcast({"type": "luni_update", "scope": scope, **extra})
 
 # Estado en memoria de la llamada grupal de #club-general (efímero, como el resto de señalización de llamadas).
 # "active" solo pasa a True cuando hay >=2 participantes a la vez (llamada "iniciada" de verdad);
@@ -184,13 +191,18 @@ def _migrate():
         # nuevos fijan explícitamente 'pending'/false en el INSERT.
         "ALTER TABLE players ADD COLUMN IF NOT EXISTS status VARCHAR NOT NULL DEFAULT 'approved'",
         "ALTER TABLE players ADD COLUMN IF NOT EXISTS club_member BOOLEAN NOT NULL DEFAULT true",
+
+        # personal_shelf: portada elegida por este jugador para su copia — si es
+        # NULL se usa la del libro (books.cover_url). Evita que elegir/subir una
+        # portada distinta a la del catálogo se la cambie a todo el mundo.
+        "ALTER TABLE personal_shelf ADD COLUMN IF NOT EXISTS cover_url VARCHAR",
     ]
     with engine.connect() as conn:
         for stmt in stmts:
             conn.execute(text(stmt))
         conn.commit()
 
-    # La tabla club_reading_logs se crea sola con create_all (modelo nuevo)
+    # Las tablas club_reading_logs y book_covers se crean solas con create_all (modelos nuevos)
 
 
 def _seed_channels():
@@ -369,7 +381,7 @@ class AdminPlayerUpdate(BaseModel):
     club_member: Optional[bool] = None
 
 @app.patch("/admin/players/{player_id}")
-def admin_update_player(
+async def admin_update_player(
     player_id: int,
     body: AdminPlayerUpdate,
     db: Session = Depends(get_db),
@@ -395,6 +407,7 @@ def admin_update_player(
 
     db.commit()
     db.refresh(player)
+    await _notify_luni("players")
     return _admin_player_out(player)
 
 
@@ -433,7 +446,7 @@ class ProfileUpdate(BaseModel):
     avatar_emoji: Optional[str] = None
 
 @app.patch("/players/me/profile")
-def update_profile(
+async def update_profile(
     body: ProfileUpdate,
     db: Session = Depends(get_db),
     current: Player = Depends(get_current_player),
@@ -457,6 +470,7 @@ def update_profile(
         player.avatar_url   = None
     db.commit()
     db.refresh(player)
+    await _notify_luni("players")
     return _player_out(player)
 
 _AVATAR_UPLOAD_DIR = os.path.join(os.path.dirname(__file__), 'uploads', 'avatars')
@@ -478,10 +492,11 @@ async def upload_avatar(
     player.avatar_url = f"/uploads/avatars/{filename}"
     db.commit()
     db.refresh(player)
+    await _notify_luni("players")
     return _player_out(player)
 
 @app.delete("/players/me/avatar")
-def remove_avatar(
+async def remove_avatar(
     db: Session = Depends(get_db),
     current: Player = Depends(get_current_player),
 ):
@@ -489,6 +504,7 @@ def remove_avatar(
     player.avatar_url = None
     db.commit()
     db.refresh(player)
+    await _notify_luni("players")
     return _player_out(player)
 
 
@@ -688,6 +704,11 @@ async def upload_cover(
     db: Session = Depends(get_db),
     current: Player = Depends(get_current_player),
 ):
+    """Sube una portada nueva a la galería del libro (con atribución a quien la
+    sube) — NO sustituye la portada del libro para nadie más; cada jugador
+    elige de la galería la que quiere ver en su propia estantería (ver
+    PersonalShelf.cover_url). El admin del club sí puede fijar la portada del
+    libro compartido desde la ficha del club (PATCH /books/{id})."""
     book = db.query(Book).filter(Book.id == book_id).first()
     if not book:
         raise HTTPException(404, "Libro no encontrado")
@@ -697,10 +718,15 @@ async def upload_cover(
     filename = f"{uuid.uuid4().hex}{ext}"
     with open(os.path.join(_UPLOAD_DIR, filename), 'wb') as f:
         shutil.copyfileobj(file.file, f)
-    book.cover_url = f"/uploads/covers/{filename}"
+    url = f"/uploads/covers/{filename}"
+    cover = BookCover(book_id=book.id, uploaded_by=current.id, url=url)
+    db.add(cover)
+    # Si el libro no tiene ninguna portada todavía, esta pasa a ser el valor
+    # por defecto (mejor que dejarlo sin portada) — no pisa una ya elegida.
+    if not book.cover_url:
+        book.cover_url = url
     db.commit()
-    db.refresh(book)
-    return _book_out(book)
+    return {"url": url}
 
 
 @app.get("/books/{book_id}/covers")
@@ -709,7 +735,8 @@ async def get_book_covers(
     db: Session = Depends(get_db),
     _: Player = Depends(get_current_player),
 ):
-    """Devuelve URLs de portadas disponibles para el libro (desde ediciones de Open Library)."""
+    """Devuelve las portadas disponibles para el libro: automáticas (Open
+    Library) y subidas a mano por cualquier jugador (con atribución)."""
     book = db.query(Book).filter(Book.id == book_id).first()
     if not book:
         raise HTTPException(404, "Libro no encontrado")
@@ -746,13 +773,85 @@ async def get_book_covers(
     if book.isbn:
         add(f"https://covers.openlibrary.org/b/isbn/{book.isbn}-M.jpg")
 
-    return {"covers": covers}
+    uploads = (
+        db.query(BookCover)
+        .filter(BookCover.book_id == book_id)
+        .order_by(BookCover.created_at.desc())
+        .all()
+    )
+    user_uploads = [
+        {
+            "url":             u.url,
+            "uploaded_by":     u.uploader.name if u.uploader else None,
+            "uploaded_by_id":  u.uploaded_by,
+        }
+        for u in uploads if u.url not in seen
+    ]
+
+    return {"covers": covers, "user_uploads": user_uploads}
 
 
 @app.get("/books/search")
-async def search_books(q: str, _: Player = Depends(get_current_player)):
+async def search_books(q: str, db: Session = Depends(get_db), current: Player = Depends(get_current_player)):
     if len(q.strip()) < 3:
         raise HTTPException(status_code=400, detail="Escribe al menos 3 caracteres para buscar")
+
+    seen_titles = set()
+    results = []
+
+    # Libros que ya añadió cualquier jugador (a su estantería o al club) van
+    # primero — ya tienen portada/metadatos listos y quizás alguien ya subió
+    # una portada a mano para ellos. Se deduplican entre sí y con los
+    # resultados de Open Library comparando el título en minúsculas.
+    # Cada palabra de la búsqueda debe aparecer en el título o el autor (no
+    # la frase completa — igual que la búsqueda libre de Open Library, que
+    # también encuentra coincidencias repartidas entre título y autor).
+    words = [w for w in q.strip().split() if len(w) >= 2]
+    local_books = []
+    if words:
+        conditions = [or_(Book.title.ilike(f"%{w}%"), Book.author.ilike(f"%{w}%")) for w in words]
+        local_books = (
+            db.query(Book)
+            .filter(and_(*conditions))
+            .order_by(Book.title)
+            .limit(15)
+            .all()
+        )
+
+    # Quién tiene ya cada uno de estos libros en su estantería personal —
+    # para poder avisar "ya lo tienes" o "añadido por <nombre>" en la búsqueda.
+    added_by_book = {}
+    if local_books:
+        rows = (
+            db.query(PersonalShelf.book_id, Player.id, Player.name)
+            .join(Player, Player.id == PersonalShelf.player_id)
+            .filter(PersonalShelf.book_id.in_([b.id for b in local_books]))
+            .all()
+        )
+        for book_id, player_id, name in rows:
+            added_by_book.setdefault(book_id, []).append({"id": player_id, "name": name})
+
+    for b in local_books:
+        key = (b.title or "").strip().lower()
+        if not key or key in seen_titles:
+            continue
+        seen_titles.add(key)
+        adders = added_by_book.get(b.id, [])
+        results.append({
+            "book_id":       b.id,
+            "open_lib_key":  b.open_lib_key,
+            "title":         b.title,
+            "author":        b.author,
+            "isbn":          b.isbn,
+            "cover_url":     b.cover_url,
+            "num_pages":     b.num_pages,
+            "year":          b.year,
+            "genre":         b.genre,
+            "already_added": True,
+            "added_by":      [a["name"] for a in adders],
+            "added_by_me":   any(a["id"] == current.id for a in adders),
+        })
+
     async with httpx.AsyncClient() as client:
         try:
             r = await client.get(
@@ -768,10 +867,16 @@ async def search_books(q: str, _: Player = Depends(get_current_player)):
     if r.status_code != 200:
         raise HTTPException(status_code=502, detail="Open Library no disponible")
     docs = r.json().get("docs", [])
-    return [
-        {
+    for d in docs:
+        title = d.get("title") or ""
+        key = title.strip().lower()
+        if not key or key in seen_titles:
+            continue
+        seen_titles.add(key)
+        results.append({
+            "book_id":      None,
             "open_lib_key": d.get("key"),
-            "title":        d.get("title"),
+            "title":        title,
             "author":       (d.get("author_name") or [""])[0],
             "isbn":         (d.get("isbn") or [None])[0],
             "cover_url":    f"https://covers.openlibrary.org/b/id/{d['cover_i']}-M.jpg"
@@ -779,9 +884,9 @@ async def search_books(q: str, _: Player = Depends(get_current_player)):
             "num_pages":    d.get("number_of_pages_median"),
             "year":         d.get("first_publish_year"),
             "genre":        _pick_genre(d.get("subject") or []),
-        }
-        for d in docs
-    ]
+            "already_added": False,
+        })
+    return results
 
 @app.get("/books/isbn/{isbn}")
 async def book_by_isbn(isbn: str, _: Player = Depends(get_current_player)):
@@ -824,6 +929,7 @@ async def book_synopsis(open_lib_key: str, _: Player = Depends(get_current_playe
 # ── Personal shelf ───────────────────────────────────────────────────────────
 
 class ShelfAddRequest(BaseModel):
+    book_id:        Optional[int]   = None   # reutilizar un libro ya existente (p.ej. de la búsqueda combinada)
     open_lib_key:   Optional[str]   = None
     title:          str
     author:         Optional[str]   = None
@@ -850,6 +956,7 @@ class ShelfUpdateRequest(BaseModel):
     started_at:         Optional[str]   = None
     finished_at:        Optional[str]   = None
     sort_order:         Optional[int]   = None
+    cover_url:          Optional[str]   = None   # "" o null → volver a la portada del libro
 
 @app.get("/shelf/personal")
 def get_personal_shelf(
@@ -869,7 +976,7 @@ def _log_activity(db, player_id: int, book_id: int, event_type: str, rating: flo
     db.add(Activity(player_id=player_id, book_id=book_id, event_type=event_type, rating=rating))
 
 @app.post("/shelf/personal")
-def add_to_personal_shelf(
+async def add_to_personal_shelf(
     body: ShelfAddRequest,
     db: Session = Depends(get_db),
     current: Player = Depends(get_current_player),
@@ -894,6 +1001,7 @@ def add_to_personal_shelf(
         _log_activity(db, current.id, book.id, 'finished')
     db.commit()
     db.refresh(entry)
+    await _notify_luni("activity")
     return _shelf_entry_out(entry)
 
 class BulkShelfRequest(BaseModel):
@@ -928,7 +1036,7 @@ def _parse_bulk_float(v, field: str):
         raise ValueError(f'"{field}" debe ser un número')
 
 @app.post("/shelf/personal/bulk")
-def bulk_add_personal_shelf(
+async def bulk_add_personal_shelf(
     body: BulkShelfRequest,
     db: Session = Depends(get_db),
     current: Player = Depends(get_current_player),
@@ -999,10 +1107,12 @@ def bulk_add_personal_shelf(
         except Exception as e:
             db.rollback()
             results.append({"index": i, "ok": False, "title": title or f"(libro {i + 1})", "error": str(e)})
+    if any(r["ok"] for r in results):
+        await _notify_luni("activity")
     return {"results": results}
 
 @app.patch("/shelf/personal/{entry_id}")
-def update_personal_shelf(
+async def update_personal_shelf(
     entry_id: int,
     body: ShelfUpdateRequest,
     db: Session = Depends(get_db),
@@ -1022,18 +1132,22 @@ def update_personal_shelf(
     if body.current_page       is not None: entry.current_page       = body.current_page
     if body.custom_total_pages is not None: entry.custom_total_pages = body.custom_total_pages
     if body.folder             is not None: entry.folder             = body.folder or None
+    if body.cover_url          is not None: entry.cover_url          = body.cover_url.strip() or None
     # Recalcular progress cuando se actualizan páginas
     total = entry.custom_total_pages or (entry.book.num_pages if entry.book else None)
     if total and entry.current_page is not None:
         entry.progress = min(entry.current_page / total, 1.0)
     # Registrar actividad al cambiar estado
-    if body.status and body.status != old_status:
+    status_changed = bool(body.status and body.status != old_status)
+    if status_changed:
         if body.status == 'reading':
             _log_activity(db, current.id, entry.book_id, 'started')
         elif body.status == 'read':
             _log_activity(db, current.id, entry.book_id, 'finished', rating=entry.rating)
     db.commit()
     db.refresh(entry)
+    if status_changed:
+        await _notify_luni("activity")
     return _shelf_entry_out(entry)
 
 @app.delete("/shelf/personal/{entry_id}")
@@ -1138,7 +1252,7 @@ def get_club_shelf(
     return [_club_entry_out(e, current.id) for e in entries]
 
 @app.post("/shelf/club")
-def propose_club_book(
+async def propose_club_book(
     body: ShelfAddRequest,
     db: Session = Depends(get_db),
     current: Player = Depends(require_club_member),
@@ -1170,6 +1284,8 @@ def propose_club_book(
     _log_activity(db, current.id, book.id, 'proposed')
     db.commit()
     db.refresh(entry)
+    await _notify_luni("club")
+    await _notify_luni("activity")
     return _club_entry_out(entry, current.id)
 
 class ClubStatusUpdate(BaseModel):
@@ -1177,7 +1293,7 @@ class ClubStatusUpdate(BaseModel):
     club_notes: Optional[str] = None
 
 @app.patch("/shelf/club/{entry_id}/status")
-def update_club_book_status(
+async def update_club_book_status(
     entry_id: int,
     body: ClubStatusUpdate,
     db: Session = Depends(get_db),
@@ -1204,6 +1320,7 @@ def update_club_book_status(
         entry.club_notes = body.club_notes
     db.commit()
     db.refresh(entry)
+    await _notify_luni("club")
     return _club_entry_out(entry, current.id)
 
 class ClubEntryUpdateRequest(BaseModel):
@@ -1213,7 +1330,7 @@ class ClubEntryUpdateRequest(BaseModel):
     proposed_by:  Optional[int] = None
 
 @app.patch("/shelf/club/{entry_id}")
-def update_club_entry(
+async def update_club_entry(
     entry_id: int,
     body: ClubEntryUpdateRequest,
     db: Session = Depends(get_db),
@@ -1237,10 +1354,11 @@ def update_club_entry(
             entry.proposed_by = body.proposed_by
     db.commit()
     db.refresh(entry)
+    await _notify_luni("club")
     return _club_entry_out(entry, current.id)
 
 @app.delete("/shelf/club/{entry_id}")
-def delete_club_book(
+async def delete_club_book(
     entry_id: int,
     db: Session = Depends(get_db),
     current: Player = Depends(require_club_member),
@@ -1253,6 +1371,7 @@ def delete_club_book(
         raise HTTPException(404, "No encontrado")
     db.delete(entry)
     db.commit()
+    await _notify_luni("club")
     return {"ok": True}
 
 
@@ -1404,7 +1523,7 @@ def get_sessions(
     return [_session_out(s) for s in sessions]
 
 @app.post("/sessions")
-def create_session(
+async def create_session(
     body: SessionCreateRequest,
     db: Session = Depends(get_db),
     current: Player = Depends(require_club_member),
@@ -1425,10 +1544,11 @@ def create_session(
     db.add(s)
     db.commit()
     db.refresh(s)
+    await _notify_luni("sessions", club_shelf_id=s.club_shelf_id)
     return _session_out(s)
 
 @app.patch("/sessions/{session_id}")
-def update_session(
+async def update_session(
     session_id: int,
     body: SessionUpdateRequest,
     db: Session = Depends(get_db),
@@ -1456,10 +1576,11 @@ def update_session(
     if body.notes           is not None: s.notes           = body.notes           or None
     db.commit()
     db.refresh(s)
+    await _notify_luni("sessions", club_shelf_id=s.club_shelf_id)
     return _session_out(s)
 
 @app.delete("/sessions/{session_id}")
-def delete_session(
+async def delete_session(
     session_id: int,
     db: Session = Depends(get_db),
     current: Player = Depends(require_club_member),
@@ -1469,14 +1590,20 @@ def delete_session(
     s = db.query(ClubSession).filter(ClubSession.id == session_id).first()
     if not s:
         raise HTTPException(404, "Sesión no encontrada")
+    club_shelf_id = s.club_shelf_id
     db.delete(s)
     db.commit()
+    await _notify_luni("sessions", club_shelf_id=club_shelf_id)
     return {"ok": True}
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
 def _get_or_create_book(db, body: ShelfAddRequest) -> Book:
+    if body.book_id:
+        book = db.query(Book).filter(Book.id == body.book_id).first()
+        if book:
+            return book
     if body.open_lib_key:
         book = db.query(Book).filter(Book.open_lib_key == body.open_lib_key).first()
         if book:
@@ -1525,10 +1652,16 @@ def _player_out(p: Player) -> dict:
     }
 
 def _shelf_entry_out(e: PersonalShelf, hide_notes=False) -> dict:
+    # La portada efectiva de ESTA copia: la que el jugador eligió para su
+    # propia estantería si la hay, si no la del libro (catálogo compartido).
+    book_out = _book_out(e.book)
+    if e.cover_url:
+        book_out["cover_url"] = e.cover_url
     return {
         "id":          e.id,
         "player_id":   e.player_id,
-        "book":        _book_out(e.book),
+        "book":        book_out,
+        "own_cover_url": e.cover_url,
         "status":      e.status,
         "progress":           e.progress,
         "current_page":       e.current_page,
