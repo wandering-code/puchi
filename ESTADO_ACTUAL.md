@@ -243,6 +243,7 @@ Al empezar cualquier sesión sobre Puchi, arrancar estos tres servicios sin espe
 - **Móvil sin Dock ni barra de pestañas**: lanzador flotante (muesca + menú circular), arrastrable, posición guardada por jugador. Se descartaron explícitamente una barra de pestañas fija abajo en GatOS y otra dentro de Luniteca — no convencieron, chocaban con el lanzador.
 - **Luniteca en móvil navega por swipe horizontal** entre Estantería/Club/Amigos, con indicador de puntos (no barra).
 - **Las apps no repiten su propio nombre/icono en su UI** — el nombre de la app activa se muestra en la barra superior junto a "GatOS" (patrón macOS), en desktop y en móvil.
+- **Bloques de año (Leídos, Mi estantería y Club) sin fondo propio ni zebra** — se probó alternar el fondo entre años y no convenció (2026-07-20); el separador visual es solo la cabecera del año, destacada con barra/borde de acento propio.
 
 ---
 
