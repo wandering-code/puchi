@@ -199,6 +199,17 @@ function IconChevronDown({ size = 10, color = 'currentColor' }) {
     </svg>
   )
 }
+// Chevrons hacia dentro (colapsar) o hacia fuera (expandir) — botón "colapsar/expandir todo".
+function IconCollapseAll({ size = 14, color = 'currentColor', expand = false }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" style={{ display: 'block' }}>
+      {expand
+        ? <path d="M4 6l4-3 4 3M4 10l4 3 4-3" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+        : <path d="M4 3l4 3 4-3M4 13l4-3 4 3" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+      }
+    </svg>
+  )
+}
 function IconImport({ size = 14, color = 'currentColor' }) {
   return (
     <svg width={size} height={size} viewBox="0 0 14 14" fill="none" style={{ display: 'block', flexShrink: 0 }}>
@@ -1450,7 +1461,9 @@ function GridItems({ books, onSelect, isHighlighted = () => false, renderActions
             onMouseLeave={ev => {
               const cover = ev.currentTarget.querySelector('.card-cover')
               cover.style.transform = 'scale(1)'
-              cover.style.boxShadow = '0 2px 8px rgba(0,0,0,0.3)'
+              // Restaura el anillo de "leyendo" si lo tenía — si no, al pasar el
+              // ratón se perdía para siempre hasta el siguiente render.
+              cover.style.boxShadow = highlighted ? `0 0 0 2px ${C.accent}, 0 2px 8px rgba(0,0,0,0.3)` : '0 2px 8px rgba(0,0,0,0.3)'
             }}
           >
             <div className="card-cover" style={{
@@ -1541,34 +1554,24 @@ function ShelfYearHeader({ label, count, collapsed, onToggle }) {
     <button
       onClick={onToggle}
       style={{
-        width: '100%', background: 'none', border: 'none', cursor: 'pointer',
-        padding: '7px 2px 6px 20px', margin: '2px 0', display: 'flex', alignItems: 'center', gap: 7,
+        width: '100%', background: C.surfaceHi, border: 'none',
+        borderLeft: `3px solid ${C.accent}`, borderRadius: 8, cursor: 'pointer',
+        padding: '8px 10px', margin: '0 0 4px', display: 'flex', alignItems: 'center', gap: 7,
       }}
     >
       <span style={{
         display: 'inline-flex', flexShrink: 0,
         transform: collapsed ? 'rotate(-90deg)' : 'none', transition: 'transform 0.15s',
       }}>
-        <IconChevronDown size={9} color={C.muted} />
+        <IconChevronDown size={10} color={C.sub} />
       </span>
-      <span style={{
-        fontSize: 12, color: C.text, fontWeight: 700,
-        background: C.surfaceHi, borderRadius: 20, padding: '2px 9px',
-      }}>{label}</span>
+      <span style={{ fontSize: 13, color: C.text, fontWeight: 700 }}>{label}</span>
       <span style={{ fontSize: 11, color: C.muted }}>{count}</span>
     </button>
   )
 }
 
-function PersonalShelfSections({ entries, viewMode, sort, onSelect, renderActions, collapsedReading, onToggleReadingCollapsed, collapsedRead, onToggleReadCollapsed, collapsedWant, onToggleWantCollapsed }) {
-  const [collapsedYears, setCollapsedYears] = useState(new Set())
-  function toggleYear(y) {
-    setCollapsedYears(prev => {
-      const next = new Set(prev)
-      next.has(y) ? next.delete(y) : next.add(y)
-      return next
-    })
-  }
+function PersonalShelfSections({ entries, viewMode, sort, onSelect, renderActions, collapsedReading, onToggleReadingCollapsed, collapsedRead, onToggleReadCollapsed, collapsedWant, onToggleWantCollapsed, collapsedYears, onToggleYear }) {
 
   const reading = entries.filter(e => e.status === 'reading')
   const read    = entries.filter(e => e.status === 'read')
@@ -1624,16 +1627,13 @@ function PersonalShelfSections({ entries, viewMode, sort, onSelect, renderAction
                 initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
                 transition={{ duration: 0.2, ease: 'easeInOut' }}
               >
-                {years.map((y, i) => (
-                  <div key={y} style={{
-                    background: i % 2 === 0 ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.065)',
-                    borderRadius: 10, marginBottom: 6, overflow: 'hidden',
-                  }}>
+                {years.map(y => (
+                  <div key={y} style={{ marginBottom: 10 }}>
                     <ShelfYearHeader
                       label={y === 'sin-fecha' ? 'Sin fecha' : y}
                       count={yearGroups[y].length}
                       collapsed={collapsedYears.has(y)}
-                      onToggle={() => toggleYear(y)}
+                      onToggle={() => onToggleYear(y)}
                     />
                     <AnimatePresence initial={false}>
                       {!collapsedYears.has(y) && (
@@ -1641,7 +1641,7 @@ function PersonalShelfSections({ entries, viewMode, sort, onSelect, renderAction
                           initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
                           transition={{ duration: 0.2, ease: 'easeInOut' }}
                         >
-                          <div style={{ padding: viewMode === 'grid' ? '0 6px 6px' : '0 4px 4px' }}>
+                          <div style={{ padding: viewMode === 'grid' ? '10px 6px' : '10px 4px' }}>
                             <Items books={yearGroups[y]} onSelect={onSelect} renderActions={renderActions} />
                           </div>
                         </motion.div>
@@ -2391,6 +2391,25 @@ function ClubTab({ player }) {
   const sortMenuRef = useOutsideClose(showSort, () => setShowSort(false))
   const addMenuRef  = useOutsideClose(showAddMenu, () => setShowAddMenu(false))
 
+  // Años del historial ("Leídos") colapsados/expandidos — igual que en Mi
+  // estantería, persistido en localStorage para recordarlo entre sesiones.
+  const clubYearsCollapsedKey = `luni_club_years_collapsed_${player.id}`
+  const [collapsedClubYears, setCollapsedClubYears] = useState(() => {
+    try { return new Set(JSON.parse(localStorage.getItem(clubYearsCollapsedKey)) || []) }
+    catch { return new Set() }
+  })
+  function persistClubYears(next) {
+    localStorage.setItem(clubYearsCollapsedKey, JSON.stringify([...next]))
+    return next
+  }
+  function toggleClubYear(y) {
+    setCollapsedClubYears(prev => {
+      const next = new Set(prev)
+      next.has(y) ? next.delete(y) : next.add(y)
+      return persistClubYears(next)
+    })
+  }
+
   function loadSection(sec) {
     setLoading(true)
     if (sec === 'proposed') {
@@ -2484,6 +2503,23 @@ function ClubTab({ player }) {
 
   const activeFiltersCount = Object.keys(EMPTY_CLUB_FILTERS).filter(k => filters[k] !== EMPTY_CLUB_FILTERS[k]).length
 
+  // Historial ("Leídos") agrupado por año de lectura — igual que Leídos en Mi
+  // estantería. "Propuestos" no se agrupa (no tiene fecha de fin relevante).
+  const historyYearGroups = {}
+  if (section === 'history') {
+    for (const e of sorted) {
+      const year = e.read_date ? e.read_date.slice(0, 4) : 'sin-fecha'
+      ;(historyYearGroups[year] ||= []).push(e)
+    }
+  }
+  const historyYears = Object.keys(historyYearGroups).filter(y => y !== 'sin-fecha').sort((a, b) => b.localeCompare(a))
+  if (historyYearGroups['sin-fecha']) historyYears.push('sin-fecha')
+
+  const anyClubYearExpanded = historyYears.some(y => !collapsedClubYears.has(y))
+  function toggleAllClubCollapsed() {
+    setCollapsedClubYears(persistClubYears(anyClubYearExpanded ? new Set(historyYears) : new Set()))
+  }
+
   function toggleSort(field) {
     setSort(s => s.field === field
       ? s.dir === 'asc' ? { field, dir: 'desc' } : { field: '', dir: 'asc' }
@@ -2493,6 +2529,42 @@ function ClubTab({ player }) {
   }
 
   const isEmpty = !loading && sorted.length === 0 && !editEntry
+
+  // Filas/tarjetas de una lista de entradas — usado tanto para "Propuestos"
+  // (lista plana) como para cada bloque de año dentro de "Leídos".
+  function renderClubEntries(list) {
+    if (viewMode === 'grid') {
+      return <GridItems books={list} onSelect={setDetailEntry} />
+    }
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <AnimatePresence>
+        {list.map(entry => (
+          <motion.div key={entry.id} layout exit={BOOK_DELETE_EXIT} transition={BOOK_DELETE_TRANSITION}>
+            {editEntry?.id === entry.id
+              ? <ClubBookEditForm
+                  entry={editEntry}
+                  onSave={() => {
+                    closeEdit()
+                    loadSection('proposed')
+                    refreshHistory()
+                  }}
+                  onCancel={closeEdit}
+                />
+              : <ClubBookCard
+                  entry={entry} isAdmin={isAdmin}
+                  onDelete={() => deleteBook(entry.id)}
+                  onChoose={section === 'proposed' ? () => chooseBook(entry.id, entry.status) : null}
+                  onEdit={() => startEdit(entry)}
+                  onDetail={section === 'history' ? () => setDetailEntry(entry) : null}
+                />
+            }
+          </motion.div>
+        ))}
+        </AnimatePresence>
+      </div>
+    )
+  }
 
   if (detailEntry) {
     return (
@@ -2515,6 +2587,18 @@ function ClubTab({ player }) {
       <div style={{ padding: '8px 12px 0', borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
           <span style={{ fontSize: 13, color: C.text, fontWeight: 600, flex: 1 }}>Club</span>
+
+          {/* Botón colapsar/expandir todo — solo en "Leídos", que es lo único agrupado por año */}
+          {section === 'history' && historyYears.length > 0 && (
+            <button onClick={toggleAllClubCollapsed} title={anyClubYearExpanded ? 'Colapsar todo' : 'Expandir todo'} style={{
+              background: C.surfaceHi, border: '1px solid transparent',
+              borderRadius: 8, width: 32, height: 28, color: C.muted,
+              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              transition: 'all 0.15s', flexShrink: 0,
+            }}>
+              <IconCollapseAll color={C.muted} expand={!anyClubYearExpanded} />
+            </button>
+          )}
 
           {/* Botón filtros — solo icono */}
           <button onClick={() => setShowFilters(true)} title="Filtros" style={{
@@ -2672,47 +2756,49 @@ function ClubTab({ player }) {
 
         {!loading && sorted.length > 0 && (
           <motion.div key={viewMode} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.15 }}>
-            {viewMode === 'grid' && (
-              <GridView books={sorted} onSelect={section === 'history' ? setDetailEntry : () => {}}
-                isHighlighted={e => e.status === 'active'}
-                renderActions={isAdmin && section === 'proposed' ? (entry) => (
-                  <ClubGridActions
-                    entry={entry}
-                    onChoose={() => chooseBook(entry.id, entry.status)}
-                    onEdit={() => startEdit(entry)}
-                    onDelete={() => deleteBook(entry.id)}
-                  />
-                ) : undefined}
-              />
-            )}
-
-            {viewMode === 'list' && (
-              <div style={{ padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <AnimatePresence>
-                {sorted.map(entry => (
-                  <motion.div key={entry.id} layout exit={BOOK_DELETE_EXIT} transition={BOOK_DELETE_TRANSITION}>
-                    {editEntry?.id === entry.id
-                      ? <ClubBookEditForm
-                          entry={editEntry}
-                          onSave={() => {
-                            closeEdit()
-                            loadSection('proposed')
-                            refreshHistory()
-                          }}
-                          onCancel={closeEdit}
-                        />
-                      : <ClubBookCard
-                          entry={entry} isAdmin={isAdmin}
-                          onDelete={() => deleteBook(entry.id)}
-                          onChoose={section === 'proposed' ? () => chooseBook(entry.id, entry.status) : null}
-                          onEdit={() => startEdit(entry)}
-                          onDetail={section === 'history' ? () => setDetailEntry(entry) : null}
-                        />
-                    }
-                  </motion.div>
+            {section === 'history' ? (
+              <div style={{ padding: viewMode === 'grid' ? '2px 16px 16px' : '2px 10px 10px' }}>
+                {historyYears.map(y => (
+                  <div key={y} style={{ marginBottom: 10 }}>
+                    <ShelfYearHeader
+                      label={y === 'sin-fecha' ? 'Sin fecha' : y}
+                      count={historyYearGroups[y].length}
+                      collapsed={collapsedClubYears.has(y)}
+                      onToggle={() => toggleClubYear(y)}
+                    />
+                    <AnimatePresence initial={false}>
+                      {!collapsedClubYears.has(y) && (
+                        <motion.div key="club-year-items" layout
+                          initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                          transition={{ duration: 0.2, ease: 'easeInOut' }}
+                        >
+                          <div style={{ padding: viewMode === 'grid' ? '10px 6px' : '10px 4px' }}>
+                            {renderClubEntries(historyYearGroups[y])}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
                 ))}
-                </AnimatePresence>
               </div>
+            ) : (
+              viewMode === 'grid'
+                ? (
+                  <GridView books={sorted} onSelect={() => {}}
+                    isHighlighted={e => e.status === 'active'}
+                    renderActions={isAdmin ? (entry) => (
+                      <ClubGridActions
+                        entry={entry}
+                        onChoose={() => chooseBook(entry.id, entry.status)}
+                        onEdit={() => startEdit(entry)}
+                        onDelete={() => deleteBook(entry.id)}
+                      />
+                    ) : undefined}
+                  />
+                )
+                : (
+                  <div style={{ padding: '10px 12px' }}>{renderClubEntries(sorted)}</div>
+                )
             )}
           </motion.div>
         )}
@@ -2984,6 +3070,27 @@ export default function LunitecaV2({ player }) {
       return next
     })
   }
+  // Años dentro de "Leídos" colapsados/expandidos individualmente — vive aquí
+  // (no dentro de PersonalShelfSections) para que el botón "colapsar/expandir
+  // todo" de la barra superior pueda controlarlos también. Persistido en
+  // localStorage igual que collapsedReading/Read/Want, para recordar entre
+  // sesiones qué años tenía colapsados el jugador.
+  const yearsCollapsedKey = `luni_shelf_years_collapsed_${player.id}`
+  const [collapsedYears, setCollapsedYears] = useState(() => {
+    try { return new Set(JSON.parse(localStorage.getItem(yearsCollapsedKey)) || []) }
+    catch { return new Set() }
+  })
+  function persistCollapsedYears(next) {
+    localStorage.setItem(yearsCollapsedKey, JSON.stringify([...next]))
+    return next
+  }
+  function toggleYear(y) {
+    setCollapsedYears(prev => {
+      const next = new Set(prev)
+      next.has(y) ? next.delete(y) : next.add(y)
+      return persistCollapsedYears(next)
+    })
+  }
   const [selected,    setSelected]    = useState(null)
   const [showSearch,  setShowSearch]  = useState(false)
   const [showFilters, setShowFilters] = useState(false)
@@ -3069,6 +3176,15 @@ export default function LunitecaV2({ player }) {
     if (va > vb) return sort.dir === 'asc' ?  1 : -1
     return 0
   }) : filtered
+
+  // "Colapsar/expandir todo": solo afecta a los bloques de año dentro de
+  // Leídos — Leyendo ahora/Leídos/Por leer no cuentan ni se tocan.
+  const readEntriesForYears = sorted.filter(e => e.status === 'read')
+  const currentReadYears = [...new Set(readEntriesForYears.map(e => e.finished_at ? e.finished_at.slice(0, 4) : 'sin-fecha'))]
+  const anyBlockExpanded = currentReadYears.some(y => !collapsedYears.has(y))
+  function toggleAllCollapsed() {
+    setCollapsedYears(persistCollapsedYears(anyBlockExpanded ? new Set(currentReadYears) : new Set()))
+  }
 
   const activeFiltersCount = Object.keys(EMPTY_FILTERS).filter(k => filters[k] !== EMPTY_FILTERS[k]).length
 
@@ -3176,6 +3292,16 @@ export default function LunitecaV2({ player }) {
               display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0,
             }}>
               <span style={{ fontSize: 13, color: C.text, fontWeight: 600, flex: 1 }}>Mi estantería</span>
+
+              {/* Botón colapsar/expandir todo */}
+              <button onClick={toggleAllCollapsed} title={anyBlockExpanded ? 'Colapsar todo' : 'Expandir todo'} style={{
+                background: C.surfaceHi, border: '1px solid transparent',
+                borderRadius: 8, width: 32, height: 28, color: C.muted,
+                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                transition: 'all 0.15s', flexShrink: 0,
+              }}>
+                <IconCollapseAll color={C.muted} expand={!anyBlockExpanded} />
+              </button>
 
               {/* Botón filtros — solo icono */}
               <button onClick={() => setShowFilters(true)} title="Filtros" style={{
@@ -3298,6 +3424,8 @@ export default function LunitecaV2({ player }) {
                   onToggleReadCollapsed={toggleReadCollapsed}
                   collapsedWant={collapsedWant}
                   onToggleWantCollapsed={toggleWantCollapsed}
+                  collapsedYears={collapsedYears}
+                  onToggleYear={toggleYear}
                   renderActions={isMobile ? (entry) => (
                     <ShelfGridActions
                       onOpenDetail={viewMode === 'grid' ? () => setSelected(entry) : undefined}
