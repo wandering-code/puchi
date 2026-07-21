@@ -159,6 +159,14 @@ export default function GatOS({ player: initialPlayer, onLogout, onProfileUpdate
   const callPeerRef       = useRef(null)
   const callTypeRef       = useRef('video')
   const ringTimeoutRef    = useRef(null)
+  // Espejo de callState en un ref: el handler del WS (ws.onmessage) se fija
+  // una sola vez al montar (useEffect con dep [player.token]) y no se
+  // vuelve a crear, así que cualquier función que cuelgue de esa cadena de
+  // closures (handleCallSignal y lo que llame) vería siempre el callState
+  // de aquel primer render si lo leyera directamente — de ahí este ref,
+  // igual que ya se hace con callPeerRef/callTypeRef para lo mismo.
+  const callStateRef      = useRef('idle')
+  useEffect(() => { callStateRef.current = callState }, [callState])
   // Credenciales TURN del backend (efímeras) — se piden de nuevo al empezar
   // cada llamada/unirse a la grupal; si el fetch falla o no hay TURN
   // configurado, se sigue intentando solo con STUN (llamadas en la misma red).
@@ -177,6 +185,12 @@ export default function GatOS({ player: initialPlayer, onLogout, onProfileUpdate
   // es un estado definitivo. Colgar al primer 'disconnected' cortaba
   // llamadas que se habrían recuperado solas.
   const disconnectTimeoutRef = useRef(null)
+  // Si llega una oferta de llamada 1-to-1 mientras ya hay otra llamada en
+  // marcha (1-to-1 activa/sonando, o grupal ya unida), aquí se guarda esa
+  // llamada previa — se cuelga solo si el usuario acepta de verdad la
+  // nueva (acceptCall); si en cambio la rechaza o se agota el timeout de
+  // aviso, la anterior queda intacta y se restaura tal cual (rejectCall).
+  const pendingHangupRef = useRef(null)
 
   function sendWs(data) {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -275,15 +289,28 @@ export default function GatOS({ player: initialPlayer, onLogout, onProfileUpdate
   async function acceptCall() {
     const peer = callPeerRef.current
     const type = callTypeRef.current
-    if (!peer || !offerSdpRef.current) return
+    const offerSdp = offerSdpRef.current
+    if (!peer || !offerSdp) return
     clearTimeout(ringTimeoutRef.current)
+    // Se acepta de verdad esta llamada nueva — si había otra en marcha, se
+    // cuelga ahora (avisando al interlocutor si era 1-to-1).
+    if (pendingHangupRef.current) {
+      const prev = pendingHangupRef.current
+      pendingHangupRef.current = null
+      if (prev.type === '1to1') {
+        if (prev.peer) sendWs({ type: 'call_end', target_id: prev.peer.id })
+        cleanupCall()
+      } else if (prev.type === 'group') {
+        leaveGroupCall()
+      }
+    }
     setCallState('active')
     openAppRef.current?.('diskordkito')
     try {
       const [stream] = await Promise.all([getMedia(type === 'video'), refreshIceServers()])
       const pc = createPC(peer.id)
       stream.getTracks().forEach(t => pc.addTrack(t, stream))
-      await pc.setRemoteDescription({ type: 'offer', sdp: offerSdpRef.current })
+      await pc.setRemoteDescription({ type: 'offer', sdp: offerSdp })
       // splice(0) vacía el array en el mismo instante síncrono en que lo lee —
       // si se hiciera con un for..of y un "= []" al final, un candidato que
       // llegase de la señalización (mensaje WS aparte) mientras el for..of
@@ -304,7 +331,19 @@ export default function GatOS({ player: initialPlayer, onLogout, onProfileUpdate
   function rejectCall() {
     const peer = callPeerRef.current
     if (peer) sendWs({ type: 'call_reject', target_id: peer.id })
-    cleanupCall()
+    const prev = pendingHangupRef.current
+    pendingHangupRef.current = null
+    if (prev?.type === '1to1') {
+      // Había otra llamada 1-to-1 en marcha de antes (su pc/stream nunca se
+      // tocaron) — se restaura su estado visible tal cual estaba.
+      callPeerRef.current = prev.peer
+      callTypeRef.current = prev.callType
+      setCallPeer(prev.peer)
+      setCallType(prev.callType)
+      setCallState(prev.callState)
+    } else {
+      cleanupCall()
+    }
   }
 
   function endCall() {
@@ -421,7 +460,14 @@ export default function GatOS({ player: initialPlayer, onLogout, onProfileUpdate
   }
 
   async function joinGroupCall(type) {
-    if (groupCallJoinedRef.current || callState !== 'idle') return
+    if (groupCallJoinedRef.current) return
+    if (callState !== 'idle') {
+      // Había una llamada 1-to-1 en marcha (activa, sonando, o llamando) —
+      // se cuelga al unirse de verdad a la grupal.
+      const peer = callPeerRef.current
+      if (peer) sendWs({ type: callState === 'incoming' ? 'call_reject' : 'call_end', target_id: peer.id })
+      cleanupCall()
+    }
     clearTimeout(groupRingTimeoutRef.current)
     setIncomingGroupCall(null)
     openAppRef.current?.('diskordkito')
@@ -539,7 +585,19 @@ export default function GatOS({ player: initialPlayer, onLogout, onProfileUpdate
 
   async function handleCallSignal(msg) {
     switch (msg.type) {
-      case 'call_offer':
+      case 'call_offer': {
+        // ¿Había ya otra llamada en marcha (1-to-1 activa/llamando, o
+        // grupal ya unida)? Se guarda para colgarla solo si esta nueva se
+        // acepta de verdad (acceptCall) — si se rechaza, se restaura tal
+        // cual (rejectCall).
+        const busyState = callStateRef.current
+        if ((busyState === 'active' || busyState === 'calling') && callPeerRef.current) {
+          pendingHangupRef.current = { type: '1to1', peer: callPeerRef.current, callType: callTypeRef.current, callState: busyState }
+        } else if (groupCallJoinedRef.current) {
+          pendingHangupRef.current = { type: 'group' }
+        } else {
+          pendingHangupRef.current = null
+        }
         offerSdpRef.current  = msg.sdp
         callPeerRef.current  = msg.from_player
         callTypeRef.current  = msg.callType ?? 'video'
@@ -550,6 +608,7 @@ export default function GatOS({ player: initialPlayer, onLogout, onProfileUpdate
         clearTimeout(ringTimeoutRef.current)
         ringTimeoutRef.current = setTimeout(rejectCall, CALL_RING_TIMEOUT)
         break
+      }
       case 'call_answer':
         if (pcRef.current) {
           await pcRef.current.setRemoteDescription({ type: 'answer', sdp: msg.sdp })
@@ -581,6 +640,56 @@ export default function GatOS({ player: initialPlayer, onLogout, onProfileUpdate
     const top = visible.reduce((a, b) => (b.zIndex > a.zIndex ? b : a))
     return top.appId === 'diskordkito'
   }
+
+  // ── Tono de llamada entrante ─────────────────────────────────────────────────
+  // Sintetizado con Web Audio (sin fichero de audio de por medio): dos notas
+  // suaves con fade in/out para que no "chasquee", repitiéndose mientras
+  // suene la llamada. El AudioContext se crea/reactiva en el primer toque
+  // del jugador en la app (los navegadores, sobre todo iOS Safari, no dejan
+  // arrancar audio sin un gesto previo) y se reutiliza para toda la sesión.
+  const audioCtxRef = useRef(null)
+  useEffect(() => {
+    function unlockAudio() {
+      const Ctx = window.AudioContext || window.webkitAudioContext
+      if (!Ctx) return
+      if (!audioCtxRef.current) audioCtxRef.current = new Ctx()
+      else if (audioCtxRef.current.state === 'suspended') audioCtxRef.current.resume().catch(() => {})
+    }
+    window.addEventListener('pointerdown', unlockAudio)
+    return () => window.removeEventListener('pointerdown', unlockAudio)
+  }, [])
+
+  function playRingChime() {
+    const ctx = audioCtxRef.current
+    if (!ctx || ctx.state !== 'running') return
+    const now = ctx.currentTime
+    // Cuarta justa (D5-A5), suave y nada estridente.
+    ;[587.33, 880].forEach((freq, i) => {
+      const osc  = ctx.createOscillator()
+      const gain = ctx.createGain()
+      osc.type = 'sine'
+      osc.frequency.value = freq
+      const start = now + i * 0.16
+      gain.gain.setValueAtTime(0.0001, start)
+      gain.gain.linearRampToValueAtTime(0.15, start + 0.06)
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.5)
+      osc.connect(gain).connect(ctx.destination)
+      osc.start(start)
+      osc.stop(start + 0.55)
+    })
+  }
+
+  // Suena mientras haya una llamada entrante mostrándose — 1-to-1 o grupal —
+  // y se para sola en cuanto deja de haberla (aceptada, rechazada, o
+  // expirado el aviso), sin necesidad de parar el intervalo a mano en cada
+  // sitio donde eso puede pasar.
+  const isRinging = callState === 'incoming' || (!!incomingGroupCall && !groupCallJoined)
+  useEffect(() => {
+    if (!isRinging) return
+    playRingChime()
+    const id = setInterval(playRingChime, 2200)
+    return () => clearInterval(id)
+  }, [isRinging])
 
   // ── WebSocket global ────────────────────────────────────────────────────────
   useEffect(() => {
