@@ -4,6 +4,7 @@ import { useIsMobile } from '../../../utils/responsive'
 import PlayerAvatar from '../PlayerAvatar'
 import AvatarCropModal from '../AvatarCropModal'
 import { PRESET_AVATARS } from '../../../utils/presetAvatars'
+import { COLOR_OPTIONS } from '../../../utils/colorOptions'
 
 // Los fondos de pantalla se gestionan desde Pirestore (catálogo en BD,
 // editable por el admin) — Ajustes se queda con lo relativo a la cuenta:
@@ -30,13 +31,18 @@ export default function SettingsApp({ player, onProfileUpdate }) {
   const isMobile = useIsMobile()
   const fileInputRef = useRef(null)
 
-  // Identidad
+  // Identidad — todo esto queda en borrador local hasta pulsar "Guardar
+  // cambios" (incluido el avatar: antes elegir un preset o subir/quitar foto
+  // se aplicaba al momento, ahora no — un cambio a medias no debe verse
+  // reflejado hasta confirmarlo).
   const [name,           setName]           = useState(player.name)
+  const [color,          setColor]          = useState(player.color)
+  // Avatar en borrador: null = sin cambios (se queda el actual del jugador);
+  // {type:'preset', url} | {type:'file', blob, previewUrl} | {type:'remove'}
+  const [pendingAvatar,  setPendingAvatar]  = useState(null)
   const [saving,         setSaving]         = useState(false)
   const [profileMsg,     setProfileMsg]     = useState('')
   const [profileMsgOk,   setProfileMsgOk]   = useState(true)
-  const [uploadingPhoto, setUploadingPhoto] = useState(false)
-  const [pickingPreset,  setPickingPreset]  = useState(false)
   const [cropFile,       setCropFile]       = useState(null) // foto elegida, pendiente de encuadrar
 
   // PIN
@@ -51,51 +57,66 @@ export default function SettingsApp({ player, onProfileUpdate }) {
   const [deleteMsg,  setDeleteMsg]  = useState('')
   const [deleteStep, setDeleteStep] = useState(false)
 
+  // Las tres solo tocan el borrador local — nada llega al backend hasta
+  // "Guardar cambios" (ver saveProfile).
+  function pickPreset(url) {
+    setPendingAvatar({ type: 'preset', url })
+  }
+  function onCropConfirm(blob) {
+    setPendingAvatar(prev => {
+      if (prev?.type === 'file') URL.revokeObjectURL(prev.previewUrl)
+      return { type: 'file', blob, previewUrl: URL.createObjectURL(blob) }
+    })
+    setCropFile(null)
+  }
+  function requestRemoveAvatar() {
+    setPendingAvatar({ type: 'remove' })
+  }
+
+  // Efectivo = borrador si lo hay, si no el del jugador tal cual está guardado.
+  const effectiveAvatarUrl =
+    pendingAvatar?.type === 'file'   ? pendingAvatar.previewUrl :
+    pendingAvatar?.type === 'preset' ? pendingAvatar.url :
+    pendingAvatar?.type === 'remove' ? null :
+    player.avatar_url
+  const hasChanges = name !== player.name || color !== player.color || pendingAvatar !== null
+
   async function saveProfile() {
     setSaving(true); setProfileMsg('')
-    const r = await fetch('/api/players/me/profile', {
-      method: 'PATCH', credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name }),
-    })
-    setSaving(false)
-    if (r.ok) {
+    try {
+      // El avatar usa sus propios endpoints (multipart para subir, DELETE
+      // para quitar) — se aplica primero si hay un cambio pendiente.
+      if (pendingAvatar?.type === 'file') {
+        const form = new FormData()
+        form.append('file', pendingAvatar.blob, 'avatar.jpg')
+        const r = await fetch('/api/players/me/avatar', { method: 'POST', credentials: 'include', body: form })
+        if (!r.ok) throw new Error('Error al subir la foto')
+      } else if (pendingAvatar?.type === 'remove') {
+        const r = await fetch('/api/players/me/avatar', { method: 'DELETE', credentials: 'include' })
+        if (!r.ok) throw new Error('Error al quitar el avatar')
+      }
+
+      // Nombre, color, y el preset de avatar (si se eligió uno) van juntos.
+      const body = { name, color }
+      if (pendingAvatar?.type === 'preset') body.avatar_url = pendingAvatar.url
+      const r2 = await fetch('/api/players/me/profile', {
+        method: 'PATCH', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      if (!r2.ok) {
+        const d = await r2.json().catch(() => ({}))
+        throw new Error(d.detail || 'Error al guardar')
+      }
+      const updated = await r2.json()
+      if (pendingAvatar?.type === 'file') URL.revokeObjectURL(pendingAvatar.previewUrl)
+      setPendingAvatar(null)
       setProfileMsgOk(true); setProfileMsg('Guardado ✓')
-      onProfileUpdate?.(await r.json())
-    } else {
-      const d = await r.json().catch(() => ({}))
-      setProfileMsgOk(false); setProfileMsg(d.detail || 'Error al guardar')
+      onProfileUpdate?.(updated)
+    } catch (err) {
+      setProfileMsgOk(false); setProfileMsg(err.message || 'Error al guardar')
     }
-  }
-
-  // A diferencia del nombre, elegir un avatar de la galería se guarda al
-  // momento (igual que subir/quitar foto) — no hace falta pulsar "Guardar
-  // cambios" aparte para esto.
-  async function pickPreset(url) {
-    setPickingPreset(true); setProfileMsg('')
-    const r = await fetch('/api/players/me/profile', {
-      method: 'PATCH', credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ avatar_url: url }),
-    })
-    setPickingPreset(false)
-    if (r.ok) onProfileUpdate?.(await r.json())
-    else { setProfileMsgOk(false); setProfileMsg('Error al guardar') }
-  }
-
-  async function uploadPhoto(blob) {
-    setUploadingPhoto(true); setProfileMsg('')
-    const form = new FormData()
-    form.append('file', blob, 'avatar.jpg')
-    const r = await fetch('/api/players/me/avatar', { method: 'POST', credentials: 'include', body: form })
-    setUploadingPhoto(false)
-    if (r.ok) onProfileUpdate?.(await r.json())
-    else { setProfileMsgOk(false); setProfileMsg('Error al subir la foto') }
-  }
-
-  async function removePhoto() {
-    const r = await fetch('/api/players/me/avatar', { method: 'DELETE', credentials: 'include' })
-    if (r.ok) onProfileUpdate?.(await r.json())
+    setSaving(false)
   }
 
   async function savePin() {
@@ -149,19 +170,16 @@ export default function SettingsApp({ player, onProfileUpdate }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
             <div style={{
               position: 'relative', width: 64, height: 64, borderRadius: '50%', overflow: 'hidden', flexShrink: 0,
-              background: player.avatar_url ? '#000' : 'rgba(255,255,255,0.08)',
+              background: effectiveAvatarUrl ? '#000' : 'rgba(255,255,255,0.08)',
               border: '2px solid rgba(255,255,255,0.12)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>
-              <PlayerAvatar emoji={player.avatar_emoji} url={player.avatar_url} size={player.avatar_url ? 64 : 32} style={player.avatar_url ? { borderRadius: 0 } : undefined} />
-              {(uploadingPhoto || pickingPreset) && (
-                <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: 'white' }}>…</div>
-              )}
+              <PlayerAvatar emoji={player.avatar_emoji} url={effectiveAvatarUrl} size={effectiveAvatarUrl ? 64 : 32} style={effectiveAvatarUrl ? { borderRadius: 0 } : undefined} />
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
               <button type="button" onClick={() => fileInputRef.current?.click()} style={btnGhost}>Subir foto</button>
-              {player.avatar_url && (
-                <button type="button" onClick={removePhoto} style={btnGhost}>Quitar foto</button>
+              {effectiveAvatarUrl && (
+                <button type="button" onClick={requestRemoveAvatar} style={btnGhost}>Quitar avatar</button>
               )}
               <input ref={fileInputRef} type="file" accept="image/*" style={{ display: 'none' }}
                 onChange={e => { const f = e.target.files?.[0]; if (f) setCropFile(f); e.target.value = '' }} />
@@ -172,16 +190,16 @@ export default function SettingsApp({ player, onProfileUpdate }) {
             <span style={labelStyle}>Galería de avatares</span>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8,1fr)', gap: 6 }}>
               {PRESET_AVATARS.map(a => {
-                const active = player.avatar_url === a.url
+                const active = effectiveAvatarUrl === a.url
                 return (
-                  <button type="button" key={a.id} onClick={() => pickPreset(a.url)} title={a.label} disabled={pickingPreset}
+                  <button type="button" key={a.id} onClick={() => pickPreset(a.url)} title={a.label}
                     style={{ padding: 3, borderRadius: '50%', background: 'transparent', border: active ? '2px solid white' : '2px solid transparent', cursor: 'pointer', transition: 'transform .15s', transform: active ? 'scale(1.1)' : 'scale(1)' }}>
                     <img src={a.url} alt={a.label} style={{ width: '100%', aspectRatio: '1', borderRadius: '50%', display: 'block' }} />
                   </button>
                 )
               })}
             </div>
-            {player.avatar_url && (
+            {effectiveAvatarUrl && (
               <p style={{ fontSize: 10.5, color: 'rgba(255,255,255,0.3)', marginTop: 6 }}>
                 Elegir uno de estos sustituye a tu foto/avatar actual.
               </p>
@@ -193,8 +211,19 @@ export default function SettingsApp({ player, onProfileUpdate }) {
             <input value={name} onChange={e => setName(e.target.value)} maxLength={20} style={{ ...inputStyle, width: '100%', textAlign: 'left', letterSpacing: 'normal' }} />
           </div>
 
+          <div>
+            <span style={labelStyle}>Color</span>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {COLOR_OPTIONS.map(c => (
+                <button type="button" key={c} onClick={() => setColor(c)}
+                  style={{ width: 24, height: 24, borderRadius: 6, background: c, border: color === c ? '3px solid white' : '3px solid transparent', cursor: 'pointer' }} />
+              ))}
+            </div>
+            <p style={{ fontSize: 12, color, marginTop: 8, fontWeight: 600 }}>{name || player.name}</p>
+          </div>
+
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <button onClick={saveProfile} disabled={saving} style={btnPrimary}>
+            <button onClick={saveProfile} disabled={saving || !hasChanges} style={{ ...btnPrimary, opacity: (saving || !hasChanges) ? 0.5 : 1 }}>
               {saving ? 'Guardando…' : 'Guardar cambios'}
             </button>
             {profileMsg && <span style={{ fontSize: 12, color: profileMsgOk ? '#23a55a' : '#ed4245' }}>{profileMsg}</span>}
@@ -268,7 +297,7 @@ export default function SettingsApp({ player, onProfileUpdate }) {
           <AvatarCropModal
             file={cropFile}
             onCancel={() => setCropFile(null)}
-            onConfirm={blob => { setCropFile(null); uploadPhoto(blob) }}
+            onConfirm={onCropConfirm}
           />
         )}
       </AnimatePresence>
