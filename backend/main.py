@@ -320,28 +320,36 @@ def logout(response: Response):
 def me(player: Player = Depends(get_current_player)):
     return _player_out(player)
 
-class RegisterRequest(BaseModel):
-    name:        str
-    pin:         str
-    color:       str = "#60a5fa"
-    avatar_emoji: str = "⭐"
-
 @app.post("/auth/register")
-def register(body: RegisterRequest, db: Session = Depends(get_db)):
-    name = body.name.strip()
+async def register(
+    name: str = Form(...),
+    pin: str = Form(...),
+    color: str = Form("#60a5fa"),
+    # Foto propia (recortada en el cliente) o URL de un preset de la galería —
+    # mutuamente excluyentes, el fichero manda si por lo que sea llegan los
+    # dos. Van en el mismo request porque el registro no emite token (cuenta
+    # "pending" hasta que la apruebe el admin, ver más abajo) — no hay forma
+    # de llamar después a POST /players/me/avatar, que exige sesión.
+    avatar_url:  Optional[str]      = Form(None),
+    avatar_file: Optional[UploadFile] = File(None),
+    db: Session = Depends(get_db),
+):
+    name = name.strip()
     if not name or len(name) > 30:
         raise HTTPException(422, "Nombre inválido")
     if db.query(Player).filter(Player.name == name).first():
         raise HTTPException(400, "Ese nombre ya está en uso")
-    if not body.pin.isdigit() or not (4 <= len(body.pin) <= 8):
+    if not pin.isdigit() or not (4 <= len(pin) <= 8):
         raise HTTPException(422, "El PIN debe tener entre 4 y 8 dígitos")
+
+    final_avatar_url = _save_avatar_file(avatar_file) if avatar_file is not None else (avatar_url or None)
 
     # Cuenta pendiente de aprobación por el admin — sin acceso a nada todavía:
     # no se emite cookie/token, no se une a #club-general y no se avisa por WS
     # a nadie (eso ocurre cuando el admin la apruebe, ver PATCH /admin/players).
     player = Player(
-        name=name, pin_hash=hash_pin(body.pin),
-        color=body.color, avatar_emoji=body.avatar_emoji,
+        name=name, pin_hash=hash_pin(pin),
+        color=color, avatar_url=final_avatar_url,
         customization={}, status="pending", club_member=False,
     )
     db.add(player)
@@ -473,6 +481,10 @@ class ProfileUpdate(BaseModel):
     name:         Optional[str] = None
     color:        Optional[str] = None
     avatar_emoji: Optional[str] = None
+    # URL de un preset de la galería (frontend/public/avatars/*.svg) — mismo
+    # campo Player.avatar_url que usa la foto subida, solo cambia de dónde
+    # sale el valor.
+    avatar_url:   Optional[str] = None
 
 @app.patch("/players/me/profile")
 async def update_profile(
@@ -497,6 +509,8 @@ async def update_profile(
         # Elegir un icono del sistema sustituye a la foto subida, si había una.
         player.avatar_emoji = body.avatar_emoji
         player.avatar_url   = None
+    elif body.avatar_url:
+        player.avatar_url = body.avatar_url
     db.commit()
     db.refresh(player)
     await _notify_luni("players")
@@ -505,6 +519,15 @@ async def update_profile(
 _AVATAR_UPLOAD_DIR = os.path.join(os.path.dirname(__file__), 'uploads', 'avatars')
 os.makedirs(_AVATAR_UPLOAD_DIR, exist_ok=True)
 
+def _save_avatar_file(file: UploadFile) -> str:
+    ext = os.path.splitext(file.filename or '')[1].lower()
+    if ext not in ('.jpg', '.jpeg', '.png', '.webp', '.gif'):
+        ext = '.jpg'
+    filename = f"{uuid.uuid4().hex}{ext}"
+    with open(os.path.join(_AVATAR_UPLOAD_DIR, filename), 'wb') as f:
+        shutil.copyfileobj(file.file, f)
+    return f"/uploads/avatars/{filename}"
+
 @app.post("/players/me/avatar")
 async def upload_avatar(
     file: UploadFile = File(...),
@@ -512,13 +535,7 @@ async def upload_avatar(
     current: Player = Depends(get_current_player),
 ):
     player = db.query(Player).filter(Player.id == current.id).first()
-    ext = os.path.splitext(file.filename or '')[1].lower()
-    if ext not in ('.jpg', '.jpeg', '.png', '.webp', '.gif'):
-        ext = '.jpg'
-    filename = f"{uuid.uuid4().hex}{ext}"
-    with open(os.path.join(_AVATAR_UPLOAD_DIR, filename), 'wb') as f:
-        shutil.copyfileobj(file.file, f)
-    player.avatar_url = f"/uploads/avatars/{filename}"
+    player.avatar_url = _save_avatar_file(file)
     db.commit()
     db.refresh(player)
     await _notify_luni("players")

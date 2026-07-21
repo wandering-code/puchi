@@ -2001,7 +2001,7 @@ function ClubBookEditForm({ entry, onSave, onCancel }) {
           <select value={proposedBy} onChange={e => setProposedBy(e.target.value)} style={{ ...inp.style }}>
             <option value="">Sin asignar</option>
             {players.map(p => (
-              <option key={p.id} value={p.id}>{p.avatar_emoji} {p.name}</option>
+              <option key={p.id} value={p.id}>{p.name}</option>
             ))}
           </select>
         </div>

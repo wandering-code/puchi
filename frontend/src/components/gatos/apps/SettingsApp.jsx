@@ -3,11 +3,11 @@ import { AnimatePresence } from 'framer-motion'
 import { useIsMobile } from '../../../utils/responsive'
 import PlayerAvatar from '../PlayerAvatar'
 import AvatarCropModal from '../AvatarCropModal'
+import { PRESET_AVATARS } from '../../../utils/presetAvatars'
 
 // Los fondos de pantalla se gestionan desde Pirestore (catálogo en BD,
 // editable por el admin) — Ajustes se queda con lo relativo a la cuenta:
 // identidad (nombre, icono/foto) y seguridad (PIN, borrado).
-const AVATARS = ['⭐','🧚','🌿','🦋','🌙','🔥','🌸','🐉','🦊','🐺','🌊','🍄','🐱','🐾','📖','✨']
 
 function IconLock({ size = 17, color = 'currentColor' }) {
   return (
@@ -32,11 +32,11 @@ export default function SettingsApp({ player, onProfileUpdate }) {
 
   // Identidad
   const [name,           setName]           = useState(player.name)
-  const [selectedEmoji,  setSelectedEmoji]  = useState(player.avatar_emoji)
   const [saving,         setSaving]         = useState(false)
   const [profileMsg,     setProfileMsg]     = useState('')
   const [profileMsgOk,   setProfileMsgOk]   = useState(true)
   const [uploadingPhoto, setUploadingPhoto] = useState(false)
+  const [pickingPreset,  setPickingPreset]  = useState(false)
   const [cropFile,       setCropFile]       = useState(null) // foto elegida, pendiente de encuadrar
 
   // PIN
@@ -56,7 +56,7 @@ export default function SettingsApp({ player, onProfileUpdate }) {
     const r = await fetch('/api/players/me/profile', {
       method: 'PATCH', credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, avatar_emoji: selectedEmoji }),
+      body: JSON.stringify({ name }),
     })
     setSaving(false)
     if (r.ok) {
@@ -66,6 +66,21 @@ export default function SettingsApp({ player, onProfileUpdate }) {
       const d = await r.json().catch(() => ({}))
       setProfileMsgOk(false); setProfileMsg(d.detail || 'Error al guardar')
     }
+  }
+
+  // A diferencia del nombre, elegir un avatar de la galería se guarda al
+  // momento (igual que subir/quitar foto) — no hace falta pulsar "Guardar
+  // cambios" aparte para esto.
+  async function pickPreset(url) {
+    setPickingPreset(true); setProfileMsg('')
+    const r = await fetch('/api/players/me/profile', {
+      method: 'PATCH', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ avatar_url: url }),
+    })
+    setPickingPreset(false)
+    if (r.ok) onProfileUpdate?.(await r.json())
+    else { setProfileMsgOk(false); setProfileMsg('Error al guardar') }
   }
 
   async function uploadPhoto(blob) {
@@ -138,10 +153,8 @@ export default function SettingsApp({ player, onProfileUpdate }) {
               border: '2px solid rgba(255,255,255,0.12)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>
-              {player.avatar_url
-                ? <PlayerAvatar url={player.avatar_url} size={64} style={{ borderRadius: 0 }} />
-                : <PlayerAvatar emoji={selectedEmoji} size={32} />}
-              {uploadingPhoto && (
+              <PlayerAvatar emoji={player.avatar_emoji} url={player.avatar_url} size={player.avatar_url ? 64 : 32} style={player.avatar_url ? { borderRadius: 0 } : undefined} />
+              {(uploadingPhoto || pickingPreset) && (
                 <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: 'white' }}>…</div>
               )}
             </div>
@@ -156,21 +169,21 @@ export default function SettingsApp({ player, onProfileUpdate }) {
           </div>
 
           <div>
-            <span style={labelStyle}>Icono del sistema</span>
+            <span style={labelStyle}>Galería de avatares</span>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8,1fr)', gap: 6 }}>
-              {AVATARS.map(e => {
-                const active = selectedEmoji === e && !player.avatar_url
+              {PRESET_AVATARS.map(a => {
+                const active = player.avatar_url === a.url
                 return (
-                  <button type="button" key={e} onClick={() => setSelectedEmoji(e)}
-                    style={{ fontSize: 18, background: active ? 'rgba(255,255,255,0.15)' : 'transparent', border: active ? '2px solid white' : '2px solid transparent', borderRadius: 8, padding: 4, cursor: 'pointer', transition: 'all .15s', transform: active ? 'scale(1.15)' : 'scale(1)' }}>
-                    {e}
+                  <button type="button" key={a.id} onClick={() => pickPreset(a.url)} title={a.label} disabled={pickingPreset}
+                    style={{ padding: 3, borderRadius: '50%', background: 'transparent', border: active ? '2px solid white' : '2px solid transparent', cursor: 'pointer', transition: 'transform .15s', transform: active ? 'scale(1.1)' : 'scale(1)' }}>
+                    <img src={a.url} alt={a.label} style={{ width: '100%', aspectRatio: '1', borderRadius: '50%', display: 'block' }} />
                   </button>
                 )
               })}
             </div>
             {player.avatar_url && (
               <p style={{ fontSize: 10.5, color: 'rgba(255,255,255,0.3)', marginTop: 6 }}>
-                Elegir uno de estos y guardar sustituye a la foto subida.
+                Elegir uno de estos sustituye a tu foto/avatar actual.
               </p>
             )}
           </div>

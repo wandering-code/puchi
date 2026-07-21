@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../../utils/auth'
 import PlayerAvatar from './PlayerAvatar'
+import AvatarCropModal from './AvatarCropModal'
+import { PRESET_AVATARS } from '../../utils/presetAvatars'
 
-const AVATAR_OPTIONS = ['⭐','🧚','🌿','🦋','🌙','🔥','🌸','🐉','🦊','🐺','🌊','🍄','🐱','🐾','📖','✨']
 const COLOR_OPTIONS  = ['#e879f9','#c026d3','#ec4899','#f43f5e','#f97316','#eab308','#84cc16','#22c55e','#34d399','#06b6d4','#60a5fa','#818cf8']
 
 export default function LoginScreen() {
@@ -16,11 +17,40 @@ export default function LoginScreen() {
   const { login } = useAuth()
 
   // Registro
-  const [regName,   setRegName]   = useState('')
-  const [regPin,    setRegPin]    = useState('')
-  const [regPin2,   setRegPin2]   = useState('')
-  const [regColor,  setRegColor]  = useState('#60a5fa')
-  const [regAvatar, setRegAvatar] = useState('⭐')
+  const [regName,       setRegName]       = useState('')
+  const [regPin,        setRegPin]        = useState('')
+  const [regPin2,       setRegPin2]       = useState('')
+  const [regColor,      setRegColor]      = useState('#60a5fa')
+  // Avatar: o un preset de la galería (URL fija) o una foto propia recortada
+  // (Blob, aún no subida — se manda en el mismo POST /auth/register porque
+  // el registro no da sesión hasta que un admin lo aprueba).
+  const [regAvatarUrl,   setRegAvatarUrl]   = useState(PRESET_AVATARS[0].url)
+  const [regAvatarBlob,  setRegAvatarBlob]  = useState(null)
+  const [regAvatarPreview, setRegAvatarPreview] = useState(null) // object URL del blob recortado, para previsualizar
+  const [cropFile,      setCropFile]      = useState(null) // File pendiente de recortar en el modal
+  const fileInputRef = useRef(null)
+
+  function pickPreset(url) {
+    setRegAvatarUrl(url)
+    setRegAvatarBlob(null)
+    setRegAvatarPreview(null)
+  }
+
+  function onFileChosen(e) {
+    const file = e.target.files?.[0]
+    e.target.value = '' // permite volver a elegir el mismo fichero después
+    if (file) setCropFile(file)
+  }
+
+  function onCropConfirm(blob) {
+    setRegAvatarBlob(blob)
+    setRegAvatarPreview(URL.createObjectURL(blob))
+    setCropFile(null)
+  }
+
+  // Libera el object URL de la previsualización anterior al reemplazarla o
+  // al desmontar — igual que ya hace AvatarCropModal con el suyo.
+  useEffect(() => () => { if (regAvatarPreview) URL.revokeObjectURL(regAvatarPreview) }, [regAvatarPreview])
 
   useEffect(() => {
     fetch('/api/players', { credentials: 'include' })
@@ -57,10 +87,18 @@ export default function LoginScreen() {
     if (!/^\d{4,8}$/.test(regPin)) { setError('PIN: 4-8 dígitos'); return }
     setLoading(true); setError('')
     try {
+      // multipart, no JSON: la foto propia (si se eligió) viaja en el mismo
+      // request — el registro no da sesión hasta que un admin lo aprueba, así
+      // que no hay forma de subirla después con un POST /players/me/avatar aparte.
+      const form = new FormData()
+      form.append('name', regName.trim())
+      form.append('pin', regPin)
+      form.append('color', regColor)
+      if (regAvatarBlob) form.append('avatar_file', regAvatarBlob, 'avatar.jpg')
+      else form.append('avatar_url', regAvatarUrl)
       const r = await fetch('/api/auth/register', {
         method: 'POST', credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: regName.trim(), pin: regPin, color: regColor, avatar_emoji: regAvatar }),
+        body: form,
       })
       if (!r.ok) { const d = await r.json(); setError(d.detail || 'Error'); setLoading(false); return }
       const data = await r.json()
@@ -75,7 +113,7 @@ export default function LoginScreen() {
 
   return (
     <div style={{
-      width: '100%', height: '100%',
+      width: '100%', height: '100%', position: 'relative',
       background: 'radial-gradient(ellipse at 30% 20%, #1a1040 0%, #0a0a14 60%)',
       display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
       fontFamily: 'system-ui, sans-serif',
@@ -149,17 +187,33 @@ export default function LoginScreen() {
                   style={{ width:'100%', background:'rgba(255,255,255,0.07)', border:'1px solid rgba(255,255,255,0.15)', borderRadius:8, padding:'8px 12px', color:'white', fontSize:14, outline:'none' }} />
               </div>
 
-              {/* Avatar */}
+              {/* Avatar: preset de la galería o foto propia */}
               <div>
                 <label style={{ fontSize:11, color:'rgba(255,255,255,0.4)', display:'block', marginBottom:6 }}>Avatar</label>
-                <div style={{ display:'grid', gridTemplateColumns:'repeat(8,1fr)', gap:4 }}>
-                  {AVATAR_OPTIONS.map(e => (
-                    <button type="button" key={e} onClick={() => setRegAvatar(e)}
-                      style={{ fontSize:18, background:regAvatar===e?'rgba(255,255,255,0.15)':'transparent', border:regAvatar===e?'2px solid white':'2px solid transparent', borderRadius:6, padding:4, cursor:'pointer' }}>
-                      {e}
-                    </button>
-                  ))}
+                <div style={{ display:'grid', gridTemplateColumns:'repeat(6,1fr)', gap:6 }}>
+                  {PRESET_AVATARS.map(a => {
+                    const active = !regAvatarBlob && regAvatarUrl === a.url
+                    return (
+                      <button type="button" key={a.id} onClick={() => pickPreset(a.url)} title={a.label}
+                        style={{ padding:2, borderRadius:'50%', background:'transparent', cursor:'pointer', border:active?'2px solid white':'2px solid transparent' }}>
+                        <img src={a.url} alt={a.label} style={{ width:'100%', aspectRatio:'1', borderRadius:'50%', display:'block' }} />
+                      </button>
+                    )
+                  })}
+                  {/* Foto propia — mismo tamaño de celda que los presets, con la previsualización si ya se recortó una */}
+                  <button type="button" onClick={() => fileInputRef.current?.click()} title="Subir tu propia foto"
+                    style={{
+                      padding:2, borderRadius:'50%', cursor:'pointer',
+                      background: regAvatarBlob ? 'transparent' : 'rgba(255,255,255,0.08)',
+                      border: regAvatarBlob ? '2px solid white' : '2px dashed rgba(255,255,255,0.35)',
+                      display:'flex', alignItems:'center', justifyContent:'center', aspectRatio:'1',
+                    }}>
+                    {regAvatarPreview
+                      ? <img src={regAvatarPreview} alt="Tu foto" style={{ width:'100%', height:'100%', borderRadius:'50%', objectFit:'cover', display:'block' }} />
+                      : <span style={{ fontSize:16, color:'rgba(255,255,255,0.5)' }}>＋</span>}
+                  </button>
                 </div>
+                <input ref={fileInputRef} type="file" accept="image/*" onChange={onFileChosen} style={{ display:'none' }} />
               </div>
 
               {/* Color */}
@@ -213,6 +267,12 @@ export default function LoginScreen() {
           </motion.div>
         )}
 
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {cropFile && (
+          <AvatarCropModal file={cropFile} onCancel={() => setCropFile(null)} onConfirm={onCropConfirm} />
+        )}
       </AnimatePresence>
     </div>
   )
