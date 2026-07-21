@@ -233,8 +233,19 @@ function CallView({ peer, callType, localStream, remoteStream, isMuted, isCamera
   const [localExpanded, setLocalExpanded] = useState(false)
   const chatScrollRef = useRef(null)
 
-  // Callback refs: se llaman al montar y cuando el stream cambia.
-  const localVideoRef  = useCallback(el => { if (el) el.srcObject = localStream  ?? null }, [localStream])
+  // Callback refs: se llaman al montar y cuando el stream cambia. El local va
+  // silenciado (el autoplay de vídeo mudo casi siempre lo permite el
+  // navegador), pero en la práctica en iOS Safari a veces también se queda
+  // en negro pese a ir muted — mismo fix de .play() con reintento que el
+  // remoto, no solo confiar en el autoplay.
+  const localVideoRef  = useCallback(el => {
+    if (!el) return
+    if (el.srcObject !== localStream) el.srcObject = localStream ?? null
+    if (!localStream) return
+    const tryPlay = () => el.play().catch(() => {})
+    tryPlay()
+    el.onloadedmetadata = tryPlay
+  }, [localStream])
   // El remoto no va silenciado, así que el navegador a veces bloquea su
   // autoplay (se queda en un fotograma negro) — mismo fix que en GroupTile:
   // forzar .play() con reintento cuando cargan los metadatos.
@@ -479,7 +490,17 @@ function GroupCallView({ myId, participantIds, allPlayers, callType, localStream
   const gridAreaRef = useRef(null)
   const [areaSize, setAreaSize] = useState({ w: 0, h: 0 })
 
-  const localVideoRef = useCallback(el => { if (el) el.srcObject = localStream ?? null }, [localStream])
+  // Mismo fix de .play() con reintento que en CallView — el vídeo local, aunque
+  // silenciado, a veces se queda en negro en iOS Safari si solo se confía en
+  // el autoplay.
+  const localVideoRef = useCallback(el => {
+    if (!el) return
+    if (el.srcObject !== localStream) el.srcObject = localStream ?? null
+    if (!localStream) return
+    const tryPlay = () => el.play().catch(() => {})
+    tryPlay()
+    el.onloadedmetadata = tryPlay
+  }, [localStream])
 
   useEffect(() => {
     if (!showChat) return
