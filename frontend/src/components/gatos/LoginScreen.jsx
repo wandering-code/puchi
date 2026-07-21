@@ -8,12 +8,17 @@ import { COLOR_OPTIONS } from '../../utils/colorOptions'
 
 export default function LoginScreen() {
   const [players,  setPlayers]  = useState([])
-  const [step,     setStep]     = useState('select')   // select | pin | register | pending
-  const [selected, setSelected] = useState(null)
-  const [pin,      setPin]      = useState('')
+  const [step,     setStep]     = useState('login')   // login | register | pending
+  const [loginName, setLoginName] = useState('')
+  const [loginPin,  setLoginPin]  = useState('')
   const [error,    setError]    = useState('')
   const [loading,  setLoading]  = useState(false)
   const { login } = useAuth()
+
+  // Se resuelve en vivo mientras se escribe el nombre — si coincide con una
+  // cuenta existente (case-insensitive), se ve su foto/avatar antes incluso
+  // de meter el PIN. No se lista el resto de perfiles en ningún momento.
+  const matchedPlayer = players.find(p => p.name.toLowerCase() === loginName.trim().toLowerCase())
 
   // Registro
   const [regName,       setRegName]       = useState('')
@@ -58,21 +63,23 @@ export default function LoginScreen() {
       .catch(() => setPlayers([]))
   }, [])
 
-  function selectPlayer(p) {
-    setSelected(p); setPin(''); setError(''); setStep('pin')
-  }
-
   async function handleLogin(e) {
     e.preventDefault()
-    if (!pin) return
+    const name = loginName.trim()
+    if (!name || !loginPin) return
     setLoading(true); setError('')
+    // Se resuelve el nombre contra la lista ya cargada — mismo dato que ya
+    // se usa para la previsualización del avatar, sin pedir nada nuevo al
+    // backend solo para saber el id.
+    const player = players.find(p => p.name.toLowerCase() === name.toLowerCase())
+    if (!player) { setError('Usuario no encontrado'); setLoading(false); return }
     try {
       const r = await fetch('/api/auth/login', {
         method: 'POST', credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ player_id: selected.id, pin }),
+        body: JSON.stringify({ player_id: player.id, pin: loginPin }),
       })
-      if (!r.ok) { setError('PIN incorrecto'); setLoading(false); return }
+      if (!r.ok) { const d = await r.json().catch(() => ({})); setError(d.detail || 'PIN incorrecto'); setLoading(false); return }
       const data = await r.json()
       login({ ...data.player, token: data.token })
     } catch { setError('Error de conexión') }
@@ -127,48 +134,45 @@ export default function LoginScreen() {
 
       <AnimatePresence mode="wait">
 
-        {/* Selección de usuario */}
-        {step === 'select' && (
-          <motion.div key="select" initial={{ opacity:0, scale:0.95 }} animate={{ opacity:1, scale:1 }} exit={{ opacity:0, scale:0.95 }} transition={{ duration:0.2 }}>
-            <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', justifyContent: 'center', maxWidth: 600 }}>
-              {players.map(p => (
-                <button key={p.id} onClick={() => selectPlayer(p)}
-                  style={{ background:'rgba(255,255,255,0.05)', border:`1px solid ${p.color}44`, borderRadius:16, padding:'20px 24px', cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', gap:10, transition:'all .2s', minWidth: 100 }}
-                  onMouseEnter={e => { e.currentTarget.style.background=`${p.color}22`; e.currentTarget.style.borderColor=p.color }}
-                  onMouseLeave={e => { e.currentTarget.style.background='rgba(255,255,255,0.05)'; e.currentTarget.style.borderColor=`${p.color}44` }}>
-                  <PlayerAvatar emoji={p.avatar_emoji} url={p.avatar_url} size={40} />
-                  <span style={{ fontSize:14, fontWeight:700, color:p.color }}>{p.name}</span>
-                </button>
-              ))}
-
-              {/* Botón crear cuenta */}
-              <button onClick={() => { setStep('register'); setError('') }}
-                style={{ background:'rgba(255,255,255,0.04)', border:'2px dashed rgba(255,255,255,0.2)', borderRadius:16, padding:'20px 24px', cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', gap:10, transition:'all .2s', minWidth: 100 }}
-                onMouseEnter={e => { e.currentTarget.style.borderColor='rgba(255,255,255,0.5)' }}
-                onMouseLeave={e => { e.currentTarget.style.borderColor='rgba(255,255,255,0.2)' }}>
-                <span style={{ fontSize: 40 }}>➕</span>
-                <span style={{ fontSize:13, fontWeight:600, color:'rgba(255,255,255,0.4)' }}>Crear cuenta</span>
-              </button>
+        {/* Login: usuario + PIN en un único paso, sin listar los perfiles.
+            El avatar se resuelve en vivo contra `players` según lo que se
+            va escribiendo en "Usuario". */}
+        {step === 'login' && (
+          <motion.div key="login" initial={{ opacity:0, scale:0.95 }} animate={{ opacity:1, scale:1 }} exit={{ opacity:0, scale:0.95 }} transition={{ duration:0.2 }}
+            style={{
+              background:'rgba(255,255,255,0.05)',
+              border:`1px solid ${matchedPlayer ? matchedPlayer.color+'44' : 'rgba(255,255,255,0.15)'}`,
+              borderRadius:20, padding:40, display:'flex', flexDirection:'column', alignItems:'center', gap:18,
+              width:'100%', maxWidth:320, boxSizing:'border-box', transition:'border-color .2s',
+            }}>
+            <div style={{
+              width:64, height:64, borderRadius:'50%', flexShrink:0, overflow:'hidden',
+              display:'flex', alignItems:'center', justifyContent:'center',
+              background: matchedPlayer ? (matchedPlayer.avatar_url ? '#000' : matchedPlayer.color+'22') : 'rgba(255,255,255,0.06)',
+              border: `2px solid ${matchedPlayer ? matchedPlayer.color+'55' : 'rgba(255,255,255,0.15)'}`,
+              transition:'all .2s',
+            }}>
+              {matchedPlayer
+                ? <PlayerAvatar emoji={matchedPlayer.avatar_emoji} url={matchedPlayer.avatar_url} size={matchedPlayer.avatar_url ? 64 : 32} style={matchedPlayer.avatar_url ? { borderRadius: 0 } : undefined} />
+                : <span style={{ fontSize:26, color:'rgba(255,255,255,0.25)' }}>👤</span>}
             </div>
-          </motion.div>
-        )}
+            {matchedPlayer && <p style={{ fontSize:15, fontWeight:700, color:matchedPlayer.color, margin:0 }}>{matchedPlayer.name}</p>}
 
-        {/* PIN */}
-        {step === 'pin' && selected && (
-          <motion.div key="pin" initial={{ opacity:0, y:20 }} animate={{ opacity:1, y:0 }} exit={{ opacity:0, y:-20 }} transition={{ duration:0.2 }}
-            style={{ background:'rgba(255,255,255,0.05)', border:`1px solid ${selected.color}44`, borderRadius:20, padding:40, display:'flex', flexDirection:'column', alignItems:'center', gap:20, width:'100%', maxWidth:320, boxSizing:'border-box' }}>
-            <PlayerAvatar emoji={selected.avatar_emoji} url={selected.avatar_url} size={48} />
-            <p style={{ fontSize:16, fontWeight:700, color:selected.color }}>{selected.name}</p>
-            <form onSubmit={handleLogin} style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:16, width:'100%' }}>
-              <input type="password" inputMode="numeric" maxLength={8} value={pin} onChange={e => setPin(e.target.value.replace(/\D/g,''))} placeholder="PIN" autoFocus
-                style={{ textAlign:'center', letterSpacing:8, fontSize:18, background:'rgba(255,255,255,0.08)', border:`1px solid ${selected.color}66`, borderRadius:10, padding:'12px 20px', color:'white', outline:'none', width:'100%' }} />
-              {error && <p style={{ fontSize:13, color:'#f87171' }}>{error}</p>}
-              <button type="submit" disabled={loading || !pin}
-                style={{ background:selected.color, border:'none', borderRadius:10, padding:'12px 32px', color:'black', fontSize:14, cursor:'pointer', fontWeight:700, width:'100%', opacity:(!pin||loading)?0.5:1 }}>
-                {loading ? 'Cargando…' : 'Iniciar sesión'}
+            <form onSubmit={handleLogin} style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:14, width:'100%' }}>
+              <input value={loginName} onChange={e => { setLoginName(e.target.value); setError('') }} placeholder="Usuario" autoFocus autoCapitalize="none" autoCorrect="off"
+                style={{ width:'100%', boxSizing:'border-box', textAlign:'center', fontSize:15, background:'rgba(255,255,255,0.08)', border:'1px solid rgba(255,255,255,0.15)', borderRadius:10, padding:'11px 16px', color:'white', outline:'none' }} />
+              <input type="password" inputMode="numeric" maxLength={8} value={loginPin} onChange={e => setLoginPin(e.target.value.replace(/\D/g,''))} placeholder="PIN"
+                style={{ width:'100%', boxSizing:'border-box', textAlign:'center', letterSpacing:8, fontSize:18, background:'rgba(255,255,255,0.08)', border:'1px solid rgba(255,255,255,0.15)', borderRadius:10, padding:'11px 20px', color:'white', outline:'none' }} />
+              {error && <p style={{ fontSize:13, color:'#f87171', margin:0 }}>{error}</p>}
+              <button type="submit" disabled={loading || !loginName.trim() || !loginPin}
+                style={{ background:matchedPlayer?.color ?? '#60a5fa', border:'none', borderRadius:10, padding:'12px 32px', color:'black', fontSize:14, cursor:'pointer', fontWeight:700, width:'100%', opacity:(loading||!loginName.trim()||!loginPin)?0.5:1 }}>
+                {loading ? 'Entrando…' : 'Iniciar sesión'}
               </button>
             </form>
-            <button onClick={() => setStep('select')} style={{ background:'none', border:'none', color:'rgba(255,255,255,0.3)', cursor:'pointer', fontSize:12 }}>← Volver</button>
+
+            <button onClick={() => { setStep('register'); setError('') }} style={{ background:'none', border:'none', color:'rgba(255,255,255,0.4)', cursor:'pointer', fontSize:12 }}>
+              ¿No tienes cuenta? Crear cuenta
+            </button>
           </motion.div>
         )}
 
@@ -246,7 +250,7 @@ export default function LoginScreen() {
               </button>
             </form>
 
-            <button onClick={() => { setStep('select'); setError('') }} style={{ background:'none', border:'none', color:'rgba(255,255,255,0.3)', cursor:'pointer', fontSize:12 }}>← Volver</button>
+            <button onClick={() => { setStep('login'); setError('') }} style={{ background:'none', border:'none', color:'rgba(255,255,255,0.3)', cursor:'pointer', fontSize:12 }}>← Volver</button>
           </motion.div>
         )}
 
@@ -259,7 +263,7 @@ export default function LoginScreen() {
             <p style={{ fontSize:13, color:'rgba(255,255,255,0.5)', lineHeight:1.5 }}>
               Un admin tiene que aprobarla antes de que puedas entrar. Vuelve a intentarlo más tarde.
             </p>
-            <button onClick={() => { setStep('select'); setRegName(''); setRegPin(''); setRegPin2(''); setError('') }}
+            <button onClick={() => { setStep('login'); setRegName(''); setRegPin(''); setRegPin2(''); setError('') }}
               style={{ background:'#60a5fa', border:'none', borderRadius:10, padding:'10px 24px', color:'black', fontSize:13, cursor:'pointer', fontWeight:700 }}>
               Volver
             </button>
