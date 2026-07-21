@@ -328,9 +328,30 @@ export default function GatOS({ player: initialPlayer, onLogout, onProfileUpdate
     }
   }
 
+  // Llamada perdida (nunca llegó a estar 'active'): vibración si el navegador
+  // la soporta (Android/Chrome — en iOS Safari no existe navigator.vibrate,
+  // limitación de la plataforma, no hay forma de simularla) y notificación
+  // nativa del sistema si la pestaña no tiene el foco (funciona en ambos).
+  function notifyMissedCall(peer) {
+    if (navigator.vibrate) navigator.vibrate([200, 100, 200])
+    if (!document.hasFocus() && Notification.permission === 'granted') {
+      const n = new Notification(`Llamada perdida de ${peer?.name ?? 'alguien'}`, {
+        body: 'Diskordkito',
+        icon: '/favicon.ico',
+        tag: 'diskordkito-call',
+        silent: false,
+      })
+      n.onclick = () => {
+        window.focus()
+        openAppRef.current?.('diskordkito')
+      }
+    }
+  }
+
   function rejectCall() {
     const peer = callPeerRef.current
     if (peer) sendWs({ type: 'call_reject', target_id: peer.id })
+    notifyMissedCall(peer) // no contestamos a tiempo (o se rechazó a mano, pero entonces la app tenía foco y no se notifica igualmente)
     const prev = pendingHangupRef.current
     pendingHangupRef.current = null
     if (prev?.type === '1to1') {
@@ -627,6 +648,11 @@ export default function GatOS({ player: initialPlayer, onLogout, onProfileUpdate
         break
       case 'call_reject':
       case 'call_end':
+        // Si todavía no estaba 'active' (llamando sin respuesta, o entrante
+        // sin contestar y el que llamaba se rindió antes), es una llamada
+        // perdida — si ya estaba 'active' y de verdad se cuelga en plena
+        // llamada, no se notifica (decisión explícita, solo perdidas).
+        if (callStateRef.current !== 'active') notifyMissedCall(msg.from_player)
         cleanupCall()
         break
     }
