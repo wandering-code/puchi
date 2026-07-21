@@ -5,9 +5,10 @@ import { DOCK_ICONS } from './apps/DockIcons'
 // Apps con contenido "de pestaña" en móvil — siempre montadas de fondo,
 // se cambia entre ellas con solo opacidad (ver GatOS.jsx). Ajustes y Admin
 // NO están aquí: siguen abriéndose como overlay a pantalla completa encima
-// (mismo patrón que desktop), pero SÍ son seleccionables desde el abanico
-// del lanzador (ver launcherApps más abajo) — es solo otra forma de llegar
-// a "abrir esta app", `switchMobileApp` no distingue entre unas y otras.
+// (mismo patrón que desktop). De las dos, solo Admin es seleccionable desde
+// el abanico del lanzador (ver launcherApps más abajo) — Ajustes se entra
+// únicamente desde el menú GatOS, a propósito, para no duplicar el mismo
+// destino en dos sitios.
 export const MOBILE_TAB_APPS = ['diskordkito', 'luniteca2', 'pirestore']
 
 // Igual que Dock — quien no es miembro del club solo ve Luniteca.
@@ -15,15 +16,18 @@ export function visibleTabApps(player) {
   return MOBILE_TAB_APPS.filter(id => isAppVisible(APPS[id], player))
 }
 
-// Qué apps ofrece el abanico del lanzador — TODAS las que el jugador puede
-// ver (mismo criterio que el Dock de escritorio), no solo las 3 de pestaña.
-// Para el admin eso incluye Ajustes y Admin; para el resto, todo menos Admin
-// (y menos lo que exija ser miembro del club, si no lo es — aunque en ese
-// caso ni se llega a mostrar el lanzador, ver GatOS.jsx: modo kiosco).
+// Qué apps ofrece el abanico del lanzador — todas las que el jugador puede
+// ver (mismo criterio que el Dock de escritorio), no solo las 3 de pestaña,
+// salvo Ajustes: esa ya tiene su único sitio en el menú GatOS (ver
+// MenuBar.jsx), así que aquí se excluye a propósito para no duplicarla.
+// Para el admin esto deja Admin como único motivo para pasar por aquí
+// además de las apps normales; para el resto, todo menos Admin (y menos lo
+// que exija ser miembro del club, si no lo es — aunque en ese caso ni se
+// llega a mostrar el lanzador, ver GatOS.jsx: modo kiosco).
 export function launcherApps(player) {
   const isAdmin = player?.name?.toLowerCase() === 'wander'
   return Object.values(APPS)
-    .filter(app => !app.hidden && isAppVisible(app, player, isAdmin))
+    .filter(app => !app.hidden && app.id !== 'settings' && isAppVisible(app, player, isAdmin))
     .map(app => app.id)
 }
 

@@ -72,11 +72,9 @@ export default function MenuBar({ player, activeAppTitle, online, onOpenApp, onL
                 <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', marginTop: 2 }}>En línea</p>
               </div>
             </div>
+            {/* Solo Ajustes aquí — Admin se entra desde el botón flotante (móvil) / Dock (escritorio) */}
             {isAppVisible(APPS.settings, player, isAdmin) && (
               <MenuItem icon="⚙️" label="Ajustes" onClick={() => { onOpenApp('settings'); setMenuOpen(false) }} />
-            )}
-            {isAdmin && (
-              <MenuItem icon="🛡️" label="Admin" onClick={() => { onOpenApp('admin'); setMenuOpen(false) }} />
             )}
             {onExitPC && (
               <MenuItem icon="🏠" label="Volver a la habitación" onClick={() => { setMenuOpen(false); onExitPC() }} />

@@ -35,7 +35,8 @@ export default function Dock({ windows, onOpenApp, onIconClick, autoHide, player
         transition: 'transform 0.28s cubic-bezier(0.4, 0, 0.2, 1)',
         willChange: 'transform',
       }}>
-        {Object.values(APPS).filter(app => !app.hidden && isAppVisible(app, player, isAdmin)).map(app => {
+        {/* Ajustes no va en el Dock — único sitio: el menú GatOS (ver MenuBar.jsx) */}
+        {Object.values(APPS).filter(app => !app.hidden && app.id !== 'settings' && isAppVisible(app, player, isAdmin)).map(app => {
           const win     = windows.find(w => w.appId === app.id)
           const running = !!win
           const Icon    = DOCK_ICONS[app.id]
