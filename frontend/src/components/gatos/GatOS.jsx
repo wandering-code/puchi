@@ -27,7 +27,10 @@ let _nextId = 1
 // ── WebRTC config ─────────────────────────────────────────────────────────────
 // Vive aquí (no en Diskordkito) para que la señalización de llamadas funcione
 // aunque la app de chat esté cerrada — igual que ya pasa con los mensajes.
-const ICE_SERVERS = [
+// Fallback si el TURN no responde (falla el fetch, o no está configurado en
+// el backend): solo STUN, válido entre dispositivos en la misma red pero no
+// a través de NAT simétrico (frecuente en redes móviles).
+const FALLBACK_ICE_SERVERS = [
   { urls: 'stun:stun.l.google.com:19302' },
   { urls: 'stun:stun1.l.google.com:19302' },
 ]
@@ -156,11 +159,23 @@ export default function GatOS({ player: initialPlayer, onLogout, onProfileUpdate
   const callPeerRef       = useRef(null)
   const callTypeRef       = useRef('video')
   const ringTimeoutRef    = useRef(null)
+  // Credenciales TURN del backend (efímeras) — se piden de nuevo al empezar
+  // cada llamada/unirse a la grupal; si el fetch falla o no hay TURN
+  // configurado, se sigue intentando solo con STUN (llamadas en la misma red).
+  const iceServersRef     = useRef(FALLBACK_ICE_SERVERS)
 
   function sendWs(data) {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify(data))
     }
+  }
+
+  async function refreshIceServers() {
+    try {
+      const r = await fetch('/api/turn-credentials', { credentials: 'include' })
+      const servers = r.ok ? await r.json() : null
+      if (Array.isArray(servers) && servers.length) iceServersRef.current = servers
+    } catch {}
   }
 
   async function getMedia(withVideo) {
@@ -171,7 +186,7 @@ export default function GatOS({ player: initialPlayer, onLogout, onProfileUpdate
   }
 
   function createPC(targetId) {
-    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS })
+    const pc = new RTCPeerConnection({ iceServers: iceServersRef.current })
     pcRef.current = pc
     pc.onicecandidate = ({ candidate }) => {
       if (candidate) sendWs({ type: 'call_ice', target_id: targetId, candidate })
@@ -213,7 +228,7 @@ export default function GatOS({ player: initialPlayer, onLogout, onProfileUpdate
     setCallState('calling')
     openAppRef.current?.('diskordkito')
     try {
-      const stream = await getMedia(type === 'video')
+      const [stream] = await Promise.all([getMedia(type === 'video'), refreshIceServers()])
       const pc = createPC(targetPlayer.id)
       stream.getTracks().forEach(t => pc.addTrack(t, stream))
       const offer = await pc.createOffer()
@@ -233,7 +248,7 @@ export default function GatOS({ player: initialPlayer, onLogout, onProfileUpdate
     setCallState('active')
     openAppRef.current?.('diskordkito')
     try {
-      const stream = await getMedia(type === 'video')
+      const [stream] = await Promise.all([getMedia(type === 'video'), refreshIceServers()])
       const pc = createPC(peer.id)
       stream.getTracks().forEach(t => pc.addTrack(t, stream))
       await pc.setRemoteDescription({ type: 'offer', sdp: offerSdpRef.current })
@@ -319,7 +334,7 @@ export default function GatOS({ player: initialPlayer, onLogout, onProfileUpdate
   }
 
   function createGroupPC(peerId) {
-    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS })
+    const pc = new RTCPeerConnection({ iceServers: iceServersRef.current })
     groupPcsRef.current[peerId] = pc
     pc.onicecandidate = ({ candidate }) => {
       if (candidate) sendWs({ type: 'group_call_ice', target_id: peerId, candidate })
@@ -356,7 +371,7 @@ export default function GatOS({ player: initialPlayer, onLogout, onProfileUpdate
     setIncomingGroupCall(null)
     openAppRef.current?.('diskordkito')
     try {
-      await getGroupMedia(type === 'video')
+      await Promise.all([getGroupMedia(type === 'video'), refreshIceServers()])
       groupCallJoinedRef.current = true
       setGroupCallJoined(true)
       setGroupCallType(type)

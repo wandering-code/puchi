@@ -9,7 +9,7 @@ from typing import Optional
 from io import BytesIO
 from PIL import Image
 import httpx
-import os, uuid, shutil, re, unicodedata
+import os, uuid, shutil, re, unicodedata, hmac, hashlib, base64, time
 from jose import JWTError, jwt
 
 from database import (
@@ -52,6 +52,20 @@ def _general_call_state() -> dict:
         "callType": general_call["call_type"],
         "participantIds": list(general_call["participants"]),
     }
+
+# ── TURN (coturn propio en el mini PC) ──────────────────────────────────────
+# Solo STUN (Google) no basta para conectar dos dispositivos si alguno está
+# detrás de un NAT simétrico (frecuente en redes móviles) — ahí hace falta un
+# TURN que retransmita el vídeo. En vez de un servicio de terceros (facturan
+# por GB, y las llamadas del club son largas — 3h+ — así que salía caro),
+# coturn propio expuesto en COTURN_EXTERNAL_IP:3478, con credenciales
+# efímeras generadas aquí vía el mecanismo REST estándar de coturn
+# (use-auth-secret): usuario "<expiry>:<id>", contraseña
+# base64(HMAC-SHA1(secret, usuario)) — el propio coturn valida el HMAC sin
+# necesitar consultarnos.
+COTURN_STATIC_SECRET = os.getenv("COTURN_STATIC_SECRET")
+COTURN_EXTERNAL_IP   = os.getenv("COTURN_EXTERNAL_IP")
+TURN_CRED_TTL_S       = 24 * 3600  # de sobra para una sesión de varias horas
 
 # Mapeo de etiquetas Open Library → géneros canónicos en español (orden = prioridad)
 _GENRE_MAP = [
@@ -113,6 +127,21 @@ app.add_middleware(
     allow_headers=["*"],
     allow_credentials=True,
 )
+
+
+@app.get("/turn-credentials")
+async def turn_credentials(player: Player = Depends(get_current_player)):
+    if not COTURN_STATIC_SECRET or not COTURN_EXTERNAL_IP:
+        return []
+    username = f"{int(time.time()) + TURN_CRED_TTL_S}:{player.id}"
+    digest = hmac.new(COTURN_STATIC_SECRET.encode(), username.encode(), hashlib.sha1).digest()
+    credential = base64.b64encode(digest).decode()
+    host = f"{COTURN_EXTERNAL_IP}:3478"
+    return [
+        {"urls": f"stun:{host}"},
+        {"urls": f"turn:{host}?transport=udp", "username": username, "credential": credential},
+        {"urls": f"turn:{host}?transport=tcp", "username": username, "credential": credential},
+    ]
 
 
 @app.on_event("startup")

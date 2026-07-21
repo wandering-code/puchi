@@ -235,7 +235,17 @@ function CallView({ peer, callType, localStream, remoteStream, isMuted, isCamera
 
   // Callback refs: se llaman al montar y cuando el stream cambia.
   const localVideoRef  = useCallback(el => { if (el) el.srcObject = localStream  ?? null }, [localStream])
-  const remoteVideoRef = useCallback(el => { if (el) el.srcObject = remoteStream ?? null }, [remoteStream])
+  // El remoto no va silenciado, así que el navegador a veces bloquea su
+  // autoplay (se queda en un fotograma negro) — mismo fix que en GroupTile:
+  // forzar .play() con reintento cuando cargan los metadatos.
+  const remoteVideoRef = useCallback(el => {
+    if (!el) return
+    if (el.srcObject !== remoteStream) el.srcObject = remoteStream ?? null
+    if (!remoteStream) return
+    const tryPlay = () => el.play().catch(() => {})
+    tryPlay()
+    el.onloadedmetadata = tryPlay
+  }, [remoteStream])
 
   useEffect(() => {
     if (!showChat) return

@@ -9,3 +9,36 @@ services:
   # ninguno (los de dev viven en docker-compose.override.yml, que no se carga
   # en producción). Nadie fuera del contenedor backend necesita hablar
   # directo con Postgres — mismo patrón que Sartori.
+
+  # TURN propio (llamadas WebRTC de Diskordkito a través de NAT simétrico).
+  # network_mode: host porque necesita el rango de puertos de relay UDP
+  # accesible directamente (mapear cientos de puertos uno a uno vía Docker
+  # sería frágil e ineficiente) — es el único servicio del mini PC con
+  # puertos expuestos directamente a internet (fuera del Cloudflare Tunnel):
+  # requiere abrir en el router, hacia la IP del mini PC, TCP+UDP 3478 y
+  # UDP 49160-49260. Credenciales HMAC efímeras (ver /turn-credentials en
+  # main.py) — sin ellas coturn rechaza el relay.
+  coturn:
+    image: coturn/coturn:4.6-alpine
+    restart: unless-stopped
+    network_mode: host
+    env_file:
+      - ./coturn.env
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >
+        turnserver -n
+        --listening-port=3478
+        --min-port=49160
+        --max-port=49260
+        --realm=puchi.wanderingcode.dev
+        --use-auth-secret
+        --static-auth-secret=$$COTURN_STATIC_SECRET
+        --listening-ip=$$COTURN_INTERNAL_IP
+        --relay-ip=$$COTURN_INTERNAL_IP
+        --external-ip=$$COTURN_EXTERNAL_IP/$$COTURN_INTERNAL_IP
+        --no-cli
+        --no-tls
+        --no-dtls
+        --no-multicast-peers
+        --log-file=stdout
