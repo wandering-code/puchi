@@ -786,15 +786,19 @@ export default function GatOS({ player: initialPlayer, onLogout, onProfileUpdate
 
   // ── Gestión de ventanas ─────────────────────────────────────────────────────
   const openApp = useCallback((appId) => {
-    // Cualquier apertura de una app "de pestaña" en móvil (venga de donde
-    // venga: el lanzador, el menú, o aquí abajo desde una notificación de
+    // Cualquier apertura de una app en móvil (venga de donde venga: el
+    // lanzador, el menú GatOS, o aquí abajo desde una notificación de
     // llamada/mensaje) debe dejarla marcada como la pestaña activa — si no,
     // se queda viendo la pestaña anterior "por debajo" con los clics activos
     // aunque la de encima (la que el jugador cree que está usando) los tenga
-    // desactivados por no ser "la activa". Centralizado aquí para que no
-    // haga falta acordarse de llamar también a switchMobileApp en cada sitio
-    // que abre una app directamente.
-    if (isMobile && MOBILE_TAB_APPS.includes(appId)) setMobileActiveTab(appId)
+    // desactivados por no ser "la activa". Ajustes/Admin se abren siempre
+    // así (desde el menú GatOS o el lanzador, nunca desde switchMobileApp),
+    // así que tienen que estar aquí también, no solo las 3 de pestaña fija.
+    // Centralizado aquí para que no haga falta acordarse de llamar también a
+    // switchMobileApp en cada sitio que abre una app directamente.
+    if (isMobile && (MOBILE_TAB_APPS.includes(appId) || appId === 'settings' || appId === 'admin')) {
+      setMobileActiveTab(appId)
+    }
     setWindows(prev => {
       const ex = prev.find(w => w.appId === appId)
       if (ex) {
@@ -959,14 +963,19 @@ case 'settings':    return <SettingsApp player={player} onProfileUpdate={onProfi
     : null
   const activeAppTitle = activeWindow ? APPS[activeWindow.appId]?.title : null
 
-  // Móvil: qué pestaña se ve, y si Ajustes está abierto encima como overlay.
-  // Quien no es miembro del club solo tiene Luniteca como pestaña posible.
+  // Móvil: qué app se ve — igual de "pestaña" para Ajustes/Admin que para
+  // Diskordkito/Luniteca/Pirestore (mismo contenedor, sin cabecera propia ni
+  // botón de volver: se navega a otra con el lanzador flotante, como entre
+  // cualquier otra). Quien no es miembro del club solo tiene Luniteca como
+  // pestaña posible.
   const tabApps = visibleTabApps(player)
-  const mobileActiveTabApp = (mobileActiveTab && tabApps.includes(mobileActiveTab))
-    ? mobileActiveTab
-    : tabApps[0]
   const mobileSettingsWindow = windows.find(w => w.appId === 'settings' && !w.minimized)
   const mobileAdminWindow    = windows.find(w => w.appId === 'admin'    && !w.minimized)
+  const mobileActiveTabApp =
+    (mobileActiveTab === 'settings' && mobileSettingsWindow) ? 'settings' :
+    (mobileActiveTab === 'admin'    && mobileAdminWindow)    ? 'admin'    :
+    (mobileActiveTab && tabApps.includes(mobileActiveTab))   ? mobileActiveTab :
+    tabApps[0]
 
   // App realmente visible ahora mismo, sea cual sea el modo — usado para
   // decidir si la notificación de llamada entrante es redundante o no.
@@ -1036,14 +1045,18 @@ case 'settings':    return <SettingsApp player={player} onProfileUpdate={onProfi
         />
 
         {/* Contenido de las pestañas, a pantalla completa (el lanzador flota
-            encima, no reserva espacio). Las tres apps se mantienen montadas a
-            la vez (ocultas con CSS, no desmontadas) para no perder su estado
-            — scroll, conversación abierta, etc. — cada vez que se cambia. */}
+            encima, no reserva espacio). Las tres apps de pestaña fija se
+            mantienen montadas a la vez (ocultas con CSS, no desmontadas)
+            para no perder su estado — scroll, conversación abierta, etc. —
+            cada vez que se cambia. Ajustes/Admin se suman a este mismo
+            listado (mismo contenedor, mismo crossfade, sin cabecera propia)
+            en cuanto se abren una vez — se navega a otra app con el
+            lanzador flotante, igual que entre cualquiera de las tres. */}
         <div style={{
           position: 'absolute', top: MENU_BAR_H, left: 0, right: 0, bottom: 0,
           overflow: 'hidden',
         }}>
-          {tabApps.map(id => {
+          {[...tabApps, ...(mobileSettingsWindow ? ['settings'] : []), ...(mobileAdminWindow ? ['admin'] : [])].map(id => {
             const active = mobileActiveTabApp === id
             return (
               <motion.div
@@ -1063,69 +1076,6 @@ case 'settings':    return <SettingsApp player={player} onProfileUpdate={onProfi
           })}
         </div>
 
-        {/* Ajustes se abre como overlay a pantalla completa encima de la pestaña activa */}
-        <AnimatePresence>
-          {mobileSettingsWindow && (
-            <motion.div
-              key="mobile-settings"
-              initial={{ y: '100%' }}
-              animate={{ y: 0 }}
-              exit={{ y: '100%' }}
-              transition={{ type: 'spring', damping: 28, stiffness: 320 }}
-              style={{
-                position: 'absolute', top: MENU_BAR_H, left: 0, right: 0, bottom: 0,
-                zIndex: 20000, background: '#111827', display: 'flex', flexDirection: 'column',
-              }}
-            >
-              <div style={{
-                height: 44, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6,
-                padding: '0 6px 0 2px', background: 'rgba(46,46,52,0.92)', backdropFilter: 'blur(20px)',
-                borderBottom: '1px solid rgba(255,255,255,0.07)',
-              }}>
-                <button onClick={() => toggleMinimize(mobileSettingsWindow.id)} style={{
-                  background: 'none', border: 'none', color: 'white', fontSize: 22, lineHeight: 1,
-                  cursor: 'pointer', padding: '8px 10px', display: 'flex', alignItems: 'center',
-                }}>‹</button>
-                <span style={{ color: 'white', fontWeight: 600, fontSize: 14 }}>Ajustes</span>
-              </div>
-              <div style={{ flex: 1, overflow: 'hidden' }}>
-                {appContent('settings')}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Admin — mismo patrón que Ajustes, overlay a pantalla completa */}
-        <AnimatePresence>
-          {mobileAdminWindow && (
-            <motion.div
-              key="mobile-admin"
-              initial={{ y: '100%' }}
-              animate={{ y: 0 }}
-              exit={{ y: '100%' }}
-              transition={{ type: 'spring', damping: 28, stiffness: 320 }}
-              style={{
-                position: 'absolute', top: MENU_BAR_H, left: 0, right: 0, bottom: 0,
-                zIndex: 20000, background: '#111827', display: 'flex', flexDirection: 'column',
-              }}
-            >
-              <div style={{
-                height: 44, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6,
-                padding: '0 6px 0 2px', background: 'rgba(46,46,52,0.92)', backdropFilter: 'blur(20px)',
-                borderBottom: '1px solid rgba(255,255,255,0.07)',
-              }}>
-                <button onClick={() => toggleMinimize(mobileAdminWindow.id)} style={{
-                  background: 'none', border: 'none', color: 'white', fontSize: 22, lineHeight: 1,
-                  cursor: 'pointer', padding: '8px 10px', display: 'flex', alignItems: 'center',
-                }}>‹</button>
-                <span style={{ color: 'white', fontWeight: 600, fontSize: 14 }}>Admin</span>
-              </div>
-              <div style={{ flex: 1, overflow: 'hidden' }}>
-                {appContent('admin')}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
 
         {/* Notificación macOS */}
         <AnimatePresence mode="wait">
