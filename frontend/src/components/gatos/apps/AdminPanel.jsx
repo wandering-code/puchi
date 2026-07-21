@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import PlayerAvatar from '../PlayerAvatar'
+import { useIsMobile } from '../../../utils/responsive'
 
 const C = {
   bg: '#111827', card: '#1e1f2e', border: 'rgba(255,255,255,0.06)',
@@ -18,6 +19,7 @@ function fmtDate(iso) {
 }
 
 export default function AdminPanel({ player }) {
+  const isMobile = useIsMobile()
   const [tab,     setTab]     = useState('pending')
   const [players, setPlayers] = useState([])
   const [loading, setLoading] = useState(true)
@@ -58,14 +60,29 @@ export default function AdminPanel({ player }) {
   const pending  = players.filter(p => p.status === 'pending')
   const approved = players.filter(p => p.status === 'approved')
 
+  // En escritorio, avatar+nombre y checkbox+botones son dos grupos en la
+  // misma fila (el primero se estira, el segundo queda a la derecha). En
+  // móvil no caben los cinco elementos en una sola línea sin que el nombre
+  // se estruje o el checkbox se parta en dos líneas — misma pareja de
+  // grupos, pero apilados verticalmente (flexDirection cambia, la
+  // estructura interna no).
   const rowStyle = {
-    display: 'flex', alignItems: 'center', gap: 12,
+    display: 'flex', flexDirection: isMobile ? 'column' : 'row',
+    alignItems: isMobile ? 'stretch' : 'center', gap: isMobile ? 10 : 12,
     background: C.card, border: `1px solid ${C.border}`, borderRadius: 12,
-    padding: '12px 14px',
+    padding: isMobile ? 12 : '12px 14px',
+  }
+  const infoGroupStyle = {
+    display: 'flex', alignItems: 'center', gap: 12, minWidth: 0,
+    flex: isMobile ? 'none' : 1,
+  }
+  const actionsGroupStyle = {
+    display: 'flex', alignItems: 'center', gap: isMobile ? 10 : 12,
+    justifyContent: isMobile ? 'space-between' : 'flex-end', flexShrink: 0,
   }
   const btnBase = {
-    border: 'none', borderRadius: 8, padding: '7px 14px', fontSize: 12.5,
-    fontWeight: 600, cursor: 'pointer', flexShrink: 0,
+    border: 'none', borderRadius: 8, fontWeight: 600, cursor: 'pointer', flexShrink: 0,
+    padding: isMobile ? '6px 10px' : '7px 14px', fontSize: isMobile ? 11.5 : 12.5,
   }
 
   return (
@@ -104,20 +121,26 @@ export default function AdminPanel({ player }) {
         )}
         {!loading && tab === 'pending' && pending.map(p => (
           <div key={p.id} style={rowStyle}>
-            <PlayerAvatar emoji={p.avatar_emoji} url={p.avatar_url} size={34} />
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <p style={{ fontSize: 13.5, fontWeight: 700, color: p.color }}>{p.name}</p>
-              <p style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>Solicitado el {fmtDate(p.created_at)}</p>
+            <div style={infoGroupStyle}>
+              <PlayerAvatar emoji={p.avatar_emoji} url={p.avatar_url} size={34} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ fontSize: 13.5, fontWeight: 700, color: p.color, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</p>
+                <p style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>Solicitado el {fmtDate(p.created_at)}</p>
+              </div>
             </div>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: C.sub, cursor: 'pointer', flexShrink: 0 }}>
-              <input type="checkbox"
-                checked={!!clubOnApprove[p.id]}
-                onChange={ev => setClubOnApprove(m => ({ ...m, [p.id]: ev.target.checked }))}
-              />
-              Miembro del club
-            </label>
-            <button onClick={() => approve(p.id)} style={{ ...btnBase, background: C.ok, color: 'white' }}>Aprobar</button>
-            <button onClick={() => reject(p.id)} style={{ ...btnBase, background: 'rgba(237,66,69,0.12)', color: C.danger }}>Rechazar</button>
+            <div style={actionsGroupStyle}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: C.sub, cursor: 'pointer', flexShrink: 0 }}>
+                <input type="checkbox"
+                  checked={!!clubOnApprove[p.id]}
+                  onChange={ev => setClubOnApprove(m => ({ ...m, [p.id]: ev.target.checked }))}
+                />
+                Miembro del club
+              </label>
+              <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                <button onClick={() => approve(p.id)} style={{ ...btnBase, background: C.ok, color: 'white' }}>Aprobar</button>
+                <button onClick={() => reject(p.id)} style={{ ...btnBase, background: 'rgba(237,66,69,0.12)', color: C.danger }}>Rechazar</button>
+              </div>
+            </div>
           </div>
         ))}
 
@@ -128,14 +151,17 @@ export default function AdminPanel({ player }) {
           const isSelf = p.id === player.id
           return (
             <div key={p.id} style={rowStyle}>
-              <PlayerAvatar emoji={p.avatar_emoji} url={p.avatar_url} size={34} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={{ fontSize: 13.5, fontWeight: 700, color: p.color }}>{p.name}</p>
-                <p style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>Se unió el {fmtDate(p.created_at)}</p>
+              <div style={infoGroupStyle}>
+                <PlayerAvatar emoji={p.avatar_emoji} url={p.avatar_url} size={34} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ fontSize: 13.5, fontWeight: 700, color: p.color, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</p>
+                  <p style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>Se unió el {fmtDate(p.created_at)}</p>
+                </div>
               </div>
               <label title={isSelf ? 'No puedes quitarte el acceso a ti mismo' : ''} style={{
                 display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: C.sub,
                 cursor: isSelf ? 'default' : 'pointer', opacity: isSelf ? 0.5 : 1, flexShrink: 0,
+                alignSelf: isMobile ? 'flex-end' : 'center',
               }}>
                 Miembro del club
                 <input type="checkbox" disabled={isSelf}
