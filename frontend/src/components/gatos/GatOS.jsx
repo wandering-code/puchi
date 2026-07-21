@@ -163,6 +163,20 @@ export default function GatOS({ player: initialPlayer, onLogout, onProfileUpdate
   // cada llamada/unirse a la grupal; si el fetch falla o no hay TURN
   // configurado, se sigue intentando solo con STUN (llamadas en la misma red).
   const iceServersRef     = useRef(FALLBACK_ICE_SERVERS)
+  // Cola de procesamiento en serie para los mensajes de señalización de
+  // llamada: si dos mensajes WS (p. ej. call_answer y el primer call_ice que
+  // le sigue) llegan casi a la vez, sin esto sus handlers async se podrían
+  // solapar entre sí — un addIceCandidate podría ejecutarse mientras el
+  // setRemoteDescription anterior aún no ha terminado de aplicarse. Encolar
+  // cada mensaje tras la promesa del anterior garantiza que cada uno se
+  // procesa entero (incluidos sus awaits internos) antes de empezar el
+  // siguiente, venga en el orden que venga por la red.
+  const signalQueueRef    = useRef(Promise.resolve())
+  // 'disconnected' en WebRTC suele ser transitorio (blip de red, cambio de
+  // wifi↔datos móviles) y se recupera solo en unos segundos — solo 'failed'
+  // es un estado definitivo. Colgar al primer 'disconnected' cortaba
+  // llamadas que se habrían recuperado solas.
+  const disconnectTimeoutRef = useRef(null)
 
   function sendWs(data) {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -196,13 +210,21 @@ export default function GatOS({ player: initialPlayer, onLogout, onProfileUpdate
     }
     pc.onconnectionstatechange = () => {
       const s = pc.connectionState
-      if (s === 'disconnected' || s === 'failed' || s === 'closed') cleanupCall()
+      clearTimeout(disconnectTimeoutRef.current)
+      if (s === 'failed' || s === 'closed') {
+        cleanupCall()
+      } else if (s === 'disconnected') {
+        disconnectTimeoutRef.current = setTimeout(() => {
+          if (pcRef.current === pc && pc.connectionState === 'disconnected') cleanupCall()
+        }, 8000)
+      }
     }
     return pc
   }
 
   function cleanupCall() {
     clearTimeout(ringTimeoutRef.current)
+    clearTimeout(disconnectTimeoutRef.current)
     pcRef.current?.close()
     pcRef.current = null
     localStreamRef.current?.getTracks().forEach(t => t.stop())
@@ -252,8 +274,14 @@ export default function GatOS({ player: initialPlayer, onLogout, onProfileUpdate
       const pc = createPC(peer.id)
       stream.getTracks().forEach(t => pc.addTrack(t, stream))
       await pc.setRemoteDescription({ type: 'offer', sdp: offerSdpRef.current })
-      for (const c of pendingCandidates.current) await pc.addIceCandidate(c)
-      pendingCandidates.current = []
+      // splice(0) vacía el array en el mismo instante síncrono en que lo lee —
+      // si se hiciera con un for..of y un "= []" al final, un candidato que
+      // llegase de la señalización (mensaje WS aparte) mientras el for..of
+      // todavía está en un await de uno anterior se perdería para siempre al
+      // pisarlo el reset final, sin haberse aplicado nunca. Bug real
+      // encontrado tras varias llamadas de prueba intermitentes (a veces
+      // conectaba, a veces no) el 2026-07-21.
+      for (const c of pendingCandidates.current.splice(0)) await pc.addIceCandidate(c)
       const answer = await pc.createAnswer()
       await pc.setLocalDescription(answer)
       sendWs({ type: 'call_answer', target_id: peer.id, sdp: pc.localDescription.sdp })
@@ -325,6 +353,9 @@ export default function GatOS({ player: initialPlayer, onLogout, onProfileUpdate
   const groupPendingCandidatesRef = useRef({})   // { [playerId]: candidate[] }
   const groupCallJoinedRef        = useRef(false)
   const groupRingTimeoutRef       = useRef(null)
+  // Margen antes de dar por perdido a un participante en 'disconnected' —
+  // mismo motivo que disconnectTimeoutRef de la 1-to-1, pero uno por peerId.
+  const groupDisconnectTimeoutsRef = useRef({})   // { [playerId]: timeoutId }
 
   async function getGroupMedia(withVideo) {
     const s = await getUserMediaWithFallback(withVideo)
@@ -344,7 +375,14 @@ export default function GatOS({ player: initialPlayer, onLogout, onProfileUpdate
     }
     pc.onconnectionstatechange = () => {
       const s = pc.connectionState
-      if (s === 'disconnected' || s === 'failed' || s === 'closed') closeGroupPeer(peerId)
+      clearTimeout(groupDisconnectTimeoutsRef.current[peerId])
+      if (s === 'failed' || s === 'closed') {
+        closeGroupPeer(peerId)
+      } else if (s === 'disconnected') {
+        groupDisconnectTimeoutsRef.current[peerId] = setTimeout(() => {
+          if (groupPcsRef.current[peerId] === pc && pc.connectionState === 'disconnected') closeGroupPeer(peerId)
+        }, 8000)
+      }
     }
     const stream = groupLocalStreamRef.current
     if (stream) stream.getTracks().forEach(t => pc.addTrack(t, stream))
@@ -352,6 +390,8 @@ export default function GatOS({ player: initialPlayer, onLogout, onProfileUpdate
   }
 
   function closeGroupPeer(peerId) {
+    clearTimeout(groupDisconnectTimeoutsRef.current[peerId])
+    delete groupDisconnectTimeoutsRef.current[peerId]
     const pc = groupPcsRef.current[peerId]
     if (pc) { pc.close(); delete groupPcsRef.current[peerId] }
     delete groupPendingCandidatesRef.current[peerId]
@@ -453,9 +493,9 @@ export default function GatOS({ player: initialPlayer, onLogout, onProfileUpdate
         if (groupPcsRef.current[fromId]) closeGroupPeer(fromId) // auto-recuperación ante doble unión casi simultánea
         const pc = createGroupPC(fromId)
         await pc.setRemoteDescription({ type: 'offer', sdp: msg.sdp })
-        const pending = groupPendingCandidatesRef.current[fromId] ?? []
+        // splice(0), no "leer + resetear a []" — ver comentario en acceptCall.
+        const pending = (groupPendingCandidatesRef.current[fromId] ?? []).splice(0)
         for (const c of pending) await pc.addIceCandidate(c)
-        groupPendingCandidatesRef.current[fromId] = []
         const answer = await pc.createAnswer()
         await pc.setLocalDescription(answer)
         sendWs({ type: 'group_call_answer', target_id: fromId, sdp: pc.localDescription.sdp })
@@ -544,11 +584,15 @@ export default function GatOS({ player: initialPlayer, onLogout, onProfileUpdate
         }
 
         if (CALL_SIGNAL_TYPES.has(msg.type)) {
-          handleCallSignal(msg)
+          signalQueueRef.current = signalQueueRef.current
+            .then(() => handleCallSignal(msg))
+            .catch(err => console.error('handleCallSignal:', err))
         }
 
         if (GROUP_CALL_SIGNAL_TYPES.has(msg.type)) {
-          handleGroupCallSignal(msg)
+          signalQueueRef.current = signalQueueRef.current
+            .then(() => handleGroupCallSignal(msg))
+            .catch(err => console.error('handleGroupCallSignal:', err))
         }
 
         if (msg.type === 'message' && msg.player_id !== player.id) {
