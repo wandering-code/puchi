@@ -12,7 +12,17 @@ export default function PlayerAvatar({ emoji, url, size = 20, style }) {
     )
   }
   return (
-    <span style={{ fontSize: size, lineHeight: 1, flexShrink: 0, display: 'inline-block', ...style }}>
+    // Mismo tamaño de caja exacto que el <img> de arriba (width/height:size)
+    // — antes esto solo fijaba el font-size, y el cuadro real que ocupa un
+    // emoji no coincide con el em-square exacto de la fuente (varía según
+    // fuente/plataforma), así que quedaba desplazado en vertical/horizontal
+    // frente a quien sí tuviera foto de perfil en la misma fila. Centrado
+    // con flex en una caja de tamaño fijo en vez de fiarse de line-height.
+    <span style={{
+      width: size, height: size, fontSize: size, lineHeight: 1,
+      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+      flexShrink: 0, ...style,
+    }}>
       {emoji ?? '⭐'}
     </span>
   )
