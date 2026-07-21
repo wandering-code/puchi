@@ -196,6 +196,16 @@ export default function GatOS({ player: initialPlayer, onLogout, onProfileUpdate
     const s = await getUserMediaWithFallback(withVideo)
     localStreamRef.current = s
     setLocalStream(s)
+    // Si se pidió vídeo pero el stream resultante no trae pista de vídeo
+    // (getUserMediaWithFallback cayó a solo-audio tras un error de cámara),
+    // que el propio icono de "cámara apagada" lo refleje en vez de dejar un
+    // <video> en negro sin explicación — y que quede constancia en consola
+    // de qué pasó exactamente con la cámara, para poder diagnosticarlo desde
+    // el inspector remoto de Safari en iOS.
+    if (withVideo && s.getVideoTracks().length === 0) {
+      console.warn('getMedia: sin pista de vídeo pese a haberla pedido (cámara no disponible o denegada)')
+      setIsCameraOff(true)
+    }
     return s
   }
 
@@ -322,7 +332,8 @@ export default function GatOS({ player: initialPlayer, onLogout, onProfileUpdate
   async function getUserMediaWithFallback(withVideo) {
     try {
       return await navigator.mediaDevices.getUserMedia({ audio: true, video: withVideo })
-    } catch {
+    } catch (err) {
+      console.warn('getUserMedia con vídeo falló, cayendo a solo-audio:', err?.name, err?.message)
       if (withVideo) return navigator.mediaDevices.getUserMedia({ audio: true, video: false })
       throw new Error('No se pudo acceder al micrófono')
     }
@@ -361,6 +372,10 @@ export default function GatOS({ player: initialPlayer, onLogout, onProfileUpdate
     const s = await getUserMediaWithFallback(withVideo)
     groupLocalStreamRef.current = s
     setGroupLocalStream(s)
+    if (withVideo && s.getVideoTracks().length === 0) {
+      console.warn('getGroupMedia: sin pista de vídeo pese a haberla pedido (cámara no disponible o denegada)')
+      setGroupIsCameraOff(true)
+    }
     return s
   }
 
