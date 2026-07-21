@@ -2,6 +2,8 @@
 
 > Documento único de contexto para sesiones de Claude Code. Sustituye a `roadmap.md` y a `memory/*.md`. Última sesión: 2026-07-21.
 >
+> **Filas de Admin adaptadas a móvil** (mismo 2026-07-21) — cada fila (avatar+nombre+checkbox+2 botones) iba en una sola línea horizontal; en móvil no cabía y el nombre/checkbox se apretaban o partían en varias líneas. Los mismos dos grupos (info / acciones) se apilan en vertical por debajo de 768px, botones con algo menos de padding/font-size en móvil. Escritorio sin cambios.
+>
 > **Ajustes y Admin en móvil, mismo comportamiento que cualquier otra app** (mismo 2026-07-21) — antes se abrían como overlay a pantalla completa con cabecera propia (botón "‹ volver") y z-index 20000, por encima incluso del menú desplegable de GatOS que quedaba tapado. Ahora se suman al mismo contenedor/crossfade que Diskordkito, Luniteca y Pirestore en cuanto se abren una vez — sin cabecera propia, se navega a otra con el lanzador flotante igual que entre cualquiera de las tres. `openApp()` marca `'settings'`/`'admin'` como pestaña activa igual que ya hacía con las tres fijas.
 >
 > **Rediseñada la pantalla de login** (mismo 2026-07-21) — antes se listaban todos los perfiles como tarjetas clicables (visible para cualquiera antes de autenticarse); ahora es un único formulario "Usuario" + PIN, sin listar a nadie. El avatar y el color de cuenta se resuelven en vivo (match exacto case-insensitive contra `GET /players`, ya cargado) mientras se escribe el nombre — aparecen antes incluso de meter el PIN. Login sigue siendo `POST /auth/login` con `player_id` (sin cambios de backend), resuelto en el cliente a partir del nombre tecleado.
