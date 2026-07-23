@@ -143,7 +143,7 @@ class Vote(Base):
     id            = Column(Integer, primary_key=True, index=True)
     player_id     = Column(Integer, ForeignKey("players.id"), nullable=False)
     club_shelf_id = Column(Integer, ForeignKey("club_shelf.id"), nullable=False)
-    rating        = Column(Integer, nullable=False)   # 1-5
+    rating        = Column(Float, nullable=False)   # 0.5-5.0 con medios puntos
     revealed      = Column(Boolean, default=False)
     voted_at      = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
@@ -158,7 +158,7 @@ class Activity(Base):
     id         = Column(Integer, primary_key=True, index=True)
     player_id  = Column(Integer, ForeignKey("players.id", ondelete="CASCADE"), nullable=False)
     book_id    = Column(Integer, ForeignKey("books.id",   ondelete="CASCADE"), nullable=False)
-    event_type = Column(String, nullable=False)  # added | started | finished
+    event_type = Column(String, nullable=False)  # added | started | finished | proposed | voted
     rating     = Column(Float, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 

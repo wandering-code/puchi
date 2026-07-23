@@ -58,5 +58,19 @@ class ConnectionManager:
                     if self._conns.get(pid) is ws:
                         self._conns.pop(pid, None)
 
+    async def kick(self, player_id: int):
+        """Cierra la conexión de un jugador si la tiene abierta ahora mismo —
+        para cuando el admin lo desactiva o lo borra y tiene que perder el
+        acceso al instante, no la próxima vez que recargue. El cierre dispara
+        solo la limpieza normal (finally del websocket_endpoint), no hace
+        falta hacer nada más aquí."""
+        async with self._lock:
+            ws = self._conns.get(player_id)
+        if ws:
+            try:
+                await ws.close(code=4001)
+            except Exception:
+                pass
+
 
 manager = ConnectionManager()

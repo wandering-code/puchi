@@ -181,6 +181,14 @@ def _migrate():
              END IF;
            END $$""",
 
+        # votes (puntuaciones del club): mismo cambio, mismo motivo — medios puntos
+        """DO $$ BEGIN
+             IF (SELECT data_type FROM information_schema.columns
+                 WHERE table_name='votes' AND column_name='rating') = 'integer'
+             THEN ALTER TABLE votes ALTER COLUMN rating TYPE FLOAT USING rating::float;
+             END IF;
+           END $$""",
+
         # activity: registro de eventos de lectura
         """CREATE TABLE IF NOT EXISTS activity (
              id         SERIAL PRIMARY KEY,
@@ -414,7 +422,7 @@ def admin_list_players(db: Session = Depends(get_db), _: Player = Depends(requir
     return [_admin_player_out(p) for p in players]
 
 class AdminPlayerUpdate(BaseModel):
-    status:      Optional[str]  = None   # approved | rejected
+    status:      Optional[str]  = None   # approved | rejected | deactivated
     club_member: Optional[bool] = None
 
 @app.patch("/admin/players/{player_id}")
@@ -422,26 +430,40 @@ async def admin_update_player(
     player_id: int,
     body: AdminPlayerUpdate,
     db: Session = Depends(get_db),
-    _: Player = Depends(require_admin),
+    admin: Player = Depends(require_admin),
 ):
     player = db.query(Player).filter(Player.id == player_id).first()
     if not player:
         raise HTTPException(404, "Jugador no encontrado")
+    if player.id == admin.id and body.status is not None and body.status != "approved":
+        raise HTTPException(403, "No puedes desactivarte/rechazarte a ti mismo")
 
+    was_deactivating = False
     if body.status is not None:
-        if body.status not in ("approved", "rejected"):
+        if body.status not in ("approved", "rejected", "deactivated"):
             raise HTTPException(422, "Estado inválido")
+        was_deactivating = body.status == "deactivated" and player.status != "deactivated"
         player.status = body.status
+        # Desactivar es "pausa reversible, sin dejar rastro social" — igual
+        # que quitar club_member (ver más abajo) pero sin exigir que el admin
+        # lo marque aparte: se implica siempre que se desactiva. Al
+        # reactivar (status vuelve a 'approved') el panel Admin ya manda
+        # club_member:true en el mismo PATCH, así que no hace falta tocarlo
+        # aquí en sentido contrario.
+        if body.status == "deactivated":
+            player.club_member = False
 
     if body.club_member is not None:
         player.club_member = body.club_member
-        # Al quitarle el acceso al club, se le saca también de todos los
-        # canales (general + DMs) — si no, conservaba membership real en
-        # channel_members y, como el WS ya deja conectarse a cualquier
-        # aprobado (ver websocket_endpoint), habría podido seguir viendo/
-        # mandando mensajes aunque su icono desaparezca del resto de la app.
-        if not body.club_member:
-            db.query(ChannelMember).filter(ChannelMember.player_id == player.id).delete()
+
+    # Sin acceso al club (por lo de arriba, o porque venía ya así, o porque
+    # esta llamada se lo ha quitado) — se le saca también de todos los
+    # canales (general + DMs). Conservaba membership real en channel_members
+    # y, como el WS deja conectarse a cualquier aprobado (ver
+    # websocket_endpoint), habría podido seguir viendo/mandando mensajes
+    # aunque su icono desaparezca del resto de la app.
+    if not player.club_member:
+        db.query(ChannelMember).filter(ChannelMember.player_id == player.id).delete()
 
     # Si queda aprobado y con acceso al club (ya sea por esta llamada o por
     # una anterior), asegurar que esté en #club-general — igual que hacía el
@@ -452,7 +474,45 @@ async def admin_update_player(
     db.commit()
     db.refresh(player)
     await _notify_luni("players")
+
+    # Si se acaba de desactivar y tenía la sesión abierta, se le avisa y se
+    # le echa al instante — "no tenga acceso a la app" tiene que ser ya, no
+    # "la próxima vez que recargue".
+    if was_deactivating:
+        await manager.send_to_players([player.id], {"type": "account_deactivated"})
+        await manager.kick(player.id)
+
     return _admin_player_out(player)
+
+
+@app.delete("/admin/players/{player_id}")
+async def admin_delete_player(
+    player_id: int,
+    db: Session = Depends(get_db),
+    admin: Player = Depends(require_admin),
+):
+    """Borrado total de la cuenta de otro jugador — mismo efecto que borrar
+    la propia (ver DELETE /players/me), sin pedir PIN porque lo hace el
+    admin. Si tenía sesión abierta se le avisa y se le echa antes de borrar."""
+    if player_id == admin.id:
+        raise HTTPException(403, "Usa 'Zona de peligro' en Ajustes para borrar tu propia cuenta")
+    player = db.query(Player).filter(Player.id == player_id).first()
+    if not player:
+        raise HTTPException(404, "Jugador no encontrado")
+
+    await manager.send_to_players([player.id], {"type": "account_deleted"})
+    await manager.kick(player.id)
+
+    db.query(ChannelMember).filter(ChannelMember.player_id == player.id).delete()
+    db.query(PersonalShelf).filter(PersonalShelf.player_id == player.id).delete()
+    db.query(ClubReadingLog).filter(ClubReadingLog.player_id == player.id).delete()
+    db.query(Vote).filter(Vote.player_id == player.id).delete()
+    db.query(ClubShelf).filter(ClubShelf.proposed_by == player.id).update({"proposed_by": None})
+
+    db.delete(player)
+    db.commit()
+    await _notify_luni("players")
+    return {"ok": True}
 
 
 class DeleteAccountRequest(BaseModel):
@@ -682,6 +742,72 @@ async def upload_wallpaper_image(
         data={"image_url": f"/uploads/wallpapers/{filename}"}, price=0,
     )
     db.add(item)
+    db.commit()
+    db.refresh(item)
+    await _notify_luni("shop")
+    return _shop_item_out(item)
+
+@app.patch("/shop/items/{id}/wallpaper-image")
+async def update_wallpaper_image(
+    id: int,
+    label: Optional[str] = Form(None),
+    file: Optional[UploadFile] = File(None),
+    db: Session = Depends(get_db),
+    current: Player = Depends(get_current_player),
+):
+    """Edita un fondo ya existente sin borrarlo y recrearlo — nombre y/o
+    imagen, cada uno opcional e independiente. A propósito NO toca `item_id`
+    (el slug identificador) aunque cambie el nombre: cualquiera que lo tenga
+    equipado ahora mismo (Player.customization.wallpaper guarda el item_id,
+    no el label) tiene que seguir apuntando al mismo fondo tras editarlo."""
+    if current.name.lower() != "wander":
+        raise HTTPException(403, "Solo el admin puede gestionar la tienda")
+    item = db.query(ShopItem).filter(ShopItem.id == id, ShopItem.type == "wallpaper").first()
+    if not item:
+        raise HTTPException(404, "Fondo no encontrado")
+
+    if label is not None:
+        label = label.strip()
+        if not label:
+            raise HTTPException(422, "El nombre no puede quedar vacío")
+        item.label = label
+
+    if file is not None:
+        ext = os.path.splitext(file.filename or '')[1].lower()
+        if ext not in _WALLPAPER_EXTS:
+            raise HTTPException(422, "Formato no soportado — usa JPG, PNG o WEBP")
+        content = await file.read()
+        if len(content) > _WALLPAPER_MAX_BYTES:
+            raise HTTPException(422, "La imagen pesa demasiado (máximo 5 MB)")
+        try:
+            img = Image.open(BytesIO(content))
+            img.load()
+        except Exception:
+            raise HTTPException(422, "El archivo no es una imagen válida")
+        w, h = img.size
+        if w < _WALLPAPER_MIN_W or h < _WALLPAPER_MIN_H:
+            raise HTTPException(422, f"La imagen es demasiado pequeña (mínimo {_WALLPAPER_MIN_W}x{_WALLPAPER_MIN_H}px, esta es {w}x{h}px)")
+
+        save_format = _WALLPAPER_EXTS[ext]
+        if save_format == "JPEG":
+            img = img.convert("RGB")
+        if w > _WALLPAPER_MAX_W:
+            new_h = round(h * _WALLPAPER_MAX_W / w)
+            img = img.resize((_WALLPAPER_MAX_W, new_h), Image.LANCZOS)
+
+        old_url = (item.data or {}).get("image_url")
+        filename = f"{uuid.uuid4().hex}{ext}"
+        save_kwargs = {"quality": 88} if save_format == "JPEG" else {}
+        img.save(os.path.join(_WALLPAPER_UPLOAD_DIR, filename), format=save_format, **save_kwargs)
+        item.data = {"image_url": f"/uploads/wallpapers/{filename}"}
+        # Borra el fichero viejo del disco — si no, cada edición de imagen
+        # deja un huérfano acumulándose en uploads/wallpapers/ para siempre.
+        # Los gradientes CSS (data.bg, los 8 de fábrica) no tienen fichero.
+        if old_url and old_url.startswith("/uploads/wallpapers/"):
+            old_path = os.path.join(_WALLPAPER_UPLOAD_DIR, os.path.basename(old_url))
+            try: os.remove(old_path)
+            except OSError: pass
+
     db.commit()
     db.refresh(item)
     await _notify_luni("shop")
@@ -1498,29 +1624,54 @@ def get_club_logs_summary(
     }
 
 
-# ── Votos (estilo Kahoot — se revelan a la vez) ──────────────────────────────
+# ── Puntuaciones del club ─────────────────────────────────────────────────────
+# Reutiliza el modelo Vote (pensado en origen como "estilo Kahoot", secreto
+# hasta que el admin lo revela — de ahí el campo `revealed`) pero sin esa
+# parte: cada puntuación es visible para todo el club en cuanto se registra,
+# así que aquí siempre se deja `revealed=True`. El campo se conserva tal cual
+# en el modelo (y el endpoint /reveal de abajo, sin usar desde ningún sitio)
+# por si hiciera falta recuperar el modo secreto más adelante.
 
 class VoteRequest(BaseModel):
-    rating: int
+    rating: float   # 0.5-5.0 con medios puntos, igual que el rating de Mi estantería
 
 @app.post("/shelf/club/{entry_id}/vote")
-def cast_vote(
+async def cast_vote(
     entry_id: int,
     body: VoteRequest,
     db: Session = Depends(get_db),
     current: Player = Depends(require_club_member),
 ):
-    if not 1 <= body.rating <= 5:
-        raise HTTPException(status_code=422, detail="La puntuación debe ser 1-5")
+    if not 0.5 <= body.rating <= 5 or (body.rating * 2) % 1 != 0:
+        raise HTTPException(status_code=422, detail="La puntuación debe ser de 0.5 en 0.5, entre 0.5 y 5")
+    entry = db.query(ClubShelf).filter(ClubShelf.id == entry_id).first()
+    if not entry:
+        raise HTTPException(404, "Libro del club no encontrado")
     existing = db.query(Vote).filter_by(player_id=current.id, club_shelf_id=entry_id).first()
     if existing:
         existing.rating   = body.rating
-        existing.revealed = False
-        db.commit()
-        return {"ok": True, "updated": True}
-    db.add(Vote(player_id=current.id, club_shelf_id=entry_id, rating=body.rating))
+        existing.revealed = True
+        updated = True
+    else:
+        db.add(Vote(player_id=current.id, club_shelf_id=entry_id, rating=body.rating, revealed=True))
+        updated = False
+    _log_activity(db, current.id, entry.book_id, 'voted', rating=body.rating)
     db.commit()
-    return {"ok": True, "updated": False}
+    await _notify_luni("votes", club_shelf_id=entry_id)
+    await _notify_luni("activity")
+    return {"ok": True, "updated": updated}
+
+@app.get("/shelf/club/{entry_id}/votes")
+def list_votes(
+    entry_id: int,
+    db: Session = Depends(get_db),
+    _: Player = Depends(require_club_member),
+):
+    votes = db.query(Vote).filter(Vote.club_shelf_id == entry_id).order_by(Vote.voted_at.asc()).all()
+    return [
+        {"player": _player_out(v.player), "rating": v.rating, "voted_at": v.voted_at.isoformat() + 'Z'}
+        for v in votes
+    ]
 
 @app.post("/shelf/club/{entry_id}/reveal")
 def reveal_votes(

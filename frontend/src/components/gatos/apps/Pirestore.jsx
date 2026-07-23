@@ -59,6 +59,13 @@ function IconPlus({ size = 13, color = 'currentColor' }) {
     </svg>
   )
 }
+function IconEdit({ size = 12, color = 'currentColor' }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 12 12" fill="none" style={{ display: 'block', flexShrink: 0 }}>
+      <path d="M7.5 1.8l2.7 2.7L4 10.7l-2.9.5.5-2.9 6-6z" stroke={color} strokeWidth="1.2" strokeLinejoin="round" />
+    </svg>
+  )
+}
 
 export default function Pirestore({ player, onProfileUpdate }) {
   const isMobile = useIsMobile()
@@ -70,6 +77,9 @@ export default function Pirestore({ player, onProfileUpdate }) {
   const [busyId, setBusyId] = useState(null)
 
   const [showForm, setShowForm] = useState(false)
+  // null = formulario de "Añadir fondo" nuevo; si no, el item que se está
+  // editando in situ (nombre y/o imagen), reutilizando el mismo formulario.
+  const [editingItem, setEditingItem] = useState(null)
   const [newLabel, setNewLabel] = useState('')
   const [newFile, setNewFile] = useState(null)
   const [previewUrl, setPreviewUrl] = useState(null)
@@ -123,17 +133,42 @@ export default function Pirestore({ player, onProfileUpdate }) {
   }
 
   function resetForm() {
-    setShowForm(false); setNewLabel(''); setNewFile(null); setFormErr('')
+    setShowForm(false); setEditingItem(null); setNewLabel(''); setNewFile(null); setFormErr('')
     if (previewUrl) URL.revokeObjectURL(previewUrl)
     setPreviewUrl(null)
   }
 
-  async function createWallpaper(e) {
+  function startEdit(item) {
+    setEditingItem(item)
+    setNewLabel(item.label)
+    setNewFile(null)
+    setFormErr('')
+    if (previewUrl) URL.revokeObjectURL(previewUrl)
+    setPreviewUrl(null)
+    setShowForm(true)
+  }
+
+  async function saveWallpaper(e) {
     e.preventDefault()
     setFormErr('')
     if (!newLabel.trim()) { setFormErr('Ponle un nombre'); return }
-    if (!newFile) { setFormErr('Elige una imagen'); return }
+    if (!editingItem && !newFile) { setFormErr('Elige una imagen'); return }
     setCreating(true)
+
+    if (editingItem) {
+      // Edición in situ — nombre y/o imagen, cada uno solo si ha cambiado
+      // (mismo item_id de siempre, así que sigue siendo el mismo fondo para
+      // quien ya lo tuviera equipado).
+      const form = new FormData()
+      if (newLabel.trim() !== editingItem.label) form.append('label', newLabel.trim())
+      if (newFile) form.append('file', newFile)
+      const r = await fetch(`/api/shop/items/${editingItem.id}/wallpaper-image`, { method: 'PATCH', credentials: 'include', body: form })
+      setCreating(false)
+      if (r.ok) { resetForm(); loadWallpapers() }
+      else { const d = await r.json().catch(() => ({})); setFormErr(d.detail || 'Error al guardar') }
+      return
+    }
+
     const form = new FormData()
     form.append('label', newLabel.trim())
     form.append('file', newFile)
@@ -193,10 +228,13 @@ export default function Pirestore({ player, onProfileUpdate }) {
         </div>
 
         {isAdmin && showForm && (
-          <form onSubmit={createWallpaper} style={{
+          <form onSubmit={saveWallpaper} style={{
             background: '#1e1f2e', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12,
             padding: 16, display: 'flex', flexDirection: 'column', gap: 12,
           }}>
+            {editingItem && (
+              <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', margin: 0 }}>Editando «{editingItem.label}»</p>
+            )}
             <div>
               <span style={labelStyle}>Nombre</span>
               <input value={newLabel} onChange={e => setNewLabel(e.target.value)} maxLength={30}
@@ -204,16 +242,19 @@ export default function Pirestore({ player, onProfileUpdate }) {
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              {previewUrl && (
-                <div style={{ width: 80, height: 50, borderRadius: 8, overflow: 'hidden', flexShrink: 0, border: '1px solid rgba(255,255,255,0.1)' }}>
-                  <img src={previewUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              {(previewUrl || editingItem) && (
+                <div style={{
+                  width: 80, height: 50, borderRadius: 8, overflow: 'hidden', flexShrink: 0,
+                  border: '1px solid rgba(255,255,255,0.1)', background: previewUrl ? undefined : wallpaperCss(editingItem),
+                }}>
+                  {previewUrl && <img src={previewUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
                 </div>
               )}
               <button type="button" onClick={() => fileInputRef.current?.click()} style={{
                 background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8,
                 padding: '8px 14px', color: 'rgba(255,255,255,0.8)', cursor: 'pointer', fontSize: 12.5,
               }}>
-                {newFile ? 'Cambiar imagen' : 'Elegir imagen'}
+                {newFile ? 'Cambiar imagen' : editingItem ? 'Sustituir imagen' : 'Elegir imagen'}
               </button>
               <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp" style={{ display: 'none' }} onChange={onPickFile} />
             </div>
@@ -221,16 +262,17 @@ export default function Pirestore({ player, onProfileUpdate }) {
             <p style={{ fontSize: 10.5, color: 'rgba(255,255,255,0.3)', margin: 0 }}>
               JPG, PNG o WEBP · mínimo {MIN_W}×{MIN_H}px · máximo 5 MB. Se recorta para llenar la pantalla (apaisada
               queda mejor), y si es muy grande se reduce sola al guardarla.
+              {editingItem && ' Deja la imagen tal cual para cambiar solo el nombre.'}
             </p>
 
             {formErr && <span style={{ fontSize: 12, color: '#ed4245' }}>{formErr}</span>}
 
-            <button type="submit" disabled={creating || !newFile} style={{
+            <button type="submit" disabled={creating || (!editingItem && !newFile)} style={{
               alignSelf: 'flex-start', background: '#5865f2', border: 'none', borderRadius: 8,
               padding: '8px 16px', color: 'white', cursor: 'pointer', fontWeight: 600, fontSize: 13,
-              opacity: (creating || !newFile) ? 0.6 : 1,
+              opacity: (creating || (!editingItem && !newFile)) ? 0.6 : 1,
             }}>
-              {creating ? 'Subiendo…' : 'Crear'}
+              {creating ? 'Guardando…' : editingItem ? 'Guardar cambios' : 'Crear'}
             </button>
           </form>
         )}
@@ -253,14 +295,24 @@ export default function Pirestore({ player, onProfileUpdate }) {
                 >
                   <span style={priceTag}>Gratis</span>
                   {isAdmin && (
-                    <button onClick={e => { e.stopPropagation(); deleteWallpaper(w) }} title="Quitar de la tienda"
-                      style={{
-                        position: 'absolute', top: 6, left: 6, width: 20, height: 20, borderRadius: 6,
-                        background: 'rgba(0,0,0,0.5)', border: 'none', cursor: 'pointer',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ed4245',
-                      }}>
-                      <IconTrash size={11} color="#ed4245" />
-                    </button>
+                    <>
+                      <button onClick={e => { e.stopPropagation(); startEdit(w) }} title="Editar nombre/imagen"
+                        style={{
+                          position: 'absolute', top: 6, left: 6, width: 20, height: 20, borderRadius: 6,
+                          background: 'rgba(0,0,0,0.5)', border: 'none', cursor: 'pointer',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,0.8)',
+                        }}>
+                        <IconEdit size={11} color="rgba(255,255,255,0.8)" />
+                      </button>
+                      <button onClick={e => { e.stopPropagation(); deleteWallpaper(w) }} title="Quitar de la tienda"
+                        style={{
+                          position: 'absolute', top: 6, left: 30, width: 20, height: 20, borderRadius: 6,
+                          background: 'rgba(0,0,0,0.5)', border: 'none', cursor: 'pointer',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ed4245',
+                        }}>
+                        <IconTrash size={11} color="#ed4245" />
+                      </button>
+                    </>
                   )}
                   {equipped && <span style={equippedBadge}><IconCheck size={10} color="white" /> En uso</span>}
                   <span style={{

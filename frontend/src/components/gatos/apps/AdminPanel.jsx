@@ -9,8 +9,9 @@ const C = {
 }
 
 const TABS = [
-  { id: 'pending', label: 'Pendientes' },
-  { id: 'players', label: 'Jugadores' },
+  { id: 'pending',     label: 'Pendientes' },
+  { id: 'players',     label: 'Jugadores' },
+  { id: 'deactivated', label: 'Desactivados' },
 ]
 
 function fmtDate(iso) {
@@ -56,9 +57,26 @@ export default function AdminPanel({ player }) {
   function toggleClubMember(id, value) {
     updatePlayer(id, { club_member: value })
   }
+  // Pausa reversible: pierde el acceso y desaparece de lo social (feed,
+  // sidebar de Diskordkito...) pero conserva su estantería/libros — y si
+  // tenía la sesión abierta, se le echa al instante (lo hace el backend).
+  function deactivate(id) {
+    updatePlayer(id, { status: 'deactivated' })
+  }
+  // Le devuelve el acceso tal cual lo tendría alguien recién aprobado
+  // (aprobado + miembro del club) — no se guarda cuál era su club_member
+  // exacto antes de desactivarlo, así que se asume el caso normal.
+  function reactivate(id) {
+    updatePlayer(id, { status: 'approved', club_member: true })
+  }
+  async function deletePlayer(id) {
+    const r = await fetch(`/api/admin/players/${id}`, { method: 'DELETE', credentials: 'include' })
+    if (r.ok) setPlayers(ps => ps.filter(p => p.id !== id))
+  }
 
-  const pending  = players.filter(p => p.status === 'pending')
-  const approved = players.filter(p => p.status === 'approved')
+  const pending     = players.filter(p => p.status === 'pending')
+  const approved    = players.filter(p => p.status === 'approved')
+  const deactivated = players.filter(p => p.status === 'deactivated')
 
   // En escritorio, avatar+nombre y checkbox+botones son dos grupos en la
   // misma fila (el primero se estira, el segundo queda a la derecha). En
@@ -158,21 +176,68 @@ export default function AdminPanel({ player }) {
                   <p style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>Se unió el {fmtDate(p.created_at)}</p>
                 </div>
               </div>
-              <label title={isSelf ? 'No puedes quitarte el acceso a ti mismo' : ''} style={{
-                display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: C.sub,
-                cursor: isSelf ? 'default' : 'pointer', opacity: isSelf ? 0.5 : 1, flexShrink: 0,
-                alignSelf: isMobile ? 'flex-end' : 'center',
-              }}>
-                Miembro del club
-                <input type="checkbox" disabled={isSelf}
-                  checked={p.club_member}
-                  onChange={ev => toggleClubMember(p.id, ev.target.checked)}
-                />
-              </label>
+              <div style={actionsGroupStyle}>
+                <label title={isSelf ? 'No puedes quitarte el acceso a ti mismo' : ''} style={{
+                  display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: C.sub,
+                  cursor: isSelf ? 'default' : 'pointer', opacity: isSelf ? 0.5 : 1, flexShrink: 0,
+                }}>
+                  Miembro del club
+                  <input type="checkbox" disabled={isSelf}
+                    checked={p.club_member}
+                    onChange={ev => toggleClubMember(p.id, ev.target.checked)}
+                  />
+                </label>
+                {!isSelf && (
+                  <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                    <button onClick={() => deactivate(p.id)} style={{ ...btnBase, background: 'rgba(255,255,255,0.08)', color: C.sub }}>Desactivar</button>
+                    <DeleteButton onConfirm={() => deletePlayer(p.id)} btnBase={btnBase} />
+                  </div>
+                )}
+              </div>
             </div>
           )
         })}
+
+        {!loading && tab === 'deactivated' && deactivated.length === 0 && (
+          <p style={{ color: C.muted, fontSize: 12, textAlign: 'center', marginTop: 30 }}>No hay cuentas desactivadas.</p>
+        )}
+        {!loading && tab === 'deactivated' && deactivated.map(p => (
+          <div key={p.id} style={rowStyle}>
+            <div style={infoGroupStyle}>
+              <PlayerAvatar emoji={p.avatar_emoji} url={p.avatar_url} size={34} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ fontSize: 13.5, fontWeight: 700, color: p.color, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</p>
+                <p style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>Desactivada — su estantería y libros siguen guardados</p>
+              </div>
+            </div>
+            <div style={actionsGroupStyle}>
+              <button onClick={() => reactivate(p.id)} style={{ ...btnBase, background: C.ok, color: 'white' }}>Reactivar</button>
+              <DeleteButton onConfirm={() => deletePlayer(p.id)} btnBase={btnBase} />
+            </div>
+          </div>
+        ))}
       </div>
+    </div>
+  )
+}
+
+// Confirmación en dos pasos antes de borrar del todo a alguien — mismo
+// patrón que ya usa el resto de la app (ClubBookCard, ClubGridActions...)
+// para cualquier borrado irreversible, en vez de un confirm() nativo.
+function DeleteButton({ onConfirm, btnBase }) {
+  const [confirming, setConfirming] = useState(false)
+  if (!confirming) {
+    return (
+      <button onClick={() => setConfirming(true)} style={{ ...btnBase, background: 'rgba(237,66,69,0.12)', color: '#ed4245' }}>
+        Eliminar
+      </button>
+    )
+  }
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+      <span style={{ fontSize: 10.5, color: '#ed4245' }}>¿Borrar del todo?</span>
+      <button onClick={onConfirm} style={{ ...btnBase, background: '#ed4245', color: 'white' }}>Sí</button>
+      <button onClick={() => setConfirming(false)} style={{ ...btnBase, background: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.45)' }}>Cancelar</button>
     </div>
   )
 }

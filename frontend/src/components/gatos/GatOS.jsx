@@ -62,6 +62,9 @@ export default function GatOS({ player: initialPlayer, onLogout, onProfileUpdate
   const [online,       setOnline]       = useState([])
   const [wallpapers,   setWallpapers]   = useState([]) // catálogo de Pirestore (tipo "wallpaper")
   const [notification, setNotification] = useState(null)
+  // 'account_deactivated' | 'account_deleted' | null — el admin ha actuado
+  // sobre esta cuenta mientras la sesión seguía abierta (ver WS más abajo).
+  const [forcedLogoutReason, setForcedLogoutReason] = useState(null)
   const wsRef            = useRef(null)
   const windowsRef       = useRef(windows)
   const containerRef     = useRef(null)
@@ -349,7 +352,7 @@ export default function GatOS({ player: initialPlayer, onLogout, onProfileUpdate
     if (!document.hasFocus() && Notification.permission === 'granted') {
       const n = new Notification(`Llamada perdida de ${peer?.name ?? 'alguien'}`, {
         body: 'Diskordkito',
-        icon: '/favicon.ico',
+        icon: '/paw-icon.svg',
         tag: 'diskordkito-call',
         silent: false,
       })
@@ -870,6 +873,13 @@ export default function GatOS({ player: initialPlayer, onLogout, onProfileUpdate
             .catch(() => {})
         }
 
+        // El admin acaba de desactivar/borrar esta cuenta y quiere que se
+        // note al instante (no la próxima vez que se recargue) — el backend
+        // manda este aviso justo antes de cerrar el WebSocket.
+        if (msg.type === 'account_deactivated' || msg.type === 'account_deleted') {
+          setForcedLogoutReason(msg.type)
+        }
+
         if (CALL_SIGNAL_TYPES.has(msg.type)) {
           signalQueueRef.current = signalQueueRef.current
             .then(() => handleCallSignal(msg))
@@ -896,7 +906,7 @@ export default function GatOS({ player: initialPlayer, onLogout, onProfileUpdate
           if (!document.hasFocus() && Notification.permission === 'granted') {
             const n = new Notification(`${msg.player_name} · Diskordkito`, {
               body: msg.content,
-              icon: '/favicon.ico',
+              icon: '/paw-icon.svg',
               tag:  'diskordkito',   // reemplaza la anterior, sin acumulación
               silent: false,
             })
@@ -1180,6 +1190,39 @@ case 'settings':    return <SettingsApp player={player} onProfileUpdate={onProfi
   const isAdmin = player.name?.toLowerCase() === 'wander'
   const kiosk = !player.club_member && !isAdmin
 
+  // Aviso a pantalla completa cuando el admin desactiva/borra la cuenta con
+  // la sesión ya abierta — tapa todo lo demás a propósito (aunque el backend
+  // ya bloquea cualquier petición nueva, más vale dejarlo claro que fallos
+  // silenciosos por todos lados) y solo se puede cerrar volviendo al login.
+  const forcedLogoutOverlay = forcedLogoutReason && (
+    <div style={{
+      position: 'absolute', inset: 0, zIndex: 999999,
+      background: 'rgba(8,8,12,0.92)', backdropFilter: 'blur(10px)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
+    }}>
+      <div style={{
+        background: '#1e1f2e', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 20,
+        padding: '32px 36px', textAlign: 'center', maxWidth: 340,
+        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14,
+        boxShadow: '0 24px 64px rgba(0,0,0,0.7)',
+      }}>
+        <span style={{ fontSize: 34 }}>{forcedLogoutReason === 'account_deleted' ? '🗑️' : '⛔️'}</span>
+        <p style={{ color: 'white', fontSize: 15, fontWeight: 700 }}>
+          {forcedLogoutReason === 'account_deleted' ? 'Tu cuenta ha sido eliminada' : 'Tu cuenta ha sido desactivada'}
+        </p>
+        <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12.5, lineHeight: 1.5 }}>
+          {forcedLogoutReason === 'account_deleted'
+            ? 'Un admin ha borrado tu cuenta y todos tus datos.'
+            : 'Un admin te ha quitado el acceso. Tu estantería y tus libros siguen guardados por si te lo vuelve a dar.'}
+        </p>
+        <button onClick={onLogout} style={{
+          marginTop: 4, background: '#5865f2', border: 'none', borderRadius: 10,
+          padding: '10px 24px', color: 'white', fontSize: 13, fontWeight: 700, cursor: 'pointer',
+        }}>Entendido</button>
+      </div>
+    </div>
+  )
+
   if (kiosk) {
     return (
       <div ref={containerRef} className="relative overflow-hidden select-none"
@@ -1204,6 +1247,7 @@ case 'settings':    return <SettingsApp player={player} onProfileUpdate={onProfi
         <div style={{ position: 'absolute', top: MENU_BAR_H, left: 0, right: 0, bottom: 0, overflow: 'hidden' }}>
           {appContent('luniteca2')}
         </div>
+        {forcedLogoutOverlay}
       </div>
     )
   }
@@ -1321,6 +1365,7 @@ case 'settings':    return <SettingsApp player={player} onProfileUpdate={onProfi
 
         {callAudioSinks}
         {callPiPElement}
+        {forcedLogoutOverlay}
       </div>
     )
   }
@@ -1427,6 +1472,7 @@ case 'settings':    return <SettingsApp player={player} onProfileUpdate={onProfi
 
       {callAudioSinks}
       {callPiPElement}
+      {forcedLogoutOverlay}
     </div>
   )
 }

@@ -39,6 +39,48 @@ const NAV = [
 
 const STARS = [1, 2, 3, 4, 5]
 
+// Selector de estrellas con medios puntos: cada estrella se divide en dos
+// mitades clicables (izquierda = X.5, derecha = X entero) — mismo patrón que
+// Amazon/Letterboxd, funciona igual con ratón que al tacto. El relleno visual
+// se hace superponiendo una estrella dorada recortada por ancho (0/50/100%)
+// sobre una gris de fondo, en vez de alternar el glifo ★/☆, para que el
+// recorte al 50% se vea limpio.
+function StarRatingInput({ value = 0, onChange, size = 26 }) {
+  // Un único botón por estrella (todo el ancho, 26px) en vez de dos mitades
+  // de 13px cada una — de mitad en mitad era demasiado estrecho para acertar
+  // de forma fiable con el ratón (reportado: "solo salen estrellas
+  // completas"). Un solo objetivo grande + mirar en qué mitad cayó el click
+  // (clientX relativo al propio botón) es más robusto y solo hace falta
+  // acertar la estrella correcta, no encima el lado.
+  const [hoverPct, setHoverPct] = useState(null) // { star, half } | null, para previsualizar al pasar el ratón
+  function pick(e, s) {
+    const rect = e.currentTarget.getBoundingClientRect()
+    const isLeftHalf = (e.clientX - rect.left) < rect.width / 2
+    return isLeftHalf ? s - 0.5 : s
+  }
+  return (
+    <div style={{ display: 'flex', gap: 2 }} onMouseLeave={() => setHoverPct(null)}>
+      {STARS.map(s => {
+        const shown = hoverPct != null ? hoverPct : value
+        const fillPct = shown >= s ? 100 : shown >= s - 0.5 ? 50 : 0
+        return (
+          <button key={s} type="button"
+            onClick={e => onChange(pick(e, s))}
+            onMouseMove={e => setHoverPct(pick(e, s))}
+            title={`${s - 0.5} – ${s} estrellas`}
+            style={{
+              position: 'relative', width: size, height: size, lineHeight: 1, flexShrink: 0,
+              background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+            }}>
+            <span style={{ position: 'absolute', inset: 0, fontSize: size, color: C.surfaceHi }}>★</span>
+            <span style={{ position: 'absolute', inset: 0, fontSize: size, color: '#f0b429', width: `${fillPct}%`, overflow: 'hidden', whiteSpace: 'nowrap' }}>★</span>
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
 const fmtShortDate = (iso) => new Date(iso).toLocaleDateString('es', { day: 'numeric', month: 'short', year: 'numeric' })
 
 // Texto de atribución para un resultado de búsqueda ya presente en la
@@ -1290,24 +1332,44 @@ function BookDetailFull({ entry, shelf, onBack, onUpdateEntry, onUpdateBook, onD
               <div>
                 {label('Páginas')}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <input type="number" min="0" max={total || undefined}
+                  {/* "key" fuerza a resincronizar el campo si la página actual
+                      cambia por fuera de este input — al editar el % de al
+                      lado (que manda current_page al backend) o por sync en
+                      vivo desde otro dispositivo; si no, al ser un input sin
+                      controlar (defaultValue) se queda con el valor viejo en
+                      pantalla aunque el dato real ya haya cambiado. */}
+                  <input type="number" min="0" max={total || undefined} key={`cur-${entry.current_page}`}
                     defaultValue={entry.current_page ?? ''}
                     placeholder="Actual"
                     onBlur={ev => onUpdateEntry(entry.id, { current_page: ev.target.value === '' ? null : parseInt(ev.target.value) })}
                     style={{ ...fieldStyle, width: 72, textAlign: 'center' }} />
                   <span style={{ color: C.muted, fontSize: 13 }}>/</span>
-                  <input type="number" min="1"
+                  <input type="number" min="1" key={`tot-${entry.custom_total_pages}`}
                     defaultValue={entry.custom_total_pages ?? entry.book.num_pages ?? ''}
                     placeholder="Total"
                     onBlur={ev => onUpdateEntry(entry.id, { custom_total_pages: ev.target.value === '' ? null : parseInt(ev.target.value) })}
                     style={{ ...fieldStyle, width: 72, textAlign: 'center', color: C.sub }} />
-                  {total > 0 && <span style={{ fontSize: 11, color: C.accent, fontWeight: 700 }}>{pct}%</span>}
+                  {/* O directamente por porcentaje (como en Kindle) — sin
+                      páginas conocidas es la única forma de anotar progreso;
+                      con páginas, editarlo recalcula la página actual (misma
+                      fuente de verdad, el backend deriva el % de ahí). El
+                      "key" fuerza a refrescar el campo si el % cambia por
+                      fuera (p.ej. al editar la página actual al lado). */}
+                  <span style={{ color: C.muted, fontSize: 13, marginLeft: 2 }}>·</span>
+                  <input type="number" min="0" max="100" key={pct}
+                    defaultValue={pct}
+                    onBlur={ev => {
+                      if (ev.target.value === '') return
+                      const p = Math.max(0, Math.min(100, parseInt(ev.target.value)))
+                      if (total) onUpdateEntry(entry.id, { current_page: Math.round(p / 100 * total) })
+                      else onUpdateEntry(entry.id, { progress: p / 100 })
+                    }}
+                    style={{ ...fieldStyle, width: 60, padding: '7px 4px', textAlign: 'center', color: C.accent, fontWeight: 700 }} />
+                  <span style={{ fontSize: 11, color: C.accent, fontWeight: 700 }}>%</span>
                 </div>
-                {total > 0 && (
-                  <div style={{ marginTop: 8, height: 3, borderRadius: 2, background: C.surfaceHi }}>
-                    <div style={{ height: '100%', borderRadius: 2, background: C.accent, width: `${pct}%`, transition: 'width 0.3s' }} />
-                  </div>
-                )}
+                <div style={{ marginTop: 8, height: 3, borderRadius: 2, background: C.surfaceHi }}>
+                  <div style={{ height: '100%', borderRadius: 2, background: C.accent, width: `${pct}%`, transition: 'width 0.3s' }} />
+                </div>
               </div>
             </motion.div>
           )}
@@ -1352,12 +1414,7 @@ function BookDetailFull({ entry, shelf, onBack, onUpdateEntry, onUpdateBook, onD
               <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
                 <div>
                   {label('Puntuación')}
-                  <div style={{ display: 'flex', gap: 2 }}>
-                    {STARS.map(s => (
-                      <button key={s} onClick={() => onUpdateEntry(entry.id, { rating: s })}
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 26, color: (entry.rating || 0) >= s ? '#f0b429' : C.surfaceHi, padding: '0 2px', lineHeight: 1 }}>★</button>
-                    ))}
-                  </div>
+                  <StarRatingInput value={entry.rating || 0} onChange={r => onUpdateEntry(entry.id, { rating: r })} />
                 </div>
                 <div>
                   {label('Notas privadas')}
@@ -1408,7 +1465,7 @@ function ListRows({ books, onSelect, renderActions, isHighlighted = () => false 
                   <span style={{ width: 5, height: 5, borderRadius: '50%', background: st?.color, flexShrink: 0 }} />
                   <span style={{ fontSize: 10, color: C.muted }}>{st?.label}</span>
                   {e.status === 'reading' && total && e.current_page != null && <span style={{ fontSize: 10, color: C.accent, marginLeft: 2, fontWeight: 600 }}>{pct}%</span>}
-                  {e.status === 'read' && e.rating > 0 && <span style={{ fontSize: 9, color: '#f0b429', marginLeft: 2 }}>{'★'.repeat(e.rating)}</span>}
+                  {e.status === 'read' && e.rating > 0 && <span style={{ fontSize: 9, marginLeft: 2 }}>{renderStars(e.rating)}</span>}
                 </div>
                 {e.status === 'reading' && total && e.current_page != null && (
                   <div style={{ marginTop: 5, height: 2, borderRadius: 1, background: C.surfaceHi }}>
@@ -2197,13 +2254,14 @@ function SessionForm({ allBooks, fixedClubShelfId, initial, onSave, onCancel }) 
   )
 }
 
-function ClubBookDetail({ entry, isAdmin, onBack, onEntryUpdated }) {
+function ClubBookDetail({ entry, isAdmin, player, onBack, onEntryUpdated }) {
   const book = entry.book
   const by   = entry.proposed_by
   const [sessions,     setSessions]     = useState([])
   const [loadingSess,  setLoadingSess]  = useState(true)
   const [addingSession,setAddingSession]= useState(false)
   const [editSession,  setEditSession]  = useState(null)
+  const [votes,        setVotes]        = useState([])
 
   function loadSessions() {
     setLoadingSess(true)
@@ -2211,20 +2269,37 @@ function ClubBookDetail({ entry, isAdmin, onBack, onEntryUpdated }) {
       .then(r => r.json()).then(setSessions).finally(() => setLoadingSess(false))
   }
 
-  useEffect(() => { loadSessions() }, [entry.id])
+  function loadVotes() {
+    fetch(`/api/shelf/club/${entry.id}/votes`, { credentials: 'include' })
+      .then(r => r.ok ? r.json() : []).then(setVotes)
+  }
 
-  // Sincronización en vivo: sesiones creadas/editadas/borradas por el admin
-  // (viendo esta misma ficha desde otro dispositivo) refrescan sin recargar.
+  useEffect(() => { loadSessions() }, [entry.id])
+  // Las puntuaciones solo aplican a libros ya leídos por el club.
+  useEffect(() => { if (entry.status === 'finished') loadVotes() }, [entry.id, entry.status])
+
+  // Sincronización en vivo: sesiones creadas/editadas/borradas, o puntuaciones
+  // registradas/cambiadas por cualquiera (viendo esta misma ficha desde otro
+  // dispositivo), refrescan sin recargar.
   useEffect(() => {
     function onWs(ev) {
       const msg = ev.detail
-      if (msg.type === 'luni_update' && msg.scope === 'sessions' && msg.club_shelf_id === entry.id) {
-        loadSessions()
-      }
+      if (msg.type !== 'luni_update' || msg.club_shelf_id !== entry.id) return
+      if (msg.scope === 'sessions') loadSessions()
+      if (msg.scope === 'votes')    loadVotes()
     }
     window.addEventListener('luni:ws', onWs)
     return () => window.removeEventListener('luni:ws', onWs)
   }, [entry.id])
+
+  async function castVote(rating) {
+    await fetch(`/api/shelf/club/${entry.id}/vote`, {
+      method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rating }),
+    })
+    loadVotes()
+  }
 
   async function saveSession(data) {
     const url    = editSession ? `/api/sessions/${editSession.id}` : '/api/sessions'
@@ -2321,6 +2396,33 @@ function ClubBookDetail({ entry, isAdmin, onBack, onEntryUpdated }) {
         {/* Notas del club */}
         {entry.club_notes && (
           <p style={{ fontSize: 12, color: C.sub, fontStyle: 'italic', marginBottom: 16 }}>{entry.club_notes}</p>
+        )}
+
+        {/* Puntuaciones — solo libros ya leídos por el club. Cada uno pone la
+            suya (vacía hasta que la registra, modificable siempre después) y
+            ve las de los demás — nada de secreto ni de "revelar", a
+            diferencia del modelo Vote original (ver comentario en el backend). */}
+        {entry.status === 'finished' && (
+          <div style={{ marginBottom: 16 }}>
+            <p style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 10 }}>
+              Puntuaciones {votes.length > 0 && `· ${votes.length}`}
+            </p>
+            <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                <span style={{ fontSize: 12, color: C.sub, fontWeight: 600 }}>Tu puntuación</span>
+                <StarRatingInput size={22} value={votes.find(v => v.player.id === player.id)?.rating || 0} onChange={castVote} />
+              </div>
+              {votes.filter(v => v.player.id !== player.id).map(v => (
+                <div key={v.player.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, paddingTop: 10, borderTop: `1px solid ${C.border}` }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                    <PlayerBadge player={v.player} size={16} />
+                    <span style={{ fontSize: 12, color: v.player.color, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v.player.name}</span>
+                  </div>
+                  <span style={{ flexShrink: 0, fontSize: 13 }}>{renderStars(v.rating)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
         )}
 
         {/* Sesiones */}
@@ -2604,6 +2706,7 @@ function ClubTab({ player }) {
         <ClubBookDetail
           entry={detailEntry}
           isAdmin={isAdmin}
+          player={player}
           // La ficha ahora se puede abrir tanto desde Propuestos (lectura activa)
           // como desde Leídos — al volver, se recarga la sección donde estábamos
           // de verdad, no siempre "Leídos" (antes solo se podía llegar desde ahí).
@@ -2901,6 +3004,7 @@ const EVENT_TEXT = {
   started:  (name, title) => <><strong style={{ color: C.text }}>{name}</strong> empezó a leer <em>«{title}»</em></>,
   finished: (name, title) => <><strong style={{ color: C.text }}>{name}</strong> terminó <em>«{title}»</em></>,
   proposed: (name, title) => <><strong style={{ color: C.text }}>{name}</strong> propuso <em>«{title}»</em> al club</>,
+  voted:    (name, title) => <><strong style={{ color: C.text }}>{name}</strong> puntuó <em>«{title}»</em> del club</>,
 }
 
 const PAGE = 50
@@ -2987,7 +3091,7 @@ function AmigosTab({ player }) {
                 <p style={{ fontSize: 12, color: C.sub, lineHeight: 1.4, margin: 0 }}>
                   {textFn ? textFn(name, title) : item.event_type}
                 </p>
-                {item.event_type === 'finished' && item.rating && (
+                {(item.event_type === 'finished' || item.event_type === 'voted') && item.rating && (
                   <div style={{ marginTop: 4 }}>{renderStars(item.rating)}</div>
                 )}
                 <p style={{ fontSize: 10, color: C.muted, marginTop: 4 }}>{timeAgo(item.created_at)}</p>
