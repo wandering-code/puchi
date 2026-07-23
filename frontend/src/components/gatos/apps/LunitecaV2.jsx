@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useIsMobile } from '../../../utils/responsive'
 import { C } from './lunitecaTheme'
 import BulkAddModal from './BulkAddModal'
+import PlayerAvatar from '../PlayerAvatar'
 
 // Cierra un popover al tocar/clicar fuera de él — el onMouseLeave que ya
 // tenían no dispara nunca en táctil (no hay hover), así que sin esto en
@@ -989,7 +990,7 @@ function SynopsisBox({ synopsis, loading, expanded, onToggle }) {
 }
 
 // ─── Detalle completo ─────────────────────────────────────────────────────────
-function BookDetailFull({ entry, shelf, onBack, onUpdateEntry, onUpdateBook, onDelete }) {
+function BookDetailFull({ entry, shelf, onBack, onUpdateEntry, onUpdateBook, onDelete, readOnly = false }) {
   const isMobile = useIsMobile()
   const [editing,          setEditing]          = useState(false)
   const [draft,            setDraft]            = useState({})
@@ -1041,6 +1042,8 @@ function BookDetailFull({ entry, shelf, onBack, onUpdateEntry, onUpdateBook, onD
       author:       entry.book.author || '',
       status:       entry.status      || 'want_to_read',
       genre:        genreValue,
+      year:         entry.book.year ?? '',
+      isbn:         entry.book.isbn || '',
       coverFile:    null,
       coverPreview: null,
       coverUrl:     null,
@@ -1096,13 +1099,17 @@ function BookDetailFull({ entry, shelf, onBack, onUpdateEntry, onUpdateBook, onD
       await onUpdateEntry(entry.id, { cover_url: newCoverUrl })
     }
 
+    const draftYear = draft.year === '' ? null : parseInt(draft.year)
     const bookChanged = draft.title    !== entry.book.title
       || draft.author   !== (entry.book.author   || '')
       || draft.genre    !== (entry.book.genre    || '')
       || synopsis       !== (entry.book.synopsis || '')
+      || draftYear      !== (entry.book.year     ?? null)
+      || draft.isbn     !== (entry.book.isbn     || '')
     if (bookChanged) {
       await onUpdateBook(entry.book.id, {
         title: draft.title, author: draft.author, genre: draft.genre, synopsis,
+        year: draftYear, isbn: draft.isbn || null,
       })
     }
     if (draft.status !== status) {
@@ -1162,7 +1169,7 @@ function BookDetailFull({ entry, shelf, onBack, onUpdateEntry, onUpdateBook, onD
           <IconBack size={16} color="currentColor" />
         </button>
         <div style={{ display: 'flex', gap: 4 }}>
-          {editing ? (<>
+          {!readOnly && (editing ? (<>
             <button onClick={saveEdit} title="Guardar cambios" style={{
               background: C.accent, border: 'none', borderRadius: 8,
               width: 30, height: 28, cursor: 'pointer',
@@ -1218,7 +1225,7 @@ function BookDetailFull({ entry, shelf, onBack, onUpdateEntry, onUpdateBook, onD
                 <IconTrash size={13} color="rgba(239,68,68,0.6)" />
               </button>
             )}
-          </>)}
+          </>))}
         </div>
       </div>
 
@@ -1256,6 +1263,11 @@ function BookDetailFull({ entry, shelf, onBack, onUpdateEntry, onUpdateBook, onD
             )}
             <div ref={folderMenuRef} style={{ position: 'relative' }}>
               {label('Carpeta')}
+              {readOnly ? (
+                <p style={{ fontSize: 12, color: entry.folder ? C.sub : C.muted, fontStyle: entry.folder ? 'normal' : 'italic', margin: 0 }}>
+                  {entry.folder || 'Sin carpeta'}
+                </p>
+              ) : (<>
               <div style={{ display: 'flex', gap: 5 }}>
                 <input type="text" value={folderValue}
                   onChange={ev => setFolderValue(ev.target.value)}
@@ -1305,6 +1317,7 @@ function BookDetailFull({ entry, shelf, onBack, onUpdateEntry, onUpdateBook, onD
                   </motion.div>
                 )}
               </AnimatePresence>
+              </>)}
             </div>
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
@@ -1314,6 +1327,18 @@ function BookDetailFull({ entry, shelf, onBack, onUpdateEntry, onUpdateBook, onD
                   style={{ ...fieldStyle, fontSize: 14, fontWeight: 700, border: `1px solid ${C.accentBd}` }} />
                 <input value={draft.author} onChange={ev => setDraft(d => ({ ...d, author: ev.target.value }))}
                   placeholder="Autor" style={{ ...fieldStyle, color: C.sub }} />
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                  <div>
+                    {label('Año')}
+                    <input type="number" value={draft.year} onChange={ev => setDraft(d => ({ ...d, year: ev.target.value }))}
+                      placeholder="Año" style={fieldStyle} />
+                  </div>
+                  <div>
+                    {label('ISBN')}
+                    <input value={draft.isbn} onChange={ev => setDraft(d => ({ ...d, isbn: ev.target.value }))}
+                      placeholder="ISBN" style={fieldStyle} />
+                  </div>
+                </div>
                 <div>
                   {label('Estado')}
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
@@ -1341,18 +1366,20 @@ function BookDetailFull({ entry, shelf, onBack, onUpdateEntry, onUpdateBook, onD
                 {entry.book.author && <p style={{ fontSize: 12, color: C.sub, margin: '0 0 3px' }}>{entry.book.author}</p>}
                 {entry.book.year   && <p style={{ fontSize: 11, color: C.muted, margin: '0 0 14px' }}>{entry.book.year}</p>}
                 <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
-                  <select value={status} onChange={ev => changeStatus(ev.target.value)} title="Cambiar estado" style={{
+                  <select value={status} onChange={ev => changeStatus(ev.target.value)} title="Cambiar estado" disabled={readOnly} style={{
                     appearance: 'none', WebkitAppearance: 'none', MozAppearance: 'none',
                     background: `${statusInfo?.color}22`, border: 'none', borderRadius: 20,
-                    padding: '4px 24px 4px 20px', fontSize: 11, fontWeight: 600, color: statusInfo?.color,
-                    cursor: 'pointer', outline: 'none', colorScheme: 'dark', fontFamily: 'inherit',
+                    padding: `4px ${readOnly ? 14 : 24}px 4px 20px`, fontSize: 11, fontWeight: 600, color: statusInfo?.color,
+                    cursor: readOnly ? 'default' : 'pointer', outline: 'none', colorScheme: 'dark', fontFamily: 'inherit',
                   }}>
                     {STATUSES.map(opt => <option key={opt.id} value={opt.id}>{opt.label}</option>)}
                   </select>
                   <span style={{ position: 'absolute', left: 11, width: 5, height: 5, borderRadius: '50%', background: statusInfo?.color, pointerEvents: 'none' }} />
-                  <span style={{ position: 'absolute', right: 8, display: 'flex', pointerEvents: 'none' }}>
-                    <IconChevronDown size={9} color={statusInfo?.color} />
-                  </span>
+                  {!readOnly && (
+                    <span style={{ position: 'absolute', right: 8, display: 'flex', pointerEvents: 'none' }}>
+                      <IconChevronDown size={9} color={statusInfo?.color} />
+                    </span>
+                  )}
                 </div>
                 {entry.book.genre && (
                   <p style={{ fontSize: 11, color: C.muted, marginTop: 8 }}>{entry.book.genre}</p>
@@ -1396,13 +1423,13 @@ function BookDetailFull({ entry, shelf, onBack, onUpdateEntry, onUpdateBook, onD
                       pantalla aunque el dato real ya haya cambiado. */}
                   <input type="number" min="0" max={total || undefined} key={`cur-${entry.current_page}`}
                     defaultValue={entry.current_page ?? ''}
-                    placeholder="Actual"
+                    placeholder="Actual" disabled={readOnly}
                     onBlur={ev => onUpdateEntry(entry.id, { current_page: ev.target.value === '' ? null : parseInt(ev.target.value) })}
                     style={{ ...fieldStyle, width: 72, textAlign: 'center' }} />
                   <span style={{ color: C.muted, fontSize: 13 }}>/</span>
                   <input type="number" min="1" key={`tot-${entry.custom_total_pages}`}
                     defaultValue={entry.custom_total_pages ?? entry.book.num_pages ?? ''}
-                    placeholder="Total"
+                    placeholder="Total" disabled={readOnly}
                     onBlur={ev => onUpdateEntry(entry.id, { custom_total_pages: ev.target.value === '' ? null : parseInt(ev.target.value) })}
                     style={{ ...fieldStyle, width: 72, textAlign: 'center', color: C.sub }} />
                   {/* O directamente por porcentaje (como en Kindle) — sin
@@ -1413,7 +1440,7 @@ function BookDetailFull({ entry, shelf, onBack, onUpdateEntry, onUpdateBook, onD
                       fuera (p.ej. al editar la página actual al lado). */}
                   <span style={{ color: C.muted, fontSize: 13, marginLeft: 2 }}>·</span>
                   <input type="number" min="0" max="100" key={pct}
-                    defaultValue={pct}
+                    defaultValue={pct} disabled={readOnly}
                     onBlur={ev => {
                       if (ev.target.value === '') return
                       const p = Math.max(0, Math.min(100, parseInt(ev.target.value)))
@@ -1441,6 +1468,7 @@ function BookDetailFull({ entry, shelf, onBack, onUpdateEntry, onUpdateBook, onD
                 <div>
                   {label('Inicio de lectura')}
                   <input type="date" defaultValue={entry.started_at ? entry.started_at.slice(0, 10) : ''}
+                    disabled={readOnly}
                     onBlur={ev => onUpdateEntry(entry.id, { started_at: ev.target.value || null })}
                     style={{ ...fieldStyle, colorScheme: 'dark' }} />
                 </div>
@@ -1451,6 +1479,7 @@ function BookDetailFull({ entry, shelf, onBack, onUpdateEntry, onUpdateBook, onD
                     >
                       {label(effectiveStatus === 'dropped' ? 'Fecha de dropeo' : 'Fin de lectura')}
                       <input type="date" defaultValue={entry.finished_at ? entry.finished_at.slice(0, 10) : ''}
+                        disabled={readOnly}
                         onBlur={ev => onUpdateEntry(entry.id, { finished_at: ev.target.value || null })}
                         style={{ ...fieldStyle, colorScheme: 'dark' }} />
                     </motion.div>
@@ -1470,15 +1499,22 @@ function BookDetailFull({ entry, shelf, onBack, onUpdateEntry, onUpdateBook, onD
               <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
                 <div>
                   {label('Puntuación')}
-                  <StarRatingInput value={entry.rating || 0} onChange={r => onUpdateEntry(entry.id, { rating: r })} />
+                  {readOnly
+                    ? (renderStars(entry.rating) || <span style={{ fontSize: 12, color: C.muted, fontStyle: 'italic' }}>Sin puntuar</span>)
+                    : <StarRatingInput value={entry.rating || 0} onChange={r => onUpdateEntry(entry.id, { rating: r })} />}
                 </div>
-                <div>
-                  {label('Notas privadas')}
-                  <textarea defaultValue={entry.notes || ''}
-                    onBlur={ev => onUpdateEntry(entry.id, { notes: ev.target.value })}
-                    rows={4} placeholder="Tus impresiones sobre el libro…"
-                    style={{ ...fieldStyle, resize: 'vertical', lineHeight: 1.6 }} />
-                </div>
+                {/* Las notas son privadas — el backend ya las oculta (null) al
+                    consultar la estantería de otro jugador, así que en modo
+                    consulta directamente no hay nada que mostrar aquí. */}
+                {!readOnly && (
+                  <div>
+                    {label('Notas privadas')}
+                    <textarea defaultValue={entry.notes || ''}
+                      onBlur={ev => onUpdateEntry(entry.id, { notes: ev.target.value })}
+                      rows={4} placeholder="Tus impresiones sobre el libro…"
+                      style={{ ...fieldStyle, resize: 'vertical', lineHeight: 1.6 }} />
+                  </div>
+                )}
               </div>
             </motion.div>
           )}
@@ -3091,16 +3127,293 @@ const EVENT_TEXT = {
 
 const PAGE = 50
 
-function AmigosTab({ player }) {
+// Estantería de otro jugador — se abre al hacer clic en su icono en la barra
+// de miembros de Amigos. Reutiliza BookDetailFull/PersonalShelfSections en
+// modo `readOnly`: el backend ya oculta las notas privadas de quien no sea su
+// dueño (ver `_shelf_entry_out`, hide_notes), así que aquí no hace falta nada
+// especial para eso — solo desactivar los controles de edición en la UI.
+// Filtro/orden/vista/colapsado son todo estado local de este componente —
+// nunca en localStorage ni mandado al servidor, así que no afecta a lo que
+// ve el propietario ni se conserva entre visitas (cada vez que se entra a
+// ver una estantería ajena, empieza en blanco).
+function FriendShelfView({ playerId, playerName, onBack }) {
+  const isMobile = useIsMobile()
+  const [shelf,   setShelf]   = useState([])
+  const [loading, setLoading] = useState(true)
+  const [selected, setSelected] = useState(null)
+  const [collapsedReading, setCollapsedReading] = useState(false)
+  const [collapsedRead,    setCollapsedRead]    = useState(false)
+  const [collapsedWant,    setCollapsedWant]    = useState(false)
+  const [collapsedDropped, setCollapsedDropped] = useState(false)
+  const [collapsedYears,   setCollapsedYears]   = useState(new Set())
+  const [viewMode, setViewMode] = useState('list')
+  const [filters,  setFilters]  = useState(EMPTY_FILTERS)
+  const [showFilters, setShowFilters] = useState(false)
+  const [sort,     setSort]     = useState({ field: '', dir: 'asc' })
+  const [showSort, setShowSort] = useState(false)
+  const sortMenuRef = useOutsideClose(showSort, () => setShowSort(false))
+
+  useEffect(() => {
+    setLoading(true)
+    fetch(`/api/shelf/personal?player_id=${playerId}`, { credentials: 'include' })
+      .then(r => r.ok ? r.json() : [])
+      .then(fresh => {
+        setShelf(fresh)
+        setSelected(s => s ? (fresh.find(e => e.id === s.id) ?? s) : s)
+      })
+      .finally(() => setLoading(false))
+  }, [playerId])
+
+  function toggleYear(y) {
+    setCollapsedYears(prev => {
+      const next = new Set(prev)
+      next.has(y) ? next.delete(y) : next.add(y)
+      return next
+    })
+  }
+
+  // Único "escritura" que puede disparar esta pantalla de solo consulta: el
+  // autorrelleno de sinopsis desde Open Library cuando el libro no la tenía
+  // guardada (mismo efecto que en la propia estantería) — nunca lo pide el
+  // jugador a propósito, así que se deja pasar igual en modo lectura.
+  async function updateBook(bookId, data) {
+    const r = await fetch(`/api/books/${bookId}`, {
+      method: 'PATCH', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    })
+    if (!r.ok) return
+    const updated = await r.json()
+    setShelf(s => s.map(e => e.book.id === bookId ? { ...e, book: updated } : e))
+    setSelected(s => s ? { ...s, book: updated } : s)
+  }
+
+  const filtered = shelf.filter(e => {
+    if (filters.status !== 'all' && e.status !== filters.status) return false
+    if (filters.author && e.book.author !== filters.author) return false
+    if (filters.folder && (e.folder || '') !== filters.folder) return false
+    if (filters.maxPages) {
+      const pages = e.custom_total_pages || e.book.num_pages
+      if (pages && pages > parseInt(filters.maxPages)) return false
+    }
+    if (filters.genre && e.book.genre !== filters.genre) return false
+    return true
+  })
+
+  const STATUS_ORDER = { want_to_read: 0, reading: 1, read: 2, dropped: 3 }
+  const sorted = sort.field ? [...filtered].sort((a, b) => {
+    let va, vb
+    if (sort.field === 'title')  { va = a.book.title?.toLowerCase()  || ''; vb = b.book.title?.toLowerCase()  || '' }
+    if (sort.field === 'author') { va = a.book.author?.toLowerCase() || ''; vb = b.book.author?.toLowerCase() || '' }
+    if (sort.field === 'status') { va = STATUS_ORDER[a.status] ?? 9;  vb = STATUS_ORDER[b.status] ?? 9 }
+    if (sort.field === 'genre')  { va = a.book.genre?.toLowerCase()  || ''; vb = b.book.genre?.toLowerCase()  || '' }
+    if (sort.field === 'date')   { va = a.finished_at || ''; vb = b.finished_at || '' }
+    if (va < vb) return sort.dir === 'asc' ? -1 : 1
+    if (va > vb) return sort.dir === 'asc' ?  1 : -1
+    return 0
+  }) : filtered
+
+  const readEntriesForYears = sorted.filter(e => e.status === 'read')
+  const currentReadYears = [...new Set(readEntriesForYears.map(e => e.finished_at ? e.finished_at.slice(0, 4) : 'sin-fecha'))]
+  const anyBlockExpanded = currentReadYears.some(y => !collapsedYears.has(y))
+  function toggleAllCollapsed() {
+    setCollapsedYears(anyBlockExpanded ? new Set(currentReadYears) : new Set())
+  }
+
+  const activeFiltersCount = Object.keys(EMPTY_FILTERS).filter(k => filters[k] !== EMPTY_FILTERS[k]).length
+
+  function toggleSort(field) {
+    setSort(s => s.field === field
+      ? s.dir === 'asc' ? { field, dir: 'desc' } : { field: '', dir: 'asc' }
+      : { field, dir: 'asc' }
+    )
+    setShowSort(false)
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', position: 'relative' }}>
+      <AnimatePresence>
+        {showFilters && <FilterModal filters={filters} onApply={setFilters} onClose={() => setShowFilters(false)} shelf={shelf} />}
+      </AnimatePresence>
+      <AnimatePresence mode="wait" initial={false}>
+        {selected ? (
+          <motion.div key="detail" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}
+            style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+            <BookDetailFull
+              key={selected.id}
+              entry={selected}
+              shelf={shelf}
+              onBack={() => setSelected(null)}
+              onUpdateEntry={() => {}}
+              onUpdateBook={updateBook}
+              onDelete={() => {}}
+              readOnly
+            />
+          </motion.div>
+        ) : (
+          <motion.div key="list" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}
+            style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+            <div style={{
+              padding: '11px 16px', borderBottom: `1px solid ${C.border}`,
+              display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0,
+            }}>
+              <button onClick={onBack} title="Volver a Amigos" style={{ background: 'none', border: 'none', color: C.sub, cursor: 'pointer', padding: 4, display: 'flex', alignItems: 'center', borderRadius: 7, transition: 'color 0.15s', flexShrink: 0 }}
+                onMouseEnter={ev => ev.currentTarget.style.color = C.text}
+                onMouseLeave={ev => ev.currentTarget.style.color = C.sub}>
+                <IconBack size={16} color="currentColor" />
+              </button>
+              <span style={{ fontSize: 13, color: C.text, fontWeight: 600, flex: 1 }}>Estantería de {playerName}</span>
+
+              {/* Colapsar/expandir todo — igual que en la propia estantería,
+                  solo afecta a los bloques de año dentro de "Leídos". */}
+              <button onClick={toggleAllCollapsed} title={anyBlockExpanded ? 'Colapsar todo' : 'Expandir todo'} style={{
+                background: C.surfaceHi, border: '1px solid transparent',
+                borderRadius: 8, width: 32, height: 28, color: C.muted,
+                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                transition: 'all 0.15s', flexShrink: 0,
+              }}>
+                <IconCollapseAll color={C.muted} expand={!anyBlockExpanded} />
+              </button>
+
+              {/* Filtros */}
+              <button onClick={() => setShowFilters(true)} title="Filtros" style={{
+                position: 'relative',
+                background: activeFiltersCount > 0 ? C.accentBg : C.surfaceHi,
+                border: `1px solid ${activeFiltersCount > 0 ? C.accentBd : 'transparent'}`,
+                borderRadius: 8, width: 32, height: 28,
+                color: activeFiltersCount > 0 ? C.accent : C.muted,
+                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                transition: 'all 0.15s', flexShrink: 0,
+              }}>
+                <IconFilter color={activeFiltersCount > 0 ? C.accent : C.muted} />
+                {activeFiltersCount > 0 && (
+                  <span style={{
+                    position: 'absolute', top: -4, right: -4,
+                    background: C.accent, color: 'white', borderRadius: '50%',
+                    width: 14, height: 14, fontSize: 8, fontWeight: 700,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1,
+                  }}>{activeFiltersCount}</span>
+                )}
+              </button>
+
+              {/* Ordenación */}
+              <div ref={sortMenuRef} style={{ position: 'relative', flexShrink: 0 }}>
+                <button onClick={() => setShowSort(v => !v)} title="Ordenar" style={{
+                  position: 'relative',
+                  background: sort.field ? C.accentBg : C.surfaceHi,
+                  border: `1px solid ${sort.field ? C.accentBd : 'transparent'}`,
+                  borderRadius: 8, width: 32, height: 28,
+                  color: sort.field ? C.accent : C.muted,
+                  cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  transition: 'all 0.15s',
+                }}>
+                  <IconSort color={sort.field ? C.accent : C.muted} />
+                </button>
+                {showSort && (
+                  <div style={{
+                    position: 'absolute', top: 'calc(100% + 6px)', right: 0,
+                    background: C.surface, border: `1px solid ${C.border}`,
+                    borderRadius: 10, overflow: 'hidden', minWidth: 160,
+                    boxShadow: '0 8px 24px rgba(0,0,0,0.4)', zIndex: 50,
+                  }}>
+                    {[
+                      { field: 'title',  label: 'Título'  },
+                      { field: 'author', label: 'Autor'   },
+                      { field: 'status', label: 'Estado'  },
+                      { field: 'genre',  label: 'Género'  },
+                      { field: 'date',   label: 'Fecha de lectura' },
+                    ].map(({ field, label }) => {
+                      const active = sort.field === field
+                      const arrow  = active ? (sort.dir === 'asc' ? ' ↑' : ' ↓') : ''
+                      return (
+                        <button key={field} onClick={() => toggleSort(field)} style={{
+                          width: '100%', background: active ? C.accentBg : 'transparent',
+                          border: 'none', padding: '9px 14px', textAlign: 'left',
+                          color: active ? C.accent : C.sub, fontSize: 12, cursor: 'pointer',
+                          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                          transition: 'background 0.1s',
+                        }}
+                          onMouseEnter={ev => { if (!active) ev.currentTarget.style.background = C.surfaceHi }}
+                          onMouseLeave={ev => { if (!active) ev.currentTarget.style.background = 'transparent' }}
+                        >
+                          <span>{label}</span>
+                          {active && <span style={{ fontSize: 11, opacity: 0.8 }}>{arrow}</span>}
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Toggle lista/grid */}
+              <div style={{ display: 'flex', gap: 2, background: C.surfaceHi, borderRadius: 8, padding: 3, flexShrink: 0 }}>
+                {[['list', '☰'], ['grid', '⊞']].map(([mode, icon]) => (
+                  <button key={mode} onClick={() => setViewMode(mode)} style={{
+                    background: viewMode === mode ? C.surface : 'transparent',
+                    border: 'none', borderRadius: 6, width: 28, height: 24,
+                    cursor: 'pointer', fontSize: 14,
+                    color: viewMode === mode ? C.text : C.muted,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    transition: 'all 0.15s',
+                  }}>{icon}</button>
+                ))}
+              </div>
+            </div>
+
+            {loading && (
+              <p style={{ color: C.muted, fontSize: 12, textAlign: 'center', marginTop: 40 }}>Cargando…</p>
+            )}
+            {!loading && shelf.length === 0 && (
+              <p style={{ color: C.muted, fontSize: 12, textAlign: 'center', marginTop: 40 }}>Aún no tiene libros en su estantería.</p>
+            )}
+            {!loading && shelf.length > 0 && sorted.length === 0 && (
+              <p style={{ color: C.muted, fontSize: 12, textAlign: 'center', marginTop: 40 }}>Ningún libro coincide con los filtros</p>
+            )}
+            {!loading && sorted.length > 0 && (
+              <motion.div key={viewMode} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.15 }}
+                style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                <PersonalShelfSections
+                  entries={sorted}
+                  viewMode={viewMode}
+                  sort={sort}
+                  onSelect={setSelected}
+                  collapsedReading={collapsedReading}
+                  onToggleReadingCollapsed={() => setCollapsedReading(v => !v)}
+                  collapsedRead={collapsedRead}
+                  onToggleReadCollapsed={() => setCollapsedRead(v => !v)}
+                  collapsedWant={collapsedWant}
+                  onToggleWantCollapsed={() => setCollapsedWant(v => !v)}
+                  collapsedDropped={collapsedDropped}
+                  onToggleDroppedCollapsed={() => setCollapsedDropped(v => !v)}
+                  collapsedYears={collapsedYears}
+                  onToggleYear={toggleYear}
+                />
+              </motion.div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  )
+}
+
+function AmigosTab({ player, onGoToShelf }) {
   const [feed,     setFeed]     = useState([])
   const [hasMore,  setHasMore]  = useState(false)
   const [loading,  setLoading]  = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
+  const [members,  setMembers]  = useState([])
+  const [viewingPlayer,  setViewingPlayer]  = useState(null)   // { id, name } | null
+  const [filterPlayer,   setFilterPlayer]   = useState(null)   // { id, name } | null
+  const [showFilterMenu, setShowFilterMenu] = useState(false)
+  const filterMenuRef = useOutsideClose(showFilterMenu, () => setShowFilterMenu(false))
 
   function fetchPage(offset, append) {
     const setter = append ? setLoadingMore : setLoading
     setter(true)
-    fetch(`/api/activity/feed?limit=${PAGE}&offset=${offset}`, { credentials: 'include' })
+    const qs = new URLSearchParams({ limit: PAGE, offset })
+    if (filterPlayer) qs.set('player_id', filterPlayer.id)
+    fetch(`/api/activity/feed?${qs}`, { credentials: 'include' })
       .then(r => r.json())
       .then(data => {
         const items = data.items || []
@@ -3110,7 +3423,17 @@ function AmigosTab({ player }) {
       .finally(() => setter(false))
   }
 
-  useEffect(() => { fetchPage(0, false) }, [])
+  // Vuelve a pedir desde el principio al cambiar de filtro — filtrar solo en
+  // cliente rompería "Cargar más" (el offset dejaría de corresponder con lo
+  // que de verdad hay filtrado en el backend).
+  useEffect(() => { fetchPage(0, false) }, [filterPlayer])
+
+  useEffect(() => {
+    fetch('/api/players', { credentials: 'include' })
+      .then(r => r.json())
+      .then(all => setMembers(all.filter(p => p.club_member)))
+      .catch(() => {})
+  }, [])
 
   // Sincronización en vivo: actividad de lectura, cambios de perfil, o
   // edición del libro compartido (título/portada) refrescan este feed sin recargar.
@@ -3123,16 +3446,106 @@ function AmigosTab({ player }) {
     }
     window.addEventListener('luni:ws', onWs)
     return () => window.removeEventListener('luni:ws', onWs)
-  }, [])
+  }, [filterPlayer])
+
+  if (viewingPlayer) {
+    return <FriendShelfView playerId={viewingPlayer.id} playerName={viewingPlayer.name} onBack={() => setViewingPlayer(null)} />
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
       {/* Cabecera */}
       <div style={{
         padding: '11px 16px', borderBottom: `1px solid ${C.border}`,
-        display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0,
+        display: 'flex', flexDirection: 'column', gap: 10, flexShrink: 0,
       }}>
-        <span style={{ fontSize: 13, color: C.text, fontWeight: 600, flex: 1 }}>Actividad de amigos</span>
+        <span style={{ fontSize: 13, color: C.text, fontWeight: 600 }}>Actividad de amigos</span>
+
+        {/* Barra de miembros — clic en uno va a su estantería (solo consulta).
+            El filtro de actividad es otra cosa a propósito (botón aparte a la
+            derecha): así un mismo clic nunca significa dos cosas distintas. */}
+        {members.length > 0 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ display: 'flex', gap: 14, overflowX: 'auto', flex: 1, paddingBottom: 2 }}>
+              {members.map(m => {
+                const isMe = m.id === player.id
+                return (
+                  <button key={m.id}
+                    onClick={() => isMe ? onGoToShelf() : setViewingPlayer({ id: m.id, name: m.name })}
+                    title={isMe ? 'Ir a mi estantería' : `Ver la estantería de ${m.name}`} style={{
+                      background: 'none', border: 'none', cursor: 'pointer', flexShrink: 0,
+                      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, padding: 2, width: 54,
+                    }}>
+                    <PlayerAvatar emoji={m.avatar_emoji} url={m.avatar_url} size={36} style={{ border: `2px solid ${m.color || C.border}` }} />
+                    <span style={{ fontSize: 10, color: C.sub, maxWidth: 54, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {isMe ? 'Tú' : m.name}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+
+            {/* Botón de filtro — este sí filtra el feed, y solo al elegir a
+                alguien de este desplegable (nunca al clicar la barra de arriba). */}
+            <div ref={filterMenuRef} style={{ position: 'relative', flexShrink: 0 }}>
+              <button onClick={() => setShowFilterMenu(v => !v)} title="Filtrar actividad por miembro" style={{
+                position: 'relative',
+                background: filterPlayer ? C.accentBg : C.surfaceHi,
+                border: `1px solid ${filterPlayer ? C.accentBd : 'transparent'}`,
+                borderRadius: 8, width: 30, height: 28, color: filterPlayer ? C.accent : C.muted,
+                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                transition: 'all 0.15s',
+              }}>
+                <IconFilter size={13} color={filterPlayer ? C.accent : C.muted} />
+              </button>
+              <AnimatePresence>
+                {showFilterMenu && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }}
+                    transition={{ duration: 0.12 }}
+                    style={{
+                      position: 'absolute', top: 'calc(100% + 6px)', right: 0,
+                      background: C.surface, border: `1px solid ${C.border}`,
+                      borderRadius: 10, overflow: 'hidden', minWidth: 190, maxHeight: 260, overflowY: 'auto',
+                      boxShadow: '0 8px 24px rgba(0,0,0,0.4)', zIndex: 50,
+                    }}>
+                    <button onClick={() => { setFilterPlayer(null); setShowFilterMenu(false) }} style={{
+                      display: 'flex', alignItems: 'center', width: '100%', textAlign: 'left', gap: 8,
+                      background: !filterPlayer ? C.accentBg : 'transparent',
+                      border: 'none', borderBottom: `1px solid ${C.border}`, padding: '9px 12px', fontSize: 12, cursor: 'pointer',
+                      color: !filterPlayer ? C.accent : C.sub, fontWeight: !filterPlayer ? 700 : 400,
+                    }}>Todos</button>
+                    {members.map(m => (
+                      <button key={m.id} onClick={() => { setFilterPlayer({ id: m.id, name: m.name }); setShowFilterMenu(false) }} style={{
+                        display: 'flex', alignItems: 'center', width: '100%', textAlign: 'left', gap: 8,
+                        background: filterPlayer?.id === m.id ? C.accentBg : 'transparent',
+                        border: 'none', padding: '8px 12px', fontSize: 12, cursor: 'pointer',
+                        color: filterPlayer?.id === m.id ? C.accent : C.sub,
+                      }}
+                        onMouseEnter={ev => { if (filterPlayer?.id !== m.id) ev.currentTarget.style.background = C.surfaceHi }}
+                        onMouseLeave={ev => { if (filterPlayer?.id !== m.id) ev.currentTarget.style.background = 'transparent' }}
+                      >
+                        <PlayerAvatar emoji={m.avatar_emoji} url={m.avatar_url} size={18} />
+                        {m.id === player.id ? 'Tú' : m.name}
+                      </button>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          </div>
+        )}
+
+        {filterPlayer && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ fontSize: 11, color: C.muted }}>
+              Filtrando por <strong style={{ color: C.text }}>{filterPlayer.name}</strong>
+            </span>
+            <button onClick={() => setFilterPlayer(null)} title="Quitar filtro" style={{
+              background: 'none', border: 'none', color: C.muted, cursor: 'pointer', fontSize: 13, lineHeight: 1, padding: '0 2px',
+            }}>×</button>
+          </div>
+        )}
       </div>
 
       {/* Lista */}
@@ -3142,7 +3555,7 @@ function AmigosTab({ player }) {
         )}
         {!loading && feed.length === 0 && (
           <p style={{ color: C.muted, fontSize: 12, textAlign: 'center', marginTop: 40 }}>
-            Aún no hay actividad. ¡Añade libros a tu estantería!
+            {filterPlayer ? `${filterPlayer.name} aún no tiene actividad.` : 'Aún no hay actividad. ¡Añade libros a tu estantería!'}
           </p>
         )}
         {feed.map(item => {
@@ -3712,7 +4125,7 @@ export default function LunitecaV2({ player }) {
         <motion.div initial={false} animate={tabAnimate('amigos')}
           transition={isMobile ? { type: 'tween', duration: 0.22, ease: [0.4, 0, 0.2, 1] } : { duration: 0 }}
           style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: nav === 'amigos' ? undefined : 'none' }}>
-          <AmigosTab player={player} />
+          <AmigosTab player={player} onGoToShelf={() => goToNav('shelf')} />
         </motion.div>
       </div>
 

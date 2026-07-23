@@ -858,6 +858,8 @@ class BookUpdateRequest(BaseModel):
     genre:     Optional[str] = None
     synopsis:  Optional[str] = None
     cover_url: Optional[str] = None
+    year:      Optional[int] = None
+    isbn:      Optional[str] = None
 
 @app.patch("/books/{book_id}")
 async def update_book(
@@ -874,6 +876,8 @@ async def update_book(
     if body.genre     is not None: book.genre     = body.genre.strip()
     if body.synopsis  is not None: book.synopsis  = body.synopsis.strip()
     if body.cover_url is not None: book.cover_url = body.cover_url.strip() or None
+    if body.year      is not None: book.year      = body.year
+    if body.isbn      is not None: book.isbn      = body.isbn.strip() or None
     db.commit()
     db.refresh(book)
     # El mismo Book es compartido entre estanterías personales y del club —
@@ -1357,27 +1361,29 @@ def delete_personal_shelf(
 def get_activity_feed(
     limit: int = 50,
     offset: int = 0,
+    player_id: Optional[int] = None,
     db: Session = Depends(get_db),
     current: Player = Depends(get_current_player),
 ):
     # La actividad es "cosa del club" — un jugador sin club_member no genera
     # entradas para nadie (ni para sí mismo), su estantería personal sigue
-    # intacta, solo no aparece en este feed.
-    activities = (
+    # intacta, solo no aparece en este feed. player_id filtra el feed a uno
+    # solo (barra de miembros de Amigos), sin tocar la paginación de los demás.
+    base_query = (
         db.query(Activity)
         .join(Player, Activity.player_id == Player.id)
         .filter(Player.club_member == True)  # noqa: E712
+    )
+    if player_id is not None:
+        base_query = base_query.filter(Activity.player_id == player_id)
+    activities = (
+        base_query
         .order_by(Activity.created_at.desc(), Activity.id.desc())
         .offset(offset)
         .limit(limit)
         .all()
     )
-    total = (
-        db.query(Activity)
-        .join(Player, Activity.player_id == Player.id)
-        .filter(Player.club_member == True)  # noqa: E712
-        .count()
-    )
+    total = base_query.count()
     return {
         "items": [
             {
