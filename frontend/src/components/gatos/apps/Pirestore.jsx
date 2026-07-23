@@ -87,6 +87,17 @@ export default function Pirestore({ player, onProfileUpdate }) {
   }
   useEffect(loadWallpapers, [])
 
+  // Si el admin añade o quita un fondo desde otro dispositivo mientras
+  // Pirestore está abierta, el catálogo se refresca solo sin recargar.
+  useEffect(() => {
+    function onWs(ev) {
+      const msg = ev.detail
+      if (msg.type === 'luni_update' && msg.scope === 'shop') loadWallpapers()
+    }
+    window.addEventListener('luni:ws', onWs)
+    return () => window.removeEventListener('luni:ws', onWs)
+  }, [])
+
   async function equipWallpaper(id) {
     if (id === currentWallpaper || busyId) return
     setBusyId(id)

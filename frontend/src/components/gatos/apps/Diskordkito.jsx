@@ -228,7 +228,7 @@ function CallingOverlay({ peer, callType, onCancel }) {
 
 // ── Active call view ──────────────────────────────────────────────────────────
 function CallView({ peer, callType, localStream, remoteStream, isMuted, isCameraOff, remoteCameraOff,
-                    onEnd, onToggleMute, onToggleCamera, showChat, onToggleChat, chatProps }) {
+                    onEnd, onToggleMute, onToggleCamera, showChat, onToggleChat, chatProps, onBack }) {
   const isMobile = useIsMobile()
   const [localExpanded, setLocalExpanded] = useState(false)
   const chatScrollRef = useRef(null)
@@ -284,13 +284,31 @@ function CallView({ peer, callType, localStream, remoteStream, isMuted, isCamera
       {/* ── Call area ────────────────────────────────────────────────────── */}
       <div style={{ flex: 1, position: 'relative' }}>
         {/* Vídeo remoto: montado siempre que haya stream (aunque no se muestre)
-            para no cortar el audio cuando la cámara remota está apagada. */}
+            — antes esto era también lo único que reproducía el audio de la
+            llamada, así que se mantenía montado con la cámara apagada para no
+            cortarlo; ahora el audio lo da un <audio> oculto y persistente en
+            GatOS.jsx (CallAudioSink, sobrevive a que esta vista se desmonte
+            del todo), así que este vídeo va muteado a propósito. */}
         {remoteStream && (
-          <video ref={remoteVideoRef} autoPlay playsInline
+          <video ref={remoteVideoRef} autoPlay playsInline muted
             style={{
               position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover',
               display: (isVideo && !remoteCameraOff) ? 'block' : 'none',
             }} />
+        )}
+
+        {/* En móvil la llamada se pinta al nivel raíz (tapa la cabecera con
+            la flecha de volver normal), así que necesita su propio control
+            flotante para salir a la lista de canales — la llamada sigue
+            sonando y se ve en la ventanita flotante (PiP, en GatOS.jsx). */}
+        {isMobile && onBack && (
+          <button onClick={onBack} title="Ver canales" style={{
+            position: 'absolute', top: 14, left: 14, zIndex: 20,
+            width: 36, height: 36, borderRadius: 10, border: 'none', cursor: 'pointer',
+            background: 'rgba(255,255,255,0.12)', backdropFilter: 'blur(6px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            color: 'white', fontSize: 22, lineHeight: 1,
+          }}>‹</button>
         )}
 
         {/* Placeholder: llamada de voz, cámara remota apagada, o aún conectando */}
@@ -418,10 +436,10 @@ function CallView({ peer, callType, localStream, remoteStream, isMuted, isCamera
 // estrechas como el móvil, donde antes se estiraban para llenar todo el alto).
 function GroupTile({ player: p, stream, isVideo, cameraOff, bare, onClick, fit = 'cover' }) {
   // Con varias conexiones negociándose casi a la vez (mesh), el navegador a
-  // veces bloquea el autoplay de un vídeo remoto (no silenciado, a diferencia
-  // del PiP propio) por llegar "demasiado lejos" del gesto de clic que inició
-  // la llamada — se queda parado en un fotograma en negro. Forzar .play() (con
-  // reintento cuando cargan los metadatos) lo recupera.
+  // veces bloquea el autoplay de un vídeo remoto por llegar "demasiado
+  // lejos" del gesto de clic que inició la llamada — se queda parado en un
+  // fotograma en negro. Forzar .play() (con reintento cuando cargan los
+  // metadatos) lo recupera.
   const videoRef = useCallback(el => {
     if (!el) return
     if (el.srcObject !== stream) el.srcObject = stream ?? null
@@ -439,7 +457,11 @@ function GroupTile({ player: p, stream, isVideo, cameraOff, bare, onClick, fit =
       cursor: onClick ? 'pointer' : 'default',
     }}>
       {showVideo ? (
-        <video ref={videoRef} autoPlay playsInline style={{ width: '100%', height: '100%', objectFit: fit }} />
+        // Muteado a propósito: el audio de todos los participantes lo dan
+        // los <audio> ocultos y persistentes de GatOS.jsx (GroupCallAudioSink),
+        // no este <video> — así el sonido nunca depende de que esta tarjeta
+        // (o la ventana de Diskordkito entera) siga montada.
+        <video ref={videoRef} autoPlay playsInline muted style={{ width: '100%', height: '100%', objectFit: fit }} />
       ) : (
         cameraOff && stream
           ? <IconCameraOff size={bare ? 48 : 36} color="rgba(255,255,255,0.3)" />
@@ -479,7 +501,7 @@ function bestGridCols(n, w, h, aspect = 4 / 3) {
 
 function GroupCallView({ myId, participantIds, allPlayers, callType, localStream, remoteStreams,
                          isMuted, isCameraOff, remoteCameraOff, onEnd, onToggleMute, onToggleCamera,
-                         showChat, onToggleChat, chatProps, sidebarCollapsed, onToggleSidebar }) {
+                         showChat, onToggleChat, chatProps, sidebarCollapsed, onToggleSidebar, onBack }) {
   const isMobile = useIsMobile()
   const [localExpanded, setLocalExpanded] = useState(false)
   // Participante "en foco": ocupa la mayor parte del área, el resto (menos
@@ -564,6 +586,20 @@ function GroupCallView({ myId, participantIds, allPlayers, callType, localStream
           >
             <IconSidebar size={16} color="white" />
           </button>
+        )}
+
+        {/* En móvil la llamada se pinta al nivel raíz (tapa hasta la propia
+            cabecera con la flecha de volver de messageAreaPanel), así que
+            necesita el mismo tipo de control flotante para poder salir a la
+            lista de canales — la llamada sigue sonando y se ve en el PiP. */}
+        {isMobile && onBack && (
+          <button onClick={onBack} title="Ver canales" style={{
+            position: 'absolute', top: 14, left: 14, zIndex: 20,
+            width: 36, height: 36, borderRadius: 10, border: 'none', cursor: 'pointer',
+            background: 'rgba(255,255,255,0.12)', backdropFilter: 'blur(6px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            color: 'white', fontSize: 22, lineHeight: 1,
+          }}>‹</button>
         )}
 
         <div ref={gridAreaRef} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 76 }}>
@@ -718,7 +754,7 @@ function GroupCallView({ myId, participantIds, allPlayers, callType, localStream
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
-export default function Diskordkito({ player, wsRef, online = [], call, groupCall, onActiveChannelChange }) {
+export default function Diskordkito({ player, wsRef, online = [], call, groupCall, onActiveChannelChange, onExposeCallRestore }) {
   // Estado de la llamada: vive en GatOS (siempre montado, para que la
   // notificación y la señalización funcionen aunque esta app esté cerrada).
   const {
@@ -770,8 +806,32 @@ export default function Diskordkito({ player, wsRef, online = [], call, groupCal
   function refreshPlayers() {
     fetch('/api/players', { credentials: 'include' })
       .then(r => r.ok ? r.json() : null)
-      .then(players => { if (players) setAllPlayers(players) })
+      .then(players => { if (players) applyFreshPlayers(players) })
       .catch(() => {})
+  }
+
+  // Aplica una lista fresca de jugadores: actualiza el sidebar y, además,
+  // repinta retroactivamente los mensajes YA en pantalla de quien haya
+  // cambiado nombre/avatar/color — si no, un mensaje enviado antes del
+  // cambio se quedaba con los datos viejos hasta recargar esa conversación.
+  function applyFreshPlayers(players) {
+    setAllPlayers(players)
+    const byId = new Map(players.map(p => [p.id, p]))
+    setMessages(prev => {
+      let changed = false
+      const next = {}
+      for (const [chId, msgs] of Object.entries(prev)) {
+        next[chId] = msgs.map(m => {
+          const p = byId.get(m.player_id)
+          if (!p) return m
+          if (m.player_name === p.name && m.player_color === p.color &&
+              m.player_emoji === p.avatar_emoji && m.player_avatar_url === p.avatar_url) return m
+          changed = true
+          return { ...m, player_name: p.name, player_color: p.color, player_emoji: p.avatar_emoji, player_avatar_url: p.avatar_url }
+        })
+      }
+      return changed ? next : prev
+    })
   }
 
   function selectChannel(chId) {
@@ -811,13 +871,45 @@ export default function Diskordkito({ player, wsRef, online = [], call, groupCal
   useEffect(() => {
     const ch = channels.find(c => c.id === activeChId)
     const peerId = ch?.type === 'dm' ? ch.other_player?.id ?? null : null
+
+    // ¿La vista completa de ALGUNA llamada (1-to-1 o grupal) tapa de verdad
+    // la pantalla ahora mismo? Solo si el canal activo es el propio de esa
+    // llamada (y, en móvil, si además se está viendo el chat, no la lista) —
+    // si se ha navegado a otra conversación, esa se ve normal aunque la
+    // llamada le siga sonando de fondo (se ve en el PiP, en GatOS.jsx).
+    const showing1to1CallFullView = callState === 'active' && !!callPeer && activeChId === callChannelId && (!isMobile || mobileView === 'chat')
+    const showingGroupCallFullView = groupCall.joined && ch?.name === 'club-general' && (!isMobile || mobileView === 'chat')
+    const showingCallFullView = showing1to1CallFullView || showingGroupCallFullView
+
     const visibleChannelId =
-      callState === 'active' ? (showChat ? callChannelId : null) :
-      callState === 'idle'   ? activeChId :
-      null // 'calling' / 'incoming': el overlay tapa toda la vista de mensajes
-    onActiveChannelChange?.({ id: activeChId, peerId, visibleChannelId })
-  }, [activeChId, channels, callState, showChat, callChannelId])
+      (callState === 'calling' || callState === 'incoming') ? null : // overlay a pantalla completa, da igual el canal
+      showing1to1CallFullView  ? (showChat ? callChannelId : null) :
+      showingGroupCallFullView ? (groupCall.chatOpen ? activeChId : null) :
+      activeChId // idle, o llamada activa pero navegado a otra conversación: se ve normal
+
+    onActiveChannelChange?.({ id: activeChId, peerId, visibleChannelId, showingCallFullView })
+  }, [activeChId, channels, callState, callPeer, callChannelId, showChat, groupCall.joined, groupCall.chatOpen, isMobile, mobileView])
   useEffect(() => () => onActiveChannelChange?.(null), [])
+
+  // Expone a GatOS una función para volver a la vista completa de la llamada
+  // que esté sonando ahora mismo (grupal → #club-general; 1-to-1 → el DM de
+  // quien llama) en vista chat — la usa el PiP al pulsarlo, para deshacer la
+  // navegación a otra conversación. Si este componente llega a desmontarse
+  // (ventana minimizada o cerrada en escritorio), se limpia la referencia: no
+  // hace falta, porque un remontado desde cero ya arranca en #club-general
+  // (ver "Chat init"), y si había una llamada 1-to-1 activa su propio efecto
+  // de arriba ya vuelve a anclar el canal al abrirse de nuevo.
+  useEffect(() => {
+    onExposeCallRestore?.(() => {
+      if (groupCall.joined) {
+        const general = channels.find(c => c.name === 'club-general')
+        if (general) selectChannel(general.id)
+      } else if (callChannelId) {
+        selectChannel(callChannelId)
+      }
+    })
+    return () => onExposeCallRestore?.(null)
+  }, [channels, groupCall.joined, callChannelId])
 
   // ── Chat init ──────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -860,9 +952,13 @@ export default function Diskordkito({ player, wsRef, online = [], call, groupCal
         const isMine    = msg.player_id === player.id
         const isVisible = msg.channel_id === readVisibleChannelIdRef.current
         if (isMine || isVisible) markChannelRead(msg.channel_id, msg.created_at)
-      } else if (msg.type === 'player_joined') {
-        setAllPlayers(prev => prev.some(p => p.id === msg.player.id) ? prev : [...prev, msg.player])
-        fetch('/api/channels', { credentials: 'include' }).then(r => r.json()).then(setChannels)
+      } else if (msg.type === 'luni_update' && msg.scope === 'players') {
+        // Cambios de perfil de cualquiera, o el admin dando/quitando acceso al
+        // club (aparece/desaparece del sidebar) — sin esperar a volver a la
+        // lista de canales ni recargar. Los canales se recargan también por
+        // si es un DM nuevo con alguien recién incorporado al club.
+        refreshPlayers()
+        fetch('/api/channels', { credentials: 'include' }).then(r => r.ok ? r.json() : null).then(chs => { if (chs) setChannels(chs) }).catch(() => {})
       }
     }
     window.addEventListener('luni:ws', onWs)
@@ -957,12 +1053,16 @@ export default function Diskordkito({ player, wsRef, online = [], call, groupCal
 
   // Canal cuyos mensajes se están viendo de verdad ahora mismo (para marcarlo
   // leído) — mismo criterio que "visibleChannelId" de arriba, pero también
-  // cuenta el chat de la llamada grupal cuando está desplegado.
-  const readVisibleChannelId = groupCall.joined
-    ? (groupCall.chatOpen ? generalChannelId : null)
-    : callState === 'active' ? (showChat ? callChannelId : null)
-    : callState === 'idle'   ? activeChId
-    : null
+  // cuenta el chat de la llamada grupal cuando está desplegado. Ojo: una
+  // llamada activa ya no implica que el canal de la llamada tape la
+  // pantalla — si se ha navegado a otra conversación, esa es la que se ve
+  // de verdad (ver el mismo razonamiento en el efecto de onActiveChannelChange).
+  const isViewing1to1CallChannel = callState === 'active' && activeChId === callChannelId
+  const readVisibleChannelId =
+    (callState === 'calling' || callState === 'incoming') ? null : // overlay a pantalla completa, da igual el canal
+    (isGeneralActive && groupCall.joined) ? (groupCall.chatOpen ? generalChannelId : null) :
+    isViewing1to1CallChannel              ? (showChat ? callChannelId : null) :
+    activeChId
 
   const readVisibleChannelIdRef = useRef(null)
   useEffect(() => { readVisibleChannelIdRef.current = readVisibleChannelId })
@@ -997,7 +1097,12 @@ export default function Diskordkito({ player, wsRef, online = [], call, groupCal
           <CallingOverlay key="calling-call" peer={callPeer} callType={callType} onCancel={endCall} />
         )}
       </AnimatePresence>
-      {callState === 'active' && callPeer && (
+      {/* Igual que la llamada grupal: la vista completa solo tapa la pantalla
+          mientras el canal activo siga siendo el DM de la propia llamada (y
+          en móvil, además, mientras se vea el chat y no la lista) — así se
+          puede navegar a otra conversación sin colgar; la llamada sigue
+          sonando y se ve en la ventanita flotante (GatOS.jsx). */}
+      {callState === 'active' && callPeer && activeChId === callChannelId && (!isMobile || mobileView === 'chat') && (
         <CallView
           peer={callPeer}
           callType={callType}
@@ -1012,14 +1117,19 @@ export default function Diskordkito({ player, wsRef, online = [], call, groupCal
           showChat={showChat}
           onToggleChat={toggleChat}
           chatProps={{ messages: messages[callChannelId] ?? [], input, onInput: e => setInput(e.target.value), onSend: sendCallMessage, player }}
+          onBack={goToChannels}
         />
       )}
     </>
   )
 
-  // Llamada grupal — siempre visible mientras estemos dentro, sea cual sea el
-  // canal seleccionado en el sidebar (igual que los overlays del 1-to-1).
-  const groupCallOverlays = groupCall.joined && (
+  // Llamada grupal — a diferencia del 1-to-1, esto YA NO tapa la pantalla
+  // pase lo que pase: solo ocupa el panel de mensajes mientras el canal
+  // activo siga siendo #club-general (y en móvil, además, mientras se esté
+  // viendo el chat y no la lista de canales) — así se puede navegar a otra
+  // conversación para escribir sin colgar la llamada, que sigue sonando de
+  // fondo y se ve en la ventanita flotante (CallPiP, en GatOS.jsx).
+  const groupCallOverlays = groupCall.joined && isGeneralActive && (!isMobile || mobileView === 'chat') && (
     <GroupCallView
       myId={player.id}
       participantIds={groupCall.participantIds}
@@ -1038,6 +1148,7 @@ export default function Diskordkito({ player, wsRef, online = [], call, groupCal
       chatProps={{ messages: messages[generalChannelId] ?? [], input, onInput: e => setInput(e.target.value), onSend: sendGroupCallMessage, player }}
       sidebarCollapsed={sidebarCollapsed}
       onToggleSidebar={() => setSidebarCollapsed(v => !v)}
+      onBack={goToChannels}
     />
   )
 
@@ -1150,7 +1261,10 @@ export default function Diskordkito({ player, wsRef, online = [], call, groupCal
                   </button>
                 </div>
               )}
-              {callState === 'active' && (
+              {/* Solo en el propio canal/DM de la llamada — si se ha
+                  navegado a otra conversación mientras suena, el aviso de que
+                  sigue activa lo da ya la ventanita flotante (PiP). */}
+              {callState === 'active' && activeChId === callChannelId && (
                 <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 5, background: '#23a55a1a', border: '1px solid #23a55a33', borderRadius: 8, padding: '3px 10px' }}>
                   <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#23a55a' }} />
                   <span style={{ fontSize: 11, color: '#23a55a', fontWeight: 600 }}>En llamada</span>
@@ -1214,8 +1328,11 @@ export default function Diskordkito({ player, wsRef, online = [], call, groupCal
           })}
         </div>
 
-        {/* Input */}
-        {activeChId && callState !== 'active' && (
+        {/* Input — se oculta solo cuando la vista completa de la llamada 1-to-1
+            está tapando de verdad este mismo canal (el DM de la llamada); si
+            se ha navegado a otra conversación durante la llamada, el input
+            normal de esa conversación funciona igual que siempre. */}
+        {activeChId && !(callState === 'active' && activeChId === callChannelId) && (
           <form onSubmit={sendMessage} style={{ padding: '0 16px 16px', flexShrink: 0 }}>
             <input
               value={input}

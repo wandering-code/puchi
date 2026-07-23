@@ -11,6 +11,7 @@ import { wallpaperCss } from '../../utils/wallpaper'
 import MessageNotification from './Notification'
 import CallNotification     from './CallNotification'
 import GroupCallNotification from './GroupCallNotification'
+import CallPiP                from './CallPiP'
 import Diskordkito   from './apps/Diskordkito'
 import Luniteca      from './apps/Luniteca'
 import LunitecaV2    from './apps/LunitecaV2'
@@ -66,7 +67,12 @@ export default function GatOS({ player: initialPlayer, onLogout, onProfileUpdate
   const containerRef     = useRef(null)
   // Canal de Diskordkito que el jugador tiene abierto ahora mismo (o null si no
   // hay ninguno / la app está cerrada) — lo actualiza Diskordkito vía callback.
+  // Además de la ref (para leerlo desde el handler del WS sin forzar
+  // reconexiones) se guarda en estado — el PiP de la llamada grupal necesita
+  // que GatOS vuelva a renderizar cuando cambia de canal, cosa que mutar solo
+  // la ref nunca dispara.
   const activeChannelRef = useRef(null)
+  const [diskordActiveChannel, setDiskordActiveChannel] = useState(null)
 
   useEffect(() => { windowsRef.current = windows }, [windows])
 
@@ -322,6 +328,12 @@ export default function GatOS({ player: initialPlayer, onLogout, onProfileUpdate
       const answer = await pc.createAnswer()
       await pc.setLocalDescription(answer)
       sendWs({ type: 'call_answer', target_id: peer.id, sdp: pc.localDescription.sdp })
+      // Aterriza en la vista completa de la llamada — si no, quien acepta
+      // desde la lista de canales (móvil) o con otra conversación abierta se
+      // encontraría con la ventanita PiP en vez de la llamada que acaba de
+      // aceptar. Diskordkito ya lleva varios ciclos de render montado (el
+      // openApp de arriba + este await), así que la función ya está registrada.
+      callRestoreRef.current?.()
     } catch (err) {
       console.error('acceptCall:', err)
       cleanupCall()
@@ -428,6 +440,95 @@ export default function GatOS({ player: initialPlayer, onLogout, onProfileUpdate
   // mismo motivo que disconnectTimeoutRef de la 1-to-1, pero uno por peerId.
   const groupDisconnectTimeoutsRef = useRef({})   // { [playerId]: timeoutId }
 
+  // ── PiP de "quién está hablando" (llamada grupal) ───────────────────────────
+  // Detección de nivel de audio por AnalyserNode, uno por stream remoto, para
+  // saber a quién mostrar en la ventanita flotante cuando la vista completa de
+  // la llamada no está en pantalla. Vive aquí (no en Diskordkito) por el mismo
+  // motivo que el resto del estado de la llamada: tiene que seguir corriendo
+  // aunque Diskordkito esté minimizado/cerrado/en otra pestaña.
+  const [groupActiveSpeakerId, setGroupActiveSpeakerId] = useState(null) // último que habló (se mantiene en silencio, no parpadea a vacío)
+  const groupAudioCtxRef   = useRef(null)
+  const groupAnalysersRef  = useRef({}) // { [playerId]: { analyser, data, source } }
+  const callRestoreRef = useRef(null) // función expuesta por Diskordkito: "vuelve a la vista completa de la llamada que esté sonando (grupal o 1-to-1)"
+  const allPlayersRef      = useRef([]) // lista completa de jugadores (nombre/avatar/color) para la etiqueta del PiP
+
+  useEffect(() => {
+    fetch('/api/players', { credentials: 'include' })
+      .then(r => r.ok ? r.json() : null)
+      .then(list => { if (list) allPlayersRef.current = list })
+      .catch(() => {})
+  }, [])
+
+  // Crea/destruye un AnalyserNode por cada stream remoto de la llamada grupal
+  // según van entrando/saliendo participantes.
+  useEffect(() => {
+    const ids = Object.keys(groupRemoteStreams)
+    for (const id of ids) {
+      if (groupAnalysersRef.current[id]) continue
+      const stream = groupRemoteStreams[id]
+      if (!stream.getAudioTracks().length) continue
+      try {
+        if (!groupAudioCtxRef.current) {
+          groupAudioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)()
+        }
+        const ctx = groupAudioCtxRef.current
+        const source = ctx.createMediaStreamSource(stream)
+        const analyser = ctx.createAnalyser()
+        analyser.fftSize = 512
+        source.connect(analyser)
+        groupAnalysersRef.current[id] = { analyser, data: new Uint8Array(analyser.fftSize), source }
+      } catch (err) {
+        console.warn('AnalyserNode de llamada grupal falló para', id, err)
+      }
+    }
+    for (const id of Object.keys(groupAnalysersRef.current)) {
+      if (!ids.includes(id)) {
+        try { groupAnalysersRef.current[id].source.disconnect() } catch {}
+        delete groupAnalysersRef.current[id]
+      }
+    }
+  }, [groupRemoteStreams])
+
+  // Si quien se veía en el PiP sale de la llamada, no se queda "congelado"
+  // mostrando a alguien que ya no está.
+  useEffect(() => {
+    if (groupActiveSpeakerId != null && !(groupActiveSpeakerId in groupRemoteStreams)) {
+      setGroupActiveSpeakerId(null)
+    }
+  }, [groupRemoteStreams, groupActiveSpeakerId])
+
+  // Sondeo del nivel de audio (RMS) de cada participante cada 200ms — cambia
+  // el foco al más alto por encima de un umbral, con un margen mínimo entre
+  // cambios para no parpadear con picos breves (una tos, un ruido de fondo).
+  // Si nadie supera el umbral, se queda con el último que habló a propósito.
+  useEffect(() => {
+    if (!groupCallJoined) return
+    const HOLD_MS = 1200
+    const THRESHOLD = 16
+    let lastSwitch = 0
+    let current = null
+    const id = setInterval(() => {
+      let loudest = null, loudestLevel = 0
+      for (const [pid, entry] of Object.entries(groupAnalysersRef.current)) {
+        entry.analyser.getByteTimeDomainData(entry.data)
+        let sum = 0
+        for (let i = 0; i < entry.data.length; i++) {
+          const v = entry.data[i] - 128
+          sum += v * v
+        }
+        const rms = Math.sqrt(sum / entry.data.length)
+        if (rms > loudestLevel) { loudestLevel = rms; loudest = Number(pid) }
+      }
+      const now = Date.now()
+      if (loudest !== null && loudestLevel > THRESHOLD && loudest !== current && now - lastSwitch > HOLD_MS) {
+        current = loudest
+        lastSwitch = now
+        setGroupActiveSpeakerId(loudest)
+      }
+    }, 200)
+    return () => clearInterval(id)
+  }, [groupCallJoined])
+
   async function getGroupMedia(withVideo) {
     const s = await getUserMediaWithFallback(withVideo)
     groupLocalStreamRef.current = s
@@ -498,6 +599,14 @@ export default function GatOS({ player: initialPlayer, onLogout, onProfileUpdate
       setGroupCallJoined(true)
       setGroupCallType(type)
       sendWs({ type: 'group_call_join', callType: type })
+      // Al unirse de verdad (no solo abrir Diskordkito) hay que aterrizar en
+      // la vista completa de la llamada — si no, alguien que se une desde la
+      // lista de canales (móvil) o con otra conversación abierta se
+      // encontraría con la ventanita PiP en vez de la llamada que acaba de
+      // aceptar. Para cuando esto se ejecuta, Diskordkito ya lleva varios
+      // ciclos de render montado (openAppRef de arriba + el await de getMedia/
+      // ICE), así que la función ya está registrada.
+      callRestoreRef.current?.()
     } catch (err) {
       console.error('joinGroupCall:', err)
       leaveGroupCall()
@@ -517,6 +626,10 @@ export default function GatOS({ player: initialPlayer, onLogout, onProfileUpdate
     setGroupIsMuted(false)
     setGroupIsCameraOff(false)
     setGroupCallChatOpen(false)
+    setGroupActiveSpeakerId(null)
+    groupAudioCtxRef.current?.close().catch(() => {})
+    groupAudioCtxRef.current = null
+    groupAnalysersRef.current = {}
   }
 
   function toggleGroupMute() {
@@ -634,6 +747,10 @@ export default function GatOS({ player: initialPlayer, onLogout, onProfileUpdate
         if (pcRef.current) {
           await pcRef.current.setRemoteDescription({ type: 'answer', sdp: msg.sdp })
           setCallState('active')
+          // Igual que en acceptCall: aterriza en la vista completa de la
+          // llamada en vez de dejar la ventanita PiP si mientras sonaba
+          // (estado 'calling') se navegó a otra conversación.
+          callRestoreRef.current?.()
         }
         break
       case 'call_ice':
@@ -731,6 +848,26 @@ export default function GatOS({ player: initialPlayer, onLogout, onProfileUpdate
 
         if (msg.type === 'presence') {
           setOnline(msg.online)
+        }
+
+        // Cambios de perfil/admin (propios o de cualquiera) — se pide el
+        // propio perfil fresco por si el admin acaba de aprobarnos, cambiarnos
+        // club_member, o (desde otro dispositivo) tocar nuestro nombre/avatar/
+        // color. Reutiliza el mismo camino que un cambio de perfil manual
+        // (onProfileUpdate), que ya actualiza tanto el estado local como el
+        // de AuthProvider/localStorage — así apps/Dock/kiosco reaccionan solos,
+        // sin recargar la página.
+        if (msg.type === 'luni_update' && msg.scope === 'players') {
+          fetch('/api/auth/me', { credentials: 'include' })
+            .then(r => r.ok ? r.json() : null)
+            .then(fresh => { if (fresh) onProfileUpdate(fresh) })
+            .catch(() => {})
+          // Lista completa (nombre/avatar/color) para la etiqueta del PiP de
+          // la llamada grupal — se refresca igual que el resto de la app.
+          fetch('/api/players', { credentials: 'include' })
+            .then(r => r.ok ? r.json() : null)
+            .then(list => { if (list) allPlayersRef.current = list })
+            .catch(() => {})
         }
 
         if (CALL_SIGNAL_TYPES.has(msg.type)) {
@@ -942,7 +1079,8 @@ export default function GatOS({ player: initialPlayer, onLogout, onProfileUpdate
   function appContent(appId) {
     switch (appId) {
       case 'diskordkito': return <Diskordkito player={player} wsRef={wsRef} online={online} call={call} groupCall={groupCall}
-                                    onActiveChannelChange={id => { activeChannelRef.current = id }} />
+                                    onActiveChannelChange={info => { activeChannelRef.current = info; setDiskordActiveChannel(info) }}
+                                    onExposeCallRestore={fn => { callRestoreRef.current = fn }} />
       case 'luniteca':    return <Luniteca    player={player} />
       case 'luniteca2':   return <LunitecaV2  player={player} />
 case 'settings':    return <SettingsApp player={player} onProfileUpdate={onProfileUpdate} />
@@ -982,6 +1120,57 @@ case 'settings':    return <SettingsApp player={player} onProfileUpdate={onProfi
   const foregroundAppId = isMobile
     ? (mobileSettingsWindow ? 'settings' : mobileAdminWindow ? 'admin' : mobileActiveTabApp)
     : activeWindow?.appId
+
+  // PiP de llamada (grupal o 1-to-1): se muestra siempre que estemos dentro
+  // de una llamada salvo que Diskordkito esté en primer plano mostrando de
+  // verdad su vista completa (el canal propio de la llamada, en vista chat
+  // si es móvil) — eso lo reporta Diskordkito mismo vía onActiveChannelChange
+  // (showingCallFullView), combinando ya los dos tipos de llamada.
+  const anyCallActive = groupCallJoined || (callState === 'active' && !!callPeer)
+  const callFullyVisible = foregroundAppId === 'diskordkito' && !!diskordActiveChannel?.showingCallFullView
+  const showCallPiP = anyCallActive && !callFullyVisible
+
+  function restoreCallView() {
+    if (isMobile) switchMobileApp('diskordkito')
+    else openApp('diskordkito')
+    // Si Diskordkito ya estaba montado (ventana abierta sin foco en
+    // escritorio, o pestaña de fondo siempre montada en móvil), esto navega
+    // su estado interno de vuelta al canal de la llamada en vista chat. Si no
+    // estaba montado, no hace falta: al abrirse de cero ya arranca ahí (y si
+    // era una 1-to-1, su propio efecto de anclaje la vuelve a enganchar).
+    callRestoreRef.current?.()
+  }
+
+  // Un <audio> oculto y persistente por cada stream remoto con audio,
+  // sobreviva o no la ventana/pestaña de Diskordkito — ver CallAudioSink.
+  // Nunca hay una llamada grupal Y una 1-to-1 activas a la vez (unirse a una
+  // cuelga la otra, ver joinGroupCall/acceptCall), así que no hay riesgo de
+  // solapar el mismo audio dos veces.
+  const callAudioSinks = (groupCallJoined || (callState === 'active' && remoteStream)) && (
+    <div style={{ display: 'none' }}>
+      {groupCallJoined
+        ? Object.entries(groupRemoteStreams).map(([pid, stream]) => <CallAudioSink key={pid} stream={stream} />)
+        : <CallAudioSink stream={remoteStream} />}
+    </div>
+  )
+
+  // Qué participante enseña el PiP: en la grupal, quien esté hablando ahora
+  // (o el último que lo hizo); en la 1-to-1 solo puede ser el interlocutor.
+  const pipStream       = groupCallJoined ? (groupActiveSpeakerId != null ? groupRemoteStreams[groupActiveSpeakerId] : null) : remoteStream
+  const pipCameraOff    = groupCallJoined ? (groupActiveSpeakerId != null ? !!groupRemoteCameraOff[groupActiveSpeakerId] : false) : remoteCameraOff
+  const pipSpeakerPlayer = groupCallJoined ? (groupActiveSpeakerId != null ? allPlayersRef.current.find(p => p.id === groupActiveSpeakerId) : null) : callPeer
+  const pipParticipantCount = groupCallJoined ? groupCallParticipantIds.length : 0
+
+  const callPiPElement = showCallPiP && (
+    <CallPiP
+      playerId={player.id}
+      stream={pipStream}
+      cameraOff={pipCameraOff}
+      speakerPlayer={pipSpeakerPlayer}
+      participantCount={pipParticipantCount}
+      onRestore={restoreCallView}
+    />
+  )
 
   // Modo "kiosco" — quien no es miembro del club solo tiene una app
   // (Luniteca), así que directamente no hay nada que gestionar: sin Dock,
@@ -1129,6 +1318,9 @@ case 'settings':    return <SettingsApp player={player} onProfileUpdate={onProfi
         {launcherApps(player).length > 1 && (
           <MobileLauncher activeAppId={mobileActiveTabApp} onSelect={switchMobileApp} playerId={player.id} player={player} />
         )}
+
+        {callAudioSinks}
+        {callPiPElement}
       </div>
     )
   }
@@ -1232,6 +1424,28 @@ case 'settings':    return <SettingsApp player={player} onProfileUpdate={onProfi
         autoHide={windows.some(w => w.maximized)}
         player={player}
       />
+
+      {callAudioSinks}
+      {callPiPElement}
     </div>
   )
+}
+
+// Reproduce el audio de un participante de una llamada (grupal o 1-to-1) de
+// forma persistente e invisible, sin depender de que ningún <video> de la
+// llamada esté montado — así el sonido nunca se corta al minimizar/cerrar la
+// ventana de Diskordkito en escritorio, ni al navegar a otra pestaña en móvil
+// (antes se cortaba, porque el único elemento que reproducía audio era el
+// <video> remoto no muteado de GroupTile/CallView, que se desmonta con la
+// ventana). Los <video> visibles de la llamada (GroupTile, CallView, PiP) van
+// muteados a propósito para no duplicar el sonido con este elemento.
+function CallAudioSink({ stream }) {
+  const ref = useRef(null)
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    if (el.srcObject !== stream) el.srcObject = stream
+    el.play().catch(() => {})
+  }, [stream])
+  return <audio ref={ref} autoPlay />
 }

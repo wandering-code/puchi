@@ -385,11 +385,24 @@ function CoverPicker({ book, currentUrl, onSelectUrl, onSelectFile, onClose }) {
   const [searching,     setSearching]     = useState(false)
   const [searchResults, setSearchResults] = useState(null) // null | [] sin resultados | [...]
 
-  useEffect(() => {
+  function loadCovers() {
     fetch(`/api/books/${book.id}/covers`, { credentials: 'include' })
       .then(r => r.ok ? r.json() : { covers: [], user_uploads: [] })
       .then(data => { setCovers(data.covers); setUserUploads(data.user_uploads || []); setLoading(false) })
       .catch(() => setLoading(false))
+  }
+
+  useEffect(loadCovers, [book.id])
+
+  // Si otro jugador sube una portada nueva a la galería de este mismo libro
+  // mientras el selector está abierto, aparece sola sin tener que reabrirlo.
+  useEffect(() => {
+    function onWs(ev) {
+      const msg = ev.detail
+      if (msg.type === 'luni_update' && msg.scope === 'books' && msg.book_id === book.id) loadCovers()
+    }
+    window.addEventListener('luni:ws', onWs)
+    return () => window.removeEventListener('luni:ws', onWs)
   }, [book.id])
 
   async function runSearch() {
@@ -1676,7 +1689,7 @@ function PersonalShelfSections({ entries, viewMode, sort, onSelect, renderAction
 }
 
 // ─── Acciones admin del club en vista Netflix (mismos botones que en lista) ───
-function ClubGridActions({ entry, onChoose, onEdit, onDelete }) {
+function ClubGridActions({ entry, onChoose, onEdit, onDelete, onDetail }) {
   const [confirmDel, setConfirmDel] = useState(false)
   const isActive = entry.status === 'active'
   const btnStyle = {
@@ -1694,6 +1707,9 @@ function ClubGridActions({ entry, onChoose, onEdit, onDelete }) {
           border: isActive ? `1px solid ${C.accentBd}` : `1px solid ${C.border}`,
           color: isActive ? C.accent : C.muted, fontSize: 12,
         }}>📌</button>
+      )}
+      {onDetail && (
+        <button onClick={onDetail} title="Ver ficha y sesiones" style={{ ...btnStyle, fontSize: 13 }}>📖</button>
       )}
       <button onClick={onEdit} title="Editar" style={btnStyle}>
         <IconEdit size={12} color={C.muted} />
@@ -2241,7 +2257,7 @@ function ClubBookDetail({ entry, isAdmin, onBack, onEntryUpdated }) {
         padding: '8px 12px', borderBottom: `1px solid ${C.border}`,
         display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0,
       }}>
-        <button onClick={onBack} style={{
+        <button onClick={onBack} title="Volver" style={{
           background: 'none', border: 'none', color: C.sub, cursor: 'pointer',
           padding: 4, display: 'flex', alignItems: 'center', borderRadius: 7,
           transition: 'color 0.15s',
@@ -2253,7 +2269,7 @@ function ClubBookDetail({ entry, isAdmin, onBack, onEntryUpdated }) {
         </button>
         <span style={{ fontSize: 13, fontWeight: 600, color: C.text, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{book.title}</span>
         {isAdmin && (
-          <button onClick={() => { setAddingSession(true); setEditSession(null) }} style={{
+          <button onClick={() => { setAddingSession(true); setEditSession(null) }} title="Añadir sesión" style={{
             background: C.accent, border: 'none', borderRadius: 8,
             width: 28, height: 24, cursor: 'pointer',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -2435,11 +2451,12 @@ function ClubTab({ player }) {
   useEffect(() => { refreshHistory() }, [])
 
   // Sincronización en vivo: libros propuestos/activados/finalizados o
-  // borrados por cualquiera (o cambios de perfil) refrescan la lista sola.
+  // borrados por cualquiera, cambios de perfil, o ediciones del libro
+  // compartido/portada nueva, refrescan la lista sola.
   useEffect(() => {
     function onWs(ev) {
       const msg = ev.detail
-      if (msg.type === 'luni_update' && (msg.scope === 'club' || msg.scope === 'players')) {
+      if (msg.type === 'luni_update' && (msg.scope === 'club' || msg.scope === 'players' || msg.scope === 'books')) {
         loadSection(section)
         refreshHistory()
       }
@@ -2447,6 +2464,16 @@ function ClubTab({ player }) {
     window.addEventListener('luni:ws', onWs)
     return () => window.removeEventListener('luni:ws', onWs)
   }, [section])
+
+  // Si hay una ficha de libro abierta (detailEntry), se mantiene sincronizada
+  // con la lista tras cada recarga — si no, quien tenga la ficha abierta no
+  // veía el nuevo título/portada/estado hasta cerrarla y volver a entrar.
+  useEffect(() => {
+    if (!detailEntry) return
+    const fresh = [...proposed, ...history].find(e => e.id === detailEntry.id)
+    if (fresh) setDetailEntry(fresh)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [proposed, history])
 
   function openAdd(type) {
     setShowAddMenu(false)
@@ -2556,7 +2583,11 @@ function ClubTab({ player }) {
                   onDelete={() => deleteBook(entry.id)}
                   onChoose={section === 'proposed' ? () => chooseBook(entry.id, entry.status) : null}
                   onEdit={() => startEdit(entry)}
-                  onDetail={section === 'history' ? () => setDetailEntry(entry) : null}
+                  // Sesiones (ficha con detalle) — se puede entrar mientras el libro
+                  // está fijado como lectura actual (es cuando se generan sesiones de
+                  // verdad) y también ya leído (por si hay que rectificar algo). Un
+                  // libro meramente propuesto, sin empezar, no tiene sesiones que ver.
+                  onDetail={(section === 'history' || entry.status === 'active') ? () => setDetailEntry(entry) : null}
                 />
             }
           </motion.div>
@@ -2573,8 +2604,11 @@ function ClubTab({ player }) {
         <ClubBookDetail
           entry={detailEntry}
           isAdmin={isAdmin}
-          onBack={() => { setDetailEntry(null); loadSection('history') }}
-          onEntryUpdated={refreshHistory}
+          // La ficha ahora se puede abrir tanto desde Propuestos (lectura activa)
+          // como desde Leídos — al volver, se recarga la sección donde estábamos
+          // de verdad, no siempre "Leídos" (antes solo se podía llegar desde ahí).
+          onBack={() => { setDetailEntry(null); loadSection(section) }}
+          onEntryUpdated={() => { loadSection(section); refreshHistory() }}
         />
       </motion.div>
     )
@@ -2784,7 +2818,14 @@ function ClubTab({ player }) {
             ) : (
               viewMode === 'grid'
                 ? (
-                  <GridView books={sorted} onSelect={() => {}}
+                  // onSelect solo abre ficha para la lectura actual (única con
+                  // sentido de tener sesiones desde Propuestos) — para el resto de
+                  // entradas no hace nada, igual que antes. En vista lista lo
+                  // gestiona onDetail (ver ClubBookCard); aquí, si es admin, el
+                  // click en la portada despliega el panel de acciones en su lugar
+                  // (ver GridItems), así que la ficha se ofrece también como botón
+                  // dentro de ClubGridActions.
+                  <GridView books={sorted} onSelect={entry => { if (entry.status === 'active') setDetailEntry(entry) }}
                     isHighlighted={e => e.status === 'active'}
                     renderActions={isAdmin ? (entry) => (
                       <ClubGridActions
@@ -2792,6 +2833,7 @@ function ClubTab({ player }) {
                         onChoose={() => chooseBook(entry.id, entry.status)}
                         onEdit={() => startEdit(entry)}
                         onDelete={() => deleteBook(entry.id)}
+                        onDetail={entry.status === 'active' ? () => setDetailEntry(entry) : null}
                       />
                     ) : undefined}
                   />
@@ -2884,12 +2926,12 @@ function AmigosTab({ player }) {
 
   useEffect(() => { fetchPage(0, false) }, [])
 
-  // Sincronización en vivo: actividad de lectura o de perfil de cualquier
-  // jugador (otra pestaña/dispositivo) refresca este feed sin recargar.
+  // Sincronización en vivo: actividad de lectura, cambios de perfil, o
+  // edición del libro compartido (título/portada) refrescan este feed sin recargar.
   useEffect(() => {
     function onWs(ev) {
       const msg = ev.detail
-      if (msg.type === 'luni_update' && (msg.scope === 'activity' || msg.scope === 'players')) {
+      if (msg.type === 'luni_update' && (msg.scope === 'activity' || msg.scope === 'players' || msg.scope === 'books')) {
         fetchPage(0, false)
       }
     }
@@ -3103,8 +3145,28 @@ export default function LunitecaV2({ player }) {
 
   function loadShelf() {
     fetch(`/api/shelf/personal?player_id=${player.id}`, { credentials: 'include' })
-      .then(r => r.ok ? r.json() : []).then(setShelf)
+      .then(r => r.ok ? r.json() : [])
+      .then(fresh => {
+        setShelf(fresh)
+        // Si hay una ficha abierta (detalle de libro), se refresca con los
+        // mismos datos frescos — si no, un libro compartido editado por otro
+        // jugador (o una portada nueva subida a la galería) se quedaba con
+        // los datos viejos en pantalla hasta cerrar y reabrir la ficha.
+        setSelected(s => s ? (fresh.find(e => e.id === s.id) ?? s) : s)
+      })
   }
+
+  // Sincronización en vivo: el libro (compartido entre estanterías) puede
+  // cambiar de título/autor/sinopsis/portada, o ganar una portada nueva en
+  // la galería, editado por cualquiera desde su propia ficha — recarga sola.
+  useEffect(() => {
+    function onWs(ev) {
+      const msg = ev.detail
+      if (msg.type === 'luni_update' && msg.scope === 'books') loadShelf()
+    }
+    window.addEventListener('luni:ws', onWs)
+    return () => window.removeEventListener('luni:ws', onWs)
+  }, [player.id])
 
   async function addBook(book) {
     await fetch('/api/shelf/personal', {

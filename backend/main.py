@@ -435,6 +435,13 @@ async def admin_update_player(
 
     if body.club_member is not None:
         player.club_member = body.club_member
+        # Al quitarle el acceso al club, se le saca también de todos los
+        # canales (general + DMs) — si no, conservaba membership real en
+        # channel_members y, como el WS ya deja conectarse a cualquier
+        # aprobado (ver websocket_endpoint), habría podido seguir viendo/
+        # mandando mensajes aunque su icono desaparezca del resto de la app.
+        if not body.club_member:
+            db.query(ChannelMember).filter(ChannelMember.player_id == player.id).delete()
 
     # Si queda aprobado y con acceso al club (ya sea por esta llamada o por
     # una anterior), asegurar que esté en #club-general — igual que hacía el
@@ -599,7 +606,7 @@ class ShopItemCreate(BaseModel):
     data:    dict
 
 @app.post("/shop/items")
-def create_shop_item(
+async def create_shop_item(
     body: ShopItemCreate,
     db: Session = Depends(get_db),
     current: Player = Depends(get_current_player),
@@ -618,6 +625,7 @@ def create_shop_item(
     db.add(item)
     db.commit()
     db.refresh(item)
+    await _notify_luni("shop")
     return _shop_item_out(item)
 
 @app.post("/shop/items/wallpaper-image")
@@ -676,10 +684,11 @@ async def upload_wallpaper_image(
     db.add(item)
     db.commit()
     db.refresh(item)
+    await _notify_luni("shop")
     return _shop_item_out(item)
 
 @app.delete("/shop/items/{id}")
-def delete_shop_item(
+async def delete_shop_item(
     id: int,
     db: Session = Depends(get_db),
     current: Player = Depends(get_current_player),
@@ -692,6 +701,7 @@ def delete_shop_item(
         raise HTTPException(404, "Item no encontrado")
     db.delete(item)
     db.commit()
+    await _notify_luni("shop")
     return {"ok": True}
 
 class PinChange(BaseModel):
@@ -724,7 +734,7 @@ class BookUpdateRequest(BaseModel):
     cover_url: Optional[str] = None
 
 @app.patch("/books/{book_id}")
-def update_book(
+async def update_book(
     book_id: int,
     body: BookUpdateRequest,
     db: Session = Depends(get_db),
@@ -740,6 +750,10 @@ def update_book(
     if body.cover_url is not None: book.cover_url = body.cover_url.strip() or None
     db.commit()
     db.refresh(book)
+    # El mismo Book es compartido entre estanterías personales y del club —
+    # cualquiera con este libro visible (aunque no lo haya editado él) debe
+    # verlo actualizado sin recargar.
+    await _notify_luni("books", book_id=book.id)
     return _book_out(book)
 
 
@@ -772,6 +786,7 @@ async def upload_cover(
     if not book.cover_url:
         book.cover_url = url
     db.commit()
+    await _notify_luni("books", book_id=book.id)
     return {"url": url}
 
 
@@ -1861,11 +1876,16 @@ async def websocket_endpoint(ws: WebSocket, token: str = Query(...)):
         if not player:
             await ws.close(code=1008)
             return
-        # Solo aprobados y miembros del club se conectan — el WS es hoy
-        # exclusivamente presencia/chat/llamadas de Diskordkito, así que
-        # bloquearlo aquí basta para que un no-miembro nunca aparezca online
-        # ni pueda entrar a ningún canal, sin tener que filtrar en más sitios.
-        if player.status != "approved" or not player.club_member:
+        # Pendientes/rechazados nunca se conectan (no tienen ni sesión válida,
+        # ver /auth/login). Los aprobados SIN club_member sí se dejan conectar
+        # ahora (antes se bloqueaban aquí igual que pendientes/rechazados) —
+        # es la única forma de que reciban en caliente el luni_update
+        # scope="players" cuando el admin les da acceso al club, sin tener
+        # que recargar la página. No hace falta filtrar presencia/chat/llamada
+        # aparte: chat usa channel_members (limpiado abajo al quitar
+        # club_member) y las llamadas grupales usan _general_member_ids —
+        # ambos ya exigen membership real, no basta con tener el socket abierto.
+        if player.status != "approved":
             await ws.close(code=1008)
             return
 

@@ -39,18 +39,7 @@ export default function MenuBar({ player, activeAppTitle, online, onOpenApp, onL
     >
       {/* Menú GatOS */}
       <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 14, height: '100%' }} ref={menuRef}>
-        <button
-          onClick={() => setMenuOpen(v => !v)}
-          style={{
-            background: menuOpen ? 'rgba(255,255,255,0.12)' : 'transparent',
-            border: 'none', cursor: 'pointer', borderRadius: 5,
-            padding: '3px 8px', display: 'flex', alignItems: 'center', gap: 6,
-            transition: 'background .15s', height: '100%',
-          }}
-        >
-          <span style={{ fontSize: 14, lineHeight: 1 }}>🐾</span>
-          <span style={{ fontFamily: '"Press Start 2P"', fontSize: 9, letterSpacing: 1 }}>GatOS</span>
-        </button>
+        <GatOSMenuButton menuOpen={menuOpen} onClick={() => setMenuOpen(v => !v)} />
 
         {activeAppTitle && (
           <span style={{ fontWeight: 600, fontSize: 13, color: 'rgba(255,255,255,0.9)' }}>{activeAppTitle}</span>
@@ -103,6 +92,32 @@ export default function MenuBar({ player, activeAppTitle, online, onOpenApp, onL
         <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)' }}>{time}</span>
       </div>
     </div>
+  )
+}
+
+function GatOSMenuButton({ menuOpen, onClick }) {
+  const [hover, setHover] = useState(false)
+  return (
+    <button
+      onClick={onClick}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        // Fondo sutil siempre visible (no solo al abrir el menú) para que se
+        // note que es un botón — antes era texto plano hasta que lo abrías.
+        background: menuOpen ? 'rgba(255,255,255,0.16)' : hover ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.05)',
+        border: 'none', cursor: 'pointer', borderRadius: 5,
+        padding: '3px 8px', display: 'flex', alignItems: 'center', gap: 6,
+        transition: 'background .15s', height: '100%',
+      }}
+    >
+      <span style={{ fontSize: 14, lineHeight: 1 }}>🐾</span>
+      <span style={{ fontFamily: '"Press Start 2P"', fontSize: 9, letterSpacing: 1 }}>GatOS</span>
+      <span style={{
+        fontSize: 8, color: 'rgba(255,255,255,0.5)', lineHeight: 1,
+        transform: menuOpen ? 'rotate(180deg)' : 'none', transition: 'transform .15s',
+      }}>▾</span>
+    </button>
   )
 }
 
