@@ -1242,8 +1242,8 @@ async def bulk_add_personal_shelf(
             if not title:
                 raise ValueError("Falta el título")
             status = raw.get("status") or "want_to_read"
-            if status not in ("want_to_read", "reading", "read"):
-                raise ValueError('"status" debe ser want_to_read, reading o read')
+            if status not in ("want_to_read", "reading", "read", "dropped"):
+                raise ValueError('"status" debe ser want_to_read, reading, read o dropped')
 
             rating       = _parse_bulk_float(raw.get("rating"), "rating")
             if rating is not None and not (0 <= rating <= 5):

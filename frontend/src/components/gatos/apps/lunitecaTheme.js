@@ -16,4 +16,5 @@ export const C = {
   read:      '#23a55a',
   reading:   '#5865f2',
   want:      '#80848e',
+  dropped:   '#ed4245',
 }

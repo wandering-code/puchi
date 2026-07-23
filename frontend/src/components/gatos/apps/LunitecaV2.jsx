@@ -26,9 +26,10 @@ function useOutsideClose(active, onClose) {
 // modales de esta app sin crear una importación circular.
 
 const STATUSES = [
-  { id: 'want_to_read', label: 'Por leer', color: C.want    },
-  { id: 'reading',      label: 'Leyendo',  color: C.reading },
-  { id: 'read',         label: 'Leído',    color: C.read    },
+  { id: 'want_to_read', label: 'Por leer',  color: C.want    },
+  { id: 'reading',      label: 'Leyendo',   color: C.reading },
+  { id: 'read',         label: 'Leído',     color: C.read    },
+  { id: 'dropped',      label: 'Dropeado',  color: C.dropped },
 ]
 
 const NAV = [
@@ -117,6 +118,13 @@ function IconFilter({ size = 14, color = 'currentColor' }) {
   return (
     <svg width={size} height={size} viewBox="0 0 14 14" fill="none" style={{ display: 'block', flexShrink: 0 }}>
       <path d="M2 3h10l-4 5v3.5l-2-1V8L2 3z" fill={color} />
+    </svg>
+  )
+}
+function IconFolder({ size = 14, color = 'currentColor' }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" style={{ display: 'block' }}>
+      <path d="M2 4a1 1 0 0 1 1-1h3.5l1.5 1.5H13a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V4z" stroke={color} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   )
 }
@@ -702,10 +710,10 @@ function FilterModal({ filters, onApply, onClose, shelf }) {
           {/* Estado */}
           <div>
             {sectionLabel('Estado')}
-            <div style={{ display: 'flex', gap: 6 }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
               {[{ id: 'all', label: 'Todos' }, ...STATUSES].map(opt => (
                 <button key={opt.id} onClick={() => setDraft(d => ({ ...d, status: opt.id }))} style={{
-                  flex: 1, border: 'none', borderRadius: 20, padding: '6px 0',
+                  flex: '1 0 30%', border: 'none', borderRadius: 20, padding: '6px 0',
                   cursor: 'pointer', fontSize: 10, fontWeight: 600, transition: 'all 0.15s',
                   background: draft.status === opt.id ? (opt.color || C.accent) : C.surfaceHi,
                   color: draft.status === opt.id ? 'white' : C.muted,
@@ -990,6 +998,9 @@ function BookDetailFull({ entry, shelf, onBack, onUpdateEntry, onUpdateBook, onD
   const [synopsis,         setSynopsis]         = useState(entry.book.synopsis || '')
   const [synopsisExpanded, setSynopsisExpanded] = useState(false)
   const [loadingSynopsis,  setLoadingSynopsis]  = useState(false)
+  const [folderValue,      setFolderValue]      = useState(entry.folder || '')
+  const [showFolderMenu,   setShowFolderMenu]   = useState(false)
+  const folderMenuRef = useOutsideClose(showFolderMenu, () => setShowFolderMenu(false))
 
   const status     = entry.status || 'want_to_read'
   const statusInfo = STATUSES.find(s => s.id === status)
@@ -1003,7 +1014,8 @@ function BookDetailFull({ entry, shelf, onBack, onUpdateEntry, onUpdateBook, onD
 
   // El estado activo en modo edición (para condicionales de páginas/fechas)
   const effectiveStatus = editing ? (draft.status || status) : status
-  const showProgressSection = effectiveStatus === 'reading' || effectiveStatus === 'read'
+  const showProgressSection = effectiveStatus === 'reading' || effectiveStatus === 'read' || effectiveStatus === 'dropped'
+  const showEndDate = effectiveStatus === 'read' || effectiveStatus === 'dropped'
 
   // Carga sinopsis desde Open Library si no está guardada
   useEffect(() => {
@@ -1037,9 +1049,9 @@ function BookDetailFull({ entry, shelf, onBack, onUpdateEntry, onUpdateBook, onD
   }
 
   // Compartida por el guardado del formulario de edición y por el desplegable
-  // rápido de estado (fuera de edición) — misma regla: al pasar a "leyendo" o
-  // "leído" se rellenan las fechas que falten con la de hoy, sin pisar las
-  // que el jugador ya hubiera puesto a mano.
+  // rápido de estado (fuera de edición) — misma regla: al pasar a "leyendo",
+  // "leído" o "dropeado" se rellenan las fechas que falten con la de hoy, sin
+  // pisar las que el jugador ya hubiera puesto a mano.
   function statusUpdates(newStatus) {
     const updates = { status: newStatus }
     if (newStatus === 'reading' && !entry.started_at) updates.started_at = today
@@ -1049,6 +1061,12 @@ function BookDetailFull({ entry, shelf, onBack, onUpdateEntry, onUpdateBook, onD
       // Al marcarlo leído, la página actual pasa a ser el total (si se
       // conoce) — da por hecho que se ha llegado hasta el final.
       if (total) updates.current_page = total
+    } else if (newStatus === 'dropped') {
+      // "Fecha fin" para un dropeado es la fecha en la que se dejó — la
+      // página actual no se toca, se queda donde lo dejó (a diferencia de
+      // "leído" no se da por llegado al final).
+      if (!entry.started_at)  updates.started_at  = today
+      if (!entry.finished_at) updates.finished_at = today
     } else {
       // Cualquier otro cambio de estado reinicia el progreso a 0.
       updates.current_page = 0
@@ -1081,9 +1099,10 @@ function BookDetailFull({ entry, shelf, onBack, onUpdateEntry, onUpdateBook, onD
     const bookChanged = draft.title    !== entry.book.title
       || draft.author   !== (entry.book.author   || '')
       || draft.genre    !== (entry.book.genre    || '')
+      || synopsis       !== (entry.book.synopsis || '')
     if (bookChanged) {
       await onUpdateBook(entry.book.id, {
-        title: draft.title, author: draft.author, genre: draft.genre,
+        title: draft.title, author: draft.author, genre: draft.genre, synopsis,
       })
     }
     if (draft.status !== status) {
@@ -1103,28 +1122,19 @@ function BookDetailFull({ entry, shelf, onBack, onUpdateEntry, onUpdateBook, onD
   const selStyle = { ...fieldStyle, cursor: 'pointer', colorScheme: 'dark' }
 
   // Mientras se edita: sección aparte debajo del hero (el formulario no tiene
-  // hueco libre junto a la portada), con clamp+toggle propios.
+  // hueco libre junto a la portada), con textarea editable en vez del texto
+  // de solo lectura — antes este bloque solo mostraba la sinopsis sin dar
+  // forma de tocarla, y saveEdit() nunca la mandaba al guardar.
   const synopsisBlock = (
     <div>
       {label('Sinopsis')}
-      {loadingSynopsis && <p style={{ fontSize: 12, color: C.muted }}>Cargando sinopsis…</p>}
-      {!loadingSynopsis && !synopsis && <p style={{ fontSize: 12, color: C.muted, fontStyle: 'italic' }}>Sin sinopsis disponible.</p>}
-      {!loadingSynopsis && synopsis && (
-        <>
-          <p style={{
-            fontSize: 12, color: C.sub, lineHeight: 1.75, margin: 0,
-            textAlign: 'justify',
-            display: '-webkit-box', WebkitBoxOrient: 'vertical', overflow: 'hidden',
-            WebkitLineClamp: synopsisExpanded ? 'none' : 5,
-          }}>{synopsis}</p>
-          {synopsis.length > 300 && (
-            <button onClick={() => setSynopsisExpanded(e => !e)}
-              style={{ background: 'none', border: 'none', color: C.accent, fontSize: 11, cursor: 'pointer', padding: '4px 0 0', fontWeight: 600 }}>
-              {synopsisExpanded ? 'Ver menos' : 'Ver más'}
-            </button>
-          )}
-        </>
-      )}
+      {loadingSynopsis
+        ? <p style={{ fontSize: 12, color: C.muted }}>Cargando sinopsis…</p>
+        : (
+          <textarea value={synopsis} onChange={ev => setSynopsis(ev.target.value)} rows={5}
+            placeholder="Sin sinopsis disponible."
+            style={{ ...fieldStyle, resize: 'vertical', lineHeight: 1.6 }} />
+        )}
     </div>
   )
 
@@ -1244,11 +1254,57 @@ function BookDetailFull({ entry, shelf, onBack, onUpdateEntry, onUpdateBook, onD
                 Nueva portada seleccionada
               </span>
             )}
-            <div>
+            <div ref={folderMenuRef} style={{ position: 'relative' }}>
               {label('Carpeta')}
-              <input type="text" defaultValue={entry.folder || ''}
-                onBlur={ev => onUpdateEntry(entry.id, { folder: ev.target.value || '' })}
-                placeholder="Sin carpeta" style={fieldStyle} />
+              <div style={{ display: 'flex', gap: 5 }}>
+                <input type="text" value={folderValue}
+                  onChange={ev => setFolderValue(ev.target.value)}
+                  onBlur={ev => onUpdateEntry(entry.id, { folder: ev.target.value || '' })}
+                  placeholder="Sin carpeta" style={{ ...fieldStyle, flex: 1, minWidth: 0 }} />
+                <button type="button" title="Elegir carpeta existente"
+                  onClick={() => setShowFolderMenu(v => !v)}
+                  style={{
+                    background: showFolderMenu ? C.accentBg : C.surfaceHi,
+                    border: `1px solid ${showFolderMenu ? C.accentBd : C.border}`,
+                    borderRadius: 8, width: 30, flexShrink: 0, cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                  <IconFolder size={13} color={showFolderMenu ? C.accent : C.muted} />
+                </button>
+              </div>
+              <AnimatePresence>
+                {showFolderMenu && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }}
+                    transition={{ duration: 0.12 }}
+                    style={{
+                      position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 4,
+                      background: C.surface, border: `1px solid ${C.border}`,
+                      borderRadius: 8, overflow: 'hidden', maxHeight: 160, overflowY: 'auto',
+                      boxShadow: '0 8px 24px rgba(0,0,0,0.4)', zIndex: 50,
+                    }}>
+                    {folders.length === 0 ? (
+                      <p style={{ fontSize: 11, color: C.muted, padding: '9px 12px', margin: 0, fontStyle: 'italic' }}>
+                        Aún no hay carpetas creadas
+                      </p>
+                    ) : folders.map(f => (
+                      <button key={f} type="button" onClick={() => {
+                        setFolderValue(f)
+                        onUpdateEntry(entry.id, { folder: f })
+                        setShowFolderMenu(false)
+                      }} style={{
+                        display: 'block', width: '100%', textAlign: 'left',
+                        background: f === folderValue ? C.accentBg : 'transparent',
+                        border: 'none', padding: '8px 12px', fontSize: 12, cursor: 'pointer',
+                        color: f === folderValue ? C.accent : C.sub,
+                      }}
+                        onMouseEnter={ev => { if (f !== folderValue) ev.currentTarget.style.background = C.surfaceHi }}
+                        onMouseLeave={ev => { if (f !== folderValue) ev.currentTarget.style.background = 'transparent' }}
+                      >{f}</button>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
@@ -1260,10 +1316,10 @@ function BookDetailFull({ entry, shelf, onBack, onUpdateEntry, onUpdateBook, onD
                   placeholder="Autor" style={{ ...fieldStyle, color: C.sub }} />
                 <div>
                   {label('Estado')}
-                  <div style={{ display: 'flex', gap: 5 }}>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
                     {STATUSES.map(opt => (
                       <button key={opt.id} onClick={() => setDraft(d => ({ ...d, status: opt.id }))} style={{
-                        flex: 1, border: 'none', borderRadius: 20, padding: '5px 0',
+                        flex: '1 0 40%', border: 'none', borderRadius: 20, padding: '5px 0',
                         cursor: 'pointer', fontSize: 10, fontWeight: 600, transition: 'all 0.15s',
                         background: draft.status === opt.id ? opt.color : C.surfaceHi,
                         color: draft.status === opt.id ? 'white' : C.muted,
@@ -1389,11 +1445,11 @@ function BookDetailFull({ entry, shelf, onBack, onUpdateEntry, onUpdateBook, onD
                     style={{ ...fieldStyle, colorScheme: 'dark' }} />
                 </div>
                 <AnimatePresence initial={false}>
-                  {effectiveStatus === 'read' && (
+                  {showEndDate && (
                     <motion.div key="fin-lectura"
                       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}
                     >
-                      {label('Fin de lectura')}
+                      {label(effectiveStatus === 'dropped' ? 'Fecha de dropeo' : 'Fin de lectura')}
                       <input type="date" defaultValue={entry.finished_at ? entry.finished_at.slice(0, 10) : ''}
                         onBlur={ev => onUpdateEntry(entry.id, { finished_at: ev.target.value || null })}
                         style={{ ...fieldStyle, colorScheme: 'dark' }} />
@@ -1478,6 +1534,11 @@ function ListRows({ books, onSelect, renderActions, isHighlighted = () => false 
                 {e.status === 'read' && (e.started_at || e.finished_at) && (
                   <p style={{ fontSize: 10, color: C.muted, marginTop: 4 }}>
                     {e.started_at ? fmtShortDate(e.started_at) : '?'} – {e.finished_at ? fmtShortDate(e.finished_at) : '?'}
+                  </p>
+                )}
+                {e.status === 'dropped' && (e.started_at || e.finished_at) && (
+                  <p style={{ fontSize: 10, color: C.muted, marginTop: 4 }}>
+                    {e.started_at ? fmtShortDate(e.started_at) : '?'} – dropeado {e.finished_at ? fmtShortDate(e.finished_at) : '?'}
                   </p>
                 )}
               </div>
@@ -1641,11 +1702,12 @@ function ShelfYearHeader({ label, count, collapsed, onToggle }) {
   )
 }
 
-function PersonalShelfSections({ entries, viewMode, sort, onSelect, renderActions, collapsedReading, onToggleReadingCollapsed, collapsedRead, onToggleReadCollapsed, collapsedWant, onToggleWantCollapsed, collapsedYears, onToggleYear }) {
+function PersonalShelfSections({ entries, viewMode, sort, onSelect, renderActions, collapsedReading, onToggleReadingCollapsed, collapsedRead, onToggleReadCollapsed, collapsedWant, onToggleWantCollapsed, collapsedDropped, onToggleDroppedCollapsed, collapsedYears, onToggleYear }) {
 
   const reading = entries.filter(e => e.status === 'reading')
   const read    = entries.filter(e => e.status === 'read')
   const want    = entries.filter(e => e.status === 'want_to_read')
+  const dropped = entries.filter(e => e.status === 'dropped')
 
   const yearGroups = {}
   for (const e of read) {
@@ -1664,7 +1726,7 @@ function PersonalShelfSections({ entries, viewMode, sort, onSelect, renderAction
 
   const Items = viewMode === 'grid' ? GridItems : ListRows
 
-  if (reading.length === 0 && read.length === 0 && want.length === 0) {
+  if (reading.length === 0 && read.length === 0 && want.length === 0 && dropped.length === 0) {
     return <p style={{ color: C.muted, fontSize: 12, textAlign: 'center', marginTop: 48 }}>Ningún libro coincide con los filtros</p>
   }
 
@@ -1736,6 +1798,26 @@ function PersonalShelfSections({ entries, viewMode, sort, onSelect, renderAction
                 transition={{ duration: 0.2, ease: 'easeInOut' }}
               >
                 <Items books={want} onSelect={onSelect} renderActions={renderActions} />
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      )}
+
+      {/* Dropeados va siempre al final, aparte de las demás listas — libros
+          que se dejaron a medias, no forman parte del flujo normal de
+          lectura. */}
+      {dropped.length > 0 && (
+        <div style={{ marginTop: 10 }}>
+          <ShelfGroupHeader icon={IconX} label="Dropeados" count={dropped.length}
+            collapsible collapsed={collapsedDropped} onToggle={onToggleDroppedCollapsed} />
+          <AnimatePresence initial={false}>
+            {!collapsedDropped && (
+              <motion.div key="dropped-items" layout
+                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                transition={{ duration: 0.2, ease: 'easeInOut' }}
+              >
+                <Items books={dropped} onSelect={onSelect} renderActions={renderActions} />
               </motion.div>
             )}
           </AnimatePresence>
@@ -3216,6 +3298,15 @@ export default function LunitecaV2({ player }) {
       return next
     })
   }
+  const droppedCollapsedKey = `luni_shelf_dropped_collapsed_${player.id}`
+  const [collapsedDropped, setCollapsedDropped] = useState(() => localStorage.getItem(droppedCollapsedKey) === '1')
+  function toggleDroppedCollapsed() {
+    setCollapsedDropped(v => {
+      const next = !v
+      localStorage.setItem(droppedCollapsedKey, next ? '1' : '0')
+      return next
+    })
+  }
   // Años dentro de "Leídos" colapsados/expandidos individualmente — vive aquí
   // (no dentro de PersonalShelfSections) para que el botón "colapsar/expandir
   // todo" de la barra superior pueda controlarlos también. Persistido en
@@ -3590,6 +3681,8 @@ export default function LunitecaV2({ player }) {
                   onToggleReadCollapsed={toggleReadCollapsed}
                   collapsedWant={collapsedWant}
                   onToggleWantCollapsed={toggleWantCollapsed}
+                  collapsedDropped={collapsedDropped}
+                  onToggleDroppedCollapsed={toggleDroppedCollapsed}
                   collapsedYears={collapsedYears}
                   onToggleYear={toggleYear}
                   renderActions={isMobile ? (entry) => (
