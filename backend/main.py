@@ -37,6 +37,33 @@ general_call: dict = {
     "call_type": "video",
 }
 
+# Estado en memoria de las llamadas 1-a-1 activas (efímero, igual que
+# general_call) — antes no hacía falta ninguno: la señalización 1-a-1 era
+# puro relé sin memoria del servidor. Con varios dispositivos por cuenta,
+# hace falta saber "este jugador está en una llamada, y es SU dispositivo X
+# el que la tiene" para poder avisar a otro dispositivo suyo de que existe, y
+# para poder pasarla de uno a otro ("mover aquí"). Una entrada por cada
+# jugador que esté en la llamada (dos entradas por llamada, una por cada
+# lado), no por llamada.
+active_1to1_calls: dict[int, dict] = {}
+# player_id -> {"device": str, "peer_id": int, "peer_device": str, "call_type": str}
+
+
+def _call_elsewhere_msg(player_id: int) -> Optional[dict]:
+    """Para avisar a un dispositivo de un jugador de que YA tiene una llamada
+    1-a-1 activa en otro de sus dispositivos (al conectarse, o justo después
+    de que se la quiten a él con "mover aquí") — con quién es y qué tipo,
+    para poder ofrecer el botón de traérsela aquí."""
+    state = active_1to1_calls.get(player_id)
+    if not state:
+        return None
+    return {
+        "type": "call_active_elsewhere",
+        "active": True,
+        "peer": state["peer_out"],
+        "callType": state["call_type"],
+    }
+
 
 def _general_member_ids(db) -> list[int]:
     general = db.query(Channel).filter(Channel.name == "club-general").first()
@@ -2045,7 +2072,7 @@ def get_or_create_dm(
 # ── WebSocket ────────────────────────────────────────────────────────────────
 
 @app.websocket("/ws")
-async def websocket_endpoint(ws: WebSocket, token: str = Query(...)):
+async def websocket_endpoint(ws: WebSocket, token: str = Query(...), device_id: Optional[str] = Query(None)):
     # Autenticar
     try:
         payload   = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
@@ -2053,6 +2080,12 @@ async def websocket_endpoint(ws: WebSocket, token: str = Query(...)):
     except (JWTError, KeyError, ValueError):
         await ws.close(code=1008)
         return
+    # Si el frontend no manda device_id (build en caché durante un despliegue,
+    # p.ej.) se genera uno de usar y tirar en vez de rechazar la conexión —
+    # ese dispositivo simplemente no participa bien en el ring-en-todos-lados/
+    # enrutado por dispositivo de las llamadas 1-a-1, pero todo lo demás
+    # (presencia, chat) funciona igual.
+    device_id = device_id or str(uuid.uuid4())
 
     db = SessionLocal()
     try:
@@ -2073,21 +2106,124 @@ async def websocket_endpoint(ws: WebSocket, token: str = Query(...)):
             await ws.close(code=1008)
             return
 
-        await manager.connect(player_id, ws)
+        await manager.connect(player_id, device_id, ws)
         # Anunciar presencia
         await manager.broadcast({"type": "presence", "online": manager.online_ids})
         # Si hay una llamada grupal en curso, que quien se acaba de conectar la vea de inmediato
         if general_call["participants"]:
             await manager.send_to_players([player_id], _general_call_state())
+        # Si este jugador ya tiene una llamada 1-a-1 activa en OTRO de sus
+        # dispositivos, que este se entere (para poder ofrecerle "moverla
+        # aquí") — salvo que el que se acaba de conectar sea justo ese mismo
+        # dispositivo (reconexión del que ya la tenía).
+        elsewhere = _call_elsewhere_msg(player_id)
+        if elsewhere and active_1to1_calls.get(player_id, {}).get("device") != device_id:
+            await manager.send_to_device(player_id, device_id, elsewhere)
 
         while True:
             data = await ws.receive_json()
             msg_type = data.get("type")
 
-            if msg_type in (
-                "call_offer", "call_answer", "call_ice", "call_reject", "call_end", "call_media",
-                "group_call_offer", "group_call_answer", "group_call_ice",
-            ):
+            if msg_type in ("call_offer", "call_answer", "call_ice", "call_reject", "call_end", "call_media"):
+                # Llamada 1-a-1: mientras no se sepa a qué dispositivo
+                # concreto del otro jugador va dirigido esto (aún no ha
+                # contestado nadie), se manda a TODOS sus dispositivos para
+                # que suene en cualquiera — igual que un teléfono normal.
+                # `target_device`, una vez se conoce (lo trae el primer
+                # `call_answer`/`call_offer` recibido, ver `from_device`
+                # abajo), hace que vaya solo a ese dispositivo concreto, ya
+                # sin sonar en el resto.
+                target_id     = int(data.get("target_id", 0))
+                target_device = data.get("target_device")
+                if target_id:
+                    payload_out = {**data, "from_player": _player_out(player), "from_device": device_id}
+                    if target_device:
+                        await manager.send_to_device(target_id, target_device, payload_out)
+                    else:
+                        await manager.send_to_players([target_id], payload_out)
+
+                    # Al aceptar o rechazar una llamada entrante desde ESTE
+                    # dispositivo, que los demás dispositivos propios (donde
+                    # también estaba sonando) dejen de mostrarla — sin esto,
+                    # seguirían sonando indefinidamente aunque ya se hubiera
+                    # contestado en otro sitio.
+                    if msg_type in ("call_answer", "call_reject"):
+                        for other_device in manager.devices_of(player_id):
+                            if other_device != device_id:
+                                await manager.send_to_device(player_id, other_device, {"type": "call_handled_elsewhere"})
+
+                    # La llamada pasa a activa — recordar qué dispositivo de
+                    # cada uno la tiene (para poder avisar de "llamada activa
+                    # en otro dispositivo" y permitir "moverla aquí" luego).
+                    if msg_type == "call_answer":
+                        target_player = db.query(Player).filter(Player.id == target_id).first()
+                        if target_player:
+                            call_type = data.get("callType") or "video"
+                            active_1to1_calls[player_id] = {
+                                "device": device_id, "peer_id": target_id,
+                                "peer_device": target_device or "", "peer_out": _player_out(target_player),
+                                "call_type": call_type,
+                            }
+                            active_1to1_calls[target_id] = {
+                                "device": target_device or "", "peer_id": player_id,
+                                "peer_device": device_id, "peer_out": _player_out(player),
+                                "call_type": call_type,
+                            }
+                            # Avisar YA a cualquier otro dispositivo de los
+                            # dos jugadores (no solo al conectarse más tarde)
+                            # de que hay una llamada activa, para que puedan
+                            # ofrecer "moverla aquí" desde el primer momento.
+                            for other_device in manager.devices_of(player_id):
+                                if other_device != device_id:
+                                    await manager.send_to_device(player_id, other_device, _call_elsewhere_msg(player_id))
+                            if target_device:
+                                for other_device in manager.devices_of(target_id):
+                                    if other_device != target_device:
+                                        await manager.send_to_device(target_id, other_device, _call_elsewhere_msg(target_id))
+
+                    # Cuelgue de verdad (no un simple rechazo de un aviso que
+                    # ni había llegado a activo) — limpiar el estado y avisar
+                    # a TODOS los dispositivos de los dos jugadores para que
+                    # se quite cualquier "llamada activa en otro dispositivo"
+                    # que pudiera quedar puesta.
+                    if msg_type in ("call_end", "call_reject"):
+                        my_state = active_1to1_calls.pop(player_id, None)
+                        other_id = (my_state["peer_id"] if my_state else target_id) or None
+                        if other_id:
+                            active_1to1_calls.pop(other_id, None)
+                        clear_msg = {"type": "call_active_elsewhere", "active": False}
+                        await manager.send_to_players([player_id], clear_msg)
+                        if other_id:
+                            await manager.send_to_players([other_id], clear_msg)
+
+            elif msg_type == "call_move_here":
+                # Traer aquí la llamada 1-a-1 activa que este jugador tiene
+                # en otro de sus dispositivos — no es un traspaso real de
+                # WebRTC (no existe tal cosa): se cuelga sin avisar al
+                # interlocutor en el dispositivo viejo, y este dispositivo
+                # inicia una oferta nueva marcada "resume" para que, del lado
+                # del interlocutor, no suene como una llamada entrante nueva.
+                state = active_1to1_calls.get(player_id)
+                if state:
+                    old_device = state["device"]
+                    if old_device and old_device != device_id:
+                        await manager.send_to_device(player_id, old_device, {"type": "call_taken_over"})
+                    active_1to1_calls[player_id]["device"] = device_id
+                    peer_id = state["peer_id"]
+                    if peer_id in active_1to1_calls:
+                        active_1to1_calls[peer_id]["peer_device"] = device_id
+                    if old_device and old_device != device_id:
+                        # Al que la tenía antes, que sepa que sigue existiendo
+                        # (solo movida) y pueda volver a traérsela si quiere.
+                        await manager.send_to_device(player_id, old_device, _call_elsewhere_msg(player_id))
+                    await manager.send_to_device(player_id, device_id, {
+                        "type": "call_move_here_ack",
+                        "peer": state["peer_out"],
+                        "peerDevice": state["peer_device"],
+                        "callType": state["call_type"],
+                    })
+
+            elif msg_type in ("group_call_offer", "group_call_answer", "group_call_ice"):
                 target_id = int(data.get("target_id", 0))
                 if target_id:
                     await manager.send_to_players([target_id], {
@@ -2178,11 +2314,27 @@ async def websocket_endpoint(ws: WebSocket, token: str = Query(...)):
     except (WebSocketDisconnect, Exception):
         pass
     finally:
-        await manager.disconnect(player_id, ws)
+        await manager.disconnect(player_id, device_id, ws)
         await manager.broadcast({"type": "presence", "online": manager.online_ids})
-        if player_id in general_call["participants"]:
+        # Solo se saca de la llamada grupal si este era su ÚLTIMO dispositivo
+        # conectado — con varios dispositivos ya soportados, cerrar uno
+        # cualquiera (p.ej. mirar el móvil un momento estando en la llamada
+        # grupal desde el PC) no debe echarle de una llamada que sigue
+        # teniendo abierta en otro sitio.
+        if player_id not in manager.online_ids and player_id in general_call["participants"]:
             general_call["participants"].discard(player_id)
             if not general_call["participants"]:
                 general_call["active"] = False
             await manager.send_to_players(_general_member_ids(db), _general_call_state())
+        # Si el dispositivo que se acaba de desconectar era justo el que
+        # tenía la llamada 1-a-1 activa (se cerró la pestaña, se cayó la red
+        # y no reconectó a tiempo...) sin haber mandado call_end, el estado
+        # se quedaría huérfano para siempre si no se limpia aquí también.
+        my_state = active_1to1_calls.get(player_id)
+        if my_state and my_state["device"] == device_id:
+            active_1to1_calls.pop(player_id, None)
+            peer_id = my_state["peer_id"]
+            active_1to1_calls.pop(peer_id, None)
+            clear_msg = {"type": "call_active_elsewhere", "active": False}
+            await manager.send_to_players([player_id, peer_id], clear_msg)
         db.close()

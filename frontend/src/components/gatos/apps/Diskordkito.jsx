@@ -765,6 +765,13 @@ export default function Diskordkito({ player, wsRef, online = [], call, groupCal
     chatOpen: showChat, toggleChat,
   } = call
 
+  // Valor de callPeer siempre al día (sin depender de closures de efectos
+  // con deps vacías) — lo usa el init del chat para saber si, al montar, ya
+  // hay una llamada 1-to-1 en marcha que debe quedarse con el canal activo
+  // (evita la carrera con el efecto de anclaje de canal de más abajo).
+  const callPeerLiveRef = useRef(callPeer)
+  callPeerLiveRef.current = callPeer
+
   const isMobile = useIsMobile()
   // En móvil se navega entre la lista de canales y el chat (patrón
   // WhatsApp/Telegram) en vez de verlos lado a lado como en desktop.
@@ -922,8 +929,13 @@ export default function Diskordkito({ player, wsRef, online = [], call, groupCal
       const chs     = chRes.ok ? await chRes.json() : []
       setAllPlayers(players)
       setChannels(chs)
+      // Si al resolver esto ya hay una llamada 1-to-1 en marcha (por ejemplo,
+      // esta app se acaba de montar porque se ha traído aquí una llamada
+      // activa desde otro dispositivo), no pisar el canal: el efecto de
+      // anclaje de arriba ya se encarga de dejar seleccionado el DM correcto,
+      // y esto podría resolver después y devolver la vista a #club-general.
       const general = chs.find(c => c.name === 'club-general')
-      if (general) { setActiveChId(general.id); loadMessages(general.id) }
+      if (general && !callPeerLiveRef.current) { setActiveChId(general.id); loadMessages(general.id) }
     }
     init()
   }, [])

@@ -1,7 +1,17 @@
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { useIsMobile } from '../../../utils/responsive'
 import { C } from './lunitecaTheme'
 import BarcodeScannerModal from './BarcodeScannerModal'
+
+// Mismo aspecto que el resto de campos móviles (ver `inpStyle` dentro del
+// componente) pero a nivel de módulo, para que CustomDateInput —fuera del
+// componente, sin acceso a `isMobile`— pueda usarlo. Solo se usa en móvil.
+const inpStyleBase = {
+  background: C.surfaceHi, border: `1px solid ${C.border}`,
+  borderRadius: 9, padding: '11px 12px', color: C.text, fontSize: 15,
+  outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit', width: '100%', minWidth: 0,
+}
 
 let _rowId = 1
 function newRow(title = '') {
@@ -12,6 +22,7 @@ function newRow(title = '') {
     matched: null,        // { open_lib_key, cover_url, isbn, num_pages, year, genre } una vez encontrado
     searching: false,
     searchResults: null,  // null = no buscado · [] = sin resultados · [...] = candidatos
+    collapsed: false,     // solo se usa en móvil — cada tarjeta se puede colapsar a solo el título
   }
 }
 
@@ -46,6 +57,13 @@ function IconCamera({ size = 13, color = 'currentColor' }) {
     </svg>
   )
 }
+function IconChevronRight({ size = 11, color = 'currentColor' }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 12 12" fill="none" style={{ display: 'block', flexShrink: 0 }}>
+      <path d="M4.2 2.2l4 3.8-4 3.8" stroke={color} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
 function IconCheck({ size = 12, color = 'currentColor' }) {
   return (
     <svg width={size} height={size} viewBox="0 0 12 12" fill="none" style={{ display: 'block', flexShrink: 0 }}>
@@ -67,7 +85,67 @@ const STATUS_OPTIONS = [
   ['read',         'Leído'],
 ]
 
+const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
+
+function daysInMonth(month, year) {
+  // month es 0-indexado (0 = enero), como Date — day 0 del mes siguiente
+  // es el último día del mes actual.
+  return new Date(year, month + 1, 0).getDate()
+}
+
+// Selector de fecha propio (día/mes/año en tres <select>) — no un
+// <input type="date"> nativo. En móvil, ese input nativo se salía del borde
+// derecho de la pantalla en Safari de iOS real (el recuadro del campo, no
+// el desplegable de fecha en sí, que funcionaba bien) y ni apilarlo, ni
+// min-width:0, ni max-width en calc(100vw) lo arreglaron en varios
+// intentos — un <select> normal, como el de Estado justo al lado, nunca ha
+// dado ese problema, así que se evita el control nativo del todo en vez de
+// seguir persiguiendo el bug.
+function CustomDateInput({ value, onChange, style }) {
+  // Estado propio de día/mes/año, no derivado directamente de `value` en
+  // cada render — mientras la fecha está incompleta (p.ej. solo se ha
+  // elegido el día) `onChange('')` deja `value` vacío, y si los <select>
+  // sacaran su valor de ahí "olvidarían" lo ya elegido en cuanto faltara
+  // una de las tres partes. Con estado propio, cada <select> conserva lo
+  // que se ha tocado hasta que las tres estén completas.
+  const initial = value ? value.split('-') : ['', '', '']
+  const [year,  setYear]  = useState(initial[0] || '')
+  const [month, setMonth] = useState(initial[1] ? String(parseInt(initial[1], 10) - 1) : '')
+  const [day,   setDay]   = useState(initial[2] ? String(parseInt(initial[2], 10)) : '')
+
+  const maxDay = (month !== '' && year) ? daysInMonth(parseInt(month), parseInt(year)) : 31
+  const days   = Array.from({ length: maxDay }, (_, i) => i + 1)
+  const thisYear = new Date().getFullYear()
+  const years  = Array.from({ length: 90 }, (_, i) => thisYear - i)
+
+  function commit(nextDay, nextMonth, nextYear) {
+    if (nextDay === '' || nextMonth === '' || nextYear === '') { onChange(''); return }
+    const clampedDay = Math.min(parseInt(nextDay), daysInMonth(parseInt(nextMonth), parseInt(nextYear)))
+    onChange(`${nextYear}-${String(parseInt(nextMonth) + 1).padStart(2, '0')}-${String(clampedDay).padStart(2, '0')}`)
+  }
+
+  const selStyle = { ...inpStyleBase, cursor: 'pointer', colorScheme: 'dark' }
+
+  return (
+    <div style={{ display: 'flex', gap: 6, ...style }}>
+      <select value={day} onChange={e => { setDay(e.target.value); commit(e.target.value, month, year) }} style={{ ...selStyle, flex: '0.8' }}>
+        <option value="">Día</option>
+        {days.map(dd => <option key={dd} value={dd}>{dd}</option>)}
+      </select>
+      <select value={month} onChange={e => { setMonth(e.target.value); commit(day, e.target.value, year) }} style={{ ...selStyle, flex: 1.5 }}>
+        <option value="">Mes</option>
+        {MONTHS.map((label, i) => <option key={i} value={i}>{label}</option>)}
+      </select>
+      <select value={year} onChange={e => { setYear(e.target.value); commit(day, month, e.target.value) }} style={{ ...selStyle, flex: 1 }}>
+        <option value="">Año</option>
+        {years.map(yy => <option key={yy} value={yy}>{yy}</option>)}
+      </select>
+    </div>
+  )
+}
+
 export default function BulkAddModal({ onClose, onImported }) {
+  const isMobile = useIsMobile()
   const [rows, setRows] = useState([newRow()])
   const [processing, setProcessing] = useState(false)
   const [results, setResults] = useState(null) // null | [{index, ok, title, error}]
@@ -115,6 +193,19 @@ export default function BulkAddModal({ onClose, onImported }) {
 
   function patchRow(key, patch) {
     setRows(rs => rs.map(r => r.key === key ? { ...r, ...patch } : r))
+  }
+  // Al marcar un libro como "Leído" se rellenan hoy como fecha de inicio y
+  // fin si aún no había ninguna puesta — así, si no se toca nada más, se
+  // queda esa fecha fija en vez de vacía (mismo criterio que ya usa la
+  // ficha de un libro en la propia estantería al pasar a "Leído").
+  function changeRowStatus(key, newStatus) {
+    const today = new Date().toISOString().slice(0, 10)
+    setRows(rs => rs.map(r => r.key === key ? {
+      ...r,
+      status: newStatus,
+      started_at:  newStatus === 'read' ? (r.started_at  || today) : r.started_at,
+      finished_at: newStatus === 'read' ? (r.finished_at || today) : r.finished_at,
+    } : r))
   }
   function addRow() {
     setRows(rs => [...rs, newRow()])
@@ -218,11 +309,23 @@ export default function BulkAddModal({ onClose, onImported }) {
   const okCount   = results?.filter(r => r.ok).length ?? 0
   const failCount = results ? results.length - okCount : 0
 
-  const inpStyle = {
+  // En móvil, texto y áreas de toque más grandes — con el tamaño de escritorio
+  // (12px, poco padding) todo se sentía apretado aunque ya fuera una fila por
+  // campo, sencillamente porque el texto era pequeño y los botones de icono
+  // (34px) quedaban justos para el dedo.
+  // minWidth:0 evita que un input dentro de un contenedor flex se niegue a
+  // encogerse por debajo de su ancho de contenido (comportamiento por
+  // defecto de los elementos flex), aunque diga width:100%.
+  const inpStyle = isMobile ? {
+    background: C.surfaceHi, border: `1px solid ${C.border}`,
+    borderRadius: 9, padding: '11px 12px', color: C.text, fontSize: 15,
+    outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit', width: '100%', minWidth: 0,
+  } : {
     background: C.surfaceHi, border: `1px solid ${C.border}`,
     borderRadius: 7, padding: '6px 8px', color: C.text, fontSize: 12,
-    outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit', width: '100%',
+    outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit', width: '100%', minWidth: 0,
   }
+  const iconBtnSize = isMobile ? 42 : 28
 
   return (
     <motion.div
@@ -232,7 +335,7 @@ export default function BulkAddModal({ onClose, onImported }) {
         background: 'rgba(15,10,6,0.75)', backdropFilter: 'blur(4px)',
         display: 'flex', flexDirection: 'column',
         alignItems: 'center', justifyContent: 'flex-start',
-        padding: '44px 16px 16px',
+        padding: isMobile ? '32px 8px 8px' : '44px 16px 16px',
       }}>
       <motion.div
         initial={{ opacity: 0, scale: 0.95, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -247,22 +350,163 @@ export default function BulkAddModal({ onClose, onImported }) {
         }}>
         {/* Cabecera — fija */}
         <div style={{
-          padding: '13px 16px', borderBottom: `1px solid ${C.border}`,
+          padding: isMobile ? '14px 16px' : '13px 16px', borderBottom: `1px solid ${C.border}`,
           display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0,
         }}>
-          <span style={{ fontSize: 13, color: C.text, fontWeight: 600 }}>Añadir varios libros</span>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer', fontSize: 18, lineHeight: 1, padding: '0 2px' }}>×</button>
+          <span style={{ fontSize: isMobile ? 15 : 13, color: C.text, fontWeight: 600 }}>Añadir varios libros</span>
+          <button onClick={onClose} style={{
+            background: 'none', border: 'none', color: C.muted, cursor: 'pointer',
+            fontSize: isMobile ? 22 : 18, lineHeight: 1, padding: isMobile ? '6px 8px' : '0 2px',
+          }}>×</button>
         </div>
 
         {/* Contenido — scrollable */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <p style={{ fontSize: 12, color: C.sub, margin: 0 }}>
-            Escribe el título de cada libro (o pega una lista con uno por línea — se reparte solo en filas).
-            Pulsa <IconSearch size={11} color={C.sub} /> para buscarlo en Open Library y rellenar autor, portada, género y páginas automáticamente; si no lo encuentra, se guarda igual solo con lo que hayas escrito.
+        <div style={{ flex: 1, overflowY: 'auto', padding: isMobile ? '14px 14px' : 16, display: 'flex', flexDirection: 'column', gap: isMobile ? 14 : 10 }}>
+          <p style={{ fontSize: isMobile ? 13 : 12, color: C.sub, margin: 0, lineHeight: 1.5 }}>
+            {isMobile
+              ? 'Escribe el título de cada libro, o pega una lista con uno por línea. El icono de la lupa lo busca en Open Library y rellena autor, portada, género y páginas.'
+              : (<>Escribe el título de cada libro (o pega una lista con uno por línea — se reparte solo en filas).
+                Pulsa <IconSearch size={11} color={C.sub} /> para buscarlo en Open Library y rellenar autor, portada, género y páginas automáticamente; si no lo encuentra, se guarda igual solo con lo que hayas escrito.</>)}
           </p>
 
           {rows.map((row, i) => (
-            <div key={row.key} style={{ position: 'relative' }}>
+            <div key={row.key} style={isMobile ? {
+              position: 'relative', border: `1px solid ${C.border}`, borderRadius: 12,
+              padding: 12, display: 'flex', flexDirection: 'column', gap: 10, minWidth: 0,
+            } : { position: 'relative' }}>
+              {isMobile ? (<>
+                {/* Móvil: cada fila es su propia tarjeta, un campo por línea
+                    — la versión de escritorio (todo en una sola fila) se
+                    quedaba muy apretada en pantallas estrechas. Inputs y
+                    botones más grandes que en escritorio (14px→15px de
+                    texto, botones de icono de 42px) porque con el tamaño de
+                    escritorio seguía sintiéndose apretado aunque ya fuera
+                    una fila por campo. Colapsable a solo el título (con su
+                    botón de buscar, que vive junto a él) para no tener que
+                    hacer scroll entre muchas tarjetas ya rellenas; "Quitar
+                    fila" pasa a ser un botón alargado al final, no un icono
+                    pequeño arriba. */}
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', minWidth: 0 }}>
+                  <button onClick={() => patchRow(row.key, { collapsed: !row.collapsed })}
+                    title={row.collapsed ? 'Expandir' : 'Colapsar'} style={{
+                      width: 30, height: iconBtnSize, flexShrink: 0, border: 'none', background: 'transparent',
+                      color: C.muted, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}>
+                    <span style={{
+                      display: 'inline-flex', transform: row.collapsed ? 'none' : 'rotate(90deg)',
+                      transition: 'transform 0.15s',
+                    }}>
+                      <IconChevronRight size={13} color={C.muted} />
+                    </span>
+                  </button>
+                  <input
+                    value={row.title}
+                    onChange={e => patchRow(row.key, { title: e.target.value })}
+                    onPaste={e => onTitlePaste(row.key, e)}
+                    onKeyDown={e => e.key === 'Enter' && searchRow(row.key)}
+                    placeholder="Título"
+                    title={row.matched ? 'Libro encontrado en Open Library' : undefined}
+                    style={{ ...inpStyle, flex: 1, border: `1px solid ${row.matched ? C.read : C.border}` }}
+                  />
+                  <button onClick={() => searchRow(row.key)} title="Buscar en Open Library" disabled={!row.title.trim() || row.searching}
+                    style={{
+                      width: iconBtnSize, height: iconBtnSize, flexShrink: 0, borderRadius: 9, border: 'none',
+                      background: C.surfaceHi, color: C.sub, cursor: 'pointer',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      opacity: (!row.title.trim() || row.searching) ? 0.4 : 1,
+                    }}>
+                    <IconSearch size={17} color={C.sub} />
+                  </button>
+                </div>
+
+                <AnimatePresence initial={false}>
+                  {!row.collapsed && (
+                    <motion.div key="body" layout
+                      initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
+                      transition={{ duration: 0.18, ease: 'easeInOut' }}
+                      style={{ overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: 10 }}
+                    >
+                      <input
+                        value={row.author}
+                        onChange={e => patchRow(row.key, { author: e.target.value })}
+                        onKeyDown={e => e.key === 'Enter' && searchRow(row.key)}
+                        placeholder="Autor (opcional)"
+                        style={inpStyle}
+                      />
+                      <select value={row.status} onChange={e => changeRowStatus(row.key, e.target.value)}
+                        style={{ ...inpStyle, cursor: 'pointer', colorScheme: 'dark' }}>
+                        {STATUS_OPTIONS.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+                      </select>
+
+                      {row.status === 'read' && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                          <div>
+                            <p style={{ fontSize: 11, color: C.muted, margin: '0 0 4px' }}>Fecha de inicio</p>
+                            <CustomDateInput value={row.started_at} onChange={v => patchRow(row.key, { started_at: v })} />
+                          </div>
+                          <div>
+                            <p style={{ fontSize: 11, color: C.muted, margin: '0 0 4px' }}>Fecha de fin</p>
+                            <CustomDateInput value={row.finished_at} onChange={v => patchRow(row.key, { finished_at: v })} />
+                          </div>
+                        </div>
+                      )}
+
+                      {row.matched && (
+                        <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+                          <span style={{ color: C.read }}><IconCheck color={C.read} /></span>
+                          <span style={{ fontSize: 12.5, color: C.sub }}>
+                            Encontrado{row.matched.year ? ` (${row.matched.year})` : ''} — portada, género y páginas rellenos
+                          </span>
+                          <button onClick={() => clearMatch(row.key)} style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer', fontSize: 12, textDecoration: 'underline', padding: 0 }}>
+                            quitar
+                          </button>
+                        </div>
+                      )}
+
+                      {row.searching && (
+                        <p style={{ fontSize: 12.5, color: C.sub, margin: 0 }}>Buscando…</p>
+                      )}
+
+                      {openSearchKey === row.key && row.searchResults && (
+                        <div style={{
+                          background: C.surfaceHi, border: `1px solid ${C.border}`,
+                          borderRadius: 8, overflow: 'hidden', maxHeight: 240, overflowY: 'auto',
+                        }}>
+                          {row.searchResults.length === 0 && (
+                            <div style={{ padding: '11px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                              <span style={{ fontSize: 13, color: C.muted }}>Sin resultados — se guardará solo con el título.</span>
+                              <button onClick={() => setOpenSearchKey(null)} style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer', fontSize: 14 }}>×</button>
+                            </div>
+                          )}
+                          {row.searchResults.map((b, bi) => (
+                            <button key={bi} onClick={() => pickMatch(row.key, b)} style={{
+                              width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px',
+                              background: 'transparent', border: 'none', borderBottom: bi < row.searchResults.length - 1 ? `1px solid ${C.border}` : 'none',
+                              cursor: 'pointer', textAlign: 'left',
+                            }}>
+                              <div style={{ width: 30, height: 44, borderRadius: 4, flexShrink: 0, overflow: 'hidden', background: C.surface, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                {b.cover_url ? <img src={b.cover_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <span style={{ fontSize: 11 }}>📖</span>}
+                              </div>
+                              <div style={{ minWidth: 0 }}>
+                                <p style={{ fontSize: 13.5, color: C.text, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', margin: 0 }}>{b.title}</p>
+                                <p style={{ fontSize: 12, color: C.sub, margin: 0 }}>{b.author}{b.year ? ` · ${b.year}` : ''}</p>
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+
+                      <button onClick={() => removeRow(row.key)} style={{
+                        width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                        background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 9,
+                        padding: '11px 0', color: '#ef4444', cursor: 'pointer', fontSize: 14, fontWeight: 600,
+                      }}>
+                        <IconTrash size={14} color="#ef4444" /> Quitar fila
+                      </button>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </>) : (
               <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
                 <input
                   value={row.title}
@@ -279,7 +523,7 @@ export default function BulkAddModal({ onClose, onImported }) {
                   placeholder="Autor (opcional)"
                   style={{ ...inpStyle, flex: '1 1 100px' }}
                 />
-                <select value={row.status} onChange={e => patchRow(row.key, { status: e.target.value })}
+                <select value={row.status} onChange={e => changeRowStatus(row.key, e.target.value)}
                   style={{ ...inpStyle, flex: '0 0 92px', cursor: 'pointer', colorScheme: 'dark' }}>
                   {STATUS_OPTIONS.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
                 </select>
@@ -313,9 +557,10 @@ export default function BulkAddModal({ onClose, onImported }) {
                   <IconTrash color={C.muted} />
                 </button>
               </div>
+              )}
 
-              {row.matched && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 3 }}>
+              {!isMobile && row.matched && (
+                <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginTop: 3 }}>
                   <span style={{ color: C.read }}><IconCheck color={C.read} /></span>
                   <span style={{ fontSize: 10.5, color: C.sub }}>
                     Encontrado{row.matched.year ? ` (${row.matched.year})` : ''} — portada, género y páginas rellenos
@@ -326,11 +571,11 @@ export default function BulkAddModal({ onClose, onImported }) {
                 </div>
               )}
 
-              {row.searching && (
+              {!isMobile && row.searching && (
                 <p style={{ fontSize: 10.5, color: C.sub, margin: '3px 0 0' }}>Buscando…</p>
               )}
 
-              {openSearchKey === row.key && row.searchResults && (
+              {!isMobile && openSearchKey === row.key && row.searchResults && (
                 <div style={{
                   marginTop: 4, background: C.surfaceHi, border: `1px solid ${C.border}`,
                   borderRadius: 8, overflow: 'hidden', maxHeight: 180, overflowY: 'auto',
@@ -350,7 +595,7 @@ export default function BulkAddModal({ onClose, onImported }) {
                       onMouseEnter={e => e.currentTarget.style.background = C.accentBg}
                       onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                     >
-                      <div style={{ width: 22, height: 32, borderRadius: 3, flexShrink: 0, overflow: 'hidden', background: C.surface, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <div style={{ width: 22, height: 32, borderRadius: 4, flexShrink: 0, overflow: 'hidden', background: C.surface, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                         {b.cover_url ? <img src={b.cover_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <span style={{ fontSize: 11 }}>📖</span>}
                       </div>
                       <div style={{ minWidth: 0 }}>
@@ -364,33 +609,35 @@ export default function BulkAddModal({ onClose, onImported }) {
             </div>
           ))}
 
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 8 }}>
             <button onClick={addRow} style={{
-              alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: 6,
-              background: 'transparent', border: `1px dashed ${C.border}`, borderRadius: 8,
-              padding: '6px 12px', color: C.sub, cursor: 'pointer', fontSize: 12,
+              alignSelf: isMobile ? 'stretch' : 'flex-start', justifyContent: isMobile ? 'center' : 'flex-start',
+              display: 'flex', alignItems: 'center', gap: 8,
+              background: 'transparent', border: `1px dashed ${C.border}`, borderRadius: 9,
+              padding: isMobile ? '13px 12px' : '8px 12px', color: C.sub, cursor: 'pointer', fontSize: isMobile ? 14 : 12,
             }}>
-              <IconPlus color={C.sub} /> Añadir fila
+              <IconPlus size={isMobile ? 14 : 12} color={C.sub} /> Añadir fila
             </button>
             <button onClick={() => { setScanFeedback(''); setShowScanner(true) }} style={{
-              alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: 6,
-              background: 'transparent', border: `1px dashed ${C.border}`, borderRadius: 8,
-              padding: '6px 12px', color: C.sub, cursor: 'pointer', fontSize: 12,
+              alignSelf: isMobile ? 'stretch' : 'flex-start', justifyContent: isMobile ? 'center' : 'flex-start',
+              display: 'flex', alignItems: 'center', gap: 8,
+              background: 'transparent', border: `1px dashed ${C.border}`, borderRadius: 9,
+              padding: isMobile ? '13px 12px' : '8px 12px', color: C.sub, cursor: 'pointer', fontSize: isMobile ? 14 : 12,
             }}>
-              <IconCamera color={C.sub} /> Escanear código de barras
+              <IconCamera size={isMobile ? 15 : 13} color={C.sub} /> Escanear código de barras
             </button>
           </div>
 
-          {formErr && <p style={{ fontSize: 12, color: '#ef4444', margin: 0 }}>{formErr}</p>}
+          {formErr && <p style={{ fontSize: isMobile ? 13.5 : 12, color: '#ef4444', margin: 0 }}>{formErr}</p>}
 
           {results && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 4 }}>
-              <p style={{ fontSize: 12, fontWeight: 600, color: C.text, margin: 0 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: isMobile ? 8 : 6, marginTop: 4 }}>
+              <p style={{ fontSize: isMobile ? 13.5 : 12, fontWeight: 600, color: C.text, margin: 0 }}>
                 {okCount} añadido{okCount === 1 ? '' : 's'}{failCount > 0 && `, ${failCount} con error`}
               </p>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 140, overflowY: 'auto' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: isMobile ? 6 : 4, maxHeight: 140, overflowY: 'auto' }}>
                 {results.map(r => (
-                  <div key={r.index} style={{ display: 'flex', alignItems: 'flex-start', gap: 6, fontSize: 11.5 }}>
+                  <div key={r.index} style={{ display: 'flex', alignItems: 'flex-start', gap: 6, fontSize: isMobile ? 13 : 11.5 }}>
                     {r.ok
                       ? <span style={{ color: C.read, flexShrink: 0, marginTop: 2 }}><IconCheck color={C.read} /></span>
                       : <span style={{ color: '#ef4444', flexShrink: 0, marginTop: 2 }}><IconX color="#ef4444" /></span>}
@@ -405,17 +652,18 @@ export default function BulkAddModal({ onClose, onImported }) {
         </div>
 
         {/* Acciones — fijas */}
-        <div style={{ padding: 16, borderTop: `1px solid ${C.border}`, display: 'flex', justifyContent: 'flex-end', gap: 10, flexShrink: 0 }}>
+        <div style={{ padding: isMobile ? 14 : 16, borderTop: `1px solid ${C.border}`, display: 'flex', justifyContent: 'flex-end', gap: 10, flexShrink: 0 }}>
           <button onClick={onClose} style={{
-            background: 'transparent', border: `1px solid ${C.border}`, borderRadius: 8,
-            padding: '8px 16px', color: C.sub, cursor: 'pointer', fontSize: 13,
+            background: 'transparent', border: `1px solid ${C.border}`, borderRadius: 9,
+            padding: isMobile ? '11px 18px' : '8px 16px', color: C.sub, cursor: 'pointer', fontSize: isMobile ? 14 : 13,
+            flex: isMobile ? 1 : undefined,
           }}>
             {results ? 'Cerrar' : 'Cancelar'}
           </button>
           <button onClick={processAll} disabled={processing} style={{
-            background: C.accent, border: 'none', borderRadius: 8,
-            padding: '8px 16px', color: 'white', cursor: 'pointer', fontWeight: 600, fontSize: 13,
-            opacity: processing ? 0.6 : 1,
+            background: C.accent, border: 'none', borderRadius: 9,
+            padding: isMobile ? '11px 18px' : '8px 16px', color: 'white', cursor: 'pointer', fontWeight: 600, fontSize: isMobile ? 14 : 13,
+            opacity: processing ? 0.6 : 1, flex: isMobile ? 1 : undefined,
           }}>
             {processing ? 'Procesando…' : 'Procesar todo'}
           </button>

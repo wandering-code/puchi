@@ -6,10 +6,12 @@ import Dock, { DOCK_RESERVED } from './Dock'
 import MobileLauncher, { MOBILE_TAB_APPS, visibleTabApps, launcherApps } from './MobileLauncher'
 import { useIsMobile } from '../../utils/responsive'
 import { wallpaperCss } from '../../utils/wallpaper'
+import { getDeviceId } from '../../utils/deviceId'
 // Renombrado en el import: "Notification" a secas taparía la API nativa
 // del navegador (window.Notification) en todo este módulo.
 import MessageNotification from './Notification'
 import CallNotification     from './CallNotification'
+import CallElsewhereNotification from './CallElsewhereNotification'
 import GroupCallNotification from './GroupCallNotification'
 import CallPiP                from './CallPiP'
 import Diskordkito   from './apps/Diskordkito'
@@ -35,7 +37,15 @@ const FALLBACK_ICE_SERVERS = [
   { urls: 'stun:stun.l.google.com:19302' },
   { urls: 'stun:stun1.l.google.com:19302' },
 ]
-const CALL_SIGNAL_TYPES = new Set(['call_offer', 'call_answer', 'call_ice', 'call_reject', 'call_end', 'call_media'])
+const CALL_SIGNAL_TYPES = new Set([
+  'call_offer', 'call_answer', 'call_ice', 'call_reject', 'call_end', 'call_media', 'call_handled_elsewhere',
+  // "Mover la llamada a este dispositivo": no es un traspaso real de WebRTC
+  // (no existe tal cosa) — el dispositivo viejo cuelga sin avisar al
+  // interlocutor (call_taken_over) y este manda una oferta nueva marcada
+  // "resume" al interlocutor, que la acepta sola sin sonar como llamada
+  // entrante (ver el caso 'call_offer' con resume=true en handleCallSignal).
+  'call_active_elsewhere', 'call_taken_over', 'call_move_here_ack',
+])
 const CALL_RING_TIMEOUT = 30000
 
 // Señalización de la llamada grupal de #club-general — sistema independiente
@@ -160,12 +170,24 @@ export default function GatOS({ player: initialPlayer, onLogout, onProfileUpdate
   // Diskordkito) para poder desplegarlo desde el clic en la notificación de
   // un mensaje nuevo, incluso si Diskordkito ya está abierto.
   const [callChatOpen, setCallChatOpen] = useState(false)
+  // Llamada 1-a-1 activa en OTRO de mis dispositivos (null si no hay
+  // ninguna) — { peer, callType }. Se rellena al conectar si ya existía, o
+  // justo después de mover la llamada A otro dispositivo (para poder
+  // traérsela de vuelta desde aquí).
+  const [callElsewhereInfo, setCallElsewhereInfo] = useState(null)
 
   const pcRef             = useRef(null)
   const localStreamRef    = useRef(null)
   const pendingCandidates = useRef([])
   const offerSdpRef       = useRef(null)
   const callPeerRef       = useRef(null)
+  // Dispositivo concreto del otro jugador en la llamada 1-a-1 actual — se
+  // aprende del primer mensaje que llega de él (from_device, ver más abajo)
+  // y a partir de ahí se manda de vuelta en cada respuesta (target_device)
+  // para que el backend deje de sonar en el resto de sus dispositivos y
+  // enrute solo a este. Antes de contestar/ser contestada, no se conoce
+  // (null) y el backend hace sonar la llamada en todos sus dispositivos.
+  const callPeerDeviceRef = useRef(null)
   const callTypeRef       = useRef('video')
   const ringTimeoutRef    = useRef(null)
   // Espejo de callState en un ref: el handler del WS (ws.onmessage) se fija
@@ -236,7 +258,7 @@ export default function GatOS({ player: initialPlayer, onLogout, onProfileUpdate
     const pc = new RTCPeerConnection({ iceServers: iceServersRef.current })
     pcRef.current = pc
     pc.onicecandidate = ({ candidate }) => {
-      if (candidate) sendWs({ type: 'call_ice', target_id: targetId, candidate })
+      if (candidate) sendWs({ type: 'call_ice', target_id: targetId, candidate, target_device: callPeerDeviceRef.current || undefined })
     }
     pc.ontrack = ({ streams }) => {
       if (streams[0]) setRemoteStream(streams[0])
@@ -264,6 +286,7 @@ export default function GatOS({ player: initialPlayer, onLogout, onProfileUpdate
     localStreamRef.current = null
     pendingCandidates.current = []
     offerSdpRef.current = null
+    callPeerDeviceRef.current = null
     setCallState('idle')
     setCallPeer(null)
     setLocalStream(null)
@@ -307,7 +330,7 @@ export default function GatOS({ player: initialPlayer, onLogout, onProfileUpdate
       const prev = pendingHangupRef.current
       pendingHangupRef.current = null
       if (prev.type === '1to1') {
-        if (prev.peer) sendWs({ type: 'call_end', target_id: prev.peer.id })
+        if (prev.peer) sendWs({ type: 'call_end', target_id: prev.peer.id, target_device: prev.peerDevice || undefined })
         cleanupCall()
       } else if (prev.type === 'group') {
         leaveGroupCall()
@@ -330,7 +353,7 @@ export default function GatOS({ player: initialPlayer, onLogout, onProfileUpdate
       for (const c of pendingCandidates.current.splice(0)) await pc.addIceCandidate(c)
       const answer = await pc.createAnswer()
       await pc.setLocalDescription(answer)
-      sendWs({ type: 'call_answer', target_id: peer.id, sdp: pc.localDescription.sdp })
+      sendWs({ type: 'call_answer', target_id: peer.id, sdp: pc.localDescription.sdp, target_device: callPeerDeviceRef.current || undefined, callType: type })
       // Aterriza en la vista completa de la llamada — si no, quien acepta
       // desde la lista de canales (móvil) o con otra conversación abierta se
       // encontraría con la ventanita PiP en vez de la llamada que acaba de
@@ -365,7 +388,7 @@ export default function GatOS({ player: initialPlayer, onLogout, onProfileUpdate
 
   function rejectCall() {
     const peer = callPeerRef.current
-    if (peer) sendWs({ type: 'call_reject', target_id: peer.id })
+    if (peer) sendWs({ type: 'call_reject', target_id: peer.id, target_device: callPeerDeviceRef.current || undefined })
     notifyMissedCall(peer) // no contestamos a tiempo (o se rechazó a mano, pero entonces la app tenía foco y no se notifica igualmente)
     const prev = pendingHangupRef.current
     pendingHangupRef.current = null
@@ -373,6 +396,7 @@ export default function GatOS({ player: initialPlayer, onLogout, onProfileUpdate
       // Había otra llamada 1-to-1 en marcha de antes (su pc/stream nunca se
       // tocaron) — se restaura su estado visible tal cual estaba.
       callPeerRef.current = prev.peer
+      callPeerDeviceRef.current = prev.peerDevice ?? null
       callTypeRef.current = prev.callType
       setCallPeer(prev.peer)
       setCallType(prev.callType)
@@ -384,7 +408,7 @@ export default function GatOS({ player: initialPlayer, onLogout, onProfileUpdate
 
   function endCall() {
     const peer = callPeerRef.current
-    if (peer) sendWs({ type: 'call_end', target_id: peer.id })
+    if (peer) sendWs({ type: 'call_end', target_id: peer.id, target_device: callPeerDeviceRef.current || undefined })
     cleanupCall()
   }
 
@@ -401,7 +425,7 @@ export default function GatOS({ player: initialPlayer, onLogout, onProfileUpdate
     track.enabled = !track.enabled
     setIsCameraOff(!track.enabled)
     const peer = callPeerRef.current
-    if (peer) sendWs({ type: 'call_media', target_id: peer.id, video: track.enabled })
+    if (peer) sendWs({ type: 'call_media', target_id: peer.id, video: track.enabled, target_device: callPeerDeviceRef.current || undefined })
   }
 
   async function getUserMediaWithFallback(withVideo) {
@@ -723,13 +747,39 @@ export default function GatOS({ player: initialPlayer, onLogout, onProfileUpdate
   async function handleCallSignal(msg) {
     switch (msg.type) {
       case 'call_offer': {
+        // "Resume": el interlocutor con el que YA estoy en llamada activa
+        // acaba de mover la llamada a otro de sus dispositivos ("Mover
+        // aquí" en su lado) — esto no es una llamada entrante nueva, no
+        // debe sonar ni pedir aceptar. Se cierra la conexión vieja (iba al
+        // dispositivo suyo anterior) y se acepta esta nueva en silencio,
+        // reutilizando el micro/cámara que ya estaban encendidos.
+        if (msg.resume && callStateRef.current === 'active' && callPeerRef.current?.id === msg.from_player?.id) {
+          pcRef.current?.close()
+          callPeerDeviceRef.current = msg.from_device ?? null
+          ;(async () => {
+            try {
+              const stream = localStreamRef.current ?? await getMedia(callTypeRef.current === 'video')
+              const pc = createPC(msg.from_player.id)
+              stream.getTracks().forEach(t => pc.addTrack(t, stream))
+              await pc.setRemoteDescription({ type: 'offer', sdp: msg.sdp })
+              for (const c of pendingCandidates.current.splice(0)) await pc.addIceCandidate(c)
+              const answer = await pc.createAnswer()
+              await pc.setLocalDescription(answer)
+              sendWs({ type: 'call_answer', target_id: msg.from_player.id, sdp: pc.localDescription.sdp, target_device: callPeerDeviceRef.current || undefined, callType: callTypeRef.current })
+            } catch (err) {
+              console.error('resume call_offer:', err)
+              cleanupCall()
+            }
+          })()
+          break
+        }
         // ¿Había ya otra llamada en marcha (1-to-1 activa/llamando, o
         // grupal ya unida)? Se guarda para colgarla solo si esta nueva se
         // acepta de verdad (acceptCall) — si se rechaza, se restaura tal
         // cual (rejectCall).
         const busyState = callStateRef.current
         if ((busyState === 'active' || busyState === 'calling') && callPeerRef.current) {
-          pendingHangupRef.current = { type: '1to1', peer: callPeerRef.current, callType: callTypeRef.current, callState: busyState }
+          pendingHangupRef.current = { type: '1to1', peer: callPeerRef.current, peerDevice: callPeerDeviceRef.current, callType: callTypeRef.current, callState: busyState }
         } else if (groupCallJoinedRef.current) {
           pendingHangupRef.current = { type: 'group' }
         } else {
@@ -737,6 +787,11 @@ export default function GatOS({ player: initialPlayer, onLogout, onProfileUpdate
         }
         offerSdpRef.current  = msg.sdp
         callPeerRef.current  = msg.from_player
+        // Dispositivo del que llama — se manda de vuelta como target_device
+        // en la respuesta (aceptar/rechazar) para que el backend deje de
+        // sonar en el resto de dispositivos propios del que llama y enrute
+        // solo a este a partir de ahora.
+        callPeerDeviceRef.current = msg.from_device ?? null
         callTypeRef.current  = msg.callType ?? 'video'
         setCallPeer(msg.from_player)
         setCallType(msg.callType ?? 'video')
@@ -748,6 +803,11 @@ export default function GatOS({ player: initialPlayer, onLogout, onProfileUpdate
       }
       case 'call_answer':
         if (pcRef.current) {
+          // Quien llama no sabía todavía qué dispositivo del otro iba a
+          // contestar (el aviso sonó en todos) — a partir de aquí ya se
+          // sabe, y las siguientes señales (ice/media/end) van dirigidas
+          // solo a ese dispositivo.
+          callPeerDeviceRef.current = msg.from_device ?? null
           await pcRef.current.setRemoteDescription({ type: 'answer', sdp: msg.sdp })
           setCallState('active')
           // Igual que en acceptCall: aterriza en la vista completa de la
@@ -775,6 +835,69 @@ export default function GatOS({ player: initialPlayer, onLogout, onProfileUpdate
         if (callStateRef.current !== 'active') notifyMissedCall(msg.from_player)
         cleanupCall()
         break
+      case 'call_handled_elsewhere':
+        // Esta llamada entrante se contestó o rechazó desde otro de mis
+        // dispositivos — dejar de sonar aquí en silencio, sin avisar de
+        // "llamada perdida" (no lo es, se cogió en otro sitio). Si este
+        // dispositivo ya la había contestado él mismo (no estaba "incoming"),
+        // no tocar nada — sería justo el propio eco de haber contestado aquí.
+        if (callStateRef.current === 'incoming') cleanupCall()
+        break
+      case 'call_active_elsewhere':
+        // Tengo una llamada 1-a-1 activa en otro de mis dispositivos (o
+        // acaba de dejar de haberla) — solo cambia el aviso, nunca la
+        // llamada de este dispositivo (si este ya la tuviera activa, no
+        // debería llegar este mensaje para ella, ver el filtro en el
+        // backend al conectar/mover).
+        setCallElsewhereInfo(msg.active ? { peer: msg.peer, callType: msg.callType } : null)
+        break
+      case 'call_taken_over':
+        // Se acaba de mover mi llamada a otro de mis dispositivos — colgar
+        // aquí en silencio (sin avisar al interlocutor: la llamada sigue,
+        // solo que ahora por el otro lado).
+        cleanupCall()
+        break
+      case 'call_move_here_ack':
+        // Confirmación de que puedo traerme aquí la llamada — iniciar la
+        // oferta "resume" hacia el interlocutor.
+        resumeCallOffer(msg.peer, msg.peerDevice, msg.callType)
+        break
+    }
+  }
+
+  // Traer a ESTE dispositivo la llamada 1-a-1 que tengo activa en otro —
+  // primero se lo pide al servidor (que sabe cuál es "el otro" y quién es
+  // el interlocutor); la oferta de verdad se manda al recibir la
+  // confirmación (call_move_here_ack, arriba).
+  function moveCallHere() {
+    sendWs({ type: 'call_move_here' })
+  }
+
+  // Oferta "resume" hacia el interlocutor de una llamada que ya estaba
+  // activa en otro de mis dispositivos — a diferencia de startCall, esto no
+  // deja el estado en "calling" (sonando), se marca activo de inmediato: la
+  // otra parte la acepta sola en cuanto le llega (no es una llamada nueva
+  // para ella, ver el "resume" en el caso 'call_offer' de arriba).
+  async function resumeCallOffer(peer, peerDevice, type) {
+    callPeerRef.current = peer
+    callPeerDeviceRef.current = peerDevice || null
+    callTypeRef.current = type
+    setCallPeer(peer)
+    setCallType(type)
+    setCallState('active')
+    setCallElsewhereInfo(null)
+    openAppRef.current?.('diskordkito')
+    try {
+      const [stream] = await Promise.all([getMedia(type === 'video'), refreshIceServers()])
+      const pc = createPC(peer.id)
+      stream.getTracks().forEach(t => pc.addTrack(t, stream))
+      const offer = await pc.createOffer()
+      await pc.setLocalDescription(offer)
+      sendWs({ type: 'call_offer', target_id: peer.id, target_device: peerDevice || undefined, sdp: pc.localDescription.sdp, callType: type, resume: true })
+      callRestoreRef.current?.()
+    } catch (err) {
+      console.error('resumeCallOffer:', err)
+      cleanupCall()
     }
   }
 
@@ -838,10 +961,41 @@ export default function GatOS({ player: initialPlayer, onLogout, onProfileUpdate
   }, [isRinging])
 
   // ── WebSocket global ────────────────────────────────────────────────────────
+  // Se reconecta sola con espera creciente si se cae — antes, si el
+  // WebSocket se cerraba por lo que fuera (el backend se reinicia al
+  // desplegar, un corte de red, el móvil pasa a segundo plano un rato...) la
+  // app se quedaba con una conexión muerta para siempre, sin avisar ni
+  // reintentar, hasta recargar la página a mano — con esto en medio, una
+  // llamada entrante nunca llegaba a sonar aunque la app pareciera abierta y
+  // normal. Reconectar no afecta a una llamada ya en marcha: el audio/vídeo
+  // va directo entre los dos extremos (P2P) una vez conectado, no depende de
+  // que este WebSocket de señalización siga vivo — solo señales nuevas
+  // (colgar, cambiar de dispositivo, etc.) tendrían que esperar a que
+  // reconecte, normalmente en menos de un segundo.
   useEffect(() => {
     if (!player.token) return
-    const ws = new WebSocket(`/ws?token=${player.token}`)
-    wsRef.current = ws
+    let cancelled = false
+    let reconnectTimer = null
+    let attempt = 0
+
+    function connectWs() {
+      const ws = new WebSocket(`/ws?token=${player.token}&device_id=${encodeURIComponent(getDeviceId())}`)
+      wsRef.current = ws
+      attachHandlers(ws)
+    }
+
+    function scheduleReconnect() {
+      if (cancelled) return
+      attempt += 1
+      // 1s, 2s, 4s... con tope en 15s — no machacar el servidor a lo loco si
+      // está de verdad caído, pero reaccionar casi al instante en el caso
+      // normal (un solo reinicio/corte puntual).
+      const delay = Math.min(1000 * 2 ** (attempt - 1), 15000)
+      reconnectTimer = setTimeout(connectWs, delay)
+    }
+
+    function attachHandlers(ws) {
+    ws.onopen = () => { attempt = 0 }
 
     ws.onmessage = (e) => {
       try {
@@ -919,9 +1073,20 @@ export default function GatOS({ player: initialPlayer, onLogout, onProfileUpdate
       } catch {}
     }
 
-    ws.onclose = () => { wsRef.current = null }
+    ws.onclose = () => {
+      if (wsRef.current === ws) wsRef.current = null
+      scheduleReconnect()
+    }
+    } // fin attachHandlers
 
-    return () => { ws.close(); wsRef.current = null }
+    connectWs()
+
+    return () => {
+      cancelled = true
+      clearTimeout(reconnectTimer)
+      wsRef.current?.close()
+      wsRef.current = null
+    }
   }, [player.token])
 
   // ── Perfil ──────────────────────────────────────────────────────────────────
@@ -1355,6 +1520,21 @@ case 'settings':    return <SettingsApp player={player} onProfileUpdate={onProfi
           )}
         </AnimatePresence>
 
+        {/* Llamada 1-a-1 activa en otro de mis dispositivos — solo si este
+            no está ya en una llamada (si lo está, ver arriba, no debería
+            llegar el aviso para la misma). */}
+        <AnimatePresence>
+          {callElsewhereInfo && callState === 'idle' && (
+            <CallElsewhereNotification
+              key={`elsewhere-${callElsewhereInfo.peer.id}`}
+              peer={callElsewhereInfo.peer}
+              callType={callElsewhereInfo.callType}
+              onMoveHere={moveCallHere}
+              onDismiss={() => setCallElsewhereInfo(null)}
+            />
+          )}
+        </AnimatePresence>
+
         {/* Sin nada que cambiar (solo Luniteca visible), el lanzador no
             aporta nada — se oculta en vez de mostrar un abanico de un icono.
             El abanico ofrece TODAS las apps visibles (como el Dock de
@@ -1458,6 +1638,19 @@ case 'settings':    return <SettingsApp player={player} onProfileUpdate={onProfi
             callType={incomingGroupCall.callType}
             onJoin={() => joinGroupCall(incomingGroupCall.callType)}
             onDismiss={() => setIncomingGroupCall(null)}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Llamada 1-a-1 activa en otro de mis dispositivos */}
+      <AnimatePresence>
+        {callElsewhereInfo && callState === 'idle' && (
+          <CallElsewhereNotification
+            key={`elsewhere-${callElsewhereInfo.peer.id}`}
+            peer={callElsewhereInfo.peer}
+            callType={callElsewhereInfo.callType}
+            onMoveHere={moveCallHere}
+            onDismiss={() => setCallElsewhereInfo(null)}
           />
         )}
       </AnimatePresence>
