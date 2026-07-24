@@ -1081,22 +1081,49 @@ async def search_books(q: str, db: Session = Depends(get_db), current: Player = 
 
 @app.get("/books/isbn/{isbn}")
 async def book_by_isbn(isbn: str, _: Player = Depends(get_current_player)):
+    """Usado tanto por el buscador manual (pegar/escribir un ISBN) como por el
+    escáner de código de barras — un mismo lookup exacto para los dos. Hace
+    falta una segunda llamada a Open Library (jscmd=data no trae la clave de
+    "work") para conseguir el open_lib_key con el que el resto de la app
+    detecta duplicados entre jugadores; si esa llamada falla no se rompe el
+    escaneo entero, simplemente ese libro no se deduplica hasta que alguien
+    lo vuelva a tocar (mismo patrón no-crítico que ya tenía el resto de
+    metadatos opcionales de Open Library)."""
     async with httpx.AsyncClient() as client:
         r = await client.get(
             f"https://openlibrary.org/api/books?bibkeys=ISBN:{isbn}&format=json&jscmd=data",
             timeout=10,
         )
-    data = r.json().get(f"ISBN:{isbn}", {})
-    if not data:
-        raise HTTPException(status_code=404, detail="ISBN no encontrado")
+        data = r.json().get(f"ISBN:{isbn}", {})
+        if not data:
+            raise HTTPException(status_code=404, detail="ISBN no encontrado")
+
+        open_lib_key = None
+        try:
+            edition = await client.get(f"https://openlibrary.org/isbn/{isbn}.json", timeout=10, follow_redirects=True)
+            if edition.status_code == 200:
+                works = edition.json().get("works") or []
+                if works:
+                    open_lib_key = works[0].get("key")
+        except Exception:
+            pass
+
     cover = data.get("cover", {})
+    subjects = [s.get("name") for s in (data.get("subjects") or []) if s.get("name")]
+    # publish_date viene en formatos sueltos ("August 31st 2010", "2010",
+    # "Aug 2010"...) — nunca garantizado como año a secas, así que se busca
+    # el primer grupo de 4 dígitos en vez de asumir que empieza por ahí
+    # (asumirlo se comía las primeras 4 letras de meses como "August").
+    year_match = re.search(r"\d{4}", data.get("publish_date") or "")
     return {
-        "title":     data.get("title"),
-        "author":    (data.get("authors") or [{}])[0].get("name"),
-        "cover_url": cover.get("medium") or cover.get("small"),
-        "isbn":      isbn,
-        "num_pages": data.get("number_of_pages"),
-        "year":      (data.get("publish_date") or "")[:4] or None,
+        "title":        data.get("title"),
+        "author":       (data.get("authors") or [{}])[0].get("name"),
+        "cover_url":    cover.get("medium") or cover.get("small"),
+        "isbn":         isbn,
+        "open_lib_key": open_lib_key,
+        "num_pages":    data.get("number_of_pages"),
+        "year":         int(year_match.group()) if year_match else None,
+        "genre":        _pick_genre(subjects),
     }
 
 @app.get("/books/synopsis/{open_lib_key:path}")

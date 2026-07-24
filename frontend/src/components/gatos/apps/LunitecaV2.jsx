@@ -4,6 +4,7 @@ import { useIsMobile } from '../../../utils/responsive'
 import { C } from './lunitecaTheme'
 import BulkAddModal from './BulkAddModal'
 import PlayerAvatar from '../PlayerAvatar'
+import BarcodeScannerModal from './BarcodeScannerModal'
 
 // Cierra un popover al tocar/clicar fuera de él — el onMouseLeave que ya
 // tenían no dispara nunca en táctil (no hay hover), así que sin esto en
@@ -119,6 +120,14 @@ function IconFilter({ size = 14, color = 'currentColor' }) {
   return (
     <svg width={size} height={size} viewBox="0 0 14 14" fill="none" style={{ display: 'block', flexShrink: 0 }}>
       <path d="M2 3h10l-4 5v3.5l-2-1V8L2 3z" fill={color} />
+    </svg>
+  )
+}
+function IconCamera({ size = 14, color = 'currentColor' }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" style={{ display: 'block' }}>
+      <path d="M2 5.5a1 1 0 0 1 1-1h1.6l.7-1.2h5.4l.7 1.2H13a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V5.5z" stroke={color} strokeWidth="1.4" strokeLinejoin="round"/>
+      <circle cx="8" cy="8.5" r="2.2" stroke={color} strokeWidth="1.4"/>
     </svg>
   )
 }
@@ -341,6 +350,7 @@ function SearchOverlay({ onClose, onAdd, hint }) {
   const [results, setResults] = useState([])
   const [loading, setLoading] = useState(false)
   const [error,   setError]   = useState(null)
+  const [showScanner, setShowScanner] = useState(false)
 
   async function search() {
     if (!q.trim()) return
@@ -355,6 +365,22 @@ function SearchOverlay({ onClose, onAdd, hint }) {
       const data = await r.json()
       setResults(data)
       if (data.length === 0) setError(`Sin resultados para "${q}"`)
+    } catch { setError('No se pudo contactar con el servidor.') }
+    setLoading(false)
+  }
+
+  // Un código de barras escaneado es un ISBN exacto — mismo lookup dedicado
+  // que usa el escáner del alta masiva, no la búsqueda de texto libre (esa
+  // es difusa y a veces no encuentra nada con solo el ISBN como consulta).
+  async function handleScan(isbn) {
+    setShowScanner(false)
+    setQ(isbn)
+    setLoading(true); setError(null); setResults([])
+    try {
+      const r = await fetch(`/api/books/isbn/${encodeURIComponent(isbn)}`, { credentials: 'include' })
+      if (!r.ok) { setError(`ISBN ${isbn} no encontrado`); setLoading(false); return }
+      const book = await r.json()
+      setResults([{ ...book, already_added: false }])
     } catch { setError('No se pudo contactar con el servidor.') }
     setLoading(false)
   }
@@ -405,11 +431,17 @@ function SearchOverlay({ onClose, onAdd, hint }) {
                 opacity: (q.trim().length > 0 && q.trim().length < 3) ? 0.4 : 1,
               }}>Buscar</button>
           }
+          <button onClick={() => setShowScanner(true)} title="Escanear código de barras" style={{
+            background: 'none', border: 'none', color: C.muted, cursor: 'pointer', padding: 0, flexShrink: 0,
+            display: 'flex', alignItems: 'center',
+          }}>
+            <IconCamera size={14} color={C.muted} />
+          </button>
           <button onClick={onClose} style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer', fontSize: 18, lineHeight: 1, padding: '0 0 0 2px', flexShrink: 0 }}>×</button>
         </div>
         <div style={{ overflowY: 'auto', flex: 1 }}>
           {!loading && !error && results.length === 0 && (
-            <p style={{ color: C.muted, fontSize: 12, textAlign: 'center', padding: '24px 16px' }}>Escribe un título, autor o ISBN y pulsa Buscar</p>
+            <p style={{ color: C.muted, fontSize: 12, textAlign: 'center', padding: '24px 16px' }}>Escribe un título, autor o ISBN y pulsa Buscar, o escanea el código de barras</p>
           )}
           {!loading && error && (
             <p style={{ color: C.muted, fontSize: 12, textAlign: 'center', padding: '24px 16px' }}>{error}</p>
@@ -417,6 +449,11 @@ function SearchOverlay({ onClose, onAdd, hint }) {
           {results.map((b, i) => <SearchResult key={i} book={b} onAdd={onAdd} />)}
         </div>
       </motion.div>
+      <AnimatePresence>
+        {showScanner && (
+          <BarcodeScannerModal onDetect={handleScan} onClose={() => setShowScanner(false)} />
+        )}
+      </AnimatePresence>
     </motion.div>
   )
 }

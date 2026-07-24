@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import { C } from './lunitecaTheme'
+import BarcodeScannerModal from './BarcodeScannerModal'
 
 let _rowId = 1
 function newRow(title = '') {
@@ -37,6 +38,14 @@ function IconPlus({ size = 12, color = 'currentColor' }) {
     </svg>
   )
 }
+function IconCamera({ size = 13, color = 'currentColor' }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 14 14" fill="none" style={{ display: 'block', flexShrink: 0 }}>
+      <path d="M1.5 4.5a1 1 0 0 1 1-1h1.3l.6-1h5.2l.6 1h1.3a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1h-9a1 1 0 0 1-1-1v-6z" stroke={color} strokeWidth="1.2" strokeLinejoin="round" />
+      <circle cx="7" cy="7.5" r="2" stroke={color} strokeWidth="1.2" />
+    </svg>
+  )
+}
 function IconCheck({ size = 12, color = 'currentColor' }) {
   return (
     <svg width={size} height={size} viewBox="0 0 12 12" fill="none" style={{ display: 'block', flexShrink: 0 }}>
@@ -65,6 +74,44 @@ export default function BulkAddModal({ onClose, onImported }) {
   const [formErr, setFormErr] = useState('')
   // Solo una fila puede tener el desplegable de resultados abierto a la vez.
   const [openSearchKey, setOpenSearchKey] = useState(null)
+  const [showScanner,   setShowScanner]   = useState(false)
+  const [scanFeedback,  setScanFeedback]  = useState('')
+  const [scanCount,     setScanCount]     = useState(0)
+
+  // Un código de barras es un ISBN exacto — lookup dedicado (no la búsqueda
+  // de texto libre que usa la lupa de cada fila) para no fallar cuando el
+  // ISBN solo no basta como consulta de texto. Cada escaneo bueno añade una
+  // fila ya encontrada (o reutiliza la primera si sigue en blanco, para no
+  // dejar una fila vacía delante de la primera escaneada), lista para
+  // retocar estado/fechas antes de "Procesar todo" — la cámara se queda
+  // abierta para seguir escaneando el siguiente.
+  async function handleScan(isbn) {
+    // Volver a leer el mismo código (típico si la cámara lo reconoce dos
+    // veces seguidas, o si simplemente ya se escaneó antes) no debe meterlo
+    // dos veces en la lista.
+    if (rows.some(r => r.matched?.isbn === isbn)) {
+      setScanFeedback(`Ya está en la lista: ${rows.find(r => r.matched?.isbn === isbn).title}`)
+      return
+    }
+    setScanFeedback(`Buscando ${isbn}…`)
+    try {
+      const r = await fetch(`/api/books/isbn/${encodeURIComponent(isbn)}`, { credentials: 'include' })
+      if (!r.ok) { setScanFeedback(`ISBN ${isbn} no encontrado`); return }
+      const book = await r.json()
+      setRows(rs => {
+        // Puede haberse escaneado otra vez mientras la petición estaba en
+        // vuelo — comprobarlo también aquí, contra el estado más reciente.
+        if (rs.some(r2 => r2.matched?.isbn === isbn)) return rs
+        const blank = rs.length === 1 && !rs[0].title.trim() && !rs[0].matched
+        const row = { ...newRow(book.title), author: book.author || '', matched: book }
+        return blank ? [row] : [...rs, row]
+      })
+      setScanCount(c => c + 1)
+      setScanFeedback(`Añadido: ${book.title}`)
+    } catch {
+      setScanFeedback('Error al buscar el ISBN — comprueba la conexión.')
+    }
+  }
 
   function patchRow(key, patch) {
     setRows(rs => rs.map(r => r.key === key ? { ...r, ...patch } : r))
@@ -157,6 +204,11 @@ export default function BulkAddModal({ onClose, onImported }) {
       if (!r.ok) { setFormErr('Error al procesar — inténtalo de nuevo.'); return }
       const data = await r.json()
       setResults(data.results)
+      // Vaciar la lista tras procesar — si no, un segundo "Procesar todo"
+      // (por error, o al reabrir el modal sin fijarse) volvería a mandar los
+      // mismos libros otra vez, duplicándolos en la estantería.
+      setRows([newRow()])
+      setScanCount(0)
       onImported?.()
     } finally {
       setProcessing(false)
@@ -312,13 +364,22 @@ export default function BulkAddModal({ onClose, onImported }) {
             </div>
           ))}
 
-          <button onClick={addRow} style={{
-            alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: 6,
-            background: 'transparent', border: `1px dashed ${C.border}`, borderRadius: 8,
-            padding: '6px 12px', color: C.sub, cursor: 'pointer', fontSize: 12,
-          }}>
-            <IconPlus color={C.sub} /> Añadir fila
-          </button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={addRow} style={{
+              alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: 6,
+              background: 'transparent', border: `1px dashed ${C.border}`, borderRadius: 8,
+              padding: '6px 12px', color: C.sub, cursor: 'pointer', fontSize: 12,
+            }}>
+              <IconPlus color={C.sub} /> Añadir fila
+            </button>
+            <button onClick={() => { setScanFeedback(''); setShowScanner(true) }} style={{
+              alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: 6,
+              background: 'transparent', border: `1px dashed ${C.border}`, borderRadius: 8,
+              padding: '6px 12px', color: C.sub, cursor: 'pointer', fontSize: 12,
+            }}>
+              <IconCamera color={C.sub} /> Escanear código de barras
+            </button>
+          </div>
 
           {formErr && <p style={{ fontSize: 12, color: '#ef4444', margin: 0 }}>{formErr}</p>}
 
@@ -360,6 +421,17 @@ export default function BulkAddModal({ onClose, onImported }) {
           </button>
         </div>
       </motion.div>
+      <AnimatePresence>
+        {showScanner && (
+          <BarcodeScannerModal
+            continuous
+            scanCount={scanCount}
+            feedback={scanFeedback}
+            onDetect={handleScan}
+            onClose={() => setShowScanner(false)}
+          />
+        )}
+      </AnimatePresence>
     </motion.div>
   )
 }
