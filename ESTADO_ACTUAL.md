@@ -1,6 +1,8 @@
 # Puchi — Estado actual
 
-> Documento único de contexto para sesiones de Claude Code. Sustituye a `roadmap.md` y a `memory/*.md`. Última sesión: 2026-07-24.
+> Documento único de contexto para sesiones de Claude Code. Sustituye a `roadmap.md` y a `memory/*.md`. Última sesión: 2026-08-05.
+>
+> **Desplegado en producción** menú inferior en móvil (sustituye al lanzador flotante), tema oscuro/claro en Luniteca, portadas de la vista de lista a tamaño uniforme según el alto real de cada fila, botón para borrar fechas de libros Leídos sin fecha exacta, y el arreglo del backend que impedía borrar `started_at`/`finished_at` de verdad — `git push` + `git pull` en el mini PC, `docker-compose restart backend` (sin migraciones, solo el fix de `ShelfUpdateRequest`) y `npm run build` del frontend. Verificado: sitio y API responden, bundle nuevo (`index-CA3vOHfa.js`) confirmado en el HTML servido, backend arrancado sin errores, `coturn`/`db` sin tocar (21h de uptime, sin reiniciar). Además, tras el corte de luz de esta misma sesión (pila CMOS agotada, ver sección de backups): backups diarios automáticos de la BBDD de prod (cron + pen USB montado en `/mnt/backups`, ver "Backups de producción → dev").
 >
 > **Desplegado en producción** llamadas multi-dispositivo (no se cortan al entrar con otro dispositivo, y se pueden mover entre ellos) + reconexión automática del WebSocket + rediseño móvil de la carga masiva de libros — `git push` + `git pull` en el mini PC, `docker-compose restart backend` (sin migraciones, solo estado en memoria nuevo) y `npm run build` del frontend. Verificado: sitio y API responden, bundle nuevo (`index-BlSxiOzE.js`) confirmado en el HTML servido, backend arrancado sin errores, `coturn`/`db` sin tocar.
 >
