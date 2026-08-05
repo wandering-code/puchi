@@ -20,12 +20,12 @@ function clamp(v, min, max) {
   return Math.min(Math.max(v, min), max)
 }
 
-function loadPos(key) {
+function loadPos(key, fallback) {
   try {
     const saved = JSON.parse(localStorage.getItem(key))
     if (saved && typeof saved.left === 'number' && typeof saved.bottom === 'number') return saved
   } catch {}
-  return DEFAULT_POS
+  return fallback
 }
 
 function PiPAvatarFallback({ player, size = 56 }) {
@@ -51,9 +51,9 @@ function PiPAvatarFallback({ player, size = 56 }) {
   )
 }
 
-export default function CallPiP({ playerId, stream, cameraOff, speakerPlayer, participantCount, onRestore }) {
+export default function CallPiP({ playerId, stream, cameraOff, speakerPlayer, participantCount, onRestore, bottomOffset = 0 }) {
   const posKey = `gatos_call_pip_pos_${playerId}`
-  const [pos, setPos] = useState(() => loadPos(posKey))
+  const [pos, setPos] = useState(() => loadPos(posKey, { left: DEFAULT_POS.left, bottom: DEFAULT_POS.bottom + bottomOffset }))
   const dragRef = useRef(null)
   const suppressClickRef = useRef(false)
 

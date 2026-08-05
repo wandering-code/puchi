@@ -2,19 +2,30 @@
 // (fondo azul-grisáceo oscuro, acento "blurple"). En su propio archivo para
 // que LunitecaV2.jsx y sus modales (BulkAddModal, etc.) puedan
 // compartirlos sin crear una importación circular entre ellos.
+//
+// Cada valor es una variable CSS (definida en index.css, dentro de
+// `.luniteca-root` / `.luniteca-root.luni-light`) en vez de un color fijo,
+// para poder soportar modo oscuro/claro sin tocar los ~400 sitios que ya
+// usan `C.xxx` — solo hace falta que el contenedor raíz de Luniteca lleve
+// la clase `luniteca-root` (y `luni-light` cuando corresponda).
 export const C = {
-  bg:        '#111827',
-  surface:   '#1e1f2e',
-  surfaceHi: '#2b2d3d',
-  border:    'rgba(255,255,255,0.07)',
-  accent:    '#5865f2',
-  accentBg:  'rgba(88,101,242,0.12)',
-  accentBd:  'rgba(88,101,242,0.35)',
-  text:      '#f2f3f5',
-  sub:       '#949ba4',
-  muted:     '#6d7079',
-  read:      '#23a55a',
-  reading:   '#5865f2',
-  want:      '#80848e',
-  dropped:   '#ed4245',
+  bg:        'var(--luni-bg)',
+  surface:   'var(--luni-surface)',
+  surfaceHi: 'var(--luni-surfaceHi)',
+  border:    'var(--luni-border)',
+  accent:    'var(--luni-accent)',
+  accentBg:  'var(--luni-accentBg)',
+  accentBd:  'var(--luni-accentBd)',
+  text:      'var(--luni-text)',
+  sub:       'var(--luni-sub)',
+  muted:     'var(--luni-muted)',
+  read:      'var(--luni-read)',
+  reading:   'var(--luni-reading)',
+  want:      'var(--luni-want)',
+  dropped:   'var(--luni-dropped)',
+  // Solo usados en la barra lateral de navegación (fuera de C originalmente,
+  // eran rgba(255,255,255,...) fijos) — ver LunitecaV2.jsx.
+  railInactive: 'var(--luni-railInactive)',
+  railHover:    'var(--luni-railHover)',
+  railDot:      'var(--luni-railDot)',
 }

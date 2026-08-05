@@ -1371,8 +1371,8 @@ async def update_personal_shelf(
     if body.progress           is not None: entry.progress           = body.progress
     if body.rating             is not None: entry.rating             = body.rating
     if body.notes              is not None: entry.notes              = body.notes
-    if body.started_at         is not None: entry.started_at         = body.started_at
-    if body.finished_at        is not None: entry.finished_at        = body.finished_at
+    if body.started_at         is not None: entry.started_at         = body.started_at  or None
+    if body.finished_at        is not None: entry.finished_at        = body.finished_at or None
     if body.sort_order         is not None: entry.sort_order         = body.sort_order
     if body.current_page       is not None: entry.current_page       = body.current_page
     if body.custom_total_pages is not None: entry.custom_total_pages = body.custom_total_pages

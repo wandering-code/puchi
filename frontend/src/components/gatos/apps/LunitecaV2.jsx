@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useIsMobile } from '../../../utils/responsive'
 import { C } from './lunitecaTheme'
@@ -166,6 +166,16 @@ function IconX({ size = 13, color = 'currentColor' }) {
     </svg>
   )
 }
+function IconCalendarOff({ size = 13, color = 'currentColor' }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" style={{ display: 'block' }}>
+      <rect x="2" y="3.2" width="12" height="10.8" rx="2" stroke={color} strokeWidth="1.3" />
+      <path d="M2 6.4h12" stroke={color} strokeWidth="1.3" />
+      <path d="M5.2 1.6v2.4M10.8 1.6v2.4" stroke={color} strokeWidth="1.3" strokeLinecap="round" />
+      <path d="M6 9.2l4 4M10 9.2l-4 4" stroke={color} strokeWidth="1.3" strokeLinecap="round" />
+    </svg>
+  )
+}
 function IconBack({ size = 14, color = 'currentColor' }) {
   return (
     <svg width={size} height={size} viewBox="0 0 16 16" fill="none" style={{ display: 'block' }}>
@@ -275,6 +285,23 @@ function IconImport({ size = 14, color = 'currentColor' }) {
     <svg width={size} height={size} viewBox="0 0 14 14" fill="none" style={{ display: 'block', flexShrink: 0 }}>
       <path d="M7 1v7M4.2 5.5L7 8.3l2.8-2.8" stroke={color} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
       <path d="M1.5 9.5v2A1.5 1.5 0 0 0 3 13h8a1.5 1.5 0 0 0 1.5-1.5v-2" stroke={color} strokeWidth="1.4" strokeLinecap="round" />
+    </svg>
+  )
+}
+function IconSun({ size = 14, color = 'currentColor' }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" style={{ display: 'block' }}>
+      <circle cx="8" cy="8" r="3.2" stroke={color} strokeWidth="1.4" />
+      <path d="M8 1.3v1.7M8 13v1.7M2.6 8H1M15 8h-1.6M3.5 3.5l1.2 1.2M11.3 11.3l1.2 1.2M12.5 3.5l-1.2 1.2M4.7 11.3l-1.2 1.2"
+        stroke={color} strokeWidth="1.4" strokeLinecap="round" />
+    </svg>
+  )
+}
+function IconMoon({ size = 14, color = 'currentColor' }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" style={{ display: 'block' }}>
+      <path d="M13.5 9.8A5.8 5.8 0 1 1 6.2 2.5a4.6 4.6 0 0 0 7.3 7.3Z"
+        stroke={color} strokeWidth="1.4" strokeLinejoin="round" />
     </svg>
   )
 }
@@ -1504,9 +1531,10 @@ function BookDetailFull({ entry, shelf, onBack, onUpdateEntry, onUpdateBook, onD
               <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 16 }}>
                 <div>
                   {label('Inicio de lectura')}
-                  <input type="date" defaultValue={entry.started_at ? entry.started_at.slice(0, 10) : ''}
+                  <input type="date" key={`start-${entry.started_at || 'empty'}`}
+                    defaultValue={entry.started_at ? entry.started_at.slice(0, 10) : ''}
                     disabled={readOnly}
-                    onBlur={ev => onUpdateEntry(entry.id, { started_at: ev.target.value || null })}
+                    onBlur={ev => onUpdateEntry(entry.id, { started_at: ev.target.value })}
                     style={{ ...fieldStyle, colorScheme: 'dark' }} />
                 </div>
                 <AnimatePresence initial={false}>
@@ -1515,14 +1543,37 @@ function BookDetailFull({ entry, shelf, onBack, onUpdateEntry, onUpdateBook, onD
                       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}
                     >
                       {label(effectiveStatus === 'dropped' ? 'Fecha de dropeo' : 'Fin de lectura')}
-                      <input type="date" defaultValue={entry.finished_at ? entry.finished_at.slice(0, 10) : ''}
+                      <input type="date" key={`end-${entry.finished_at || 'empty'}`}
+                        defaultValue={entry.finished_at ? entry.finished_at.slice(0, 10) : ''}
                         disabled={readOnly}
-                        onBlur={ev => onUpdateEntry(entry.id, { finished_at: ev.target.value || null })}
+                        onBlur={ev => onUpdateEntry(entry.id, { finished_at: ev.target.value })}
                         style={{ ...fieldStyle, colorScheme: 'dark' }} />
                     </motion.div>
                   )}
                 </AnimatePresence>
               </div>
+
+              {/* Borrar fechas — para libros leídos hace tiempo cuya fecha
+                  exacta ya no se recuerda, mejor sin fecha que una inventada.
+                  Solo en "Leído" (no reading/dropped, a propósito: ahí la
+                  fecha de inicio/fin todavía tiene sentido tenerla exacta) y
+                  solo si hay algo que borrar. */}
+              {!readOnly && effectiveStatus === 'read' && (entry.started_at || entry.finished_at) && (
+                <button onClick={() => onUpdateEntry(entry.id, { started_at: '', finished_at: '' })}
+                  title="Borrar ambas fechas" style={{
+                    marginTop: 10, background: C.surfaceHi, border: `1px solid ${C.border}`,
+                    borderRadius: 8, padding: '7px 12px',
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    color: C.muted, fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                    transition: 'background 0.15s, color 0.15s, border-color 0.15s',
+                  }}
+                  onMouseEnter={ev => { ev.currentTarget.style.background = C.accentBg; ev.currentTarget.style.color = C.accent; ev.currentTarget.style.borderColor = C.accentBd }}
+                  onMouseLeave={ev => { ev.currentTarget.style.background = C.surfaceHi; ev.currentTarget.style.color = C.muted; ev.currentTarget.style.borderColor = C.border }}
+                >
+                  <IconCalendarOff />
+                  No recuerdo la fecha exacta
+                </button>
+              )}
             </motion.div>
           )}
         </AnimatePresence>
@@ -1561,70 +1612,105 @@ function BookDetailFull({ entry, shelf, onBack, onUpdateEntry, onUpdateBook, onD
   )
 }
 
+// Fila individual — separada de ListRows para poder medir con ResizeObserver
+// el alto real del bloque de texto (título → fecha) de CADA fila. Ese alto
+// no se usa directo para la portada de la propia fila (si no, un libro "por
+// leer", con menos líneas, tendría una portada más pequeña que uno "leído"
+// con fecha/estrellas) — se reporta hacia arriba (onMeasure) y quien decide
+// el alto real de la portada (coverH) es PersonalShelfSections, con el
+// máximo de TODAS las filas visibles a la vez, para que todas las portadas
+// del mismo listado midan igual sea cual sea el contenido de cada una.
+//
+// Un truco solo de CSS (aspect-ratio + align-self:stretch en la propia
+// portada) no serviría aquí ni aunque quisiéramos el alto por fila: en una
+// fila (eje principal = ancho), el ancho de un item flex se resuelve ANTES
+// de que el estirado del alto cruzado se aplique, así que no hay forma de
+// derivar el ancho a partir de un alto que todavía no existe en esa pasada
+// — de ahí medir de verdad en vez de confiar en que el navegador lo
+// resuelva solo.
+function ListRow({ entry: e, onSelect, renderActions, highlighted, coverH, onMeasure }) {
+  const st          = STATUSES.find(s => s.id === e.status)
+  const total       = e.custom_total_pages || e.book.num_pages
+  const pct         = total && e.current_page != null ? Math.min(Math.round(e.current_page / total * 100), 100) : Math.round((e.progress || 0) * 100)
+  const textRef     = useRef(null)
+
+  useEffect(() => {
+    const el = textRef.current
+    if (!el) return
+    const ro = new ResizeObserver(([entry]) => {
+      const h = Math.round(entry.contentRect.height)
+      if (h > 0) onMeasure(e.id, h)
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [e.id, onMeasure])
+
+  return (
+    <motion.div layout exit={BOOK_DELETE_EXIT} transition={BOOK_DELETE_TRANSITION} style={{
+      width: '100%', display: 'flex', alignItems: 'center',
+      borderRadius: 10, marginBottom: 2, transition: 'background 0.1s',
+      background: highlighted ? C.accentBg : 'transparent',
+      border: `1px solid ${highlighted ? C.accentBd : 'transparent'}`,
+    }}
+      onMouseEnter={ev => { ev.currentTarget.style.background = highlighted ? C.accentBg : C.surfaceHi }}
+      onMouseLeave={ev => { ev.currentTarget.style.background = highlighted ? C.accentBg : 'transparent' }}
+    >
+      <button onClick={() => onSelect(e)} style={{
+        flex: 1, minWidth: 0, background: 'transparent', border: 'none',
+        cursor: 'pointer', padding: 10,
+        display: 'flex', gap: 12, alignItems: 'center', textAlign: 'left', outline: 'none',
+      }}>
+        <Cover url={e.book.cover_url} w={Math.round(coverH * (2 / 3))} h={coverH} radius={5} />
+        <div ref={textRef} style={{ flex: 1, overflow: 'hidden', minWidth: 0 }}>
+          <p style={{ fontSize: 13, color: C.text, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{e.book.title}</p>
+          <p style={{ fontSize: 11, color: C.sub, marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{e.book.author}</p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 6 }}>
+            <span style={{ width: 5, height: 5, borderRadius: '50%', background: st?.color, flexShrink: 0 }} />
+            <span style={{ fontSize: 10, color: C.muted }}>{st?.label}</span>
+            {e.status === 'reading' && total && e.current_page != null && <span style={{ fontSize: 10, color: C.accent, marginLeft: 2, fontWeight: 600 }}>{pct}%</span>}
+            {e.status === 'read' && e.rating > 0 && <span style={{ fontSize: 9, marginLeft: 2 }}>{renderStars(e.rating)}</span>}
+          </div>
+          {e.status === 'reading' && total && e.current_page != null && (
+            <div style={{ marginTop: 5, height: 2, borderRadius: 1, background: C.surfaceHi }}>
+              <div style={{ height: '100%', borderRadius: 1, background: C.accent, width: `${pct}%` }} />
+            </div>
+          )}
+          {e.status === 'reading' && e.started_at && (
+            <p style={{ fontSize: 10, color: C.muted, marginTop: 4 }}>Empezado el {fmtShortDate(e.started_at)}</p>
+          )}
+          {e.status === 'read' && (
+            <p style={{ fontSize: 10, color: C.muted, marginTop: 4 }}>
+              {(e.started_at || e.finished_at)
+                ? `${e.started_at ? fmtShortDate(e.started_at) : '?'} – ${e.finished_at ? fmtShortDate(e.finished_at) : '?'}`
+                : 'Sin fecha'}
+            </p>
+          )}
+          {e.status === 'dropped' && (e.started_at || e.finished_at) && (
+            <p style={{ fontSize: 10, color: C.muted, marginTop: 4 }}>
+              {e.started_at ? fmtShortDate(e.started_at) : '?'} – dropeado {e.finished_at ? fmtShortDate(e.finished_at) : '?'}
+            </p>
+          )}
+        </div>
+      </button>
+      {highlighted && <span style={{ marginRight: 10, flexShrink: 0, display: 'flex' }}><IconBookmark size={12} color={C.accent} /></span>}
+      {renderActions && (
+        <div onClick={ev => ev.stopPropagation()} style={{ display: 'flex', gap: 6, paddingRight: 10, flexShrink: 0 }}>
+          {renderActions(e)}
+        </div>
+      )}
+    </motion.div>
+  )
+}
+
 // ─── Vista lista — filas sueltas (sin envoltorio de scroll, se componen dentro
 // de PersonalShelfSections; Club ya no usa esta vista, tiene ClubBookCard) ────
-function ListRows({ books, onSelect, renderActions, isHighlighted = () => false }) {
+function ListRows({ books, onSelect, renderActions, isHighlighted = () => false, coverH, onMeasure }) {
   return (
     <AnimatePresence>
-      {books.map(e => {
-        const st          = STATUSES.find(s => s.id === e.status)
-        const total       = e.custom_total_pages || e.book.num_pages
-        const pct         = total && e.current_page != null ? Math.min(Math.round(e.current_page / total * 100), 100) : Math.round((e.progress || 0) * 100)
-        const highlighted = isHighlighted(e)
-        return (
-          <motion.div key={e.id} layout exit={BOOK_DELETE_EXIT} transition={BOOK_DELETE_TRANSITION} style={{
-            width: '100%', display: 'flex', alignItems: 'center',
-            borderRadius: 10, marginBottom: 2, transition: 'background 0.1s',
-            background: highlighted ? C.accentBg : 'transparent',
-            border: `1px solid ${highlighted ? C.accentBd : 'transparent'}`,
-          }}
-            onMouseEnter={ev => { ev.currentTarget.style.background = highlighted ? C.accentBg : C.surfaceHi }}
-            onMouseLeave={ev => { ev.currentTarget.style.background = highlighted ? C.accentBg : 'transparent' }}
-          >
-            <button onClick={() => onSelect(e)} style={{
-              flex: 1, minWidth: 0, background: 'transparent', border: 'none',
-              cursor: 'pointer', padding: 10,
-              display: 'flex', gap: 12, alignItems: 'center', textAlign: 'left', outline: 'none',
-            }}>
-              <Cover url={e.book.cover_url} w={38} h={55} radius={5} />
-              <div style={{ flex: 1, overflow: 'hidden', minWidth: 0 }}>
-                <p style={{ fontSize: 13, color: C.text, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{e.book.title}</p>
-                <p style={{ fontSize: 11, color: C.sub, marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{e.book.author}</p>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 6 }}>
-                  <span style={{ width: 5, height: 5, borderRadius: '50%', background: st?.color, flexShrink: 0 }} />
-                  <span style={{ fontSize: 10, color: C.muted }}>{st?.label}</span>
-                  {e.status === 'reading' && total && e.current_page != null && <span style={{ fontSize: 10, color: C.accent, marginLeft: 2, fontWeight: 600 }}>{pct}%</span>}
-                  {e.status === 'read' && e.rating > 0 && <span style={{ fontSize: 9, marginLeft: 2 }}>{renderStars(e.rating)}</span>}
-                </div>
-                {e.status === 'reading' && total && e.current_page != null && (
-                  <div style={{ marginTop: 5, height: 2, borderRadius: 1, background: C.surfaceHi }}>
-                    <div style={{ height: '100%', borderRadius: 1, background: C.accent, width: `${pct}%` }} />
-                  </div>
-                )}
-                {e.status === 'reading' && e.started_at && (
-                  <p style={{ fontSize: 10, color: C.muted, marginTop: 4 }}>Empezado el {fmtShortDate(e.started_at)}</p>
-                )}
-                {e.status === 'read' && (e.started_at || e.finished_at) && (
-                  <p style={{ fontSize: 10, color: C.muted, marginTop: 4 }}>
-                    {e.started_at ? fmtShortDate(e.started_at) : '?'} – {e.finished_at ? fmtShortDate(e.finished_at) : '?'}
-                  </p>
-                )}
-                {e.status === 'dropped' && (e.started_at || e.finished_at) && (
-                  <p style={{ fontSize: 10, color: C.muted, marginTop: 4 }}>
-                    {e.started_at ? fmtShortDate(e.started_at) : '?'} – dropeado {e.finished_at ? fmtShortDate(e.finished_at) : '?'}
-                  </p>
-                )}
-              </div>
-            </button>
-            {highlighted && <span style={{ marginRight: 10, flexShrink: 0, display: 'flex' }}><IconBookmark size={12} color={C.accent} /></span>}
-            {renderActions && (
-              <div onClick={ev => ev.stopPropagation()} style={{ display: 'flex', gap: 6, paddingRight: 10, flexShrink: 0 }}>
-                {renderActions(e)}
-              </div>
-            )}
-          </motion.div>
-        )
-      })}
+      {books.map(e => (
+        <ListRow key={e.id} entry={e} onSelect={onSelect} renderActions={renderActions}
+          highlighted={isHighlighted(e)} coverH={coverH} onMeasure={onMeasure} />
+      ))}
     </AnimatePresence>
   )
 }
@@ -1797,6 +1883,21 @@ function PersonalShelfSections({ entries, viewMode, sort, onSelect, renderAction
     }
   }
 
+  // Alto compartido de portada para toda la vista de lista — cada fila mide
+  // su propio bloque de texto y lo reporta aquí (ver ListRow), y todas usan
+  // el máximo entre TODAS las secciones (Leyendo/Leídos/Por leer/Dropeados),
+  // no solo la suya — si no, "Leídos" (con fecha) y "Por leer" (sin fecha,
+  // menos líneas) tendrían cada una su propio tamaño de portada distinto.
+  // Filtrado contra los ids que hay ahora mismo para no arrastrar el alto
+  // de un libro que ya no está en la lista (filtro/borrado).
+  const [rowHeights, setRowHeights] = useState({})
+  const onMeasureRow = useCallback((id, h) => {
+    setRowHeights(prev => (prev[id] === h ? prev : { ...prev, [id]: h }))
+  }, [])
+  const currentIds = new Set(entries.map(e => e.id))
+  const heightValues = Object.entries(rowHeights).filter(([id]) => currentIds.has(Number(id))).map(([, h]) => h)
+  const sharedCoverH = heightValues.length ? Math.max(...heightValues) : 55
+
   const Items = viewMode === 'grid' ? GridItems : ListRows
 
   if (reading.length === 0 && read.length === 0 && want.length === 0 && dropped.length === 0) {
@@ -1815,7 +1916,7 @@ function PersonalShelfSections({ entries, viewMode, sort, onSelect, renderAction
                 initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
                 transition={{ duration: 0.2, ease: 'easeInOut' }}
               >
-                <Items books={reading} onSelect={onSelect} renderActions={renderActions} isHighlighted={() => true} />
+                <Items books={reading} onSelect={onSelect} renderActions={renderActions} isHighlighted={() => true} coverH={sharedCoverH} onMeasure={onMeasureRow} />
               </motion.div>
             )}
           </AnimatePresence>
@@ -1847,7 +1948,7 @@ function PersonalShelfSections({ entries, viewMode, sort, onSelect, renderAction
                           transition={{ duration: 0.2, ease: 'easeInOut' }}
                         >
                           <div style={{ padding: viewMode === 'grid' ? '10px 6px' : '10px 4px' }}>
-                            <Items books={yearGroups[y]} onSelect={onSelect} renderActions={renderActions} />
+                            <Items books={yearGroups[y]} onSelect={onSelect} renderActions={renderActions} coverH={sharedCoverH} onMeasure={onMeasureRow} />
                           </div>
                         </motion.div>
                       )}
@@ -1870,7 +1971,7 @@ function PersonalShelfSections({ entries, viewMode, sort, onSelect, renderAction
                 initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
                 transition={{ duration: 0.2, ease: 'easeInOut' }}
               >
-                <Items books={want} onSelect={onSelect} renderActions={renderActions} />
+                <Items books={want} onSelect={onSelect} renderActions={renderActions} coverH={sharedCoverH} onMeasure={onMeasureRow} />
               </motion.div>
             )}
           </AnimatePresence>
@@ -1890,7 +1991,7 @@ function PersonalShelfSections({ entries, viewMode, sort, onSelect, renderAction
                 initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
                 transition={{ duration: 0.2, ease: 'easeInOut' }}
               >
-                <Items books={dropped} onSelect={onSelect} renderActions={renderActions} />
+                <Items books={dropped} onSelect={onSelect} renderActions={renderActions} coverH={sharedCoverH} onMeasure={onMeasureRow} />
               </motion.div>
             )}
           </AnimatePresence>
@@ -3721,6 +3822,21 @@ export default function LunitecaV2({ player }) {
     localStorage.setItem(vmKey, mode)
     setViewMode(mode)
   }
+
+  // Tema oscuro/claro — PRUEBA (2026-08-05). Afecta a toda la app de
+  // Luniteca (Estantería/Club/Amigos, vía la clase en el contenedor raíz más
+  // abajo), aunque el botón solo vive en la barra de Mi estantería. Ver
+  // lunitecaTheme.js (C.* son variables CSS) e index.css (.luniteca-root /
+  // .luni-light) para los valores de cada tema.
+  const themeKey = `luni_theme_${player.id}`
+  const [theme, setTheme] = useState(() => localStorage.getItem(themeKey) || 'dark')
+  function toggleTheme() {
+    setTheme(t => {
+      const next = t === 'dark' ? 'light' : 'dark'
+      localStorage.setItem(themeKey, next)
+      return next
+    })
+  }
   const readCollapsedKey = `luni_shelf_read_collapsed_${player.id}`
   const [collapsedRead, setCollapsedRead] = useState(() => localStorage.getItem(readCollapsedKey) === '1')
   function toggleReadCollapsed() {
@@ -3904,7 +4020,7 @@ export default function LunitecaV2({ player }) {
   }
 
   return (
-    <div style={{
+    <div className={`luniteca-root${theme === 'light' ? ' luni-light' : ''}`} style={{
       display: 'flex', height: '100%',
       flexDirection: isMobile ? 'column' : 'row',
       background: C.bg, fontFamily: 'system-ui, -apple-system, sans-serif',
@@ -3923,7 +4039,7 @@ export default function LunitecaV2({ player }) {
         {visibleNav.map(item => {
           const Icon    = NAV_ICONS[item.id]
           const active  = nav === item.id
-          const iconColor = active ? C.accent : 'rgba(255,255,255,0.38)'
+          const iconColor = active ? C.accent : C.railInactive
           return (
             <button key={item.id} title={item.label}
               onClick={() => { setNav(item.id); setSelected(null) }}
@@ -3935,7 +4051,7 @@ export default function LunitecaV2({ player }) {
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 transition: 'all 0.15s',
               }}
-              onMouseEnter={e => { if (!active) e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
+              onMouseEnter={e => { if (!active) e.currentTarget.style.background = C.railHover }}
               onMouseLeave={e => { if (!active) e.currentTarget.style.background = 'transparent' }}
             >
               <Icon size={18} color={iconColor} />
@@ -3953,7 +4069,7 @@ export default function LunitecaV2({ player }) {
               style={{
                 width: nav === item.id ? 18 : 6, height: 6, borderRadius: 4,
                 border: 'none', padding: 0, cursor: 'pointer',
-                background: nav === item.id ? C.accent : 'rgba(255,255,255,0.18)',
+                background: nav === item.id ? C.accent : C.railDot,
                 transition: 'width 0.2s ease, background 0.2s ease',
               }}
             />
@@ -4094,6 +4210,15 @@ export default function LunitecaV2({ player }) {
                   }}>{icon}</button>
                 ))}
               </div>
+
+              {/* Tema oscuro/claro — PRUEBA */}
+              <button onClick={toggleTheme} title={theme === 'dark' ? 'Modo claro' : 'Modo oscuro'} style={{
+                background: C.surfaceHi, border: 'none', borderRadius: 8,
+                width: 32, height: 28, cursor: 'pointer', color: C.muted,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+              }}>
+                {theme === 'dark' ? <IconSun color={C.muted} /> : <IconMoon color={C.muted} />}
+              </button>
 
               <button onClick={() => setShowBulkImport(true)} title="Añadir varios libros de golpe" style={{
                 background: C.surfaceHi, border: 'none', borderRadius: 8,

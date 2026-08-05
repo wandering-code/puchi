@@ -3,7 +3,8 @@ import { AnimatePresence, motion } from 'framer-motion'
 import Window        from './Window'
 import MenuBar, { MENU_BAR_H } from './MenuBar'
 import Dock, { DOCK_RESERVED } from './Dock'
-import MobileLauncher, { MOBILE_TAB_APPS, visibleTabApps, launcherApps } from './MobileLauncher'
+import { MOBILE_TAB_APPS, visibleTabApps, launcherApps } from './MobileLauncher'
+import MobileBottomNav, { MOBILE_BOTTOM_NAV_H } from './MobileBottomNav'
 import { useIsMobile } from '../../utils/responsive'
 import { wallpaperCss } from '../../utils/wallpaper'
 import { getDeviceId } from '../../utils/deviceId'
@@ -1344,6 +1345,7 @@ case 'settings':    return <SettingsApp player={player} onProfileUpdate={onProfi
       speakerPlayer={pipSpeakerPlayer}
       participantCount={pipParticipantCount}
       onRestore={restoreCallView}
+      bottomOffset={isMobile && launcherApps(player).length > 1 ? MOBILE_BOTTOM_NAV_H + 8 : 0}
     />
   )
 
@@ -1451,7 +1453,8 @@ case 'settings':    return <SettingsApp player={player} onProfileUpdate={onProfi
             en cuanto se abren una vez — se navega a otra app con el
             lanzador flotante, igual que entre cualquiera de las tres. */}
         <div style={{
-          position: 'absolute', top: MENU_BAR_H, left: 0, right: 0, bottom: 0,
+          position: 'absolute', top: MENU_BAR_H, left: 0, right: 0,
+          bottom: `calc(${MOBILE_BOTTOM_NAV_H}px + env(safe-area-inset-bottom))`,
           overflow: 'hidden',
         }}>
           {[...tabApps, ...(mobileSettingsWindow ? ['settings'] : []), ...(mobileAdminWindow ? ['admin'] : [])].map(id => {
@@ -1535,12 +1538,12 @@ case 'settings':    return <SettingsApp player={player} onProfileUpdate={onProfi
           )}
         </AnimatePresence>
 
-        {/* Sin nada que cambiar (solo Luniteca visible), el lanzador no
-            aporta nada — se oculta en vez de mostrar un abanico de un icono.
-            El abanico ofrece TODAS las apps visibles (como el Dock de
-            escritorio), no solo las 3 de pestaña. */}
+        {/* Sin nada que cambiar (solo Luniteca visible), el menú no aporta
+            nada — se oculta. Ofrece TODAS las apps visibles (como el Dock de
+            escritorio), no solo las 3 de pestaña — mismo criterio que el
+            lanzador flotante que sustituye (ver launcherApps). */}
         {launcherApps(player).length > 1 && (
-          <MobileLauncher activeAppId={mobileActiveTabApp} onSelect={switchMobileApp} playerId={player.id} player={player} />
+          <MobileBottomNav activeAppId={mobileActiveTabApp} onSelect={switchMobileApp} player={player} />
         )}
 
         {callAudioSinks}
