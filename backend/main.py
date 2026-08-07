@@ -260,6 +260,18 @@ def _migrate():
         # NULL se usa la del libro (books.cover_url). Evita que elegir/subir una
         # portada distinta a la del catálogo se la cambie a todo el mundo.
         "ALTER TABLE personal_shelf ADD COLUMN IF NOT EXISTS cover_url VARCHAR",
+
+        # personal_shelf: veces leído (relecturas) — nuevo estado "rereading"
+        # (Releyendo) en el frontend, sin cambio de esquema propio (status
+        # sigue siendo VARCHAR libre, como "dropped" ya antes). Filas ya
+        # marcadas "Leído" se backfillan a 1 para que el contador no empiece
+        # en 0 en libros leídos antes de que existiera esta columna.
+        "ALTER TABLE personal_shelf ADD COLUMN IF NOT EXISTS times_read INTEGER NOT NULL DEFAULT 0",
+        "UPDATE personal_shelf SET times_read = 1 WHERE status = 'read' AND times_read = 0",
+
+        # activity: número de lectura al terminar (para "terminó X por 2ª vez"
+        # en el feed de Amigos) — solo relevante en eventos 'finished'.
+        "ALTER TABLE activity ADD COLUMN IF NOT EXISTS times_read INTEGER",
     ]
     with engine.connect() as conn:
         for stmt in stmts:
@@ -1202,6 +1214,7 @@ class ShelfUpdateRequest(BaseModel):
     finished_at:        Optional[str]   = None
     sort_order:         Optional[int]   = None
     cover_url:          Optional[str]   = None   # "" o null → volver a la portada del libro
+    times_read:         Optional[int]   = None   # editable a mano (ver "Releyendo")
 
 @app.get("/shelf/personal")
 def get_personal_shelf(
@@ -1217,8 +1230,8 @@ def get_personal_shelf(
     )
     return [_shelf_entry_out(e, hide_notes=(target_id != current.id)) for e in entries]
 
-def _log_activity(db, player_id: int, book_id: int, event_type: str, rating: float = None):
-    db.add(Activity(player_id=player_id, book_id=book_id, event_type=event_type, rating=rating))
+def _log_activity(db, player_id: int, book_id: int, event_type: str, rating: float = None, times_read: int = None):
+    db.add(Activity(player_id=player_id, book_id=book_id, event_type=event_type, rating=rating, times_read=times_read))
 
 @app.post("/shelf/personal")
 async def add_to_personal_shelf(
@@ -1237,13 +1250,14 @@ async def add_to_personal_shelf(
     entry = PersonalShelf(
         player_id=current.id, book_id=book.id,
         status=body.status, sort_order=max_order,
+        times_read=1 if body.status == 'read' else 0,
     )
     db.add(entry)
     _log_activity(db, current.id, book.id, 'added')
     if body.status == 'reading':
         _log_activity(db, current.id, book.id, 'started')
     elif body.status == 'read':
-        _log_activity(db, current.id, book.id, 'finished')
+        _log_activity(db, current.id, book.id, 'finished', times_read=entry.times_read)
     db.commit()
     db.refresh(entry)
     await _notify_luni("activity")
@@ -1337,6 +1351,7 @@ async def bulk_add_personal_shelf(
                 folder=folder, notes=raw.get("notes") or None,
                 started_at=started_at, finished_at=finished_at,
                 sort_order=next_order,
+                times_read=1 if status == "read" else 0,
             )
             db.add(entry)
             next_order += 1
@@ -1345,7 +1360,7 @@ async def bulk_add_personal_shelf(
             if status == "reading":
                 _log_activity(db, current.id, book.id, "started")
             elif status == "read":
-                _log_activity(db, current.id, book.id, "finished", rating=rating)
+                _log_activity(db, current.id, book.id, "finished", rating=rating, times_read=entry.times_read)
 
             db.commit()
             results.append({"index": i, "ok": True, "title": title})
@@ -1374,6 +1389,7 @@ async def update_personal_shelf(
     if body.started_at         is not None: entry.started_at         = body.started_at  or None
     if body.finished_at        is not None: entry.finished_at        = body.finished_at or None
     if body.sort_order         is not None: entry.sort_order         = body.sort_order
+    if body.times_read         is not None: entry.times_read         = body.times_read
     if body.current_page       is not None: entry.current_page       = body.current_page
     if body.custom_total_pages is not None: entry.custom_total_pages = body.custom_total_pages
     if body.folder             is not None: entry.folder             = body.folder or None
@@ -1388,10 +1404,31 @@ async def update_personal_shelf(
         if body.status == 'reading':
             _log_activity(db, current.id, entry.book_id, 'started')
         elif body.status == 'read':
-            _log_activity(db, current.id, entry.book_id, 'finished', rating=entry.rating)
+            _log_activity(db, current.id, entry.book_id, 'finished', rating=entry.rating, times_read=entry.times_read)
+    # Puntuar (o corregir la puntuación) NUNCA crea actividad nueva — solo
+    # actualiza en el sitio la de "terminó" más reciente de este libro, si
+    # existe. Así un tropiezo puntuando en el móvil (fácil de tocar la
+    # estrella que no tocaba) nunca deja rastro en el feed, y puntuar después
+    # de terminar sí que se refleja, en vez de quedarse "sin puntuación" para
+    # siempre en la tarjeta ya publicada.
+    rating_activity_updated = False
+    if body.rating is not None:
+        latest_finished = (
+            db.query(Activity)
+            .filter(
+                Activity.player_id == current.id,
+                Activity.book_id == entry.book_id,
+                Activity.event_type == 'finished',
+            )
+            .order_by(Activity.created_at.desc(), Activity.id.desc())
+            .first()
+        )
+        if latest_finished:
+            latest_finished.rating = entry.rating
+            rating_activity_updated = True
     db.commit()
     db.refresh(entry)
-    if status_changed:
+    if status_changed or rating_activity_updated:
         await _notify_luni("activity")
     return _shelf_entry_out(entry)
 
@@ -1444,6 +1481,7 @@ def get_activity_feed(
                 "id":         a.id,
                 "event_type": a.event_type,
                 "rating":     a.rating,
+                "times_read": a.times_read,
                 "created_at": a.created_at.isoformat() + 'Z' if a.created_at else None,
                 "player":     _player_out(a.player),
                 "book":       _book_out(a.book),
@@ -1935,6 +1973,7 @@ def _shelf_entry_out(e: PersonalShelf, hide_notes=False) -> dict:
         "book":        book_out,
         "own_cover_url": e.cover_url,
         "status":      e.status,
+        "times_read":         e.times_read,
         "progress":           e.progress,
         "current_page":       e.current_page,
         "custom_total_pages": e.custom_total_pages,

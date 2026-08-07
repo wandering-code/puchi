@@ -22,16 +22,36 @@ function useOutsideClose(active, onClose) {
   return ref
 }
 
+// Guardarraíl contra el doble-tap accidental en los botones de "confirmar
+// borrado" que sustituyen al icono de la papelera EN EL MISMO SITIO — un
+// doble-tap instintivo (muy típico en móvil, p.ej. al parar el scroll con el
+// dedo justo encima) toca primero la papelera y sin querer, medio segundo
+// después, el botón de confirmar que ha aparecido justo debajo del dedo,
+// borrando el libro sin ninguna confirmación real. Un libro borrado así no
+// deja rastro en Amigos (a diferencia de un cambio de estado), así que
+// parecía que "desaparecía solo". Ignora los taps sobre el botón de
+// confirmar durante los primeros ~500ms desde que aparece.
+function useConfirmGuard(active) {
+  const [armed, setArmed] = useState(false)
+  useEffect(() => {
+    if (!active) { setArmed(false); return }
+    const t = setTimeout(() => setArmed(true), 500)
+    return () => clearTimeout(t)
+  }, [active])
+  return armed
+}
+
 // ─── Design tokens ────────────────────────────────────────────────────────────
 // Paleta alineada con Diskordkito (fondo azul-grisáceo oscuro, acento
 // "blurple" de Discord). Vive en lunitecaTheme.js para compartirla con los
 // modales de esta app sin crear una importación circular.
 
 const STATUSES = [
-  { id: 'want_to_read', label: 'Por leer',  color: C.want    },
-  { id: 'reading',      label: 'Leyendo',   color: C.reading },
-  { id: 'read',         label: 'Leído',     color: C.read    },
-  { id: 'dropped',      label: 'Dropeado',  color: C.dropped },
+  { id: 'want_to_read', label: 'Por leer',   color: C.want      },
+  { id: 'reading',      label: 'Leyendo',    color: C.reading   },
+  { id: 'rereading',    label: 'Releyendo',  color: C.rereading },
+  { id: 'read',         label: 'Leído',      color: C.read      },
+  { id: 'dropped',      label: 'Dropeado',   color: C.dropped   },
 ]
 
 const NAV = [
@@ -1054,11 +1074,12 @@ function SynopsisBox({ synopsis, loading, expanded, onToggle }) {
 }
 
 // ─── Detalle completo ─────────────────────────────────────────────────────────
-function BookDetailFull({ entry, shelf, onBack, onUpdateEntry, onUpdateBook, onDelete, readOnly = false }) {
+function BookDetailFull({ entry, shelf, onBack, onUpdateEntry, onUpdateBook, onDelete, onAddToShelf, readOnly = false }) {
   const isMobile = useIsMobile()
   const [editing,          setEditing]          = useState(false)
   const [draft,            setDraft]            = useState({})
   const [confirmDelete,    setConfirmDelete]    = useState(false)
+  const confirmDeleteArmed = useConfirmGuard(confirmDelete)
   const [showCoverPicker,  setShowCoverPicker]  = useState(false)
   const [synopsis,         setSynopsis]         = useState(entry.book.synopsis || '')
   const [synopsisExpanded, setSynopsisExpanded] = useState(false)
@@ -1066,6 +1087,15 @@ function BookDetailFull({ entry, shelf, onBack, onUpdateEntry, onUpdateBook, onD
   const [folderValue,      setFolderValue]      = useState(entry.folder || '')
   const [showFolderMenu,   setShowFolderMenu]   = useState(false)
   const folderMenuRef = useOutsideClose(showFolderMenu, () => setShowFolderMenu(false))
+
+  // Panel "Añadir a mi estantería" — solo tiene sentido en modo consulta de
+  // una estantería ajena (readOnly + onAddToShelf). Mismo criterio de
+  // autorrelleno de fechas al elegir "Leído" que el resto de la app, con su
+  // propio botón para borrarlas (igual que al editar un libro propio).
+  const [addPanelOpen, setAddPanelOpen] = useState(false)
+  const [addDraft,     setAddDraft]     = useState({ status: 'want_to_read', started_at: '', finished_at: '' })
+  const [addSaving,    setAddSaving]    = useState(false)
+  const [addResult,    setAddResult]    = useState(null) // null | 'ok' | 'exists' | 'error'
 
   const status     = entry.status || 'want_to_read'
   const statusInfo = STATUSES.find(s => s.id === status)
@@ -1079,8 +1109,9 @@ function BookDetailFull({ entry, shelf, onBack, onUpdateEntry, onUpdateBook, onD
 
   // El estado activo en modo edición (para condicionales de páginas/fechas)
   const effectiveStatus = editing ? (draft.status || status) : status
-  const showProgressSection = effectiveStatus === 'reading' || effectiveStatus === 'read' || effectiveStatus === 'dropped'
+  const showProgressSection = effectiveStatus === 'reading' || effectiveStatus === 'rereading' || effectiveStatus === 'read' || effectiveStatus === 'dropped'
   const showEndDate = effectiveStatus === 'read' || effectiveStatus === 'dropped'
+  const showTimesRead = effectiveStatus === 'read' || effectiveStatus === 'rereading'
 
   // Carga sinopsis desde Open Library si no está guardada
   useEffect(() => {
@@ -1122,12 +1153,25 @@ function BookDetailFull({ entry, shelf, onBack, onUpdateEntry, onUpdateBook, onD
   function statusUpdates(newStatus) {
     const updates = { status: newStatus }
     if (newStatus === 'reading' && !entry.started_at) updates.started_at = today
+    if (newStatus === 'rereading') {
+      // Empezar una relectura: fecha de inicio nueva (la de la relectura, no
+      // la de la primera vez) y sin fecha de fin todavía — el progreso se
+      // reinicia igual que cualquier otro cambio de estado, más abajo. El
+      // contador de veces leído NO sube aquí, solo al volver a "Leído".
+      updates.started_at = today
+      updates.finished_at = ''
+    }
     if (newStatus === 'read') {
       if (!entry.started_at)  updates.started_at  = today
       if (!entry.finished_at) updates.finished_at = today
       // Al marcarlo leído, la página actual pasa a ser el total (si se
       // conoce) — da por hecho que se ha llegado hasta el final.
       if (total) updates.current_page = total
+      // Cada vez que el libro pasa a "Leído" desde cualquier otro estado
+      // suma una lectura (la primera vez pasa de 0 a 1, como antes de que
+      // existiera "Releyendo"). Editable a mano después, por si un cambio
+      // de estado accidental no debía contar como una lectura real.
+      updates.times_read = (entry.times_read || 0) + 1
     } else if (newStatus === 'dropped') {
       // "Fecha fin" para un dropeado es la fecha en la que se dejó — la
       // página actual no se toca, se queda donde lo dejó (a diferencia de
@@ -1144,6 +1188,36 @@ function BookDetailFull({ entry, shelf, onBack, onUpdateEntry, onUpdateBook, onD
   function changeStatus(newStatus) {
     if (newStatus === status) return
     onUpdateEntry(entry.id, statusUpdates(newStatus))
+  }
+
+  function addStatusChange(newStatus) {
+    setAddDraft(d => {
+      const next = { ...d, status: newStatus }
+      if (newStatus === 'read') {
+        if (!d.started_at)  next.started_at  = today
+        if (!d.finished_at) next.finished_at = today
+      }
+      return next
+    })
+  }
+
+  async function confirmAddToShelf() {
+    setAddSaving(true)
+    setAddResult(null)
+    const result = await onAddToShelf({
+      status:      addDraft.status,
+      started_at:  addDraft.status === 'read' ? addDraft.started_at  : '',
+      finished_at: addDraft.status === 'read' ? addDraft.finished_at : '',
+    })
+    setAddSaving(false)
+    setAddResult(result)
+    if (result === 'ok') {
+      setTimeout(() => {
+        setAddPanelOpen(false)
+        setAddResult(null)
+        setAddDraft({ status: 'want_to_read', started_at: '', finished_at: '' })
+      }, 1300)
+    }
   }
 
   async function saveEdit() {
@@ -1233,6 +1307,17 @@ function BookDetailFull({ entry, shelf, onBack, onUpdateEntry, onUpdateBook, onD
           <IconBack size={16} color="currentColor" />
         </button>
         <div style={{ display: 'flex', gap: 4 }}>
+          {readOnly && onAddToShelf && (
+            <button onClick={() => setAddPanelOpen(v => !v)} title="Añadir a mi estantería" style={{
+              background: addPanelOpen ? C.accentBg : 'none', border: `1px solid ${addPanelOpen ? C.accentBd : C.border}`,
+              borderRadius: 8, height: 28, padding: '0 10px', cursor: 'pointer', transition: 'all 0.15s',
+              display: 'flex', alignItems: 'center', gap: 6,
+              color: addPanelOpen ? C.accent : C.sub, fontSize: 11, fontWeight: 600,
+            }}>
+              <IconPlus size={11} color={addPanelOpen ? C.accent : C.sub} />
+              Añadir a mi estantería
+            </button>
+          )}
           {!readOnly && (editing ? (<>
             <button onClick={saveEdit} title="Guardar cambios" style={{
               background: C.accent, border: 'none', borderRadius: 8,
@@ -1262,10 +1347,11 @@ function BookDetailFull({ entry, shelf, onBack, onUpdateEntry, onUpdateBook, onD
             {confirmDelete ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                 <span style={{ fontSize: 11, color: 'rgba(239,68,68,0.8)', whiteSpace: 'nowrap' }}>¿Eliminar?</span>
-                <button onClick={onDelete} title="Confirmar eliminación" style={{
+                <button onClick={() => { if (confirmDeleteArmed) onDelete() }} title="Confirmar eliminación" style={{
                   background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.4)',
                   borderRadius: 8, width: 30, height: 28, cursor: 'pointer',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  opacity: confirmDeleteArmed ? 1 : 0.4, transition: 'opacity 0.2s',
                 }}>
                   <IconCheck size={13} color="#ef4444" />
                 </button>
@@ -1295,6 +1381,89 @@ function BookDetailFull({ entry, shelf, onBack, onUpdateEntry, onUpdateBook, onD
 
       {/* Contenido scrollable */}
       <div style={{ flex: 1, overflowY: 'auto', padding: 24, display: 'flex', flexDirection: 'column', gap: 22 }}>
+
+        <AnimatePresence initial={false}>
+          {addPanelOpen && (
+            <motion.div key="add-panel" layout
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              transition={{ duration: 0.2, ease: 'easeInOut' }}
+            >
+              <div style={{
+                background: C.surfaceHi, border: `1px solid ${C.border}`, borderRadius: 12,
+                padding: 16, display: 'flex', flexDirection: 'column', gap: 14,
+              }}>
+                <div>
+                  {label('Estado')}
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                    {STATUSES.map(opt => (
+                      <button key={opt.id} onClick={() => addStatusChange(opt.id)} style={{
+                        flex: '1 0 40%', border: 'none', borderRadius: 20, padding: '6px 0',
+                        cursor: 'pointer', fontSize: 11, fontWeight: 600, transition: 'all 0.15s',
+                        background: addDraft.status === opt.id ? opt.color : C.surface,
+                        color: addDraft.status === opt.id ? 'white' : C.muted,
+                      }}>{opt.label}</button>
+                    ))}
+                  </div>
+                </div>
+
+                <AnimatePresence initial={false}>
+                  {addDraft.status === 'read' && (
+                    <motion.div key="fechas-add" layout
+                      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}
+                    >
+                      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 12 }}>
+                        <div>
+                          {label('Inicio de lectura')}
+                          <input type="date" value={addDraft.started_at}
+                            onChange={ev => setAddDraft(d => ({ ...d, started_at: ev.target.value }))}
+                            style={{ ...fieldStyle, colorScheme: 'dark', background: C.surface }} />
+                        </div>
+                        <div>
+                          {label('Fin de lectura')}
+                          <input type="date" value={addDraft.finished_at}
+                            onChange={ev => setAddDraft(d => ({ ...d, finished_at: ev.target.value }))}
+                            style={{ ...fieldStyle, colorScheme: 'dark', background: C.surface }} />
+                        </div>
+                      </div>
+
+                      {/* Borrar fechas — mismo botón y mismo criterio que al
+                          editar un libro propio: mejor sin fecha que una
+                          inventada para las que se autorrellenan con hoy. */}
+                      {(addDraft.started_at || addDraft.finished_at) && (
+                        <button onClick={() => setAddDraft(d => ({ ...d, started_at: '', finished_at: '' }))}
+                          title="Borrar ambas fechas" style={{
+                            marginTop: 10, background: C.surface, border: `1px solid ${C.border}`,
+                            borderRadius: 8, padding: '7px 12px',
+                            display: 'flex', alignItems: 'center', gap: 6,
+                            color: C.muted, fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                            transition: 'background 0.15s, color 0.15s, border-color 0.15s',
+                          }}
+                          onMouseEnter={ev => { ev.currentTarget.style.background = C.accentBg; ev.currentTarget.style.color = C.accent; ev.currentTarget.style.borderColor = C.accentBd }}
+                          onMouseLeave={ev => { ev.currentTarget.style.background = C.surface; ev.currentTarget.style.color = C.muted; ev.currentTarget.style.borderColor = C.border }}
+                        >
+                          <IconCalendarOff />
+                          No recuerdo la fecha exacta
+                        </button>
+                      )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <button onClick={confirmAddToShelf} disabled={addSaving} style={{
+                    background: C.accent, border: 'none', borderRadius: 8, padding: '8px 16px',
+                    color: 'white', fontSize: 12, fontWeight: 700, cursor: 'pointer', opacity: addSaving ? 0.6 : 1,
+                  }}>
+                    {addSaving ? 'Añadiendo…' : 'Añadir a mi estantería'}
+                  </button>
+                  {addResult === 'ok'     && <span style={{ fontSize: 11, color: C.read, fontWeight: 600 }}>Añadido ✓</span>}
+                  {addResult === 'exists' && <span style={{ fontSize: 11, color: C.muted }}>Ya lo tienes en tu estantería</span>}
+                  {addResult === 'error'  && <span style={{ fontSize: 11, color: '#ef4444' }}>Error — inténtalo de nuevo</span>}
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Hero */}
         <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start' }}>
@@ -1429,20 +1598,30 @@ function BookDetailFull({ entry, shelf, onBack, onUpdateEntry, onUpdateBook, onD
                 <h2 style={{ fontSize: 17, color: C.text, fontWeight: 700, lineHeight: 1.3, margin: '0 0 4px' }}>{entry.book.title}</h2>
                 {entry.book.author && <p style={{ fontSize: 12, color: C.sub, margin: '0 0 3px' }}>{entry.book.author}</p>}
                 {entry.book.year   && <p style={{ fontSize: 11, color: C.muted, margin: '0 0 14px' }}>{entry.book.year}</p>}
-                <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
-                  <select value={status} onChange={ev => changeStatus(ev.target.value)} title="Cambiar estado" disabled={readOnly} style={{
-                    appearance: 'none', WebkitAppearance: 'none', MozAppearance: 'none',
-                    background: `${statusInfo?.color}22`, border: 'none', borderRadius: 20,
-                    padding: `4px ${readOnly ? 14 : 24}px 4px 20px`, fontSize: 11, fontWeight: 600, color: statusInfo?.color,
-                    cursor: readOnly ? 'default' : 'pointer', outline: 'none', colorScheme: 'dark', fontFamily: 'inherit',
-                  }}>
-                    {STATUSES.map(opt => <option key={opt.id} value={opt.id}>{opt.label}</option>)}
-                  </select>
-                  <span style={{ position: 'absolute', left: 11, width: 5, height: 5, borderRadius: '50%', background: statusInfo?.color, pointerEvents: 'none' }} />
-                  {!readOnly && (
-                    <span style={{ position: 'absolute', right: 8, display: 'flex', pointerEvents: 'none' }}>
-                      <IconChevronDown size={9} color={statusInfo?.color} />
-                    </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
+                    <select value={status} onChange={ev => changeStatus(ev.target.value)} title="Cambiar estado" disabled={readOnly} style={{
+                      appearance: 'none', WebkitAppearance: 'none', MozAppearance: 'none',
+                      background: `${statusInfo?.color}22`, border: 'none', borderRadius: 20,
+                      padding: `4px ${readOnly ? 14 : 24}px 4px 20px`, fontSize: 11, fontWeight: 600, color: statusInfo?.color,
+                      cursor: readOnly ? 'default' : 'pointer', outline: 'none', colorScheme: 'dark', fontFamily: 'inherit',
+                    }}>
+                      {STATUSES.map(opt => <option key={opt.id} value={opt.id}>{opt.label}</option>)}
+                    </select>
+                    <span style={{ position: 'absolute', left: 11, width: 5, height: 5, borderRadius: '50%', background: statusInfo?.color, pointerEvents: 'none' }} />
+                    {!readOnly && (
+                      <span style={{ position: 'absolute', right: 8, display: 'flex', pointerEvents: 'none' }}>
+                        <IconChevronDown size={9} color={statusInfo?.color} />
+                      </span>
+                    )}
+                  </div>
+                  {/* Veces leído — solo a partir de la 2ª, la 1ª se da por
+                      hecha con solo estar en "Leído" y no aporta nada nuevo. */}
+                  {(entry.times_read || 0) >= 2 && (
+                    <span style={{
+                      background: C.surfaceHi, borderRadius: 20, padding: '4px 10px',
+                      fontSize: 11, fontWeight: 600, color: C.sub,
+                    }}>×{entry.times_read} lecturas</span>
                   )}
                 </div>
                 {entry.book.genre && (
@@ -1579,6 +1758,30 @@ function BookDetailFull({ entry, shelf, onBack, onUpdateEntry, onUpdateBook, onD
         </AnimatePresence>
 
         <AnimatePresence initial={false}>
+          {showTimesRead && (
+            <motion.div key="veces-leido" layout
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              transition={{ duration: 0.2, ease: 'easeInOut' }}
+            >
+              <div>
+                {label('Veces leído')}
+                {readOnly ? (
+                  <p style={{ fontSize: 13, color: C.text, margin: 0 }}>{entry.times_read || 1}</p>
+                ) : (
+                  <input type="number" min="1" key={`times-${entry.times_read}`}
+                    defaultValue={entry.times_read || 1}
+                    onBlur={ev => {
+                      const v = parseInt(ev.target.value)
+                      if (v >= 1) onUpdateEntry(entry.id, { times_read: v })
+                    }}
+                    style={{ ...fieldStyle, width: 72, textAlign: 'center' }} />
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence initial={false}>
           {effectiveStatus === 'read' && (
             <motion.div key="puntuacion-notas" layout
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
@@ -1667,15 +1870,16 @@ function ListRow({ entry: e, onSelect, renderActions, highlighted, coverH, onMea
           <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 6 }}>
             <span style={{ width: 5, height: 5, borderRadius: '50%', background: st?.color, flexShrink: 0 }} />
             <span style={{ fontSize: 10, color: C.muted }}>{st?.label}</span>
-            {e.status === 'reading' && total && e.current_page != null && <span style={{ fontSize: 10, color: C.accent, marginLeft: 2, fontWeight: 600 }}>{pct}%</span>}
+            {(e.status === 'reading' || e.status === 'rereading') && total && e.current_page != null && <span style={{ fontSize: 10, color: C.accent, marginLeft: 2, fontWeight: 600 }}>{pct}%</span>}
             {e.status === 'read' && e.rating > 0 && <span style={{ fontSize: 9, marginLeft: 2 }}>{renderStars(e.rating)}</span>}
+            {(e.times_read || 0) >= 2 && <span style={{ fontSize: 9, color: C.muted, marginLeft: 2 }}>· ×{e.times_read}</span>}
           </div>
-          {e.status === 'reading' && total && e.current_page != null && (
+          {(e.status === 'reading' || e.status === 'rereading') && total && e.current_page != null && (
             <div style={{ marginTop: 5, height: 2, borderRadius: 1, background: C.surfaceHi }}>
               <div style={{ height: '100%', borderRadius: 1, background: C.accent, width: `${pct}%` }} />
             </div>
           )}
-          {e.status === 'reading' && e.started_at && (
+          {(e.status === 'reading' || e.status === 'rereading') && e.started_at && (
             <p style={{ fontSize: 10, color: C.muted, marginTop: 4 }}>Empezado el {fmtShortDate(e.started_at)}</p>
           )}
           {e.status === 'read' && (
@@ -1771,6 +1975,14 @@ function GridItems({ books, onSelect, isHighlighted = () => false, renderActions
                   boxShadow: '0 2px 6px rgba(0,0,0,0.5)',
                 }}><IconBookmark size={10} color="white" /></span>
               )}
+              {(e.times_read || 0) >= 2 && (
+                <span style={{
+                  position: 'absolute', top: 5, left: 5,
+                  background: 'rgba(0,0,0,0.65)', borderRadius: 10,
+                  padding: '2px 6px', fontSize: 10, fontWeight: 700, color: 'white',
+                  boxShadow: '0 2px 6px rgba(0,0,0,0.5)',
+                }}>×{e.times_read}</span>
+              )}
 
               {/* Panel de acciones — se despliega hacia arriba desde abajo, sobre la
                   propia portada (no debajo), mismo contenido que en la vista lista */}
@@ -1863,7 +2075,10 @@ function ShelfYearHeader({ label, count, collapsed, onToggle }) {
 
 function PersonalShelfSections({ entries, viewMode, sort, onSelect, renderActions, collapsedReading, onToggleReadingCollapsed, collapsedRead, onToggleReadCollapsed, collapsedWant, onToggleWantCollapsed, collapsedDropped, onToggleDroppedCollapsed, collapsedYears, onToggleYear }) {
 
-  const reading = entries.filter(e => e.status === 'reading')
+  // "Releyendo" se cuela en el mismo bloque fijado que "Leyendo" — ambos son
+  // lecturas activas, la diferencia (que ya no es la primera vez) la marca
+  // el propio badge de veces leído, no una sección aparte.
+  const reading = entries.filter(e => e.status === 'reading' || e.status === 'rereading')
   const read    = entries.filter(e => e.status === 'read')
   const want    = entries.filter(e => e.status === 'want_to_read')
   const dropped = entries.filter(e => e.status === 'dropped')
@@ -2004,6 +2219,7 @@ function PersonalShelfSections({ entries, viewMode, sort, onSelect, renderAction
 // ─── Acciones admin del club en vista Netflix (mismos botones que en lista) ───
 function ClubGridActions({ entry, onChoose, onEdit, onDelete, onDetail }) {
   const [confirmDel, setConfirmDel] = useState(false)
+  const armed = useConfirmGuard(confirmDel)
   const isActive = entry.status === 'active'
   const btnStyle = {
     background: 'transparent', border: `1px solid ${C.border}`,
@@ -2031,9 +2247,9 @@ function ClubGridActions({ entry, onChoose, onEdit, onDelete, onDetail }) {
         ? <button onClick={() => setConfirmDel(true)} title="Eliminar" style={btnStyle}>
             <IconTrash size={12} color={C.muted} />
           </button>
-        : <button onClick={() => { setConfirmDel(false); onDelete() }} title="Confirmar borrado" style={{
+        : <button onClick={() => { if (!armed) return; setConfirmDel(false); onDelete() }} title="Confirmar borrado" style={{
             ...btnStyle, background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.4)',
-            color: '#f87171', fontSize: 11,
+            color: '#f87171', fontSize: 11, opacity: armed ? 1 : 0.4, transition: 'opacity 0.2s',
           }}>✕</button>
       }
     </>
@@ -2043,6 +2259,7 @@ function ClubGridActions({ entry, onChoose, onEdit, onDelete, onDetail }) {
 // ─── Acciones rápidas de Mi estantería (lista y grid) ─────────────────────────
 function ShelfGridActions({ onOpenDetail, onDelete }) {
   const [confirmDel, setConfirmDel] = useState(false)
+  const armed = useConfirmGuard(confirmDel)
   const btnStyle = {
     background: 'transparent', border: `1px solid ${C.border}`,
     borderRadius: 6, width: 32, height: 32, cursor: 'pointer',
@@ -2060,9 +2277,9 @@ function ShelfGridActions({ onOpenDetail, onDelete }) {
         ? <button onClick={() => setConfirmDel(true)} title="Eliminar" style={btnStyle}>
             <IconTrash size={12} color={C.muted} />
           </button>
-        : <button onClick={() => { setConfirmDel(false); onDelete() }} title="Confirmar borrado" style={{
+        : <button onClick={() => { if (!armed) return; setConfirmDel(false); onDelete() }} title="Confirmar borrado" style={{
             ...btnStyle, background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.4)',
-            color: '#f87171', fontSize: 11,
+            color: '#f87171', fontSize: 11, opacity: armed ? 1 : 0.4, transition: 'opacity 0.2s',
           }}>✕</button>
       }
     </>
@@ -2080,6 +2297,7 @@ function ClubBookCard({ entry, isAdmin, onDelete, onEdit, onChoose, onDetail }) 
   const by        = entry.proposed_by
   const isActive  = entry.status === 'active'
   const [confirmDel, setConfirmDel] = useState(false)
+  const armed = useConfirmGuard(confirmDel)
 
   return (
     <div
@@ -2166,10 +2384,11 @@ function ClubBookCard({ entry, isAdmin, onDelete, onEdit, onChoose, onDetail }) 
                   borderRadius: 6, width: 26, height: 26,
                   cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
                 }}><IconTrash size={12} color={C.muted} /></button>
-              : <button onClick={() => { setConfirmDel(false); onDelete() }} title="Confirmar borrado" style={{
+              : <button onClick={() => { if (!armed) return; setConfirmDel(false); onDelete() }} title="Confirmar borrado" style={{
                   background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.4)',
                   borderRadius: 6, width: 26, height: 26, color: '#f87171',
                   cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11,
+                  opacity: armed ? 1 : 0.4, transition: 'opacity 0.2s',
                 }}>✕</button>
             }
           </div>
@@ -2374,6 +2593,7 @@ function ClubBookEditForm({ entry, onSave, onCancel }) {
 
 function SessionCard({ session, isAdmin, onDelete, onEdit }) {
   const [confirmDel, setConfirmDel] = useState(false)
+  const armed = useConfirmGuard(confirmDel)
   const dateStr = session.date
     ? new Date(session.date + 'T12:00').toLocaleDateString('es', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
     : '—'
@@ -2413,10 +2633,11 @@ function SessionCard({ session, isAdmin, onDelete, onEdit }) {
                 borderRadius: 6, width: 26, height: 26, color: C.muted,
                 cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
               }}><IconTrash size={12} color={C.muted} /></button>
-            : <button onClick={() => { setConfirmDel(false); onDelete() }} title="Confirmar borrado" style={{
+            : <button onClick={() => { if (!armed) return; setConfirmDel(false); onDelete() }} title="Confirmar borrado" style={{
                 background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.4)',
                 borderRadius: 6, width: 26, height: 26, color: '#f87171',
                 cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11,
+                opacity: armed ? 1 : 0.4, transition: 'opacity 0.2s',
               }}>✕</button>
           }
         </div>
@@ -3255,10 +3476,22 @@ function renderStars(rating) {
   )
 }
 
+// Ordinales femeninos ("vez" es femenino) para "terminó X por Nª vez" — solo
+// hace falta diferenciar la relectura en el feed, la primera vez no dice nada
+// especial (ya lo decía antes de que existiera "Releyendo").
+const ORDINALS_FEM = { 2: 'segunda', 3: 'tercera', 4: 'cuarta', 5: 'quinta', 6: 'sexta', 7: 'séptima', 8: 'octava', 9: 'novena', 10: 'décima' }
+function ordinalTimes(n) {
+  return ORDINALS_FEM[n] || `${n}ª`
+}
+
 const EVENT_TEXT = {
   added:    (name, title) => <><strong style={{ color: C.text }}>{name}</strong> añadió <em>«{title}»</em> a su estantería</>,
   started:  (name, title) => <><strong style={{ color: C.text }}>{name}</strong> empezó a leer <em>«{title}»</em></>,
-  finished: (name, title) => <><strong style={{ color: C.text }}>{name}</strong> terminó <em>«{title}»</em></>,
+  finished: (name, title, timesRead) => (
+    <><strong style={{ color: C.text }}>{name}</strong> terminó <em>«{title}»</em>
+      {timesRead >= 2 && <> por {ordinalTimes(timesRead)} vez</>}
+    </>
+  ),
   proposed: (name, title) => <><strong style={{ color: C.text }}>{name}</strong> propuso <em>«{title}»</em> al club</>,
   voted:    (name, title) => <><strong style={{ color: C.text }}>{name}</strong> puntuó <em>«{title}»</em> del club</>,
 }
@@ -3326,6 +3559,36 @@ function FriendShelfView({ playerId, playerName, onBack }) {
     setSelected(s => s ? { ...s, book: updated } : s)
   }
 
+  // Añadir un libro visto en la estantería de un amigo a la propia — reutiliza
+  // el mismo `book_id` (ShelfAddRequest ya soporta esto, igual que la búsqueda
+  // combinada) en vez de crear un libro duplicado. Devuelve 'ok'/'exists'/'error'
+  // para que el panel de BookDetailFull muestre el resultado sin más lógica aquí.
+  async function addToMyShelf(entry, { status, started_at, finished_at }) {
+    try {
+      const r = await fetch('/api/shelf/personal', {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ book_id: entry.book.id, title: entry.book.title, status }),
+      })
+      if (r.status === 409) return 'exists'
+      if (!r.ok) return 'error'
+      const created = await r.json()
+      if (status === 'read' && (started_at || finished_at)) {
+        await fetch(`/api/shelf/personal/${created.id}`, {
+          method: 'PATCH', credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ started_at: started_at || '', finished_at: finished_at || '' }),
+        })
+      }
+      // Avisa a "Mi estantería" (montada aparte, en otra pestaña, y sin
+      // recargarse sola por esto) de que hay un libro nuevo que cargar.
+      window.dispatchEvent(new CustomEvent('luni:ws', { detail: { type: 'luni_update', scope: 'shelf' } }))
+      return 'ok'
+    } catch {
+      return 'error'
+    }
+  }
+
   const filtered = shelf.filter(e => {
     if (filters.status !== 'all' && e.status !== filters.status) return false
     if (filters.author && e.book.author !== filters.author) return false
@@ -3338,7 +3601,7 @@ function FriendShelfView({ playerId, playerName, onBack }) {
     return true
   })
 
-  const STATUS_ORDER = { want_to_read: 0, reading: 1, read: 2, dropped: 3 }
+  const STATUS_ORDER = { want_to_read: 0, reading: 1, rereading: 2, read: 3, dropped: 4 }
   const sorted = sort.field ? [...filtered].sort((a, b) => {
     let va, vb
     if (sort.field === 'title')  { va = a.book.title?.toLowerCase()  || ''; vb = b.book.title?.toLowerCase()  || '' }
@@ -3385,6 +3648,7 @@ function FriendShelfView({ playerId, playerName, onBack }) {
               onUpdateEntry={() => {}}
               onUpdateBook={updateBook}
               onDelete={() => {}}
+              onAddToShelf={opts => addToMyShelf(selected, opts)}
               readOnly
             />
           </motion.div>
@@ -3722,7 +3986,7 @@ function AmigosTab({ player, onGoToShelf }) {
                   {isMe && <span style={{ fontSize: 9, color: C.muted, background: C.surfaceHi, borderRadius: 4, padding: '1px 5px' }}>tú</span>}
                 </div>
                 <p style={{ fontSize: 12, color: C.sub, lineHeight: 1.4, margin: 0 }}>
-                  {textFn ? textFn(name, title) : item.event_type}
+                  {textFn ? textFn(name, title, item.times_read) : item.event_type}
                 </p>
                 {(item.event_type === 'finished' || item.event_type === 'voted') && item.rating && (
                   <div style={{ marginTop: 4 }}>{renderStars(item.rating)}</div>
@@ -3920,10 +4184,14 @@ export default function LunitecaV2({ player }) {
   // Sincronización en vivo: el libro (compartido entre estanterías) puede
   // cambiar de título/autor/sinopsis/portada, o ganar una portada nueva en
   // la galería, editado por cualquiera desde su propia ficha — recarga sola.
+  // scope 'shelf' (evento local, no del servidor): un libro añadido desde la
+  // estantería de un amigo (FriendShelfView) no tocaba nada de lo que esta
+  // pestaña ya tenía cargado, así que el libro se guardaba de verdad pero no
+  // aparecía aquí hasta recargar la página entera.
   useEffect(() => {
     function onWs(ev) {
       const msg = ev.detail
-      if (msg.type === 'luni_update' && msg.scope === 'books') loadShelf()
+      if (msg.type === 'luni_update' && (msg.scope === 'books' || msg.scope === 'shelf')) loadShelf()
     }
     window.addEventListener('luni:ws', onWs)
     return () => window.removeEventListener('luni:ws', onWs)
@@ -3985,7 +4253,7 @@ export default function LunitecaV2({ player }) {
     return true
   })
 
-  const STATUS_ORDER = { want_to_read: 0, reading: 1, read: 2 }
+  const STATUS_ORDER = { want_to_read: 0, reading: 1, rereading: 2, read: 3, dropped: 4 }
   const sorted = sort.field ? [...filtered].sort((a, b) => {
     let va, vb
     if (sort.field === 'title')  { va = a.book.title?.toLowerCase()  || ''; vb = b.book.title?.toLowerCase()  || '' }

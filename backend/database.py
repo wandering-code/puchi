@@ -77,7 +77,8 @@ class PersonalShelf(Base):
     id          = Column(Integer, primary_key=True, index=True)
     player_id   = Column(Integer, ForeignKey("players.id"), nullable=False)
     book_id     = Column(Integer, ForeignKey("books.id"), nullable=False)
-    status      = Column(String, nullable=False, default="want_to_read")  # reading | read | want_to_read
+    status      = Column(String, nullable=False, default="want_to_read")  # reading | rereading | read | want_to_read | dropped
+    times_read  = Column(Integer, nullable=False, default=0)  # veces marcado "Leído" — editable a mano
     progress           = Column(Float, default=0.0)  # 0.0 – 1.0
     current_page       = Column(Integer, nullable=True)
     custom_total_pages = Column(Integer, nullable=True)
@@ -160,6 +161,7 @@ class Activity(Base):
     book_id    = Column(Integer, ForeignKey("books.id",   ondelete="CASCADE"), nullable=False)
     event_type = Column(String, nullable=False)  # added | started | finished | proposed | voted
     rating     = Column(Float, nullable=True)
+    times_read = Column(Integer, nullable=True)  # solo en 'finished' — para "terminó X por 2ª vez" en Amigos
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     player = relationship("Player")

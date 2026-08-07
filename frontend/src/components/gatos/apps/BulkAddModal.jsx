@@ -19,6 +19,9 @@ function newRow(title = '') {
     key: _rowId++,
     title, author: '', status: 'want_to_read',
     started_at: '', finished_at: '',  // solo se piden/usan si status es "read"
+    dateResetSeq: 0,      // ver "Borrar fechas" — fuerza a CustomDateInput a
+                           // resincronizar sus <select> internos, que si no
+                           // se quedan con el día/mes/año viejo en pantalla
     matched: null,        // { open_lib_key, cover_url, isbn, num_pages, year, genre } una vez encontrado
     searching: false,
     searchResults: null,  // null = no buscado · [] = sin resultados · [...] = candidatos
@@ -75,6 +78,16 @@ function IconX({ size = 12, color = 'currentColor' }) {
   return (
     <svg width={size} height={size} viewBox="0 0 12 12" fill="none" style={{ display: 'block', flexShrink: 0 }}>
       <path d="M2.5 2.5l7 7M9.5 2.5l-7 7" stroke={color} strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
+  )
+}
+function IconCalendarOff({ size = 13, color = 'currentColor' }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" style={{ display: 'block', flexShrink: 0 }}>
+      <rect x="2" y="3.2" width="12" height="10.8" rx="2" stroke={color} strokeWidth="1.3" />
+      <path d="M2 6.4h12" stroke={color} strokeWidth="1.3" />
+      <path d="M5.2 1.6v2.4M10.8 1.6v2.4" stroke={color} strokeWidth="1.3" strokeLinecap="round" />
+      <path d="M6 9.2l4 4M10 9.2l-4 4" stroke={color} strokeWidth="1.3" strokeLinecap="round" />
     </svg>
   )
 }
@@ -442,12 +455,29 @@ export default function BulkAddModal({ onClose, onImported }) {
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                           <div>
                             <p style={{ fontSize: 11, color: C.muted, margin: '0 0 4px' }}>Fecha de inicio</p>
-                            <CustomDateInput value={row.started_at} onChange={v => patchRow(row.key, { started_at: v })} />
+                            {/* key: CustomDateInput solo lee `value` al montarse (día/mes/año
+                                son estado propio) — sin esto, "Borrar fechas" no las borra
+                                de verdad en pantalla, aunque sí en el estado de la fila. */}
+                            <CustomDateInput key={`start-${row.dateResetSeq}`} value={row.started_at} onChange={v => patchRow(row.key, { started_at: v })} />
                           </div>
                           <div>
                             <p style={{ fontSize: 11, color: C.muted, margin: '0 0 4px' }}>Fecha de fin</p>
-                            <CustomDateInput value={row.finished_at} onChange={v => patchRow(row.key, { finished_at: v })} />
+                            <CustomDateInput key={`end-${row.dateResetSeq}`} value={row.finished_at} onChange={v => patchRow(row.key, { finished_at: v })} />
                           </div>
+                          {/* Borrar fechas — para libros leídos hace tiempo cuya
+                              fecha exacta ya no se recuerda, mismo botón que en
+                              la ficha de un libro propio. */}
+                          {(row.started_at || row.finished_at) && (
+                            <button onClick={() => patchRow(row.key, { started_at: '', finished_at: '', dateResetSeq: row.dateResetSeq + 1 })}
+                              style={{
+                                alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: 6,
+                                background: C.surfaceHi, border: `1px solid ${C.border}`, borderRadius: 8,
+                                padding: '9px 12px', color: C.muted, fontSize: 12.5, fontWeight: 600, cursor: 'pointer',
+                              }}>
+                              <IconCalendarOff size={13} color={C.muted} />
+                              No recuerdo la fecha exacta
+                            </button>
+                          )}
                         </div>
                       )}
 
@@ -536,6 +566,17 @@ export default function BulkAddModal({ onClose, onImported }) {
                     <input type="date" title="Fecha de fin" value={row.finished_at}
                       onChange={e => patchRow(row.key, { finished_at: e.target.value })}
                       style={{ ...inpStyle, flex: '0 0 132px', colorScheme: 'dark' }} />
+                    {(row.started_at || row.finished_at) && (
+                      <button onClick={() => patchRow(row.key, { started_at: '', finished_at: '' })}
+                        title="No recuerdo la fecha exacta"
+                        style={{
+                          width: 28, height: 28, flexShrink: 0, borderRadius: 7, border: 'none',
+                          background: C.surfaceHi, color: C.muted, cursor: 'pointer',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        }}>
+                        <IconCalendarOff color={C.muted} />
+                      </button>
+                    )}
                   </>
                 )}
 

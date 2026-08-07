@@ -21,6 +21,7 @@ export const C = {
   muted:     'var(--luni-muted)',
   read:      'var(--luni-read)',
   reading:   'var(--luni-reading)',
+  rereading: 'var(--luni-rereading)',
   want:      'var(--luni-want)',
   dropped:   'var(--luni-dropped)',
   // Solo usados en la barra lateral de navegación (fuera de C originalmente,
