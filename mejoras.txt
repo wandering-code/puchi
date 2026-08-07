@@ -1,6 +1,6 @@
 Añadir la posibilidad de subir el libro en pdf o epub al libro del club para poder buscar referencias concretas por texto o por capítulos
 
-Añadir un estado de "Releyendo" en la estantería personal, pudiendo marcar cuándo fue la primera lectura, la segunda, y cualquiera más si hay más de dos (varias fechas de inicio/fin, no solo un par). Además, al cambiar un libro de "Dropeado" a cualquier otro estado, poder marcar cuándo se le dio la segunda oportunidad (y las siguientes, si vuelve a dropearse y se retoma otra vez).
+Hecho el 2026-08-07: estado "Releyendo" con contador de veces leído (editable a mano). Queda pendiente lo más fino de la idea original: guardar varias fechas de inicio/fin por libro (una por cada lectura, no solo la última — ahora mismo cada vez que se vuelve a "Leído" se pisa la fecha de la lectura anterior), y al cambiar un libro de "Dropeado" a cualquier otro estado, poder marcar cuándo se le dio la segunda oportunidad (y las siguientes, si vuelve a dropearse y se retoma otra vez).
 
 Añadir una opción desde el botón de gatOS para cambiar entre modo claro y modo oscuro. El modo oscuro realmente sería el modo actual, y luego el claro sería en colores similares pero más claros.
 
