@@ -192,8 +192,14 @@ def _migrate():
         # personal_shelf: estado y orden físico
         "ALTER TABLE personal_shelf ADD COLUMN IF NOT EXISTS status VARCHAR NOT NULL DEFAULT 'read'",
         "ALTER TABLE personal_shelf ADD COLUMN IF NOT EXISTS sort_order INTEGER",
-        # Inferir estado de lectura para filas existentes
-        "UPDATE personal_shelf SET status = 'reading' WHERE status = 'read' AND finished_at IS NULL AND progress > 0",
+        # NOTA: hubo aquí un backfill "UPDATE ... SET status='reading' WHERE
+        # status='read' AND finished_at IS NULL AND progress>0" pensado para
+        # ejecutarse una sola vez al añadir la columna. Al no tener guarda,
+        # se repetía en CADA arranque del backend (cada despliegue) y volvía
+        # a bajar a "reading" cualquier libro marcado "Leído" sin fecha (su
+        # progress se pone a 1.0 al marcarlo leído, así que siempre volvía a
+        # encajar en el filtro). Detectado 2026-08-08. Eliminado sin
+        # sustituto: el backfill original ya se aplicó hace tiempo.
 
         # personal_shelf: progreso por páginas y carpetas
         "ALTER TABLE personal_shelf ADD COLUMN IF NOT EXISTS current_page INTEGER",
