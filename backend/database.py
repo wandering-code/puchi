@@ -93,6 +93,12 @@ class PersonalShelf(Base):
     notes       = Column(Text, nullable=True)
     sort_order  = Column(Integer, nullable=True)    # orden en la estantería física
     added_at    = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    # Cómo llegó el libro a esta estantería — 'search' (buscado en Open
+    # Library, alta manual, o carga masiva) o 'copied' (visto en la
+    # estantería de otro jugador y añadido con el botón "Añadir a mi
+    # estantería"). Nullable: filas de antes de este campo se quedan sin
+    # dato, no se puede reconstruir a posteriori.
+    origin      = Column(String, nullable=True)
 
     player = relationship("Player", back_populates="personal_shelf")
     book   = relationship("Book")

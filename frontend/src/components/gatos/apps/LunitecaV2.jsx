@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useIsMobile } from '../../../utils/responsive'
 import { C } from './lunitecaTheme'
@@ -398,6 +399,34 @@ function SearchOverlay({ onClose, onAdd, hint }) {
   const [loading, setLoading] = useState(false)
   const [error,   setError]   = useState(null)
   const [showScanner, setShowScanner] = useState(false)
+  // Alta manual — para libros que Open Library no conoce (la búsqueda no
+  // trae nada). Mismo `onAdd` que usan los resultados de búsqueda; el
+  // backend ya crea el libro sin más con solo el título (sin book_id ni
+  // open_lib_key no intenta emparejar con nada existente).
+  const [manualMode,   setManualMode]   = useState(false)
+  const [manualSaving, setManualSaving] = useState(false)
+  const [manualDraft,  setManualDraft]  = useState({ title: '', author: '', year: '', isbn: '', genre: '', num_pages: '' })
+
+  const manualFieldStyle = {
+    width: '100%', background: C.surfaceHi, border: `1px solid ${C.border}`,
+    borderRadius: 8, padding: '8px 10px', color: C.text, fontSize: 12,
+    outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit',
+  }
+
+  async function handleManualAdd() {
+    if (!manualDraft.title.trim()) return
+    setManualSaving(true)
+    await onAdd({
+      title:     manualDraft.title.trim(),
+      author:    manualDraft.author.trim()    || null,
+      year:      manualDraft.year      ? parseInt(manualDraft.year)      : null,
+      isbn:      manualDraft.isbn.trim()      || null,
+      genre:     manualDraft.genre.trim()     || null,
+      num_pages: manualDraft.num_pages ? parseInt(manualDraft.num_pages) : null,
+    })
+    setManualSaving(false)
+    onClose()
+  }
 
   async function search() {
     if (!q.trim()) return
@@ -486,15 +515,60 @@ function SearchOverlay({ onClose, onAdd, hint }) {
           </button>
           <button onClick={onClose} style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer', fontSize: 18, lineHeight: 1, padding: '0 0 0 2px', flexShrink: 0 }}>×</button>
         </div>
-        <div style={{ overflowY: 'auto', flex: 1 }}>
-          {!loading && !error && results.length === 0 && (
-            <p style={{ color: C.muted, fontSize: 12, textAlign: 'center', padding: '24px 16px' }}>Escribe un título, autor o ISBN y pulsa Buscar, o escanea el código de barras</p>
-          )}
-          {!loading && error && (
-            <p style={{ color: C.muted, fontSize: 12, textAlign: 'center', padding: '24px 16px' }}>{error}</p>
-          )}
-          {results.map((b, i) => <SearchResult key={i} book={b} onAdd={onAdd} />)}
-        </div>
+        {manualMode ? (
+          <div style={{ overflowY: 'auto', flex: 1, padding: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <button onClick={() => setManualMode(false)} style={{
+              alignSelf: 'flex-start', background: 'none', border: 'none', color: C.muted,
+              fontSize: 11, cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', gap: 4, marginBottom: 4,
+            }}>
+              <IconBack size={11} color={C.muted} /> Volver a la búsqueda
+            </button>
+            <p style={{ fontSize: 11, color: C.muted, margin: '0 0 4px' }}>
+              Para libros que Open Library no conoce — rellena lo que sepas, el resto se puede completar después.
+            </p>
+            <input autoFocus value={manualDraft.title}
+              onChange={ev => setManualDraft(d => ({ ...d, title: ev.target.value }))}
+              placeholder="Título *" style={manualFieldStyle} />
+            <input value={manualDraft.author}
+              onChange={ev => setManualDraft(d => ({ ...d, author: ev.target.value }))}
+              placeholder="Autor" style={manualFieldStyle} />
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input value={manualDraft.year} type="number"
+                onChange={ev => setManualDraft(d => ({ ...d, year: ev.target.value }))}
+                placeholder="Año" style={{ ...manualFieldStyle, flex: 1 }} />
+              <input value={manualDraft.num_pages} type="number" min="1"
+                onChange={ev => setManualDraft(d => ({ ...d, num_pages: ev.target.value }))}
+                placeholder="Páginas" style={{ ...manualFieldStyle, flex: 1 }} />
+            </div>
+            <input value={manualDraft.genre}
+              onChange={ev => setManualDraft(d => ({ ...d, genre: ev.target.value }))}
+              placeholder="Género" style={manualFieldStyle} />
+            <input value={manualDraft.isbn}
+              onChange={ev => setManualDraft(d => ({ ...d, isbn: ev.target.value }))}
+              placeholder="ISBN" style={manualFieldStyle} />
+            <button onClick={handleManualAdd} disabled={!manualDraft.title.trim() || manualSaving} style={{
+              marginTop: 4, background: C.accent, border: 'none', borderRadius: 8, padding: '9px 12px',
+              color: 'white', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+              opacity: (!manualDraft.title.trim() || manualSaving) ? 0.5 : 1,
+            }}>{manualSaving ? 'Añadiendo…' : 'Añadir a mi estantería'}</button>
+          </div>
+        ) : (
+          <div style={{ overflowY: 'auto', flex: 1 }}>
+            {!loading && !error && results.length === 0 && (
+              <p style={{ color: C.muted, fontSize: 12, textAlign: 'center', padding: '24px 16px' }}>Escribe un título, autor o ISBN y pulsa Buscar, o escanea el código de barras</p>
+            )}
+            {!loading && error && (
+              <p style={{ color: C.muted, fontSize: 12, textAlign: 'center', padding: '24px 16px' }}>{error}</p>
+            )}
+            {results.map((b, i) => <SearchResult key={i} book={b} onAdd={onAdd} />)}
+          </div>
+        )}
+        {!manualMode && (
+          <button onClick={() => setManualMode(true)} style={{
+            flexShrink: 0, background: 'none', border: 'none', borderTop: `1px solid ${C.border}`,
+            color: C.sub, fontSize: 11, cursor: 'pointer', padding: '10px 14px', textAlign: 'center',
+          }}>¿No está en la lista? Añadirlo a mano</button>
+        )}
       </motion.div>
       <AnimatePresence>
         {showScanner && (
@@ -1644,62 +1718,63 @@ function BookDetailFull({ entry, shelf, onBack, onUpdateEntry, onUpdateBook, onD
           </>
         )}
 
-        {/* Páginas / Fechas / Puntuación y notas — aparecen y desaparecen según
-            el estado (p.ej. al cambiarlo desde el desplegable de arriba, sin
-            entrar a editar). Se animan siempre con height+opacity en vez de
-            aparecer/desaparecer de golpe — patrón a repetir en toda Puchi
-            para cualquier bloque condicionado por un desplegable/estado. */}
-        <AnimatePresence initial={false}>
-          {showProgressSection && (
-            <motion.div key="paginas" layout
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              transition={{ duration: 0.2, ease: 'easeInOut' }}
-            >
-              <div>
-                {label('Páginas')}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  {/* "key" fuerza a resincronizar el campo si la página actual
-                      cambia por fuera de este input — al editar el % de al
-                      lado (que manda current_page al backend) o por sync en
-                      vivo desde otro dispositivo; si no, al ser un input sin
-                      controlar (defaultValue) se queda con el valor viejo en
-                      pantalla aunque el dato real ya haya cambiado. */}
-                  <input type="number" min="0" max={total || undefined} key={`cur-${entry.current_page}`}
-                    defaultValue={entry.current_page ?? ''}
-                    placeholder="Actual" disabled={readOnly}
-                    onBlur={ev => onUpdateEntry(entry.id, { current_page: ev.target.value === '' ? null : parseInt(ev.target.value) })}
-                    style={{ ...fieldStyle, width: 72, textAlign: 'center' }} />
-                  <span style={{ color: C.muted, fontSize: 13 }}>/</span>
-                  <input type="number" min="1" key={`tot-${entry.custom_total_pages}`}
-                    defaultValue={entry.custom_total_pages ?? entry.book.num_pages ?? ''}
-                    placeholder="Total" disabled={readOnly}
-                    onBlur={ev => onUpdateEntry(entry.id, { custom_total_pages: ev.target.value === '' ? null : parseInt(ev.target.value) })}
-                    style={{ ...fieldStyle, width: 72, textAlign: 'center', color: C.sub }} />
-                  {/* O directamente por porcentaje (como en Kindle) — sin
-                      páginas conocidas es la única forma de anotar progreso;
-                      con páginas, editarlo recalcula la página actual (misma
-                      fuente de verdad, el backend deriva el % de ahí). El
-                      "key" fuerza a refrescar el campo si el % cambia por
-                      fuera (p.ej. al editar la página actual al lado). */}
-                  <span style={{ color: C.muted, fontSize: 13, marginLeft: 2 }}>·</span>
-                  <input type="number" min="0" max="100" key={pct}
-                    defaultValue={pct} disabled={readOnly}
-                    onBlur={ev => {
-                      if (ev.target.value === '') return
-                      const p = Math.max(0, Math.min(100, parseInt(ev.target.value)))
-                      if (total) onUpdateEntry(entry.id, { current_page: Math.round(p / 100 * total) })
-                      else onUpdateEntry(entry.id, { progress: p / 100 })
-                    }}
-                    style={{ ...fieldStyle, width: 60, padding: '7px 4px', textAlign: 'center', color: C.accent, fontWeight: 700 }} />
-                  <span style={{ fontSize: 11, color: C.accent, fontWeight: 700 }}>%</span>
-                </div>
-                <div style={{ marginTop: 8, height: 3, borderRadius: 2, background: C.surfaceHi }}>
-                  <div style={{ height: '100%', borderRadius: 2, background: C.accent, width: `${pct}%`, transition: 'width 0.3s' }} />
-                </div>
+        {/* Páginas — a diferencia de Fechas/Puntuación (más abajo), esto se
+            muestra siempre, en cualquier estado (antes solo aparecía con el
+            libro en Leyendo/Leído/Releyendo/Dropeado, nunca en Por leer). Sin
+            ningún dato de páginas (ni de la API ni tecleado a mano) y en modo
+            consulta (readOnly, viendo la estantería de otro) no tiene sentido
+            enseñar tres inputs deshabilitados y vacíos — se cambia por un
+            mensaje explícito. El propio dueño, en cambio, sigue viendo los
+            inputs editables tenga o no páginas ya conocidas, para poder
+            añadirlas él mismo en el momento. */}
+        <div>
+          {label('Páginas')}
+          {(!total && entry.current_page == null && readOnly) ? (
+            <p style={{ fontSize: 12, color: C.muted, margin: 0 }}>No se conoce el número de páginas de este libro.</p>
+          ) : (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                {/* "key" fuerza a resincronizar el campo si la página actual
+                    cambia por fuera de este input — al editar el % de al
+                    lado (que manda current_page al backend) o por sync en
+                    vivo desde otro dispositivo; si no, al ser un input sin
+                    controlar (defaultValue) se queda con el valor viejo en
+                    pantalla aunque el dato real ya haya cambiado. */}
+                <input type="number" min="0" max={total || undefined} key={`cur-${entry.current_page}`}
+                  defaultValue={entry.current_page ?? ''}
+                  placeholder="Actual" disabled={readOnly}
+                  onBlur={ev => onUpdateEntry(entry.id, { current_page: ev.target.value === '' ? null : parseInt(ev.target.value) })}
+                  style={{ ...fieldStyle, width: 72, textAlign: 'center' }} />
+                <span style={{ color: C.muted, fontSize: 13 }}>/</span>
+                <input type="number" min="1" key={`tot-${entry.custom_total_pages}`}
+                  defaultValue={entry.custom_total_pages ?? entry.book.num_pages ?? ''}
+                  placeholder="Total" disabled={readOnly}
+                  onBlur={ev => onUpdateEntry(entry.id, { custom_total_pages: ev.target.value === '' ? null : parseInt(ev.target.value) })}
+                  style={{ ...fieldStyle, width: 72, textAlign: 'center', color: C.sub }} />
+                {/* O directamente por porcentaje (como en Kindle) — sin
+                    páginas conocidas es la única forma de anotar progreso;
+                    con páginas, editarlo recalcula la página actual (misma
+                    fuente de verdad, el backend deriva el % de ahí). El
+                    "key" fuerza a refrescar el campo si el % cambia por
+                    fuera (p.ej. al editar la página actual al lado). */}
+                <span style={{ color: C.muted, fontSize: 13, marginLeft: 2 }}>·</span>
+                <input type="number" min="0" max="100" key={pct}
+                  defaultValue={pct} disabled={readOnly}
+                  onBlur={ev => {
+                    if (ev.target.value === '') return
+                    const p = Math.max(0, Math.min(100, parseInt(ev.target.value)))
+                    if (total) onUpdateEntry(entry.id, { current_page: Math.round(p / 100 * total) })
+                    else onUpdateEntry(entry.id, { progress: p / 100 })
+                  }}
+                  style={{ ...fieldStyle, width: 60, padding: '7px 4px', textAlign: 'center', color: C.accent, fontWeight: 700 }} />
+                <span style={{ fontSize: 11, color: C.accent, fontWeight: 700 }}>%</span>
               </div>
-            </motion.div>
+              <div style={{ marginTop: 8, height: 3, borderRadius: 2, background: C.surfaceHi }}>
+                <div style={{ height: '100%', borderRadius: 2, background: C.accent, width: `${pct}%`, transition: 'width 0.3s' }} />
+              </div>
+            </>
           )}
-        </AnimatePresence>
+        </div>
 
         <AnimatePresence initial={false}>
           {showProgressSection && (
@@ -1810,6 +1885,17 @@ function BookDetailFull({ entry, shelf, onBack, onUpdateEntry, onUpdateBook, onD
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* Fecha de alta — siempre visible, en cualquier estado (a diferencia
+            de todo lo de arriba, condicionado al estado). El origen (buscado
+            vs. copiado de la estantería de un amigo) ya se guarda en el
+            backend (PersonalShelf.origin) de cara al feed social, pero
+            todavía no se decide dónde mostrarlo — de momento solo la fecha. */}
+        {entry.added_at && (
+          <p style={{ fontSize: 10, color: C.muted, margin: 0 }}>
+            Añadido a {readOnly ? 'su' : 'tu'} estantería el {fmtShortDate(entry.added_at)}
+          </p>
+        )}
       </div>
     </div>
   )
@@ -1870,6 +1956,10 @@ function ListRow({ entry: e, onSelect, renderActions, highlighted, coverH, onMea
           <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 6 }}>
             <span style={{ width: 5, height: 5, borderRadius: '50%', background: st?.color, flexShrink: 0 }} />
             <span style={{ fontSize: 10, color: C.muted }}>{st?.label}</span>
+            {/* Páginas — a diferencia del detalle, aquí si no hay dato no se
+                muestra nada (ni mensaje ni placeholder), y aparece siempre
+                que se conozcan, con o sin progreso de lectura en marcha. */}
+            {total > 0 && <span style={{ fontSize: 10, color: C.muted, marginLeft: 2 }}>· {total} pág.</span>}
             {(e.status === 'reading' || e.status === 'rereading') && total && e.current_page != null && <span style={{ fontSize: 10, color: C.accent, marginLeft: 2, fontWeight: 600 }}>{pct}%</span>}
             {e.status === 'read' && e.rating > 0 && <span style={{ fontSize: 9, marginLeft: 2 }}>{renderStars(e.rating)}</span>}
             {(e.times_read || 0) >= 2 && <span style={{ fontSize: 9, color: C.muted, marginLeft: 2 }}>· ×{e.times_read}</span>}
@@ -3497,6 +3587,7 @@ const EVENT_TEXT = {
 }
 
 const PAGE = 50
+const MEMBER_MENU_WIDTH = 76 // dos botones de icono de 32px + gap + padding
 
 // Estantería de otro jugador — se abre al hacer clic en su icono en la barra
 // de miembros de Amigos. Reutiliza BookDetailFull/PersonalShelfSections en
@@ -3568,7 +3659,7 @@ function FriendShelfView({ playerId, playerName, onBack }) {
       const r = await fetch('/api/shelf/personal', {
         method: 'POST', credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ book_id: entry.book.id, title: entry.book.title, status }),
+        body: JSON.stringify({ book_id: entry.book.id, title: entry.book.title, status, origin: 'copied' }),
       })
       if (r.status === 409) return 'exists'
       if (!r.ok) return 'error'
@@ -3799,7 +3890,7 @@ function FriendShelfView({ playerId, playerName, onBack }) {
   )
 }
 
-function AmigosTab({ player, onGoToShelf }) {
+function AmigosTab({ player }) {
   const [feed,     setFeed]     = useState([])
   const [hasMore,  setHasMore]  = useState(false)
   const [loading,  setLoading]  = useState(true)
@@ -3807,8 +3898,59 @@ function AmigosTab({ player, onGoToShelf }) {
   const [members,  setMembers]  = useState([])
   const [viewingPlayer,  setViewingPlayer]  = useState(null)   // { id, name } | null
   const [filterPlayer,   setFilterPlayer]   = useState(null)   // { id, name } | null
-  const [showFilterMenu, setShowFilterMenu] = useState(false)
-  const filterMenuRef = useOutsideClose(showFilterMenu, () => setShowFilterMenu(false))
+  // { id, name, rect } del miembro con el mini menú abierto, o null. Se
+  // renderiza en un portal (ver más abajo) — la fila de avatares tiene
+  // overflowX:'auto' para poder desplazarse con muchos miembros, y eso
+  // fuerza a overflowY a computar también 'auto' (efecto colateral real de
+  // CSS: no se puede tener un eje con scroll y el otro 'visible' de verdad),
+  // así que un popover posicionado dentro de esa fila quedaba recortado.
+  // El portal NO es a document.body: las variables de color del tema
+  // (--luni-surface, etc.) están definidas en la clase .luniteca-root, así
+  // que fuera de ahí el fondo del popover cae a transparente — se porta al
+  // propio nodo .luniteca-root (más arriba en el árbol, sin overflow que lo
+  // recorte) para heredarlas.
+  const [openMemberMenu, setOpenMemberMenu] = useState(null)
+  const memberButtonRefs = useRef({})   // id -> nodo del botón avatar
+  const memberMenuPortalRef = useRef(null)
+  // Nodo .luniteca-root cacheado la primera vez que se abre un menú — así el
+  // portal sigue teniendo destino durante la animación de salida (cuando
+  // openMemberMenu ya es null, AnimatePresence sigue pintando el último
+  // frame un instante más, pero necesita seguir sabiendo dónde portarlo).
+  const lunitecaRootRef = useRef(null)
+  const otherMembers = members.filter(m => m.id !== player.id)
+
+  useEffect(() => {
+    if (!openMemberMenu) return
+    function onDown(e) {
+      const trigger = memberButtonRefs.current[openMemberMenu.id]
+      if (trigger?.contains(e.target)) return
+      if (memberMenuPortalRef.current?.contains(e.target)) return
+      setOpenMemberMenu(null)
+    }
+    document.addEventListener('pointerdown', onDown)
+    return () => document.removeEventListener('pointerdown', onDown)
+  }, [openMemberMenu])
+
+  function toggleMemberMenu(m, buttonEl) {
+    setOpenMemberMenu(prev => {
+      if (prev?.id === m.id) return null
+      const rect = buttonEl.getBoundingClientRect()
+      const portalTarget = buttonEl.closest('.luniteca-root') || document.body
+      lunitecaRootRef.current = portalTarget
+      // Centrado bajo el avatar por defecto, pero recortado a los bordes de
+      // la propia ventana de Luniteca (no solo de la pantalla) — así un
+      // avatar pegado al borde derecho de la fila nunca saca el popover del
+      // marco de la ventana en escritorio, ni de la pantalla en móvil.
+      // El borde izquierdo se calcula ya centrado bajo el avatar (en vez de
+      // usar transform:translateX(-50%): framer-motion controla la propiedad
+      // "transform" para su propia animación de "y" y pisa cualquier
+      // transform estático que se le ponga por fuera).
+      const bounds = portalTarget.getBoundingClientRect()
+      const idealLeft = rect.left + rect.width / 2 - MEMBER_MENU_WIDTH / 2
+      const left = Math.min(Math.max(idealLeft, bounds.left + 8), bounds.right - MEMBER_MENU_WIDTH - 8)
+      return { id: m.id, name: m.name, top: rect.bottom + 6, left }
+    })
+  }
 
   function fetchPage(offset, append) {
     const setter = append ? setLoadingMore : setLoading
@@ -3833,7 +3975,7 @@ function AmigosTab({ player, onGoToShelf }) {
   useEffect(() => {
     fetch('/api/players', { credentials: 'include' })
       .then(r => r.json())
-      .then(all => setMembers(all.filter(p => p.club_member)))
+      .then(all => setMembers(all))
       .catch(() => {})
   }, [])
 
@@ -3850,12 +3992,19 @@ function AmigosTab({ player, onGoToShelf }) {
     return () => window.removeEventListener('luni:ws', onWs)
   }, [filterPlayer])
 
-  if (viewingPlayer) {
-    return <FriendShelfView playerId={viewingPlayer.id} playerName={viewingPlayer.name} onBack={() => setViewingPlayer(null)} />
-  }
-
+  // Entrar/salir de la estantería de un amigo es un cambio de vista completo
+  // dentro de la tab — antes cambiaba de golpe (return condicional distinto);
+  // ahora ambos estados viven en el mismo AnimatePresence con un crossfade.
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+    <AnimatePresence mode="wait">
+      {viewingPlayer ? (
+        <motion.div key="friend-shelf" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+          transition={{ duration: 0.15 }} style={{ height: '100%' }}>
+          <FriendShelfView playerId={viewingPlayer.id} playerName={viewingPlayer.name} onBack={() => setViewingPlayer(null)} />
+        </motion.div>
+      ) : (
+    <motion.div key="feed" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      transition={{ duration: 0.15 }} style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
       {/* Cabecera */}
       <div style={{
         padding: '11px 16px', borderBottom: `1px solid ${C.border}`,
@@ -3863,91 +4012,111 @@ function AmigosTab({ player, onGoToShelf }) {
       }}>
         <span style={{ fontSize: 13, color: C.text, fontWeight: 600 }}>Actividad de amigos</span>
 
-        {/* Barra de miembros — clic en uno va a su estantería (solo consulta).
-            El filtro de actividad es otra cosa a propósito (botón aparte a la
-            derecha): así un mismo clic nunca significa dos cosas distintas. */}
-        {members.length > 0 && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div style={{ display: 'flex', gap: 14, overflowX: 'auto', flex: 1, paddingBottom: 2 }}>
-              {members.map(m => {
-                const isMe = m.id === player.id
-                return (
-                  <button key={m.id}
-                    onClick={() => isMe ? onGoToShelf() : setViewingPlayer({ id: m.id, name: m.name })}
-                    title={isMe ? 'Ir a mi estantería' : `Ver la estantería de ${m.name}`} style={{
-                      background: 'none', border: 'none', cursor: 'pointer', flexShrink: 0,
-                      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, padding: 2, width: 54,
-                    }}>
-                    <PlayerAvatar emoji={m.avatar_emoji} url={m.avatar_url} size={36} style={{ border: `2px solid ${m.color || C.border}` }} />
-                    <span style={{ fontSize: 10, color: C.sub, maxWidth: 54, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {isMe ? 'Tú' : m.name}
-                    </span>
-                  </button>
-                )
-              })}
-            </div>
-
-            {/* Botón de filtro — este sí filtra el feed, y solo al elegir a
-                alguien de este desplegable (nunca al clicar la barra de arriba). */}
-            <div ref={filterMenuRef} style={{ position: 'relative', flexShrink: 0 }}>
-              <button onClick={() => setShowFilterMenu(v => !v)} title="Filtrar actividad por miembro" style={{
-                position: 'relative',
-                background: filterPlayer ? C.accentBg : C.surfaceHi,
-                border: `1px solid ${filterPlayer ? C.accentBd : 'transparent'}`,
-                borderRadius: 8, width: 30, height: 28, color: filterPlayer ? C.accent : C.muted,
-                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                transition: 'all 0.15s',
-              }}>
-                <IconFilter size={13} color={filterPlayer ? C.accent : C.muted} />
-              </button>
-              <AnimatePresence>
-                {showFilterMenu && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }}
-                    transition={{ duration: 0.12 }}
-                    style={{
-                      position: 'absolute', top: 'calc(100% + 6px)', right: 0,
-                      background: C.surface, border: `1px solid ${C.border}`,
-                      borderRadius: 10, overflow: 'hidden', minWidth: 190, maxHeight: 260, overflowY: 'auto',
-                      boxShadow: '0 8px 24px rgba(0,0,0,0.4)', zIndex: 50,
-                    }}>
-                    <button onClick={() => { setFilterPlayer(null); setShowFilterMenu(false) }} style={{
-                      display: 'flex', alignItems: 'center', width: '100%', textAlign: 'left', gap: 8,
-                      background: !filterPlayer ? C.accentBg : 'transparent',
-                      border: 'none', borderBottom: `1px solid ${C.border}`, padding: '9px 12px', fontSize: 12, cursor: 'pointer',
-                      color: !filterPlayer ? C.accent : C.sub, fontWeight: !filterPlayer ? 700 : 400,
-                    }}>Todos</button>
-                    {members.map(m => (
-                      <button key={m.id} onClick={() => { setFilterPlayer({ id: m.id, name: m.name }); setShowFilterMenu(false) }} style={{
-                        display: 'flex', alignItems: 'center', width: '100%', textAlign: 'left', gap: 8,
-                        background: filterPlayer?.id === m.id ? C.accentBg : 'transparent',
-                        border: 'none', padding: '8px 12px', fontSize: 12, cursor: 'pointer',
-                        color: filterPlayer?.id === m.id ? C.accent : C.sub,
-                      }}
-                        onMouseEnter={ev => { if (filterPlayer?.id !== m.id) ev.currentTarget.style.background = C.surfaceHi }}
-                        onMouseLeave={ev => { if (filterPlayer?.id !== m.id) ev.currentTarget.style.background = 'transparent' }}
-                      >
-                        <PlayerAvatar emoji={m.avatar_emoji} url={m.avatar_url} size={18} />
-                        {m.id === player.id ? 'Tú' : m.name}
-                      </button>
-                    ))}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
+        {/* Barra de miembros — clic en uno abre un mini menú (Filtrar / Ver
+            estantería) anclado al propio avatar, en vez de un botón de filtro
+            aparte. "Filtrar" marca/desmarca esa persona como filtro del feed
+            (clic de nuevo lo quita); "Ver estantería" abre su estantería en
+            modo consulta. Uno mismo no aparece aquí (para eso ya está la tab
+            "Mi estantería"). */}
+        {otherMembers.length > 0 && (
+          <div data-noswipe style={{ display: 'flex', gap: 14, overflowX: 'auto', paddingBottom: 2 }}>
+            {otherMembers.map(m => {
+              const isFiltered = filterPlayer?.id === m.id
+              return (
+                <button key={m.id}
+                  ref={el => { memberButtonRefs.current[m.id] = el }}
+                  onClick={e => toggleMemberMenu(m, e.currentTarget)}
+                  title={m.name} style={{
+                    background: 'none', border: 'none', cursor: 'pointer', flexShrink: 0,
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, padding: 2, width: 54,
+                  }}>
+                  <PlayerAvatar emoji={m.avatar_emoji} url={m.avatar_url} size={36}
+                    style={{ border: `2px solid ${isFiltered ? C.accent : (m.color || C.border)}`, transition: 'border-color 0.2s' }} />
+                  <span style={{ fontSize: 10, color: isFiltered ? C.accent : C.sub, maxWidth: 54, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', transition: 'color 0.2s' }}>
+                    {m.name}
+                  </span>
+                </button>
+              )
+            })}
           </div>
         )}
 
-        {filterPlayer && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ fontSize: 11, color: C.muted }}>
-              Filtrando por <strong style={{ color: C.text }}>{filterPlayer.name}</strong>
-            </span>
-            <button onClick={() => setFilterPlayer(null)} title="Quitar filtro" style={{
-              background: 'none', border: 'none', color: C.muted, cursor: 'pointer', fontSize: 13, lineHeight: 1, padding: '0 2px',
-            }}>×</button>
-          </div>
+        {/* Popover en portal a .luniteca-root (ver motivo arriba), posicionado
+            con las coordenadas reales del avatar tocado (recortado a los
+            bordes de la ventana, ver toggleMemberMenu). Solo iconos, sin
+            texto — filtrar / ver estantería. Envuelto en AnimatePresence
+            para que también tenga una salida suave al cerrarse, no solo una
+            entrada — antes desaparecía de golpe. */}
+        {lunitecaRootRef.current && createPortal(
+          <AnimatePresence>
+            {openMemberMenu && (
+              <motion.div
+                key="member-menu"
+                ref={memberMenuPortalRef}
+                initial={{ opacity: 0, y: -4, scale: 0.94 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -4, scale: 0.94 }}
+                transition={{ duration: 0.16, ease: [0.4, 0, 0.2, 1] }}
+                style={{
+                  position: 'fixed',
+                  top: openMemberMenu.top,
+                  left: openMemberMenu.left,
+                  display: 'flex', gap: 4, padding: 4,
+                  background: C.surface, border: `1px solid ${C.border}`,
+                  borderRadius: 10, width: MEMBER_MENU_WIDTH,
+                  boxShadow: '0 8px 24px rgba(0,0,0,0.4)', zIndex: 9999,
+                }}>
+                <button
+                  title="Filtrar el feed por esta persona"
+                  onClick={() => {
+                    setFilterPlayer(filterPlayer?.id === openMemberMenu.id ? null : { id: openMemberMenu.id, name: openMemberMenu.name })
+                    setOpenMemberMenu(null)
+                  }}
+                  style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 32,
+                    background: filterPlayer?.id === openMemberMenu.id ? C.accentBg : 'transparent',
+                    border: 'none', borderRadius: 7, cursor: 'pointer',
+                    transition: 'background 0.15s',
+                  }}
+                  onMouseEnter={ev => { if (filterPlayer?.id !== openMemberMenu.id) ev.currentTarget.style.background = C.surfaceHi }}
+                  onMouseLeave={ev => { if (filterPlayer?.id !== openMemberMenu.id) ev.currentTarget.style.background = 'transparent' }}
+                >
+                  <IconFilter size={13} color={filterPlayer?.id === openMemberMenu.id ? C.accent : C.sub} />
+                </button>
+                <button
+                  title="Ver su estantería"
+                  onClick={() => { setViewingPlayer({ id: openMemberMenu.id, name: openMemberMenu.name }); setOpenMemberMenu(null) }}
+                  style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 32,
+                    background: 'transparent', border: 'none', borderRadius: 7, cursor: 'pointer',
+                    transition: 'background 0.15s',
+                  }}
+                  onMouseEnter={ev => { ev.currentTarget.style.background = C.surfaceHi }}
+                  onMouseLeave={ev => { ev.currentTarget.style.background = 'transparent' }}
+                >
+                  <IconShelf size={15} color={C.sub} />
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>,
+          lunitecaRootRef.current
         )}
+
+        <AnimatePresence>
+          {filterPlayer && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.18 }}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, overflow: 'hidden' }}>
+              <span style={{ fontSize: 11, color: C.muted }}>
+                Filtrando por <strong style={{ color: C.text }}>{filterPlayer.name}</strong>
+              </span>
+              <button onClick={() => setFilterPlayer(null)} title="Quitar filtro" style={{
+                background: 'none', border: 'none', color: C.muted, cursor: 'pointer', fontSize: 13, lineHeight: 1, padding: '0 2px',
+              }}>×</button>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* Lista */}
@@ -4013,7 +4182,9 @@ function AmigosTab({ player, onGoToShelf }) {
           </button>
         )}
       </div>
-    </div>
+    </motion.div>
+      )}
+    </AnimatePresence>
   )
 }
 
@@ -4030,6 +4201,15 @@ function useSwipeNav(isMobile, nav, goToNav, navIds) {
 
   function onTouchStart(e) {
     if (!isMobile) return
+    // Elementos marcados con data-noswipe (p.ej. la barra de avatares de
+    // Amigos, que se desplaza en horizontal por sí misma) no deben disparar
+    // nunca el cambio de pestaña — si no, deslizar dentro de la barra para
+    // ver los primeros miembros de vuelta se comía el gesto y saltaba a la
+    // pestaña de al lado.
+    if (e.target.closest('[data-noswipe]')) {
+      touchRef.current.tracking = false
+      return
+    }
     const t = e.touches[0]
     touchRef.current = { x: t.clientX, y: t.clientY, tracking: true, decided: null }
   }
@@ -4201,7 +4381,7 @@ export default function LunitecaV2({ player }) {
     await fetch('/api/shelf/personal', {
       method: 'POST', credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...book, status: 'want_to_read' }),
+      body: JSON.stringify({ ...book, status: 'want_to_read', origin: 'search' }),
     })
     loadShelf()
   }
@@ -4555,7 +4735,7 @@ export default function LunitecaV2({ player }) {
         <motion.div initial={false} animate={tabAnimate('amigos')}
           transition={isMobile ? { type: 'tween', duration: 0.22, ease: [0.4, 0, 0.2, 1] } : { duration: 0 }}
           style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: nav === 'amigos' ? undefined : 'none' }}>
-          <AmigosTab player={player} onGoToShelf={() => goToNav('shelf')} />
+          <AmigosTab player={player} />
         </motion.div>
       </div>
 

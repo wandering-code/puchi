@@ -278,6 +278,12 @@ def _migrate():
         # activity: número de lectura al terminar (para "terminó X por 2ª vez"
         # en el feed de Amigos) — solo relevante en eventos 'finished'.
         "ALTER TABLE activity ADD COLUMN IF NOT EXISTS times_read INTEGER",
+
+        # personal_shelf: origen del alta — 'search' (buscado/alta manual/carga
+        # masiva) o 'copied' (copiado de la estantería de un amigo). Sin
+        # backfill: no hay forma de reconstruirlo para filas ya existentes,
+        # se quedan en NULL.
+        "ALTER TABLE personal_shelf ADD COLUMN IF NOT EXISTS origin VARCHAR",
     ]
     with engine.connect() as conn:
         for stmt in stmts:
@@ -1203,6 +1209,7 @@ class ShelfAddRequest(BaseModel):
     year:           Optional[int]   = None
     genre:          Optional[str]   = None
     status:         str             = "want_to_read"   # reading | read | want_to_read
+    origin:         Optional[str]   = None   # 'search' | 'copied' — ver PersonalShelf.origin
     # Club-specific (ignored by personal shelf)
     initial_status: str             = "proposed"       # proposed | finished (admin only for finished)
     read_date:      Optional[str]   = None
@@ -1236,6 +1243,8 @@ def get_personal_shelf(
     )
     return [_shelf_entry_out(e, hide_notes=(target_id != current.id)) for e in entries]
 
+CLUB_ACTIVITY_EVENT_TYPES = {'proposed', 'voted'}
+
 def _log_activity(db, player_id: int, book_id: int, event_type: str, rating: float = None, times_read: int = None):
     db.add(Activity(player_id=player_id, book_id=book_id, event_type=event_type, rating=rating, times_read=times_read))
 
@@ -1257,6 +1266,7 @@ async def add_to_personal_shelf(
         player_id=current.id, book_id=book.id,
         status=body.status, sort_order=max_order,
         times_read=1 if body.status == 'read' else 0,
+        origin=body.origin,
     )
     db.add(entry)
     _log_activity(db, current.id, book.id, 'added')
@@ -1358,6 +1368,7 @@ async def bulk_add_personal_shelf(
                 started_at=started_at, finished_at=finished_at,
                 sort_order=next_order,
                 times_read=1 if status == "read" else 0,
+                origin="search",
             )
             db.add(entry)
             next_order += 1
@@ -1462,15 +1473,14 @@ def get_activity_feed(
     db: Session = Depends(get_db),
     current: Player = Depends(get_current_player),
 ):
-    # La actividad es "cosa del club" — un jugador sin club_member no genera
-    # entradas para nadie (ni para sí mismo), su estantería personal sigue
-    # intacta, solo no aparece en este feed. player_id filtra el feed a uno
-    # solo (barra de miembros de Amigos), sin tocar la paginación de los demás.
-    base_query = (
-        db.query(Activity)
-        .join(Player, Activity.player_id == Player.id)
-        .filter(Player.club_member == True)  # noqa: E712
-    )
+    # Actividad de estantería personal (added/started/finished) se ve de
+    # cualquier jugador, sea socio del club o no. Solo lo específico del club
+    # (proposed/voted) se oculta a quien no es club_member. player_id filtra
+    # el feed a uno solo (barra de miembros de Amigos), sin tocar la
+    # paginación de los demás.
+    base_query = db.query(Activity)
+    if not current.club_member:
+        base_query = base_query.filter(Activity.event_type.notin_(CLUB_ACTIVITY_EVENT_TYPES))
     if player_id is not None:
         base_query = base_query.filter(Activity.player_id == player_id)
     activities = (
@@ -1989,7 +1999,8 @@ def _shelf_entry_out(e: PersonalShelf, hide_notes=False) -> dict:
         "started_at":  e.started_at.isoformat()  if e.started_at  else None,
         "finished_at": e.finished_at.isoformat()  if e.finished_at else None,
         "sort_order":  e.sort_order,
-        "added_at":    e.added_at.isoformat(),
+        "added_at":    e.added_at.isoformat() if e.added_at else None,
+        "origin":      e.origin,
     }
 
 def _club_entry_out(e: ClubShelf, current_player_id: int = None) -> dict:
