@@ -1284,7 +1284,8 @@ class BulkShelfRequest(BaseModel):
     # campo con el tipo equivocado en un libro no invalida el envío entero
     # (Pydantic rechazaría todo el body de golpe antes de llegar al endpoint)
     # — se valida y convierte a mano dentro del bucle, libro a libro.
-    books: list[dict]
+    books:  list[dict]
+    origin: Optional[str] = None   # 'search' (por defecto) | 'goodreads' — ver PersonalShelf.origin
 
 def _parse_bulk_date(s, field: str):
     if not s:
@@ -1341,6 +1342,7 @@ async def bulk_add_personal_shelf(
             current_page = _parse_bulk_int(raw.get("current_page"), "current_page")
             started_at   = _parse_bulk_date(raw.get("started_at"), "started_at")
             finished_at  = _parse_bulk_date(raw.get("finished_at"), "finished_at")
+            times_read   = _parse_bulk_int(raw.get("times_read"), "times_read")
             folder = raw.get("folder")
             folder = folder.strip() if isinstance(folder, str) and folder.strip() else None
 
@@ -1367,8 +1369,8 @@ async def bulk_add_personal_shelf(
                 folder=folder, notes=raw.get("notes") or None,
                 started_at=started_at, finished_at=finished_at,
                 sort_order=next_order,
-                times_read=1 if status == "read" else 0,
-                origin="search",
+                times_read=times_read if times_read else (1 if status == "read" else 0),
+                origin=raw.get("origin") or body.origin or "search",
             )
             db.add(entry)
             next_order += 1

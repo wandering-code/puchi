@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useIsMobile } from '../../../utils/responsive'
 import { C } from './lunitecaTheme'
 import BulkAddModal from './BulkAddModal'
+import GoodreadsImportModal from './GoodreadsImportModal'
 import PlayerAvatar from '../PlayerAvatar'
 import BarcodeScannerModal from './BarcodeScannerModal'
 
@@ -309,6 +310,15 @@ function IconImport({ size = 14, color = 'currentColor' }) {
     </svg>
   )
 }
+function IconFileImport({ size = 14, color = 'currentColor' }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 14 14" fill="none" style={{ display: 'block', flexShrink: 0 }}>
+      <path d="M3.5 1.2h4.8L11 3.9v8.4a.5.5 0 0 1-.5.5h-6a.5.5 0 0 1-.5-.5V1.7a.5.5 0 0 1 .5-.5z" stroke={color} strokeWidth="1.3" strokeLinejoin="round" />
+      <path d="M8.2 1.2v2.4a.5.5 0 0 0 .5.5H11" stroke={color} strokeWidth="1.3" strokeLinejoin="round" />
+      <path d="M6.5 6v3.6M4.9 8L6.5 9.6 8.1 8" stroke={color} strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
 function IconSun({ size = 14, color = 'currentColor' }) {
   return (
     <svg width={size} height={size} viewBox="0 0 16 16" fill="none" style={{ display: 'block' }}>
@@ -393,7 +403,7 @@ function SearchResult({ book, onAdd }) {
   )
 }
 
-function SearchOverlay({ onClose, onAdd, hint }) {
+function SearchOverlay({ onClose, onAdd, hint, startInManualMode = false }) {
   const [q,       setQ]       = useState('')
   const [results, setResults] = useState([])
   const [loading, setLoading] = useState(false)
@@ -402,8 +412,10 @@ function SearchOverlay({ onClose, onAdd, hint }) {
   // Alta manual — para libros que Open Library no conoce (la búsqueda no
   // trae nada). Mismo `onAdd` que usan los resultados de búsqueda; el
   // backend ya crea el libro sin más con solo el título (sin book_id ni
-  // open_lib_key no intenta emparejar con nada existente).
-  const [manualMode,   setManualMode]   = useState(false)
+  // open_lib_key no intenta emparejar con nada existente). `startInManualMode`
+  // salta directo aquí desde el menú del "+" (opción "Añadir manualmente"),
+  // sin pasar primero por la búsqueda.
+  const [manualMode,   setManualMode]   = useState(startInManualMode)
   const [manualSaving, setManualSaving] = useState(false)
   const [manualDraft,  setManualDraft]  = useState({ title: '', author: '', year: '', isbn: '', genre: '', num_pages: '' })
 
@@ -4340,11 +4352,15 @@ export default function LunitecaV2({ player }) {
   }
   const [selected,    setSelected]    = useState(null)
   const [showSearch,  setShowSearch]  = useState(false)
+  const [manualAdd,   setManualAdd]   = useState(false)
   const [showFilters, setShowFilters] = useState(false)
   const [showSort,    setShowSort]    = useState(false)
   const [showBulkImport, setShowBulkImport] = useState(false)
+  const [showGoodreadsImport, setShowGoodreadsImport] = useState(false)
+  const [showAddChooser, setShowAddChooser] = useState(false)
   const [sort,        setSort]        = useState({ field: '', dir: 'asc' })
   const sortMenuRef = useOutsideClose(showSort, () => setShowSort(false))
+  const addChooserRef = useOutsideClose(showAddChooser, () => setShowAddChooser(false))
 
   useEffect(() => { loadShelf() }, [player.id])
 
@@ -4668,21 +4684,47 @@ export default function LunitecaV2({ player }) {
                 {theme === 'dark' ? <IconSun color={C.muted} /> : <IconMoon color={C.muted} />}
               </button>
 
-              <button onClick={() => setShowBulkImport(true)} title="Añadir varios libros de golpe" style={{
-                background: C.surfaceHi, border: 'none', borderRadius: 8,
-                width: 32, height: 28, cursor: 'pointer', color: C.muted,
-                display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-              }}>
-                <IconImport size={13} color={C.muted} />
-              </button>
-
-              <button onClick={() => setShowSearch(true)} title="Añadir libro" style={{
+              <div ref={addChooserRef} style={{ position: 'relative', flexShrink: 0 }}>
+              <button onClick={() => setShowAddChooser(v => !v)} title="Añadir libro" style={{
                 background: C.accent, border: 'none', borderRadius: 8,
                 width: 32, height: 28, cursor: 'pointer',
                 display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
               }}>
                 <IconPlus size={13} color="white" />
               </button>
+              <AnimatePresence>
+              {showAddChooser && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.96, y: -4 }} animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.96, y: -4 }} transition={{ duration: 0.14 }}
+                  style={{
+                    position: 'absolute', top: 'calc(100% + 6px)', right: 0,
+                    background: C.surface, border: `1px solid ${C.border}`,
+                    borderRadius: 10, overflow: 'hidden', minWidth: 210,
+                    boxShadow: '0 8px 24px rgba(0,0,0,0.35)', zIndex: 50,
+                  }}>
+                  {[
+                    { icon: <IconSearch     size={13} color={C.sub} />, label: 'Buscar libro',           onClick: () => setShowSearch(true) },
+                    { icon: <IconEdit       size={13} color={C.sub} />, label: 'Añadir manualmente',      onClick: () => { setManualAdd(true); setShowSearch(true) } },
+                    { icon: <IconImport     size={13} color={C.sub} />, label: 'Añadir varios',           onClick: () => setShowBulkImport(true) },
+                    { icon: <IconFileImport size={13} color={C.sub} />, label: 'Importar desde Goodreads', onClick: () => setShowGoodreadsImport(true) },
+                  ].map(({ icon, label, onClick }) => (
+                    <button key={label} onClick={() => { onClick(); setShowAddChooser(false) }} style={{
+                      width: '100%', background: 'transparent', border: 'none',
+                      padding: '9px 13px', textAlign: 'left', cursor: 'pointer',
+                      color: C.text, fontSize: 12,
+                      display: 'flex', alignItems: 'center', gap: 9, transition: 'background 0.1s',
+                    }}
+                      onMouseEnter={e => e.currentTarget.style.background = C.surfaceHi}
+                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                    >
+                      {icon}{label}
+                    </button>
+                  ))}
+                </motion.div>
+              )}
+              </AnimatePresence>
+              </div>
             </div>
 
             {sorted.length === 0 && (
@@ -4740,13 +4782,20 @@ export default function LunitecaV2({ player }) {
       </div>
 
       <AnimatePresence>
-        {showSearch && <SearchOverlay onClose={() => setShowSearch(false)} onAdd={addBook} />}
+        {showSearch && <SearchOverlay
+          startInManualMode={manualAdd}
+          onClose={() => { setShowSearch(false); setManualAdd(false) }}
+          onAdd={addBook}
+        />}
       </AnimatePresence>
       <AnimatePresence>
         {showFilters && <FilterModal filters={filters} onApply={setFilters} onClose={() => setShowFilters(false)} shelf={shelf} />}
       </AnimatePresence>
       <AnimatePresence>
         {showBulkImport && <BulkAddModal onClose={() => setShowBulkImport(false)} onImported={loadShelf} />}
+      </AnimatePresence>
+      <AnimatePresence>
+        {showGoodreadsImport && <GoodreadsImportModal shelf={shelf} onClose={() => setShowGoodreadsImport(false)} onImported={loadShelf} />}
       </AnimatePresence>
     </div>
   )
