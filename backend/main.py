@@ -1285,7 +1285,7 @@ class BulkShelfRequest(BaseModel):
     # (Pydantic rechazaría todo el body de golpe antes de llegar al endpoint)
     # — se valida y convierte a mano dentro del bucle, libro a libro.
     books:  list[dict]
-    origin: Optional[str] = None   # 'search' (por defecto) | 'goodreads' — ver PersonalShelf.origin
+    origin: Optional[str] = None   # 'search' (por defecto) | 'goodreads' | 'excel' — ver PersonalShelf.origin
 
 def _parse_bulk_date(s, field: str):
     if not s:

@@ -5,6 +5,7 @@ import { useIsMobile } from '../../../utils/responsive'
 import { C } from './lunitecaTheme'
 import BulkAddModal from './BulkAddModal'
 import GoodreadsImportModal from './GoodreadsImportModal'
+import ExcelImportModal from './ExcelImportModal'
 import PlayerAvatar from '../PlayerAvatar'
 import BarcodeScannerModal from './BarcodeScannerModal'
 
@@ -316,6 +317,15 @@ function IconFileImport({ size = 14, color = 'currentColor' }) {
       <path d="M3.5 1.2h4.8L11 3.9v8.4a.5.5 0 0 1-.5.5h-6a.5.5 0 0 1-.5-.5V1.7a.5.5 0 0 1 .5-.5z" stroke={color} strokeWidth="1.3" strokeLinejoin="round" />
       <path d="M8.2 1.2v2.4a.5.5 0 0 0 .5.5H11" stroke={color} strokeWidth="1.3" strokeLinejoin="round" />
       <path d="M6.5 6v3.6M4.9 8L6.5 9.6 8.1 8" stroke={color} strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+function IconFileSpreadsheet({ size = 14, color = 'currentColor' }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 14 14" fill="none" style={{ display: 'block', flexShrink: 0 }}>
+      <path d="M3.5 1.2h4.8L11 3.9v8.4a.5.5 0 0 1-.5.5h-6a.5.5 0 0 1-.5-.5V1.7a.5.5 0 0 1 .5-.5z" stroke={color} strokeWidth="1.3" strokeLinejoin="round" />
+      <path d="M8.2 1.2v2.4a.5.5 0 0 0 .5.5H11" stroke={color} strokeWidth="1.3" strokeLinejoin="round" />
+      <path d="M4.3 7.2h5.4M4.3 9.4h5.4M6.6 7.2v4.6" stroke={color} strokeWidth="1.1" strokeLinecap="round" />
     </svg>
   )
 }
@@ -4357,6 +4367,7 @@ export default function LunitecaV2({ player }) {
   const [showSort,    setShowSort]    = useState(false)
   const [showBulkImport, setShowBulkImport] = useState(false)
   const [showGoodreadsImport, setShowGoodreadsImport] = useState(false)
+  const [showExcelImport, setShowExcelImport] = useState(false)
   const [showAddChooser, setShowAddChooser] = useState(false)
   const [sort,        setSort]        = useState({ field: '', dir: 'asc' })
   const sortMenuRef = useOutsideClose(showSort, () => setShowSort(false))
@@ -4706,8 +4717,9 @@ export default function LunitecaV2({ player }) {
                   {[
                     { icon: <IconSearch     size={13} color={C.sub} />, label: 'Buscar libro',           onClick: () => setShowSearch(true) },
                     { icon: <IconEdit       size={13} color={C.sub} />, label: 'Añadir manualmente',      onClick: () => { setManualAdd(true); setShowSearch(true) } },
-                    { icon: <IconImport     size={13} color={C.sub} />, label: 'Añadir varios',           onClick: () => setShowBulkImport(true) },
-                    { icon: <IconFileImport size={13} color={C.sub} />, label: 'Importar desde Goodreads', onClick: () => setShowGoodreadsImport(true) },
+                    { icon: <IconImport          size={13} color={C.sub} />, label: 'Añadir varios',           onClick: () => setShowBulkImport(true) },
+                    { icon: <IconFileImport      size={13} color={C.sub} />, label: 'Importar desde Goodreads', onClick: () => setShowGoodreadsImport(true) },
+                    { icon: <IconFileSpreadsheet size={13} color={C.sub} />, label: 'Importar desde Excel',     onClick: () => setShowExcelImport(true) },
                   ].map(({ icon, label, onClick }) => (
                     <button key={label} onClick={() => { onClick(); setShowAddChooser(false) }} style={{
                       width: '100%', background: 'transparent', border: 'none',
@@ -4796,6 +4808,9 @@ export default function LunitecaV2({ player }) {
       </AnimatePresence>
       <AnimatePresence>
         {showGoodreadsImport && <GoodreadsImportModal shelf={shelf} onClose={() => setShowGoodreadsImport(false)} onImported={loadShelf} />}
+      </AnimatePresence>
+      <AnimatePresence>
+        {showExcelImport && <ExcelImportModal shelf={shelf} onClose={() => setShowExcelImport(false)} onImported={loadShelf} />}
       </AnimatePresence>
     </div>
   )
