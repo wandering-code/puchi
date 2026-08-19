@@ -1056,15 +1056,30 @@ function ClubFilterModal({ filters, onApply, onClose, items }) {
   )
 }
 
+// Aro giratorio minimalista para indicar que una portada está bajando —
+// evita que el hueco vacío se confunda con un fallo mientras carga.
+function CoverSpinner({ size = 16 }) {
+  return (
+    <motion.svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+      animate={{ rotate: 360 }} transition={{ duration: 0.8, repeat: Infinity, ease: 'linear' }}>
+      <circle cx="12" cy="12" r="9" stroke={C.border} strokeWidth="2.5" />
+      <path d="M21 12a9 9 0 0 0-9-9" stroke={C.muted} strokeWidth="2.5" strokeLinecap="round" />
+    </motion.svg>
+  )
+}
+
 // ─── Portada genérica ─────────────────────────────────────────────────────────
 function Cover({ url, w, h, radius = 6 }) {
   // El marcador de posición va siempre detrás, no solo cuando no hay url —
   // así, mientras la imagen real todavía está bajando (o si falla del todo,
-  // vía onError), el hueco nunca se ve vacío/transparente.
+  // vía onError), el hueco nunca se ve vacío/transparente. Mientras baja se
+  // muestra además un spinner, para que no parezca un fallo sino una carga.
   const [broken, setBroken] = useState(false)
-  useEffect(() => { setBroken(false) }, [url])
+  const [loaded, setLoaded] = useState(false)
+  useEffect(() => { setBroken(false); setLoaded(false) }, [url])
   const showImg = !!url && !broken
   const emojiSize = typeof w === 'number' ? Math.round(w * 0.28) : 28
+  const spinnerSize = Math.max(14, Math.round((typeof w === 'number' ? w : 60) * 0.18))
   return (
     <div style={{
       width: w, height: h, borderRadius: radius, flexShrink: 0, position: 'relative', overflow: 'hidden',
@@ -1072,9 +1087,18 @@ function Cover({ url, w, h, radius = 6 }) {
     }}>
       {!showImg && <span style={{ fontSize: emojiSize }}>📖</span>}
       {showImg && (
-        <img src={url} alt="" onError={() => setBroken(true)}
+        <motion.img src={url} alt="" onError={() => setBroken(true)} onLoad={() => setLoaded(true)}
+          initial={false} animate={{ opacity: loaded ? 1 : 0 }} transition={{ duration: 0.25 }}
           style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
       )}
+      <AnimatePresence>
+        {showImg && !loaded && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}
+            style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <CoverSpinner size={spinnerSize} />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }
@@ -1084,6 +1108,7 @@ function Cover({ url, w, h, radius = 6 }) {
 // disponible: la imagen se ve entera, sin recortes ni márgenes vacíos.
 function HeroCover({ url, width = 150 }) {
   const [broken, setBroken] = useState(false)
+  const [loaded, setLoaded] = useState(false)
   // Ancho fijo, alto automático según la proporción real de la imagen — la
   // dirección inversa (alto fijo/ancho automático) es ambigua dentro de un
   // flex con stretch: el navegador puede calcular el ancho contra una altura
@@ -1093,7 +1118,7 @@ function HeroCover({ url, width = 150 }) {
   // Se parte de 2:3 (proporción habitual de portada) y se corrige en cuanto
   // la imagen carga y conocemos su proporción real.
   const [ratio, setRatio] = useState(2 / 3)
-  useEffect(() => { setBroken(false); setRatio(2 / 3) }, [url])
+  useEffect(() => { setBroken(false); setLoaded(false); setRatio(2 / 3) }, [url])
   const showImg = !!url && !broken
   if (!showImg) {
     return (
@@ -1104,11 +1129,22 @@ function HeroCover({ url, width = 150 }) {
     )
   }
   return (
-    <img src={url} alt=""
-      onError={() => setBroken(true)}
-      onLoad={ev => setRatio(ev.currentTarget.naturalWidth / ev.currentTarget.naturalHeight)}
-      style={{ width, height: 'auto', aspectRatio: ratio, display: 'block', borderRadius: 8, flexShrink: 0 }}
-    />
+    <div style={{ position: 'relative', width, aspectRatio: ratio, flexShrink: 0, borderRadius: 8, overflow: 'hidden', background: C.surfaceHi }}>
+      <motion.img src={url} alt=""
+        onError={() => setBroken(true)}
+        onLoad={ev => { setRatio(ev.currentTarget.naturalWidth / ev.currentTarget.naturalHeight); setLoaded(true) }}
+        initial={false} animate={{ opacity: loaded ? 1 : 0 }} transition={{ duration: 0.25 }}
+        style={{ width: '100%', height: '100%', display: 'block', objectFit: 'cover' }}
+      />
+      <AnimatePresence>
+        {!loaded && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}
+            style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <CoverSpinner size={Math.max(16, Math.round(width * 0.14))} />
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
   )
 }
 

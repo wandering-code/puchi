@@ -10,6 +10,7 @@ from io import BytesIO
 from PIL import Image
 import httpx
 import os, uuid, shutil, re, unicodedata, hmac, hashlib, base64, time
+from urllib.parse import urlsplit
 from jose import JWTError, jwt
 
 from database import (
@@ -137,6 +138,47 @@ def _pick_genre(subjects: list) -> str | None:
 
 _UPLOAD_DIR = os.path.join(os.path.dirname(__file__), 'uploads', 'covers')
 os.makedirs(_UPLOAD_DIR, exist_ok=True)
+
+_COVER_CACHE_MAX_BYTES = 8 * 1024 * 1024  # portada razonable ~cientos de KB; 8MB da margen sin abrir la puerta a abusos
+
+def _cover_cache_path(url: str) -> tuple[str, str]:
+    """Ruta local + URL pública deterministas (hash de la propia URL externa)
+    para la copia cacheada de una portada — así una portada ya bajada, para
+    el libro/jugador que sea, nunca se vuelve a descargar."""
+    ext = os.path.splitext(urlsplit(url).path)[1].lower()
+    if ext not in ('.jpg', '.jpeg', '.png', '.webp', '.gif'):
+        ext = '.jpg'
+    name = hashlib.sha1(url.encode()).hexdigest() + ext
+    return os.path.join(_UPLOAD_DIR, name), f"/uploads/covers/{name}"
+
+async def _cache_cover_url(url: Optional[str]) -> Optional[str]:
+    """Si `url` es una portada externa (Open Library u otra fuente por
+    internet), la descarga una única vez y la deja servida desde el propio
+    backend — evita que cargar Luniteca dependa en cada visita de la
+    latencia/disponibilidad de un tercero. Ya local (empieza por '/') se
+    devuelve tal cual. Cualquier fallo (timeout, 404, tipo raro, demasiado
+    grande...) devuelve la URL externa sin cambios — nunca debe romper el
+    alta/edición de un libro por un problema de red ajeno."""
+    if not url or url.startswith('/'):
+        return url
+    try:
+        path, public_url = _cover_cache_path(url)
+        if os.path.exists(path):
+            return public_url
+        async with httpx.AsyncClient(follow_redirects=True, timeout=8) as client:
+            r = await client.get(url)
+            if r.status_code != 200 or not r.content:
+                return url
+            if len(r.content) > _COVER_CACHE_MAX_BYTES:
+                return url
+            ctype = r.headers.get('content-type', '')
+            if ctype and not ctype.startswith('image/'):
+                return url
+            with open(path, 'wb') as f:
+                f.write(r.content)
+        return public_url
+    except Exception:
+        return url
 
 app = FastAPI(title="Luni API")
 app.mount("/uploads", StaticFiles(directory=os.path.join(os.path.dirname(__file__), 'uploads')), name="uploads")
@@ -926,7 +968,7 @@ async def update_book(
     if body.author    is not None: book.author    = body.author.strip()
     if body.genre     is not None: book.genre     = body.genre.strip()
     if body.synopsis  is not None: book.synopsis  = body.synopsis.strip()
-    if body.cover_url is not None: book.cover_url = body.cover_url.strip() or None
+    if body.cover_url is not None: book.cover_url = await _cache_cover_url(body.cover_url.strip() or None)
     if body.year      is not None: book.year      = body.year
     if body.isbn      is not None: book.isbn      = body.isbn.strip() or None
     db.commit()
@@ -1254,7 +1296,7 @@ async def add_to_personal_shelf(
     db: Session = Depends(get_db),
     current: Player = Depends(get_current_player),
 ):
-    book = _get_or_create_book(db, body)
+    book = await _get_or_create_book(db, body)
     existing = db.query(PersonalShelf).filter_by(
         player_id=current.id, book_id=book.id
     ).first()
@@ -1349,7 +1391,7 @@ async def bulk_add_personal_shelf(
             book = Book(
                 title=title,
                 author=raw.get("author") or None,
-                cover_url=raw.get("cover_url") or None,
+                cover_url=await _cache_cover_url(raw.get("cover_url") or None),
                 isbn=raw.get("isbn") or None,
                 num_pages=num_pages,
                 synopsis=raw.get("synopsis") or None,
@@ -1412,7 +1454,7 @@ async def update_personal_shelf(
     if body.current_page       is not None: entry.current_page       = body.current_page
     if body.custom_total_pages is not None: entry.custom_total_pages = body.custom_total_pages
     if body.folder             is not None: entry.folder             = body.folder or None
-    if body.cover_url          is not None: entry.cover_url          = body.cover_url.strip() or None
+    if body.cover_url          is not None: entry.cover_url          = await _cache_cover_url(body.cover_url.strip() or None)
     # Recalcular progress cuando se actualizan páginas
     total = entry.custom_total_pages or (entry.book.num_pages if entry.book else None)
     if total and entry.current_page is not None:
@@ -1566,7 +1608,7 @@ async def propose_club_book(
     if initial not in ("proposed", "finished"):
         initial = "proposed"
 
-    book = _get_or_create_book(db, body)
+    book = await _get_or_create_book(db, body)
     existing = db.query(ClubShelf).filter_by(book_id=book.id).first()
     if existing:
         raise HTTPException(status_code=409, detail="El libro ya está en la estantería del club")
@@ -1927,7 +1969,7 @@ async def delete_session(
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
-def _get_or_create_book(db, body: ShelfAddRequest) -> Book:
+async def _get_or_create_book(db, body: ShelfAddRequest) -> Book:
     if body.book_id:
         book = db.query(Book).filter(Book.id == body.book_id).first()
         if book:
@@ -1944,7 +1986,7 @@ def _get_or_create_book(db, body: ShelfAddRequest) -> Book:
             return book
     book = Book(
         title=body.title, author=body.author,
-        cover_url=body.cover_url, isbn=body.isbn,
+        cover_url=await _cache_cover_url(body.cover_url), isbn=body.isbn,
         open_lib_key=body.open_lib_key,
         num_pages=body.num_pages, synopsis=body.synopsis,
         year=body.year, genre=body.genre,
