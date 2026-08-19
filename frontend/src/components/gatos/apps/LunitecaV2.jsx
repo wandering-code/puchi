@@ -1076,7 +1076,20 @@ function Cover({ url, w, h, radius = 6 }) {
   // muestra además un spinner, para que no parezca un fallo sino una carga.
   const [broken, setBroken] = useState(false)
   const [loaded, setLoaded] = useState(false)
-  useEffect(() => { setBroken(false); setLoaded(false) }, [url])
+  // Reseteo al cambiar de `url` hecho en el propio render (no en un
+  // useEffect): con la imagen ya en la caché del navegador, `onLoad` puede
+  // disparar de forma prácticamente síncrona al montar — si el reseteo
+  // llegara después, vía efecto, pisaría el `loaded=true` que ya había
+  // puesto `onLoad` y la portada se quedaba con opacidad 0 para siempre
+  // (bug real visto en producción, portadas ya cacheadas que no llegaban a
+  // pintarse). Comparando contra un ref y ajustando el estado ya durante el
+  // render, el reseteo siempre ocurre antes de que el <img> llegue a existir.
+  const prevUrl = useRef(url)
+  if (prevUrl.current !== url) {
+    prevUrl.current = url
+    setBroken(false)
+    setLoaded(false)
+  }
   const showImg = !!url && !broken
   const emojiSize = typeof w === 'number' ? Math.round(w * 0.28) : 28
   const spinnerSize = Math.max(14, Math.round((typeof w === 'number' ? w : 60) * 0.18))
@@ -1118,7 +1131,16 @@ function HeroCover({ url, width = 150 }) {
   // Se parte de 2:3 (proporción habitual de portada) y se corrige en cuanto
   // la imagen carga y conocemos su proporción real.
   const [ratio, setRatio] = useState(2 / 3)
-  useEffect(() => { setBroken(false); setLoaded(false); setRatio(2 / 3) }, [url])
+  // Mismo motivo que en Cover: reseteo en el propio render, no en un
+  // useEffect, para no perder una carga que ya vino de caché (ver comentario
+  // detallado más arriba).
+  const prevUrl = useRef(url)
+  if (prevUrl.current !== url) {
+    prevUrl.current = url
+    setBroken(false)
+    setLoaded(false)
+    setRatio(2 / 3)
+  }
   const showImg = !!url && !broken
   if (!showImg) {
     return (
