@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://luni:luni@localhost:5433/luni")
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://luni:luni@localhost:5436/luni")
 
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(bind=engine)

@@ -158,6 +158,7 @@ const TARGET_FIELDS = [
   { key: 'times_read',  label: 'Veces leído',                          templateHeader: 'Veces leído',      aliases: ['veces leido', 'read count', 'relecturas', 'numero de lecturas', 'n de lecturas'] },
   { key: 'folder',      label: 'Carpeta',                              templateHeader: 'Carpeta',          aliases: ['carpeta', 'folder', 'coleccion'] },
   { key: 'notes',       label: 'Notas',                                templateHeader: 'Notas',            aliases: ['notas', 'notes', 'comentarios', 'comentario', 'resena'] },
+  { key: 'synopsis',    label: 'Sinopsis',                             templateHeader: 'Sinopsis',         aliases: ['sinopsis', 'synopsis', 'resumen', 'descripcion', 'argumento', 'summary'] },
 ]
 
 function normHeader(s) {
@@ -165,7 +166,7 @@ function normHeader(s) {
 }
 
 // Adivina el mapeo inicial por el nombre de cada columna, para no obligar a
-// mapear las 13 casillas a mano cuando el archivo ya usa nombres obvios
+// mapear las 14 casillas a mano cuando el archivo ya usa nombres obvios
 // ("Título", "Autor"...). Siempre editable después — esto es solo un punto
 // de partida, nunca una decisión definitiva.
 function guessMapping(headers) {
@@ -346,6 +347,7 @@ function buildRowsFromExcel(rawRows, mapping) {
       genre: col.genre != null ? mapGenreValue(r[col.genre]) : '',
       folder: col.folder != null ? toStr(r[col.folder]) : '',
       notes: col.notes != null ? toStr(r[col.notes]) : '',
+      synopsis: col.synopsis != null ? toStr(r[col.synopsis]) : '',
       cover_url: null,
       coverStatus: 'pending', // pending | done | error — ver enrichRows
       coverSource: null, // 'isbn' | 'search' | null — de dónde salió lo completado
@@ -579,6 +581,7 @@ export default function ExcelImportModal({ onClose, onImported, shelf }) {
       finished_at: showDates(r.status) ? (r.finished_at || undefined) : undefined,
       times_read: r.times_read || undefined,
       notes: r.notes || undefined,
+      synopsis: r.synopsis || undefined,
       cover_url: r.cover_url || undefined,
     }))
     try {
@@ -983,6 +986,8 @@ export default function ExcelImportModal({ onClose, onImported, shelf }) {
                               )}
                             </div>
                           )}
+                          <textarea value={row.synopsis || ''} onChange={e => patchRow(row.key, { synopsis: e.target.value })}
+                            placeholder="Sinopsis" rows={2} style={{ ...inpStyle, resize: 'vertical', fontFamily: 'inherit' }} />
                           <textarea value={row.notes || ''} onChange={e => patchRow(row.key, { notes: e.target.value })}
                             placeholder="Notas" rows={2} style={{ ...inpStyle, resize: 'vertical', fontFamily: 'inherit' }} />
                           <button onClick={() => toggleExpanded(row.key)} style={{

@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react'
 import { AnimatePresence } from 'framer-motion'
-import { useIsMobile } from '../../../utils/responsive'
+import { useIsMobile, getWindowModePref, setWindowModePref } from '../../../utils/responsive'
 import PlayerAvatar from '../PlayerAvatar'
 import AvatarCropModal from '../AvatarCropModal'
 import { PRESET_AVATARS } from '../../../utils/presetAvatars'
@@ -26,6 +26,22 @@ function IconUser({ size = 17, color = 'currentColor' }) {
     </svg>
   )
 }
+function IconLayout({ size = 15, color = 'currentColor' }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" style={{ display: 'block', flexShrink: 0 }}>
+      <rect x="2" y="3" width="12" height="10" rx="1.5" stroke={color} strokeWidth="1.35" />
+      <path d="M2 6.5h12" stroke={color} strokeWidth="1.35" />
+    </svg>
+  )
+}
+function IconTablet({ size = 15, color = 'currentColor' }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" style={{ display: 'block', flexShrink: 0 }}>
+      <rect x="3.5" y="1.5" width="9" height="13" rx="1.5" stroke={color} strokeWidth="1.35" />
+      <path d="M7 12.3h2" stroke={color} strokeWidth="1.35" strokeLinecap="round" />
+    </svg>
+  )
+}
 
 export default function SettingsApp({ player, onProfileUpdate }) {
   const isMobile = useIsMobile()
@@ -44,6 +60,15 @@ export default function SettingsApp({ player, onProfileUpdate }) {
   const [profileMsg,     setProfileMsg]     = useState('')
   const [profileMsgOk,   setProfileMsgOk]   = useState(true)
   const [cropFile,       setCropFile]       = useState(null) // foto elegida, pendiente de encuadrar
+
+  // Modo de interfaz (ventanas de escritorio vs. pantalla completa táctil,
+  // "modo tablet") — se aplica al instante, no forma parte del borrador de
+  // arriba: es una preferencia de este dispositivo, no del perfil.
+  const [windowMode, setWindowModeState] = useState(() => getWindowModePref(player.id))
+  function chooseWindowMode(mode) {
+    setWindowModePref(player.id, mode)
+    setWindowModeState(mode)
+  }
 
   // PIN
   const [curPin,  setCurPin]  = useState('')
@@ -227,6 +252,39 @@ export default function SettingsApp({ player, onProfileUpdate }) {
               {saving ? 'Guardando…' : 'Guardar cambios'}
             </button>
             {profileMsg && <span style={{ fontSize: 12, color: profileMsgOk ? '#23a55a' : '#ed4245' }}>{profileMsg}</span>}
+          </div>
+        </section>
+
+        {/* Modo de interfaz: ventanas de escritorio vs. pantalla completa táctil */}
+        <section style={cardStyle}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <IconLayout size={13} color="rgba(255,255,255,0.5)" />
+            <h3 style={{ fontSize: 13, fontWeight: 700, color: 'rgba(255,255,255,0.85)' }}>Modo de interfaz</h3>
+          </div>
+          <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)', margin: 0 }}>
+            En pantallas grandes táctiles (tablet) las ventanas pueden costar de arrastrar y redimensionar con el dedo.
+            El modo tablet cambia a una app a pantalla completa cada vez, como ya funciona en el móvil.
+            Se aplica solo a este dispositivo.
+          </p>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            {[
+              ['auto', 'Ventanas (PC)', IconLayout],
+              ['tablet', 'Pantalla completa (tablet)', IconTablet],
+            ].map(([mode, label, Icon]) => {
+              const active = windowMode === mode
+              return (
+                <button type="button" key={mode} onClick={() => chooseWindowMode(mode)} style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  background: active ? 'rgba(88,101,242,0.18)' : 'rgba(255,255,255,0.06)',
+                  border: active ? '1px solid #5865f2' : '1px solid rgba(255,255,255,0.1)',
+                  borderRadius: 9, padding: '9px 14px', color: active ? '#8b95f8' : 'rgba(255,255,255,0.7)',
+                  cursor: 'pointer', fontSize: 12.5, fontWeight: 600,
+                }}>
+                  <Icon size={14} color={active ? '#8b95f8' : 'rgba(255,255,255,0.5)'} />
+                  {label}
+                </button>
+              )
+            })}
           </div>
         </section>
 
