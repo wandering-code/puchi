@@ -1,6 +1,7 @@
 services:
   backend:
     build: ./backend
+    restart: unless-stopped
     volumes:
       - ./backend:/app
     environment:
@@ -13,6 +14,7 @@ services:
 
   db:
     image: postgres:16
+    restart: unless-stopped
     environment:
       POSTGRES_USER: luni
       POSTGRES_PASSWORD: luni
