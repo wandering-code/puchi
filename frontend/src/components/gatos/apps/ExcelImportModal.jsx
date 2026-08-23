@@ -480,14 +480,14 @@ export default function ExcelImportModal({ onClose, onImported, shelf }) {
     setRows(rs => rs.map(r => r.key === key ? { ...r, ...patch } : r))
   }
 
-  // Completa cada fila contra Open Library sin pisar nada que ya venga del
-  // Excel — mismo criterio que el importador de Goodreads (solo rellena lo
-  // que esté vacío). Con ISBN es un lookup exacto; sin ISBN (muy habitual en
-  // una hoja de cálculo personal, a diferencia del export de Goodreads que
-  // casi siempre lo trae) se cae a una búsqueda por título + autor, igual
-  // que "Cambiar portada" pero automática y tomando el primer resultado —
-  // por eso esas filas se marcan aparte (coverSource:'search') y se avisa
-  // en la propia fila para que se revise que la edición es la correcta.
+  // Completa cada fila contra Google Books + Open Library (backend:
+  // /books/enrich, con preferencia por sinopsis en español) sin pisar nada
+  // que ya venga del Excel — mismo criterio que el importador de Goodreads
+  // (solo rellena lo que esté vacío). Con ISBN es un lookup exacto; sin ISBN
+  // (muy habitual en una hoja de cálculo personal, a diferencia del export
+  // de Goodreads que casi siempre lo trae) se cae a una búsqueda por título +
+  // autor — por eso esas filas se marcan aparte (coverSource:'search') y se
+  // avisa en la propia fila para que se revise que la edición es la correcta.
   async function enrichRows(initialRows) {
     const targets = initialRows.filter(r => r.title)
     if (targets.length === 0) return
@@ -497,30 +497,25 @@ export default function ExcelImportModal({ onClose, onImported, shelf }) {
     async function worker() {
       while (cursor < targets.length) {
         const row = targets[cursor++]
-        let b = null, source = null
+        let b = null
         try {
-          if (row.isbn) {
-            const r = await fetch(`/api/books/isbn/${encodeURIComponent(row.isbn)}`, { credentials: 'include' })
-            if (r.ok) { b = await r.json(); source = 'isbn' }
-          }
-          if (!b) {
-            const q = [row.title, row.author].filter(Boolean).join(' ').trim()
-            if (q.length >= 3) {
-              const r = await fetch(`/api/books/search?q=${encodeURIComponent(q)}`, { credentials: 'include' })
-              if (r.ok) {
-                const results = await r.json()
-                if (results.length > 0) { b = results[0]; source = 'search' }
-              }
-            }
-          }
+          const params = new URLSearchParams()
+          if (row.title)  params.set('title', row.title)
+          if (row.author) params.set('author', row.author)
+          if (row.isbn)   params.set('isbn', row.isbn)
+          const r = await fetch(`/api/books/enrich?${params.toString()}`, { credentials: 'include' })
+          if (r.ok) b = await r.json()
           if (b) {
             patchRow(row.key, {
+              author: row.author || b.author || '',
+              synopsis: row.synopsis || b.synopsis || '',
               cover_url: row.cover_url || b.cover_url || null,
               num_pages: row.num_pages || b.num_pages || null,
               year: row.year || b.year || null,
               genre: row.genre || mapGenreValue(b.genre) || '',
+              isbn: row.isbn || b.isbn || '',
               coverStatus: 'done',
-              coverSource: source,
+              coverSource: b.source,
             })
           } else {
             patchRow(row.key, { coverStatus: 'error' })

@@ -9,7 +9,7 @@ from typing import Optional
 from io import BytesIO
 from PIL import Image
 import httpx
-import os, uuid, shutil, re, unicodedata, hmac, hashlib, base64, time
+import os, uuid, shutil, re, unicodedata, hmac, hashlib, base64, time, difflib
 from urllib.parse import urlsplit
 from jose import JWTError, jwt
 
@@ -179,6 +179,198 @@ async def _cache_cover_url(url: Optional[str]) -> Optional[str]:
         return public_url
     except Exception:
         return url
+
+def _normalize_title(s: Optional[str]) -> str:
+    if not s:
+        return ""
+    s = unicodedata.normalize("NFD", s)
+    s = "".join(c for c in s if unicodedata.category(c) != "Mn")
+    return re.sub(r"[^a-z0-9]+", " ", s.lower()).strip()
+
+def _titles_match(a: Optional[str], b: Optional[str]) -> bool:
+    """Compara dos títulos con tolerancia a acentos/mayúsculas/subtítulos,
+    pero rechazando coincidencias por "se parece un poco" — sin esto, una
+    búsqueda de texto libre (sin ISBN) puede devolver datos de OTRO libro
+    con un título parecido (p. ej. "El filatelista" encontrando una novela
+    homónima distinta de otro autor) y pisar campos buenos con los de un
+    libro que no es. Solo se usa para descartar resultados de búsquedas por
+    texto — un lookup por ISBN ya es exacto y no pasa por aquí."""
+    na, nb = _normalize_title(a), _normalize_title(b)
+    if not na or not nb:
+        return False
+    if na == nb or na in nb or nb in na:
+        return True
+    return difflib.SequenceMatcher(None, na, nb).ratio() >= 0.82
+
+
+# Google Books complementa a Open Library: a diferencia de esta, soporta
+# filtrar resultados por idioma (`langRestrict`), así que es la fuente que
+# permite conseguir sinopsis en español para libros traducidos, cosa que
+# Open Library no ofrece (su `description` es un único campo por "work",
+# normalmente en el idioma en el que se catalogó originalmente, casi
+# siempre inglés). Funciona sin API key con una cuota reducida; con
+# GOOGLE_BOOKS_API_KEY puesta la cuota sube.
+GOOGLE_BOOKS_API_KEY = os.getenv("GOOGLE_BOOKS_API_KEY")
+
+async def _google_books_lookup(client: httpx.AsyncClient, query: str, isbn: Optional[str] = None, lang: Optional[str] = None, expect_title: Optional[str] = None) -> Optional[dict]:
+    """Primer resultado de Google Books normalizado al mismo formato que ya
+    usan los endpoints de Open Library. Devuelve None ante cualquier fallo
+    (sin resultados, error de red, timeout...) — nunca lanza, para que quien
+    llame pueda simplemente caer a la siguiente fuente.
+
+    Sin ISBN, Google Books es una búsqueda de texto libre y puede devolver
+    un libro distinto con un título parecido (homónimos, otra obra de la
+    saga...) — con `expect_title` se descarta el resultado si su título no
+    coincide razonablemente, en vez de devolver datos de un libro que no es."""
+    q = f"isbn:{isbn}" if isbn else query
+    if not q:
+        return None
+    params = {"q": q, "maxResults": 1}
+    if lang:
+        params["langRestrict"] = lang
+    if GOOGLE_BOOKS_API_KEY:
+        params["key"] = GOOGLE_BOOKS_API_KEY
+    try:
+        r = await client.get("https://www.googleapis.com/books/v1/volumes", params=params, timeout=10)
+        if r.status_code != 200:
+            return None
+        items = r.json().get("items") or []
+        if not items:
+            return None
+    except Exception:
+        return None
+
+    info = items[0].get("volumeInfo", {})
+    if not isbn and expect_title and not _titles_match(info.get("title"), expect_title):
+        return None
+    found_isbn = None
+    for ident in info.get("industryIdentifiers") or []:
+        if ident.get("type") == "ISBN_13":
+            found_isbn = ident.get("identifier")
+            break
+        if ident.get("type") == "ISBN_10" and not found_isbn:
+            found_isbn = ident.get("identifier")
+    year_match = re.search(r"\d{4}", info.get("publishedDate") or "")
+    images = info.get("imageLinks") or {}
+    cover = images.get("thumbnail") or images.get("smallThumbnail")
+    return {
+        "author":    ", ".join(info.get("authors") or []) or None,
+        "synopsis":  info.get("description"),
+        "isbn":      found_isbn,
+        "num_pages": info.get("pageCount"),
+        "year":      int(year_match.group()) if year_match else None,
+        "genre":     _pick_genre(info.get("categories") or []),
+        "cover_url": cover.replace("http://", "https://") if cover else None,
+    }
+
+
+async def _fetch_book_metadata(title: Optional[str] = None, author: Optional[str] = None, isbn: Optional[str] = None) -> dict:
+    """Combina Google Books y Open Library para autocompletar los datos de un
+    libro. Prioridad por campo: Google Books en español > Google Books en
+    cualquier idioma > Open Library — así se consigue sinopsis en español
+    cuando existe, sin perder los datos de Open Library (portadas, páginas...)
+    cuando Google Books no tiene el libro. Usado tanto por la carga masiva
+    por Excel como por el refresco de datos de un libro ya guardado."""
+    query = " ".join(w for w in (title, author) if w).strip()
+    open_lib_key = None
+    ol_data: dict = {}
+
+    async with httpx.AsyncClient() as client:
+        google_es  = await _google_books_lookup(client, query, isbn=isbn, lang="es", expect_title=title)
+        google_any = await _google_books_lookup(client, query, isbn=isbn, expect_title=title)
+
+        if isbn:
+            try:
+                r = await client.get(
+                    f"https://openlibrary.org/api/books?bibkeys=ISBN:{isbn}&format=json&jscmd=data",
+                    timeout=10,
+                )
+                data = r.json().get(f"ISBN:{isbn}", {})
+                if data:
+                    cover = data.get("cover", {})
+                    subjects = [s.get("name") for s in (data.get("subjects") or []) if s.get("name")]
+                    year_match = re.search(r"\d{4}", data.get("publish_date") or "")
+                    ol_data = {
+                        "author":    (data.get("authors") or [{}])[0].get("name"),
+                        "cover_url": cover.get("medium") or cover.get("small"),
+                        "num_pages": data.get("number_of_pages"),
+                        "year":      int(year_match.group()) if year_match else None,
+                        "genre":     _pick_genre(subjects),
+                    }
+                    edition = await client.get(f"https://openlibrary.org/isbn/{isbn}.json", timeout=10, follow_redirects=True)
+                    if edition.status_code == 200:
+                        works = edition.json().get("works") or []
+                        if works:
+                            open_lib_key = works[0].get("key")
+            except Exception:
+                pass
+        elif query:
+            ol_fields = "key,title,author_name,isbn,cover_i,number_of_pages_median,first_publish_year,subject"
+            try:
+                r = await client.get(
+                    "https://openlibrary.org/search.json",
+                    params={"q": query, "limit": 1, "fields": ol_fields},
+                    timeout=10,
+                )
+                docs = r.json().get("docs", [])
+                # A veces el buscador de Open Library devuelve 0 resultados
+                # para título+autor combinados sin motivo aparente (p. ej.
+                # ciertas iniciales con puntos como "J.K." junto a un título
+                # con tilde) aunque el título solo sí encuentre el libro —
+                # capricho del analizador de su buscador (Solr), no algo que
+                # podamos arreglar del lado del autor. Si falla la combinada,
+                # se reintenta solo con el título antes de rendirse.
+                if not docs and author and title:
+                    r = await client.get(
+                        "https://openlibrary.org/search.json",
+                        params={"q": title, "limit": 1, "fields": ol_fields},
+                        timeout=10,
+                    )
+                    docs = r.json().get("docs", [])
+                # Sin ISBN esto es texto libre — igual que con Google Books,
+                # se descarta si el título del resultado no es razonablemente
+                # el mismo libro (ver _titles_match), para no devolver datos
+                # de un homónimo o de otra obra distinta.
+                if docs and _titles_match(docs[0].get("title"), title):
+                    d = docs[0]
+                    open_lib_key = d.get("key")
+                    ol_data = {
+                        "author":    (d.get("author_name") or [None])[0],
+                        "isbn":      (d.get("isbn") or [None])[0],
+                        "cover_url": f"https://covers.openlibrary.org/b/id/{d['cover_i']}-M.jpg" if d.get("cover_i") else None,
+                        "num_pages": d.get("number_of_pages_median"),
+                        "year":      d.get("first_publish_year"),
+                        "genre":     _pick_genre(d.get("subject") or []),
+                    }
+            except Exception:
+                pass
+
+        # Sinopsis de Open Library: solo se llega aquí si ni Google ES ni
+        # Google (cualquier idioma) tenían descripción — sirve de último
+        # recurso, casi siempre en inglés.
+        if open_lib_key and not (google_es or {}).get("synopsis") and not (google_any or {}).get("synopsis"):
+            try:
+                r = await client.get(f"https://openlibrary.org{open_lib_key}.json", timeout=10)
+                if r.status_code == 200:
+                    desc = r.json().get("description")
+                    if isinstance(desc, dict):
+                        desc = desc.get("value")
+                    ol_data["synopsis"] = desc
+            except Exception:
+                pass
+
+    merged = {}
+    for field in ("author", "synopsis", "cover_url", "isbn", "num_pages", "year", "genre"):
+        merged[field] = (
+            (google_es or {}).get(field)
+            or (google_any or {}).get(field)
+            or ol_data.get(field)
+        )
+    merged["isbn"] = merged.get("isbn") or isbn
+    merged["open_lib_key"] = open_lib_key
+    merged["source"] = "isbn" if isbn else ("search" if title else None)
+    return merged
+
 
 app = FastAPI(title="Luni API")
 app.mount("/uploads", StaticFiles(directory=os.path.join(os.path.dirname(__file__), 'uploads')), name="uploads")
@@ -953,6 +1145,7 @@ class BookUpdateRequest(BaseModel):
     cover_url: Optional[str] = None
     year:      Optional[int] = None
     isbn:      Optional[str] = None
+    num_pages: Optional[int] = None
 
 @app.patch("/books/{book_id}")
 async def update_book(
@@ -971,6 +1164,7 @@ async def update_book(
     if body.cover_url is not None: book.cover_url = await _cache_cover_url(body.cover_url.strip() or None)
     if body.year      is not None: book.year      = body.year
     if body.isbn      is not None: book.isbn      = body.isbn.strip() or None
+    if body.num_pages is not None: book.num_pages = body.num_pages
     db.commit()
     db.refresh(book)
     # El mismo Book es compartido entre estanterías personales y del club —
@@ -1235,6 +1429,24 @@ async def book_synopsis(open_lib_key: str, _: Player = Depends(get_current_playe
     if isinstance(desc, dict):
         desc = desc.get("value")
     return {"synopsis": desc or None}
+
+
+@app.get("/books/enrich")
+async def enrich_book(
+    title: Optional[str] = None,
+    author: Optional[str] = None,
+    isbn: Optional[str] = None,
+    _: Player = Depends(get_current_player),
+):
+    """Autocompleta los metadatos de un libro (autor, sinopsis, portada,
+    páginas, año, género, ISBN) combinando Google Books y Open Library, con
+    preferencia por resultados en español. Usado por el enriquecido
+    automático de la carga masiva por Excel y por el botón de refrescar
+    datos de un libro ya guardado — quien llame decide qué hacer con cada
+    campo (rellenar huecos o sustituir el valor actual)."""
+    if not title and not isbn:
+        raise HTTPException(status_code=400, detail="Falta título o ISBN")
+    return await _fetch_book_metadata(title=title, author=author, isbn=isbn)
 
 
 # ── Personal shelf ───────────────────────────────────────────────────────────

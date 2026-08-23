@@ -175,6 +175,14 @@ function IconTrash({ size = 14, color = 'currentColor' }) {
     </svg>
   )
 }
+function IconRefresh({ size = 14, color = 'currentColor' }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" style={{ display: 'block', flexShrink: 0 }}>
+      <path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9" stroke={color} strokeWidth="1.5" strokeLinecap="round" />
+      <path d="M13.5 2.5v3.2h-3.2" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
 function IconCheck({ size = 14, color = 'currentColor' }) {
   return (
     <svg width={size} height={size} viewBox="0 0 16 16" fill="none" style={{ display: 'block' }}>
@@ -1240,6 +1248,8 @@ function BookDetailFull({ entry, shelf, onBack, onUpdateEntry, onUpdateBook, onD
   const [loadingSynopsis,  setLoadingSynopsis]  = useState(false)
   const [folderValue,      setFolderValue]      = useState(entry.folder || '')
   const [showFolderMenu,   setShowFolderMenu]   = useState(false)
+  const [refreshingData,   setRefreshingData]   = useState(false)
+  const [refreshResult,    setRefreshResult]    = useState(null) // null | 'ok' | 'nomatch'
   const folderMenuRef = useOutsideClose(showFolderMenu, () => setShowFolderMenu(false))
 
   // Panel "Añadir a mi estantería" — solo tiene sentido en modo consulta de
@@ -1298,6 +1308,50 @@ function BookDetailFull({ entry, shelf, onBack, onUpdateEntry, onUpdateBook, onD
       coverUrl:     null,
     })
     setEditing(true)
+  }
+
+  // Refresca los datos del libro (todo menos el título y la portada) contra
+  // Google Books + Open Library, priorizando español y cayendo a inglés si
+  // no hay datos en español — igual que el autocompletado del Excel, pero
+  // sustituyendo en vez de solo rellenar huecos, ya que aquí el jugador pide
+  // expresamente "traeme lo último que haya". La portada se deja fuera a
+  // propósito (se elige aparte, a mano, con "Cambiar portada" — no queremos
+  // que un refresco de datos la cambie sin que el jugador lo pida). Solo
+  // toca el Book compartido (onUpdateBook): nunca los datos propios del
+  // jugador (notas, fechas, puntuación, estado, portada personal...), que
+  // viven en PersonalShelf y no se tocan desde aquí. Si una fuente no
+  // devuelve un campo, se deja el valor actual tal cual — nunca se borra un
+  // dato bueno por uno vacío.
+  async function refreshBookData() {
+    setRefreshingData(true)
+    setRefreshResult(null)
+    try {
+      const params = new URLSearchParams()
+      params.set('title', entry.book.title)
+      if (entry.book.author) params.set('author', entry.book.author)
+      if (entry.book.isbn)   params.set('isbn', entry.book.isbn)
+      const r = await fetch(`/api/books/enrich?${params.toString()}`, { credentials: 'include' })
+      let updates = {}
+      if (r.ok) {
+        const fresh = await r.json()
+        for (const field of ['author', 'genre', 'synopsis', 'year', 'isbn', 'num_pages']) {
+          if (fresh[field] !== null && fresh[field] !== undefined && fresh[field] !== '') updates[field] = fresh[field]
+        }
+        if (Object.keys(updates).length > 0) {
+          await onUpdateBook(entry.book.id, updates)
+          if (updates.synopsis) setSynopsis(updates.synopsis)
+        }
+      }
+      // El backend ya descarta resultados de búsqueda por texto cuyo título
+      // no coincide razonablemente con el nuestro (evita pisar datos con los
+      // de un libro homónimo o distinto) — si no hay ISBN y no encuentra una
+      // coincidencia segura, updates llega vacío y aquí solo se avisa de que
+      // no se ha tocado nada, en vez de fallar en silencio.
+      setRefreshResult(Object.keys(updates).length > 0 ? 'ok' : 'nomatch')
+      setTimeout(() => setRefreshResult(null), 2500)
+    } finally {
+      setRefreshingData(false)
+    }
   }
 
   // Compartida por el guardado del formulario de edición y por el desplegable
@@ -1488,6 +1542,39 @@ function BookDetailFull({ entry, shelf, onBack, onUpdateEntry, onUpdateBook, onD
               <IconX size={13} color={C.sub} />
             </button>
           </>) : (<>
+            <div style={{ position: 'relative' }}>
+              <button onClick={refreshBookData} disabled={refreshingData} title="Actualizar datos del libro" style={{
+                background: 'none', border: `1px solid ${C.border}`, borderRadius: 8,
+                width: 30, height: 28, cursor: refreshingData ? 'default' : 'pointer', transition: 'all 0.15s',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                opacity: refreshingData ? 0.5 : 1,
+              }}
+                onMouseEnter={ev => { if (!refreshingData) { ev.currentTarget.style.background = C.surfaceHi; ev.currentTarget.style.borderColor = C.muted } }}
+                onMouseLeave={ev => { ev.currentTarget.style.background = 'none'; ev.currentTarget.style.borderColor = C.border }}
+              >
+                <motion.span style={{ display: 'flex' }}
+                  animate={{ rotate: refreshingData ? 360 : 0 }}
+                  transition={refreshingData ? { repeat: Infinity, duration: 0.8, ease: 'linear' } : { duration: 0 }}
+                >
+                  <IconRefresh size={13} color={C.sub} />
+                </motion.span>
+              </button>
+              <AnimatePresence>
+                {refreshResult === 'nomatch' && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }}
+                    transition={{ duration: 0.15 }}
+                    style={{
+                      position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 20,
+                      background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8,
+                      padding: '6px 10px', fontSize: 11, color: C.sub, whiteSpace: 'nowrap',
+                      boxShadow: '0 8px 24px rgba(0,0,0,0.35)',
+                    }}>
+                    Sin coincidencia segura — no se ha tocado nada
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
             <button onClick={startEdit} title="Editar libro" style={{
               background: 'none', border: `1px solid ${C.border}`, borderRadius: 8,
               width: 30, height: 28, cursor: 'pointer', transition: 'all 0.15s',
