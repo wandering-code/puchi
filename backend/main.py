@@ -2025,7 +2025,23 @@ async def cast_vote(
     else:
         db.add(Vote(player_id=current.id, club_shelf_id=entry_id, rating=body.rating, revealed=True))
         updated = False
-    _log_activity(db, current.id, entry.book_id, 'voted', rating=body.rating)
+    # Igual que al puntuar en Mi estantería: una repuntuación NUNCA crea una
+    # actividad nueva en el feed, solo actualiza en el sitio la que ya existía
+    # para esta puntuación de club (mismo player + libro).
+    existing_activity = (
+        db.query(Activity)
+        .filter(
+            Activity.player_id == current.id,
+            Activity.book_id == entry.book_id,
+            Activity.event_type == 'voted',
+        )
+        .order_by(Activity.created_at.desc(), Activity.id.desc())
+        .first()
+    )
+    if existing_activity:
+        existing_activity.rating = body.rating
+    else:
+        _log_activity(db, current.id, entry.book_id, 'voted', rating=body.rating)
     db.commit()
     await _notify_luni("votes", club_shelf_id=entry_id)
     await _notify_luni("activity")
