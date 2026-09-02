@@ -9,6 +9,7 @@ from typing import Optional
 from io import BytesIO
 from PIL import Image
 import httpx
+import asyncio
 import os, uuid, shutil, re, unicodedata, hmac, hashlib, base64, time, difflib
 from urllib.parse import urlsplit
 from jose import JWTError, jwt
@@ -203,6 +204,79 @@ def _titles_match(a: Optional[str], b: Optional[str]) -> bool:
     return difflib.SequenceMatcher(None, na, nb).ratio() >= 0.82
 
 
+def _core_title_key(title: Optional[str]) -> str:
+    """Título "pelado" de anotaciones de edición/colección/idioma dual — para
+    agrupar como el MISMO libro cosas como "El Pozo de la Ascensión
+    (Trilogía Original Mistborn 2)" y "...(edición ilustrada 2)", o
+    "El marciano / The Martian" y "El marciano" a secas. Sin esto, la
+    bibliografía de un autor con muchas ediciones/traducciones (habitual en
+    Google Books) sale llena de libros repetidos bajo títulos ligeramente
+    distintos — issue reportada en "Más del mismo autor"."""
+    if not title:
+        return ""
+    t = re.split(r"\s*/\s*", title)[0]           # "X / Y" (título bilingüe) -> "X"
+    t = re.sub(r"\([^)]*\)", "", t)               # quita cualquier "(...)"
+    t = re.sub(r":\s*$", "", t)                   # ":" suelto que deja el corte anterior
+    return _normalize_title(t)
+
+
+
+# Marcadores casi exclusivos de inglés/alemán/italiano como PALABRA suelta
+# (nunca como subcadena — "the" no debe descartar "esther") — usados para
+# preferir español en "Más del mismo autor" cuando la propia fuente no da un
+# idioma fiable (ver _open_library_works_by_author: Open Library casi nunca
+# separa ediciones por idioma). Es un filtro por EXCLUSIÓN a propósito: solo
+# se descarta un título con evidencia positiva de ser inglés/alemán/italiano,
+# nunca hace falta demostrar que uno SÍ es español — así un título ambiguo
+# (una sola palabra, un nombre propio) no se pierde por no tener ningún
+# marcador. "trilogy"/"vol" se cuelan a veces como sufijo en inglés dentro de
+# un título por lo demás en otro idioma (p.ej. italiano) — issue reportada:
+# "L'eco del tempo futuro. Licanius trilogy (Vol. 2)" pasaba como "español"
+# al no llevar ningún marcador de inglés/alemán.
+_NON_SPANISH_WORDS = {
+    'the', 'of', 'and', 'an', 'a', 'to', 'is', 'was', 'his', 'her', 'this', 'that', 'trilogy',
+    'der', 'die', 'das', 'und', 'von', 'des', 'ein', 'eine',
+    'il', 'gli', 'della', 'dello', 'degli', 'sono', 'perché', 'tempo',
+}
+
+def _looks_spanish(title: Optional[str]) -> bool:
+    if not title:
+        return False
+    words = set(re.findall(r"[a-záéíóúñü']+", title.lower()))
+    return not (words & _NON_SPANISH_WORDS)
+
+
+def _dedupe_candidates(candidates: list[dict]) -> list[dict]:
+    """Funde candidatos que son EL MISMO libro (ediciones/traducciones,
+    título casi idéntico salvo alguna anotación que _core_title_key no pilló)
+    — issue reportada: "aparecen aparte de sus mismas versiones sin
+    portada... el mismo título en diferentes idiomas". Comparación difusa
+    (no solo clave exacta) contra cada candidato ya aceptado; cuando dos son
+    el mismo libro, se queda el más completo (con portada > sin ella, con
+    ISBN > sin él) en vez de simplemente "el primero que llegó"."""
+    accepted = []
+    for cand in candidates:
+        key = _core_title_key(cand.get('title'))
+        if not key:
+            continue
+        dup_idx = next(
+            (i for i, a in enumerate(accepted)
+             if a['_key'] == key or difflib.SequenceMatcher(None, a['_key'], key).ratio() >= 0.87),
+            None,
+        )
+        cand = {**cand, '_key': key}
+        if dup_idx is None:
+            accepted.append(cand)
+        else:
+            existing = accepted[dup_idx]
+            if (not existing.get('cover_url') and cand.get('cover_url')) or \
+               (not existing.get('isbn') and cand.get('isbn')):
+                accepted[dup_idx] = cand
+    for c in accepted:
+        c.pop('_key', None)
+    return accepted
+
+
 # Google Books complementa a Open Library: a diferencia de esta, soporta
 # filtrar resultados por idioma (`langRestrict`), así que es la fuente que
 # permite conseguir sinopsis en español para libros traducidos, cosa que
@@ -262,6 +336,380 @@ async def _google_books_lookup(client: httpx.AsyncClient, query: str, isbn: Opti
         "genre":     _pick_genre(info.get("categories") or []),
         "cover_url": cover.replace("http://", "https://") if cover else None,
     }
+
+
+async def _google_books_by_author(client: httpx.AsyncClient, author: str, exclude_title: Optional[str] = None, max_results: int = 20) -> list[dict]:
+    """Otros libros del mismo autor vía Google Books, para "Más del mismo
+    autor" — a diferencia de _google_books_lookup, aquí interesan VARIOS
+    resultados, no el primero. Nunca lanza (mismo criterio que el resto de
+    llamadas a APIs externas de este archivo): ante cualquier fallo devuelve
+    lista vacía y quien llame simplemente no muestra la sección.
+
+    Restringido a español (`langRestrict`): sin esto, un autor con obra muy
+    traducida devuelve el mismo libro una y otra vez en varios idiomas
+    (edición original en inglés, edición en español, "Classroom Edition"...)
+    — la app y la biblioteca del jugador son en español, así que no aporta
+    nada y solo duplica. El deduplicado por `_core_title_key` (en vez de
+    título normalizado a secas) se encarga del resto: distintas ediciones
+    del mismo libro EN ESPAÑOL (edición ilustrada, con subtítulo de saga...)
+    siguen siendo, para esto, "el mismo libro".
+
+    Google Books tope a 20 resultados por petición pase lo que sea en
+    "maxResults" — con un autor muy prolífico y muy reeditado (Sanderson:
+    300 resultados totales), los libros base de una saga bien pueden quedar
+    enterrados más allá de esos primeros 20, tapados por ediciones
+    ilustradas/reediciones más recientes — issue reportada: "de Nacidos de
+    la Bruma no me sale ninguno". Se piden 3 páginas EN PARALELO
+    (startIndex 0/20/40, hasta 60 resultados en bruto) en vez de solo la
+    primera — el coste en latencia es el de la más lenta, no la suma,
+    porque van con asyncio.gather."""
+    async def fetch_page(start_index: int) -> list[dict]:
+        params = {"q": f'inauthor:"{author}"', "maxResults": max_results, "startIndex": start_index, "langRestrict": "es"}
+        if GOOGLE_BOOKS_API_KEY:
+            params["key"] = GOOGLE_BOOKS_API_KEY
+        try:
+            r = await client.get("https://www.googleapis.com/books/v1/volumes", params=params, timeout=10)
+            if r.status_code != 200:
+                return []
+            return r.json().get("items") or []
+        except Exception:
+            return []
+
+    pages = await asyncio.gather(*(fetch_page(i * max_results) for i in range(3)))
+    items = [item for page in pages for item in page]
+
+    target_author = _normalize_title(author)
+    exclude_key = _core_title_key(exclude_title) if exclude_title else None
+    raw = []
+    for item in items:
+        info = item.get("volumeInfo", {})
+        title = info.get("title")
+        if not title:
+            continue
+        # `langRestrict` en la petición es, en la práctica, solo orientativo
+        # — Google Books lo ignora a menudo con "inauthor:" y devuelve igual
+        # ediciones en inglés/alemán/etc. mezcladas con las de español (visto
+        # en pruebas reales) — el campo `language` de cada resultado sí es
+        # fiable, así que el filtro real va aquí.
+        if info.get("language") != "es":
+            continue
+        key = _core_title_key(title)
+        if not key:
+            continue
+        if exclude_key and (key == exclude_key or difflib.SequenceMatcher(None, key, exclude_key).ratio() >= 0.82):
+            continue
+        # inauthor: es una búsqueda difusa que puede devolver un libro donde
+        # nuestro autor solo aparece de refilón (antología con muchos
+        # colaboradores, libro de otra persona con nombre parecido/coincidente
+        # — "John Williams" es autor de "Stoner" Y también el compositor de
+        # cine, entre otros) — se exige una coincidencia EXACTA (normalizada)
+        # con alguno de los autores del resultado, no solo "se parece", y se
+        # descartan antologías con muchos colaboradores (un libro con más de
+        # 3 autores casi nunca es "una obra más de este autor" en el sentido
+        # que le interesa a esta sección) para no llenar "Más del mismo
+        # autor" de libros que no son realmente de este autor.
+        authors = info.get("authors") or []
+        if len(authors) > 3 or not any(_normalize_title(a) == target_author for a in authors):
+            continue
+        found_isbn = None
+        for ident in info.get("industryIdentifiers") or []:
+            if ident.get("type") == "ISBN_13":
+                found_isbn = ident.get("identifier")
+                break
+            if ident.get("type") == "ISBN_10" and not found_isbn:
+                found_isbn = ident.get("identifier")
+        year_match = re.search(r"\d{4}", info.get("publishedDate") or "")
+        images = info.get("imageLinks") or {}
+        cover = images.get("thumbnail") or images.get("smallThumbnail")
+        raw.append({
+            "title":       title,
+            "author":      ", ".join(info.get("authors") or []) or author,
+            "isbn":        found_isbn,
+            "year":        int(year_match.group()) if year_match else None,
+            "genre":       _pick_genre(info.get("categories") or []),
+            "num_pages":   info.get("pageCount"),
+            "cover_url":   cover.replace("http://", "https://") if cover else None,
+            "synopsis":    info.get("description"),
+            "open_lib_key": None,
+        })
+    return _dedupe_candidates(raw)
+
+
+async def _open_library_isbn_for_book(client: httpx.AsyncClient, isbn: Optional[str], open_lib_key: Optional[str]) -> Optional[str]:
+    """El etiquetado de saga ("series:...") de Open Library vive en los datos
+    de EDICIÓN (bibkey por ISBN), no en los de "work" — sin ISBN guardado no
+    hay forma directa de consultarlo. Si el libro solo tiene open_lib_key
+    (p.ej. añadido por búsqueda de texto sin ISBN), se intenta sacar un ISBN
+    de cualquiera de sus ediciones antes de rendirse."""
+    if isbn:
+        return isbn
+    if not open_lib_key:
+        return None
+    try:
+        clean = open_lib_key.lstrip('/')
+        r = await client.get(f"https://openlibrary.org/{clean}/editions.json", params={"limit": 5}, timeout=10)
+        if r.status_code != 200:
+            return None
+        for entry in r.json().get("entries", []):
+            ids = entry.get("isbn_13") or entry.get("isbn_10") or []
+            if ids:
+                return ids[0]
+    except Exception:
+        pass
+    return None
+
+
+async def _open_library_work_key_for_isbn(client: httpx.AsyncClient, isbn: Optional[str]) -> Optional[str]:
+    """El "work" (obra, independiente de edición/idioma/traducción) al que
+    pertenece una edición concreta — clave para reconocer el libro actual
+    dentro de un grupo de saga aunque el título guardado sea una traducción
+    distinta del título con el que Open Library indexa la obra (su etiquetado
+    de sagas es casi siempre en el idioma original). Sin esto, un libro
+    traducido nunca se reconocería a sí mismo dentro de su propia saga."""
+    if not isbn:
+        return None
+    try:
+        r = await client.get(f"https://openlibrary.org/isbn/{isbn}.json", timeout=10, follow_redirects=True)
+        if r.status_code != 200:
+            return None
+        works = r.json().get("works") or []
+        return works[0].get("key") if works else None
+    except Exception:
+        return None
+
+
+async def _open_library_spanish_edition(client: httpx.AsyncClient, work_key: str) -> Optional[dict]:
+    """Edición en español de una obra de Open Library (issue reportada:
+    "Sigue con..." mostraba título y portada en el idioma original de
+    catalogación, casi siempre inglés, aunque el jugador lea en español) —
+    de entre todas las ediciones en español catalogadas para la obra, se
+    prefiere la de año de publicación más reciente encontrado (mejor proxy
+    de "portada actual", no una cualquiera antigua al azar). Devuelve None
+    si no hay ninguna en español — quien llame se queda con los datos
+    originales antes que sin nada."""
+    try:
+        clean = work_key.lstrip('/')
+        r = await client.get(f"https://openlibrary.org/{clean}/editions.json", params={"limit": 50}, timeout=10)
+        if r.status_code != 200:
+            return None
+        entries = r.json().get("entries") or []
+    except Exception:
+        return None
+    best, best_year = None, -1
+    for e in entries:
+        langs = [l.get("key") for l in (e.get("languages") or [])]
+        if "/languages/spa" not in langs:
+            continue
+        year_match = re.search(r"\d{4}", e.get("publish_date") or "")
+        year = int(year_match.group()) if year_match else 0
+        if year < best_year:
+            continue
+        cover_id = next((c for c in (e.get("covers") or []) if c and c > 0), None)
+        best_year = year
+        best = {
+            "title":     e.get("title"),
+            "cover_url": f"https://covers.openlibrary.org/b/id/{cover_id}-M.jpg" if cover_id else None,
+            "isbn":      (e.get("isbn_13") or e.get("isbn_10") or [None])[0],
+            "year":      year or None,
+        }
+    return best
+
+
+async def _prefer_spanish_edition(client: httpx.AsyncClient, book: dict) -> dict:
+    """Sustituye título/portada/ISBN/año de un libro de un grupo de saga por
+    los de su edición en español más reciente si existe (ver
+    _open_library_spanish_edition) — el orden del grupo ya se decide ANTES
+    de esta sustitución (por año de publicación ORIGINAL, no el de la
+    traducción), así que esto solo cambia lo que se muestra, nunca el
+    orden."""
+    if not book.get("open_lib_key"):
+        return book
+    spanish = await _open_library_spanish_edition(client, book["open_lib_key"])
+    if not spanish:
+        return book
+    return {
+        **book,
+        "title":     spanish["title"] or book["title"],
+        "cover_url": spanish["cover_url"] or book["cover_url"],
+        "isbn":      spanish["isbn"] or book["isbn"],
+        "year":      spanish["year"] or book["year"],
+    }
+
+
+async def _open_library_series_groups(client: httpx.AsyncClient, lookup_isbn: str) -> list[dict]:
+    """Sagas que Open Library tiene etiquetadas para este libro (dado ya un
+    ISBN resuelto — ver _open_library_isbn_for_book), cada una como grupo
+    independiente (p.ej. un libro del Cosmere de Sanderson puede llevar
+    "series:mistborn" o "series:stormlight_archive", nunca un "series:cosmere"
+    que mezclaría sub-sagas incompatibles en un único orden inventado) — así
+    un libro con varias etiquetas de saga da varios grupos separados, y un
+    libro sin ninguna (standalone) no devuelve nada en vez de forzar una
+    relación que no existe.
+
+    Solo se usa el prefijo estructurado "series:" — se probó también a
+    aceptar subjects sueltos sin prefijo que "parecían" nombre de saga
+    (mayúsculas, tamaño pequeño del subject) para casos como "El nombre del
+    viento" (etiquetado solo como "The Kingkiller Chronicle", sin prefijo),
+    pero salió mal en la práctica: con "El imperio final" (Mistborn), un
+    subject suelto llamado "Covert Operations" (por la trama de intriga)
+    coló como si fuera una saga y mezcló libros de un autor completamente
+    distinto. Mejor quedarse sin sección de saga en algún caso (como
+    Kingkiller) que arriesgarse a mostrar una relación falsa.
+
+    El orden dentro de cada grupo es first_publish_year (mejor proxy gratuito
+    disponible); el propio dato de qué libros pertenecen a la saga es el
+    etiquetado manual/colectivo de Open Library, así que puede estar
+    incompleto (una saga larga con solo 2 de 5 tomos etiquetados) — no es
+    incorrecto, solo puede faltar algún volumen. Por el mismo motivo, un
+    libro puede tener más de una etiqueta "series:" que en realidad
+    describen la misma saga (variantes de catalogación) — se descartan
+    grupos cuyos libros ya estén todos cubiertos por otro grupo mayor."""
+    try:
+        r = await client.get(
+            f"https://openlibrary.org/api/books?bibkeys=ISBN:{lookup_isbn}&format=json&jscmd=data",
+            timeout=10,
+        )
+        data = r.json().get(f"ISBN:{lookup_isbn}", {})
+    except Exception:
+        return []
+    subjects = data.get("subjects") or []
+    series_urls = []
+    for s in subjects:
+        name, url = s.get("name") or "", s.get("url") or ""
+        if url and name.lower().startswith("series:"):
+            series_urls.append((name.split(":", 1)[1].strip(), url))
+    if not series_urls:
+        return []
+
+    async def fetch_group(label: str, url: str) -> Optional[dict]:
+        slug = url.rstrip("/").rsplit("/", 1)[-1]
+        try:
+            r = await client.get(f"https://openlibrary.org/subjects/{slug}.json", params={"limit": 50}, timeout=10)
+            if r.status_code != 200:
+                return None
+            works = r.json().get("works") or []
+        except Exception:
+            return None
+        books = []
+        for w in works:
+            author_name = ", ".join(a.get("name") for a in (w.get("authors") or []) if a.get("name"))
+            books.append({
+                "title":        w.get("title"),
+                "author":       author_name or None,
+                "year":         w.get("first_publish_year"),
+                "cover_url":    f"https://covers.openlibrary.org/b/id/{w['cover_id']}-M.jpg" if w.get("cover_id") else None,
+                "isbn":         None,
+                "genre":        None,
+                "num_pages":    None,
+                "open_lib_key": w.get("key"),
+            })
+        # Una "saga" de un único libro no aporta nada aquí — o el volumen
+        # que falta simplemente no está etiquetado, o el subject no era de
+        # verdad una saga; en ambos casos, mejor no mostrar el grupo.
+        if len(books) < 2:
+            return None
+        # El orden se decide con el año de publicación ORIGINAL (arriba),
+        # antes de sustituir por la edición en español — la traducción se
+        # muestra, pero el orden de la saga no depende de cuándo se tradujo.
+        books.sort(key=lambda b: (b["year"] is None, b["year"] or 0, b["title"] or ""))
+        books = list(await asyncio.gather(*(_prefer_spanish_edition(client, b) for b in books)))
+        return {"label": label, "books": books, "_keys": {b["open_lib_key"] for b in books if b.get("open_lib_key")}}
+
+    results = await asyncio.gather(*(fetch_group(label, url) for label, url in series_urls))
+    groups = [g for g in results if g]
+
+    # Un mismo libro puede llevar varias etiquetas "series:" que en el fondo
+    # describen la misma saga (catalogación duplicada) — si el conjunto de
+    # libros de un grupo está enteramente contenido en otro grupo mayor, es
+    # el mismo grupo repetido bajo otro nombre; se descarta el más pequeño.
+    groups.sort(key=lambda g: len(g["_keys"]), reverse=True)
+    kept = []
+    for g in groups:
+        if any(g["_keys"] and g["_keys"] <= kept_g["_keys"] for kept_g in kept):
+            continue
+        kept.append(g)
+    for g in kept:
+        del g["_keys"]
+    return kept
+
+
+async def _open_library_author_key_for_work(client: httpx.AsyncClient, work_key: Optional[str]) -> Optional[str]:
+    """El autor (id estable de Open Library, no un nombre de texto) al que
+    pertenece esta obra — permite listar el resto de su bibliografía sin el
+    problema de los homónimos (dos personas reales distintas con el mismo
+    nombre, p.ej. hay más de un "John Williams" publicado)."""
+    if not work_key:
+        return None
+    try:
+        clean = work_key.lstrip('/')
+        r = await client.get(f"https://openlibrary.org/{clean}.json", timeout=10)
+        if r.status_code != 200:
+            return None
+        for a in r.json().get("authors") or []:
+            key = (a.get("author") or {}).get("key")
+            if key:
+                return key
+    except Exception:
+        pass
+    return None
+
+
+async def _open_library_works_by_author(client: httpx.AsyncClient, author_key: str, author_label: Optional[str], exclude_title: Optional[str], max_results: int = 40) -> list[dict]:
+    """Bibliografía de un autor por su id de Open Library (vía search.json
+    filtrado por `author_key:`, no por nombre) — a diferencia de
+    _google_books_by_author (búsqueda de texto sobre "inauthor:", que puede
+    devolver libros de otra persona distinta con el mismo nombre, o
+    antologías donde nuestro autor solo es uno más entre muchos
+    colaboradores), aquí no hay ambigüedad posible: son EXACTAMENTE las obras
+    catalogadas bajo ese id — y a diferencia del listado de bibliografía
+    (/authors/{id}/works.json, usado antes), search.json sí trae portada e
+    ISBN por edición.
+
+    Open Library no separa fiablemente por idioma (su campo `language` casi
+    nunca está relleno) — así que el mismo libro puede aparecer una vez por
+    cada idioma en el que tenga edición catalogada. Tras deduplicar
+    ediciones del mismo libro (_dedupe_candidates), se filtra a las que
+    "parecen español" (_looks_spanish, ver comentario ahí); si eso deja la
+    lista vacía (autor sin ninguna edición en español conocida), se enseña
+    la lista sin filtrar antes que no enseñar nada — "predominio", no
+    "exclusividad"."""
+    try:
+        clean_key = author_key.lstrip('/').rsplit('/', 1)[-1]
+        r = await client.get("https://openlibrary.org/search.json", params={
+            "q": f"author_key:{clean_key}",
+            "fields": "title,first_publish_year,cover_i,isbn,key",
+            "limit": max_results,
+        }, timeout=10)
+        if r.status_code != 200:
+            return []
+        docs = r.json().get("docs") or []
+    except Exception:
+        return []
+
+    exclude_key = _core_title_key(exclude_title) if exclude_title else None
+    raw = []
+    for d in docs:
+        title = d.get("title")
+        key = _core_title_key(title)
+        # Los títulos en alfabetos no latinos normalizan a cadena vacía — se
+        # descartan en vez de enseñar entradas que el jugador no podría leer.
+        if not key:
+            continue
+        if exclude_key and (key == exclude_key or difflib.SequenceMatcher(None, key, exclude_key).ratio() >= 0.82):
+            continue
+        raw.append({
+            "title":        title,
+            "author":       author_label,
+            "isbn":         (d.get("isbn") or [None])[0],
+            "year":         d.get("first_publish_year"),
+            "genre":        None,
+            "num_pages":    None,
+            "cover_url":    f"https://covers.openlibrary.org/b/id/{d['cover_i']}-M.jpg" if d.get("cover_i") else None,
+            "open_lib_key": d.get("key"),
+        })
+    deduped = _dedupe_candidates(raw)
+    spanish = [c for c in deduped if _looks_spanish(c["title"])]
+    return spanish or deduped
 
 
 async def _fetch_book_metadata(title: Optional[str] = None, author: Optional[str] = None, isbn: Optional[str] = None) -> dict:
@@ -1447,6 +1895,186 @@ async def enrich_book(
     if not title and not isbn:
         raise HTTPException(status_code=400, detail="Falta título o ISBN")
     return await _fetch_book_metadata(title=title, author=author, isbn=isbn)
+
+
+def _related_candidate_out(db: Session, candidate: dict, current_book_id: int, my_shelf: dict, current_work_key: Optional[str] = None, my_shelf_by_key: Optional[dict] = None) -> dict:
+    """Cruza un candidato (de Google Books o de un grupo de saga de Open
+    Library) con el catálogo local y con la estantería del jugador actual —
+    mismo formato para ambas fuentes, así el frontend no distingue de dónde
+    vino cada sugerencia.
+
+    `current_work_key` (la obra de OL a la que pertenece el libro cuya ficha
+    se está viendo, ver _open_library_work_key_for_isbn) permite reconocer
+    ese libro dentro de su propia saga aunque el título guardado sea una
+    traducción distinta del título original con el que Open Library etiqueta
+    la obra — sin esto, un libro traducido nunca se reconocería a sí mismo.
+
+    `my_shelf_by_key` (ver related_books) hace lo mismo para "ya está en tu
+    estantería": un candidato con anotación de saga en el título
+    ("Juramentada (El Archivo de las Tormentas 3)") no coincide por título
+    EXACTO con tu "Juramentada" ya guardada — se prueba una comparación
+    difusa como último recurso, solo contra tu propia estantería."""
+    local = None
+    if candidate.get("open_lib_key"):
+        local = db.query(Book).filter(Book.open_lib_key == candidate["open_lib_key"]).first()
+    if not local and candidate.get("title"):
+        local = db.query(Book).filter(func.lower(Book.title) == candidate["title"].strip().lower()).first()
+    entry = my_shelf.get(local.id) if local else None
+    if not entry and my_shelf_by_key and candidate.get("title"):
+        cand_key = _core_title_key(candidate["title"])
+        if cand_key:
+            match = my_shelf_by_key.get(cand_key)
+            if not match:
+                for key, pair in my_shelf_by_key.items():
+                    if difflib.SequenceMatcher(None, cand_key, key).ratio() >= 0.87:
+                        match = pair
+                        break
+            if match:
+                local, entry = match
+    is_current = bool(local and local.id == current_book_id) or (
+        current_work_key is not None and candidate.get("open_lib_key") == current_work_key
+    )
+    return {
+        "title":        candidate.get("title"),
+        "author":       candidate.get("author"),
+        "cover_url":    candidate.get("cover_url"),
+        "isbn":         candidate.get("isbn"),
+        "year":         candidate.get("year"),
+        "genre":        candidate.get("genre"),
+        "num_pages":    candidate.get("num_pages"),
+        "synopsis":     candidate.get("synopsis"),
+        "open_lib_key": candidate.get("open_lib_key"),
+        "book_id":      local.id if local else None,
+        "is_current":   is_current,
+        "in_shelf":     entry is not None,
+        "shelf_status": entry.status if entry else None,
+    }
+
+
+@app.get("/books/{book_id}/related")
+async def related_books(
+    book_id: int,
+    db: Session = Depends(get_db),
+    current: Player = Depends(get_current_player),
+):
+    """Sugerencias para la ficha de un libro, con vistas a añadirlas a la
+    estantería con un clic — issue #7:
+      - "series": saga(s) a las que Open Library tiene etiquetado este libro,
+        cada una en su propio orden (antes/en curso/después), con el libro
+        actual señalado. Sagas compartidas con muchas sub-sagas incompatibles
+        entre sí (el Cosmere de Sanderson: Mistborn, Stormlight...) nunca se
+        mezclan en un único orden inventado porque el etiquetado de Open
+        Library ya viene separado por sub-saga — un libro sin etiqueta de
+        saga (standalone, o sin ISBN conocido) simplemente no genera ningún
+        grupo, en vez de forzar una relación que no existe.
+      - "same_author": el resto de la bibliografía del autor — por id de
+        autor de Open Library cuando se puede resolver (sin ambigüedad
+        posible entre dos personas con el mismo nombre), cayendo a una
+        búsqueda de texto en Google Books cuando no (menos precisa, pero
+        sigue exigiendo coincidencia exacta de nombre — ver
+        _google_books_by_author).
+    """
+    book = db.query(Book).filter(Book.id == book_id).first()
+    if not book:
+        raise HTTPException(status_code=404, detail="Libro no encontrado")
+
+    my_shelf = {
+        e.book_id: e
+        for e in db.query(PersonalShelf).filter_by(player_id=current.id).all()
+    }
+    # Para reconocer "Juramentada (El Archivo de las Tormentas 3)" (título
+    # de Google Books, con anotación de saga) como el MISMO libro que tu
+    # "Juramentada" ya en la estantería (sin esa anotación) — el cruce por
+    # isbn/open_lib_key/título EXACTO no basta cuando la anotación solo la
+    # lleva uno de los dos lados. Comparación difusa, pero SOLO contra lo
+    # que el jugador ya tiene (no contra todo el catálogo compartido — sería
+    # caro y no hace falta para esto) — issue reportada.
+    my_shelf_by_key = {}
+    if my_shelf:
+        for b in db.query(Book).filter(Book.id.in_(my_shelf.keys())).all():
+            key = _core_title_key(b.title)
+            if key:
+                my_shelf_by_key[key] = (b, my_shelf[b.id])
+
+    # Todas las llamadas externas que no dependen unas de otras van en
+    # paralelo (asyncio.gather) en vez de encadenadas — esto era ~4s por
+    # ficha yendo todo en serie (Open Library: isbn->work->sagas, LUEGO
+    # Google Books) y baja bastante corriendo lo independiente a la vez.
+    # Google Books (búsqueda "más del mismo autor") no depende en nada de la
+    # resolución de ISBN/work/sagas de Open Library, así que arranca desde
+    # el principio junto con esa cadena, no después.
+    async with httpx.AsyncClient() as client:
+        lookup_isbn = await _open_library_isbn_for_book(client, book.isbn, book.open_lib_key)
+
+        google_same_author_task = (
+            asyncio.create_task(_google_books_by_author(client, book.author, exclude_title=book.title))
+            if book.author else None
+        )
+
+        current_work_key, series_groups_raw = (
+            await asyncio.gather(
+                _open_library_work_key_for_isbn(client, lookup_isbn),
+                _open_library_series_groups(client, lookup_isbn),
+            ) if lookup_isbn else (None, [])
+        )
+
+        # Google Books primero: da títulos en español (si la traducción existe)
+        # con portada y año, y ya exige coincidencia exacta de nombre — para
+        # un autor único (la inmensa mayoría) esto es justo lo que se quiere
+        # ver. Open Library por id de autor (sin ningún riesgo de homónimo)
+        # queda de respaldo para cuando Google Books no encuentra nada, no
+        # como fuente principal: su listado de bibliografía no distingue
+        # ediciones/traducciones de obras distintas (un autor muy traducido
+        # como Sanderson aparece con títulos mezclados en varios idiomas y
+        # alguna entrada repetida por edición), así que solo compensa cuando
+        # es la única fuente disponible.
+        same_author_raw = await google_same_author_task if google_same_author_task else []
+        if not same_author_raw and current_work_key:
+            author_key = await _open_library_author_key_for_work(client, current_work_key)
+            if author_key:
+                same_author_raw = await _open_library_works_by_author(client, author_key, book.author, exclude_title=book.title)
+
+    series = [
+        {
+            "label": g["label"],
+            "books": [_related_candidate_out(db, c, book_id, my_shelf, current_work_key, my_shelf_by_key) for c in g["books"]],
+        }
+        for g in series_groups_raw
+    ]
+    same_author = [_related_candidate_out(db, c, book_id, my_shelf, current_work_key, my_shelf_by_key) for c in same_author_raw]
+
+    # Sin esto, un libro que ya sale en "Sigue con..." (p.ej. la continuación
+    # de una saga, vía Open Library) podía aparecer TAMBIÉN en "Más del
+    # autor" bajo otra edición/idioma (vía Google Books) — issue reportada:
+    # "El temor de un hombre sabio" repetido. Comparación difusa por título
+    # (ya en español a los dos lados tras la sustitución de arriba), no
+    # exacta — mismo criterio que _dedupe_candidates.
+    series_keys = [_core_title_key(b["title"]) for g in series for b in g["books"]]
+    series_keys = [k for k in series_keys if k]
+    def _already_in_series(title):
+        key = _core_title_key(title)
+        return bool(key) and any(key == k or difflib.SequenceMatcher(None, key, k).ratio() >= 0.85 for k in series_keys)
+    same_author = [c for c in same_author if not _already_in_series(c["title"])]
+
+    # Portadas cacheadas en local antes de devolver la respuesta — sin esto
+    # cada visita a la ficha dependía de la latencia de books.google.com/
+    # covers.openlibrary.org para las miniaturas de esta sección, que se
+    # notaba bastante (issue reportada: "las portadas tardan también").
+    # _cache_cover_url ya deduplica por hash de URL en disco: a partir de la
+    # primera vez que se vea cualquiera de estas portadas (aquí o en
+    # cualquier otra ficha), las siguientes salen servidas en local, al
+    # instante. Concurrente (gather) para que el coste sea el de la más
+    # lenta, no la suma de todas.
+    all_candidates = [b for g in series for b in g["books"]] + same_author
+    cover_urls = list({c["cover_url"] for c in all_candidates if c.get("cover_url")})
+    if cover_urls:
+        cached = await asyncio.gather(*(_cache_cover_url(u) for u in cover_urls))
+        cache_map = dict(zip(cover_urls, cached))
+        for c in all_candidates:
+            if c.get("cover_url") in cache_map:
+                c["cover_url"] = cache_map[c["cover_url"]]
+
+    return {"series": series, "same_author": same_author}
 
 
 # ── Personal shelf ───────────────────────────────────────────────────────────

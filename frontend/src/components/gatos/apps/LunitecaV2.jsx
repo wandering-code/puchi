@@ -1124,6 +1124,354 @@ function Cover({ url, w, h, radius = 6 }) {
   )
 }
 
+// ─── Relacionados (issue #7) ──────────────────────────────────────────────
+// Tarjeta compartida por "Sigue la saga" y "Más del mismo autor" — misma
+// forma para las dos, ya que el backend ya normaliza ambas fuentes (grupo de
+// saga de Open Library / bibliografía del autor en Google Books) al mismo
+// formato. `is_current` marca el libro cuya ficha se está viendo (para poder
+// verlo señalado dentro de su propia saga, junto con lo anterior/posterior);
+// `in_shelf`/`shelf_status` reflejan si ya estaba en la estantería ANTES de
+// abrir esta ficha — tras un añadido rápido con el botón, `added` (estado
+// local) lo refleja sin esperar a recargar toda la sección.
+function RelatedBookCard({ b, onQuickAdd, size = 78 }) {
+  const HOLD_MS = 550
+  // Mantener pulsado en vez de un botón o un menú de estado: un tap suelto
+  // no hace nada (a propósito — la fila tiene scroll horizontal táctil, y
+  // un tap normal es indistinguible de tocar para empezar a deslizarla; si
+  // añadiera al primer tap, deslizar la fila añadiría libros sin querer).
+  // Mantener pulsado ~0.5s sí es inequívocamente intencional. Siempre como
+  // "Por leer" — el resto de estados (Leyendo/Leído...) se cambian después
+  // abriendo la ficha del libro ya añadido, como con cualquier otro.
+  const [holding, setHolding] = useState(false)
+  // 'idle' | 'adding' | 'done' | 'error'
+  const [phase, setPhase] = useState('idle')
+  const [showInfo, setShowInfo] = useState(false)
+  const holdTimer = useRef(null)
+  // Para distinguir un tap limpio (abre la info) de arrastrar la fila para
+  // deslizarla (no debe abrir nada) — mismo criterio de umbral que
+  // useSwipeNav, aplicado aquí al gesto de esta tarjeta en concreto.
+  const pointerStart = useRef(null)
+  // Marca si EL MANTENIDO PULSADO DE ESTE GESTO EN CONCRETO llegó a disparar
+  // el añadido — un intento anterior usaba "inShelf"/"interactive" (estado
+  // ambiental) para decidirlo, pero si el jugador se queda con el dedo
+  // puesto hasta VER el check verde de confirmación antes de soltar, para
+  // entonces `phase` ya es 'done' y esa condición volvía a colar la info
+  // encima igualmente. Esta marca vive solo durante el gesto (se resetea en
+  // cada pointerdown y se consume en el pointerup correspondiente), así que
+  // no importa cuánto tiempo siga el dedo puesto después de que dispare.
+  const holdFired = useRef(false)
+  const inShelf = b.in_shelf || phase === 'done'
+  const statusInfo = b.shelf_status ? STATUSES.find(s => s.id === b.shelf_status) : null
+  const interactive = !b.is_current && !inShelf && phase !== 'adding'
+
+  function startHold() {
+    if (!interactive || holdTimer.current) return
+    setHolding(true)
+    holdTimer.current = setTimeout(async () => {
+      holdTimer.current = null
+      holdFired.current = true
+      setHolding(false)
+      setPhase('adding')
+      const ok = await onQuickAdd({ ...b, status: 'want_to_read' })
+      if (ok) setPhase('done') // se queda en 'done' (inShelf ya lo cubre de forma permanente)
+      else { setPhase('error'); setTimeout(() => setPhase('idle'), 2000) }
+    }, HOLD_MS)
+  }
+  function cancelHold() {
+    if (holdTimer.current) { clearTimeout(holdTimer.current); holdTimer.current = null }
+    setHolding(false)
+  }
+  useEffect(() => () => { if (holdTimer.current) clearTimeout(holdTimer.current) }, [])
+
+  // Un tap normal (sin mantener pulsado ni arrastrar) abre la info básica
+  // del libro — issue reportada: "que un click salte un popup con portada,
+  // sinopsis y páginas". Funciona en CUALQUIER tarjeta (también las ya
+  // añadidas), no solo en las interactivas de añadir; la única excepción es
+  // el libro actual (ya estás viendo su ficha entera).
+  function onDown(ev) {
+    holdFired.current = false
+    pointerStart.current = { x: ev.clientX, y: ev.clientY }
+    if (interactive) startHold()
+  }
+  function onUp(ev) {
+    if (interactive) cancelHold()
+    const start = pointerStart.current
+    pointerStart.current = null
+    const firedThisPress = holdFired.current
+    holdFired.current = false
+    if (!start || b.is_current || firedThisPress) return
+    const movedLittle = Math.abs(ev.clientX - start.x) < 8 && Math.abs(ev.clientY - start.y) < 8
+    if (movedLittle) setShowInfo(true)
+  }
+  function onLeaveOrCancel() {
+    pointerStart.current = null
+    if (interactive) cancelHold()
+  }
+
+  return (
+    <div style={{ width: size, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 6, position: 'relative' }}>
+      <div
+        onPointerDown={onDown}
+        onPointerUp={onUp}
+        onPointerLeave={onLeaveOrCancel}
+        onPointerCancel={onLeaveOrCancel}
+        onContextMenu={ev => interactive && ev.preventDefault()}
+        title={b.is_current ? undefined : interactive ? 'Toca para ver info · mantén pulsado para añadir a "Por leer"' : 'Toca para ver info'}
+        style={{
+          position: 'relative', cursor: b.is_current ? 'default' : 'pointer',
+          WebkitUserSelect: 'none', userSelect: 'none', WebkitTouchCallout: 'none',
+        }}
+      >
+        <Cover url={b.cover_url} w={size} h={Math.round(size * 1.5)} radius={7} />
+        {/* inset: 0 (pegado al borde de la portada), no un valor negativo
+            sobresaliendo por fuera — issue reportada: ese saliente se
+            recortaba en algunos casos por la misma regla de CSS de siempre
+            (la fila con scroll horizontal recorta también el desbordamiento
+            vertical), dejando el borde incompleto. */}
+        {b.is_current ? (
+          <div style={{ position: 'absolute', inset: 0, border: `2px solid ${C.accent}`, borderRadius: 7, pointerEvents: 'none' }} />
+        ) : inShelf ? (
+          // Ya está en tu estantería — issue reportada: antes solo se notaba
+          // en la pequeña etiqueta de estado debajo, poco visible de un
+          // vistazo. El borde verde es la señal principal ("esto ya es
+          // tuyo"); la etiqueta de abajo sigue distinguiendo el estado
+          // concreto (Leído/Leyendo/Por leer).
+          <div style={{ position: 'absolute', inset: 0, border: '2px solid #22c55e', borderRadius: 7, pointerEvents: 'none' }} />
+        ) : null}
+        <AnimatePresence>
+          {holding && (
+            <motion.div
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}
+              style={{
+                position: 'absolute', inset: 0, borderRadius: 7, background: 'rgba(10,10,14,0.45)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none',
+              }}>
+              <svg width="30" height="30" viewBox="0 0 30 30" style={{ transform: 'rotate(-90deg)' }}>
+                <circle cx="15" cy="15" r="12" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="3" />
+                <motion.circle
+                  cx="15" cy="15" r="12" fill="none" stroke={C.accent} strokeWidth="3" strokeLinecap="round"
+                  style={{ strokeDasharray: 2 * Math.PI * 12 }}
+                  initial={{ strokeDashoffset: 2 * Math.PI * 12 }}
+                  animate={{ strokeDashoffset: 0 }}
+                  transition={{ duration: HOLD_MS / 1000, ease: 'linear' }}
+                />
+              </svg>
+            </motion.div>
+          )}
+        </AnimatePresence>
+        <AnimatePresence>
+          {(phase === 'adding' || phase === 'done') && (
+            <motion.div
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}
+              style={{
+                position: 'absolute', inset: 0, borderRadius: 7,
+                background: phase === 'done' ? 'rgba(34,197,94,0.35)' : 'rgba(10,10,14,0.55)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none',
+              }}>
+              {phase === 'adding'
+                ? <CoverSpinner size={16} />
+                : (
+                  <motion.div initial={{ scale: 0.5, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+                    transition={{ type: 'spring', damping: 14, stiffness: 300 }}
+                    style={{
+                      width: 26, height: 26, borderRadius: '50%', background: '#22c55e',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}>
+                    <IconCheck size={14} color="white" />
+                  </motion.div>
+                )}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+      <p title={b.title} style={{
+        fontSize: 10.5, color: b.is_current ? C.text : C.sub, fontWeight: b.is_current ? 700 : 500,
+        lineHeight: 1.3, margin: 0, minHeight: 26,
+        display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+      }}>{b.title}</p>
+      {b.year && <p style={{ fontSize: 9, color: C.muted, margin: 0 }}>{b.year}</p>}
+      {b.is_current ? (
+        <span style={{
+          fontSize: 9, fontWeight: 700, color: C.accent, background: C.accentBg,
+          borderRadius: 20, padding: '2px 7px', alignSelf: 'flex-start', whiteSpace: 'nowrap',
+        }}>Estás aquí</span>
+      ) : phase === 'error' ? (
+        <span style={{ fontSize: 9, color: '#ef4444', fontWeight: 600 }}>No se pudo añadir</span>
+      ) : inShelf ? (
+        <span style={{
+          fontSize: 9, fontWeight: 600, color: statusInfo?.color || '#22c55e',
+          background: `${statusInfo?.color || '#22c55e'}22`,
+          borderRadius: 20, padding: '2px 7px', alignSelf: 'flex-start', whiteSpace: 'nowrap',
+        }}>{phase === 'done' ? '✓ Añadido' : (statusInfo?.label || 'Añadido')}</span>
+      ) : (phase === 'adding' || holding) ? (
+        <span style={{ fontSize: 9, color: C.muted, fontStyle: 'italic' }}>
+          {phase === 'adding' ? 'Añadiendo…' : 'Mantén pulsado…'}
+        </span>
+      ) : null}
+
+      <AnimatePresence>
+        {showInfo && <RelatedBookInfoModal book={b} onClose={() => setShowInfo(false)} />}
+      </AnimatePresence>
+    </div>
+  )
+}
+
+// Ficha rápida (portada, sinopsis, páginas) al tocar un libro de "Sigue
+// con..."/"Más del mismo autor" — issue #7. Vía portal a <body> (no
+// "position: absolute" dentro de la tarjeta): la fila que lo contiene tiene
+// scroll horizontal, y por la misma regla de CSS que ya dio problemas con
+// el popover de estado anterior (overflow-x:auto recorta también el
+// overflow vertical), un modal posicionado dentro de la fila se abriría
+// invisible. Al ser un overlay centrado en toda la pantalla (no anclado a
+// la tarjeta como aquel popover), tampoco hace falta calcular su posición.
+function RelatedBookInfoModal({ book, onClose }) {
+  // Portal a .luniteca-root, no a document.body — GatOS envuelve esta app en
+  // una ventana con su propia transformación de posición/escala, así que un
+  // "position: fixed" portado directo a document.body deja de referirse a
+  // la pantalla real y el fondo se queda transparente/ilegible (mismo motivo
+  // ya resuelto para el popover de miembros de Amigos, ver lunitecaRootRef).
+  const portalTarget = document.querySelector('.luniteca-root') || document.body
+  return createPortal(
+    <motion.div
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 400,
+        background: 'rgba(10,10,14,0.65)', backdropFilter: 'blur(4px)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
+      }}>
+      <motion.div
+        onClick={ev => ev.stopPropagation()}
+        initial={{ opacity: 0, scale: 0.95, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 10, transition: { duration: 0.15 } }}
+        transition={{ type: 'spring', damping: 24, stiffness: 320 }}
+        style={{
+          background: C.surface, border: `1px solid ${C.border}`, borderRadius: 16,
+          width: '100%', maxWidth: 380, maxHeight: '85vh',
+          display: 'flex', flexDirection: 'column', overflow: 'hidden',
+          boxShadow: '0 32px 80px rgba(0,0,0,0.6)',
+        }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '10px 10px 0' }}>
+          <button onClick={onClose} title="Cerrar" style={{
+            background: 'none', border: 'none', color: C.muted, cursor: 'pointer',
+            display: 'flex', alignItems: 'center', padding: 4,
+          }}>
+            <IconX size={14} color={C.muted} />
+          </button>
+        </div>
+        <div style={{
+          padding: '0 24px 24px', overflowY: 'auto',
+          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12,
+        }}>
+          <HeroCover url={book.cover_url} width={130} />
+          <div style={{ textAlign: 'center' }}>
+            <h3 style={{ fontSize: 15, color: C.text, fontWeight: 700, margin: '0 0 4px', lineHeight: 1.3 }}>{book.title}</h3>
+            {book.author && <p style={{ fontSize: 12, color: C.sub, margin: 0 }}>{book.author}</p>}
+            {(book.year || book.num_pages) && (
+              <p style={{ fontSize: 11, color: C.muted, margin: '4px 0 0' }}>
+                {[book.year, book.num_pages ? `${book.num_pages} páginas` : null].filter(Boolean).join(' · ')}
+              </p>
+            )}
+          </div>
+          <p style={{ fontSize: 12, color: C.sub, lineHeight: 1.6, textAlign: 'justify', margin: 0, alignSelf: 'stretch' }}>
+            {book.synopsis || <span style={{ fontStyle: 'italic', color: C.muted }}>Sin sinopsis disponible.</span>}
+          </p>
+        </div>
+      </motion.div>
+    </motion.div>,
+    portalTarget
+  )
+}
+
+// Una fila horizontal con scroll táctil — el orden de izquierda a derecha ES
+// el orden de la saga (o de publicación, en "Más del mismo autor"), así que
+// no hace falta ninguna flecha ni número para que se entienda qué va antes y
+// qué después; el libro actual se distingue por el borde de acento + la
+// etiqueta "Estás aquí" en vez de por su posición.
+function RelatedRow({ label, books, onQuickAdd }) {
+  return (
+    <div>
+      {/* Pista única para toda la fila (antes se repetía en cada tarjeta,
+          "Mantén pulsado para añadir" bajo cada portada — redundante y
+          ocupaba sitio en cada una). */}
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 7, flexWrap: 'wrap', marginBottom: 9 }}>
+        <span style={{ fontSize: 10, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 600 }}>
+          {label}
+        </span>
+        <span style={{ fontSize: 9.5, color: C.muted, opacity: 0.75 }}>
+          toca para ver · mantén pulsado para añadir
+        </span>
+      </div>
+      {/* data-noswipe: sin esto, deslizar aquí para ver el resto de la fila
+          se confundía con el gesto de cambiar de pestaña (Estantería/Club/
+          Amigos) — mismo mecanismo ya usado por la barra de avatares de
+          Amigos, ver useSwipeNav. */}
+      <div data-noswipe style={{ display: 'flex', gap: 14, overflowX: 'auto', paddingBottom: 4, WebkitOverflowScrolling: 'touch' }}>
+        {books.map((b, i) => (
+          <RelatedBookCard key={b.open_lib_key || b.book_id || `${b.title}-${i}`} b={b} onQuickAdd={onQuickAdd} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// Sección completa de la ficha de un libro: saga(s) etiquetadas por Open
+// Library (una por sub-saga — ver comentario del endpoint en el backend,
+// nunca se inventa un orden único para sagas compartidas con varias
+// sub-sagas incompatibles como el Cosmere de Sanderson) + el resto de la
+// bibliografía del autor. Se calla del todo (sin spinner ni mensaje) si no
+// hay nada que sugerir — es una sección secundaria, no algo que deba llamar
+// la atención con un estado de carga propio.
+function RelatedBooksSection({ bookId, onQuickAdd }) {
+  const [data,    setData]    = useState(null)
+  // Puede tardar 1-3s (varias llamadas externas encadenadas en el backend:
+  // Open Library + Google Books) — sin ningún indicador, una sección que
+  // aparece en silencio y tarda es indistinguible de una que no está
+  // implementada (confusión real ya vista al probarlo). El spinner se
+  // queda solo mientras carga; si al terminar no hay nada que sugerir, la
+  // sección entera desaparece sin dejar hueco.
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+    setData(null)
+    setLoading(true)
+    fetch(`/api/books/${bookId}/related`, { credentials: 'include' })
+      .then(r => r.ok ? r.json() : { series: [], same_author: [] })
+      .then(d => { if (!cancelled) setData(d) })
+      .catch(() => { if (!cancelled) setData({ series: [], same_author: [] }) })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [bookId])
+
+  if (loading) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <CoverSpinner size={13} />
+        <span style={{ fontSize: 11, color: C.muted }}>Buscando libros relacionados…</span>
+      </div>
+    )
+  }
+
+  if (!data || (data.series.length === 0 && data.same_author.length === 0)) return null
+
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.25 }}
+      style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
+      {data.series.map(g => (
+        <RelatedRow key={g.label} label={`Sigue con «${g.label}»`} books={g.books} onQuickAdd={onQuickAdd} />
+      ))}
+      {data.same_author.length > 0 && (
+        <RelatedRow
+          label={`Más de ${data.same_author[0].author || 'este autor'}`}
+          books={data.same_author}
+          onQuickAdd={onQuickAdd}
+        />
+      )}
+    </motion.div>
+  )
+}
+
 // Portada del hero del detalle — a diferencia de Cover (que rellena una caja
 // de tamaño fijo y recorta), aquí el ancho es automático según la altura
 // disponible: la imagen se ve entera, sin recortes ni márgenes vacíos.
@@ -1236,7 +1584,7 @@ function SynopsisBox({ synopsis, loading, expanded, onToggle }) {
 }
 
 // ─── Detalle completo ─────────────────────────────────────────────────────────
-function BookDetailFull({ entry, shelf, onBack, onUpdateEntry, onUpdateBook, onDelete, onAddToShelf, readOnly = false }) {
+function BookDetailFull({ entry, shelf, onBack, onUpdateEntry, onUpdateBook, onDelete, onAddToShelf, onQuickAdd, readOnly = false }) {
   const isMobile = useIsMobile()
   const [editing,          setEditing]          = useState(false)
   const [draft,            setDraft]            = useState({})
@@ -1251,6 +1599,31 @@ function BookDetailFull({ entry, shelf, onBack, onUpdateEntry, onUpdateBook, onD
   const [refreshingData,   setRefreshingData]   = useState(false)
   const [refreshResult,    setRefreshResult]    = useState(null) // null | 'ok' | 'nomatch'
   const folderMenuRef = useOutsideClose(showFolderMenu, () => setShowFolderMenu(false))
+
+  // Mantener el scroll pegado abajo cuando el contenido crece por debajo del
+  // punto donde estaba el jugador — issue reportada: "Relacionados" tarda en
+  // cargar (llamadas externas), y si el jugador ya había bajado del todo
+  // mientras tanto, en cuanto la sección aparece (pasa de una línea con
+  // spinner a varias filas de portadas) el contenido empuja hacia abajo y
+  // hay que volver a bajar a mano. Se compara contra el scrollHeight de
+  // ANTES del cambio (guardado en el cierre del observer anterior, no en
+  // este) — el que da el propio ResizeObserver ya es el nuevo, tarde para
+  // saber si "antes" estaba al final.
+  const scrollRef  = useRef(null)
+  const contentRef = useRef(null)
+  useEffect(() => {
+    const scrollEl  = scrollRef.current
+    const contentEl = contentRef.current
+    if (!scrollEl || !contentEl) return
+    let lastScrollHeight = scrollEl.scrollHeight
+    const ro = new ResizeObserver(() => {
+      const wasAtBottom = scrollEl.scrollTop + scrollEl.clientHeight >= lastScrollHeight - 40
+      if (wasAtBottom) scrollEl.scrollTop = scrollEl.scrollHeight
+      lastScrollHeight = scrollEl.scrollHeight
+    })
+    ro.observe(contentEl)
+    return () => ro.disconnect()
+  }, [])
 
   // Panel "Añadir a mi estantería" — solo tiene sentido en modo consulta de
   // una estantería ajena (readOnly + onAddToShelf). Mismo criterio de
@@ -1620,8 +1993,11 @@ function BookDetailFull({ entry, shelf, onBack, onUpdateEntry, onUpdateBook, onD
         </div>
       </div>
 
-      {/* Contenido scrollable */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: 24, display: 'flex', flexDirection: 'column', gap: 22 }}>
+      {/* Contenido scrollable — el div interno (contentRef) es el que mide su
+          alto real para el ResizeObserver de arriba; este de fuera (scrollRef)
+          es el viewport, cuyo propio tamaño no cambia con el contenido. */}
+      <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', padding: 24 }}>
+      <div ref={contentRef} style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
 
         <AnimatePresence initial={false}>
           {addPanelOpen && (
@@ -2053,6 +2429,15 @@ function BookDetailFull({ entry, shelf, onBack, onUpdateEntry, onUpdateBook, onD
           )}
         </AnimatePresence>
 
+        {/* Continuaciones y "más del mismo autor" (issue #7) — solo en la
+            propia estantería y fuera de edición, para no competir con el
+            formulario ni con el panel de "Añadir a mi estantería" de una
+            estantería ajena (ese caso ya tiene su propio flujo de añadido,
+            con fechas/estado a elegir; este es un añadido rápido directo). */}
+        {!readOnly && !editing && onQuickAdd && (
+          <RelatedBooksSection bookId={entry.book.id} onQuickAdd={onQuickAdd} />
+        )}
+
         {/* Fecha de alta — siempre visible, en cualquier estado (a diferencia
             de todo lo de arriba, condicionado al estado). El origen (buscado
             vs. copiado de la estantería de un amigo) ya se guarda en el
@@ -2063,6 +2448,7 @@ function BookDetailFull({ entry, shelf, onBack, onUpdateEntry, onUpdateBook, onD
             Añadido a {readOnly ? 'su' : 'tu'} estantería el {fmtShortDate(entry.added_at)}
           </p>
         )}
+      </div>
       </div>
     </div>
   )
@@ -2330,15 +2716,35 @@ function ShelfYearHeader({ label, count, collapsed, onToggle }) {
   )
 }
 
-function PersonalShelfSections({ entries, viewMode, sort, onSelect, renderActions, collapsedReading, onToggleReadingCollapsed, collapsedRead, onToggleReadCollapsed, collapsedWant, onToggleWantCollapsed, collapsedDropped, onToggleDroppedCollapsed, collapsedYears, onToggleYear }) {
+function PersonalShelfSections({ entries, viewMode, sort, onSelect, renderActions, collapsedReading, onToggleReadingCollapsed, collapsedRead, onToggleReadCollapsed, collapsedWant, onToggleWantCollapsed, collapsedDropped, onToggleDroppedCollapsed, collapsedYears, onToggleYear, scrollContainerRef }) {
 
   // "Releyendo" se cuela en el mismo bloque fijado que "Leyendo" — ambos son
   // lecturas activas, la diferencia (que ya no es la primera vez) la marca
   // el propio badge de veces leído, no una sección aparte.
   const reading = entries.filter(e => e.status === 'reading' || e.status === 'rereading')
   const read    = entries.filter(e => e.status === 'read')
-  const want    = entries.filter(e => e.status === 'want_to_read')
+  let   want    = entries.filter(e => e.status === 'want_to_read')
   const dropped = entries.filter(e => e.status === 'dropped')
+
+  // Sin orden explícito elegido, "Por leer" no tenía ningún criterio propio
+  // (se quedaba en el orden que devolviera la consulta a la base de datos,
+  // sin garantía real de qué orden era ese) — por defecto ahora se agrupa
+  // por autor, sin autor conocido al final; dentro de un mismo autor, por
+  // título. Si el jugador elige explícitamente otro orden en el desplegable
+  // de arriba, ese manda igual que siempre (aquí `want` ya llegaría en ese
+  // orden y este bloque no se ejecuta).
+  if (!sort.field) {
+    want = [...want].sort((a, b) => {
+      const authorA = a.book.author?.toLowerCase() || ''
+      const authorB = b.book.author?.toLowerCase() || ''
+      if (!authorA && authorB) return 1
+      if (authorA && !authorB) return -1
+      if (authorA !== authorB) return authorA < authorB ? -1 : 1
+      const titleA = a.book.title?.toLowerCase() || ''
+      const titleB = b.book.title?.toLowerCase() || ''
+      return titleA < titleB ? -1 : titleA > titleB ? 1 : 0
+    })
+  }
 
   const yearGroups = {}
   for (const e of read) {
@@ -2377,7 +2783,7 @@ function PersonalShelfSections({ entries, viewMode, sort, onSelect, renderAction
   }
 
   return (
-    <div style={{ flex: 1, overflowY: 'auto', padding: viewMode === 'grid' ? '2px 16px 16px' : '2px 10px 10px' }}>
+    <div ref={scrollContainerRef} style={{ flex: 1, overflowY: 'auto', padding: viewMode === 'grid' ? '2px 16px 16px' : '2px 10px 10px' }}>
       {reading.length > 0 && (
         <div style={{ marginBottom: 10 }}>
           <ShelfGroupHeader icon={IconBookmark} label="Leyendo ahora" count={reading.length}
@@ -3770,6 +4176,26 @@ function FriendShelfView({ playerId, playerName, onBack }) {
   const [shelf,   setShelf]   = useState([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState(null)
+  // Mismo mecanismo que en la propia estantería (ver LunitecaV2) para no
+  // perder el scroll de la lista al entrar a la ficha de un libro ajeno y
+  // volver. Primer intento (useLayoutEffect sobre [selected]) NO funcionaba
+  // de verdad: el AnimatePresence de abajo usa mode="wait", así que al
+  // volver (selected -> null) la lista no remonta en ese mismo render —
+  // espera a que la ficha termine su animación de salida — y para entonces
+  // el efecto ya se había disparado (y no vuelve a hacerlo) contra un ref
+  // todavía sin nodo. Con ref-callback en vez de objeto, la restauración
+  // pasa exactamente cuando el nodo del scroll llega a existir de verdad,
+  // sea cual sea el momento, en vez de acoplarse a cuándo cambia `selected`.
+  const shelfScrollNode = useRef(null)
+  const shelfScrollPos  = useRef(0)
+  const shelfScrollRef = useCallback((node) => {
+    shelfScrollNode.current = node
+    if (node) node.scrollTop = shelfScrollPos.current
+  }, [])
+  function selectBook(entry) {
+    if (shelfScrollNode.current) shelfScrollPos.current = shelfScrollNode.current.scrollTop
+    setSelected(entry)
+  }
   const [collapsedReading, setCollapsedReading] = useState(false)
   const [collapsedRead,    setCollapsedRead]    = useState(false)
   const [collapsedWant,    setCollapsedWant]    = useState(false)
@@ -3781,6 +4207,11 @@ function FriendShelfView({ playerId, playerName, onBack }) {
   const [sort,     setSort]     = useState({ field: '', dir: 'asc' })
   const [showSort, setShowSort] = useState(false)
   const sortMenuRef = useOutsideClose(showSort, () => setShowSort(false))
+  // Búsqueda por texto dentro de esta estantería (por título o autor) —
+  // nombre distinto de showSearch/setShowSearch (esa es la búsqueda externa
+  // para AÑADIR un libro nuevo, cosa muy distinta a filtrar lo que ya hay).
+  const [shelfQuery,      setShelfQuery]      = useState('')
+  const [showShelfSearch, setShowShelfSearch] = useState(false)
 
   useEffect(() => {
     setLoading(true)
@@ -3856,6 +4287,12 @@ function FriendShelfView({ playerId, playerName, onBack }) {
       if (pages && pages > parseInt(filters.maxPages)) return false
     }
     if (filters.genre && e.book.genre !== filters.genre) return false
+    if (shelfQuery.trim()) {
+      const q = shelfQuery.trim().toLowerCase()
+      const inTitle  = e.book.title?.toLowerCase().includes(q)
+      const inAuthor = e.book.author?.toLowerCase().includes(q)
+      if (!inTitle && !inAuthor) return false
+    }
     return true
   })
 
@@ -3922,8 +4359,47 @@ function FriendShelfView({ playerId, playerName, onBack }) {
                 onMouseLeave={ev => ev.currentTarget.style.color = C.sub}>
                 <IconBack size={16} color="currentColor" />
               </button>
-              <span style={{ fontSize: 13, color: C.text, fontWeight: 600, flex: 1 }}>Estantería de {playerName}</span>
+              {showShelfSearch ? (
+                <div style={{
+                  flex: 1, display: 'flex', alignItems: 'center', gap: 6,
+                  background: C.surfaceHi, borderRadius: 8, padding: '0 8px', height: 28,
+                }}>
+                  <IconSearch size={12} color={C.muted} />
+                  <input autoFocus value={shelfQuery} onChange={ev => setShelfQuery(ev.target.value)}
+                    placeholder="Buscar por título o autor…"
+                    style={{ flex: 1, background: 'none', border: 'none', outline: 'none', color: C.text, fontSize: 12 }} />
+                  <button onClick={() => { setShelfQuery(''); setShowShelfSearch(false) }} title="Cerrar búsqueda" style={{
+                    background: 'none', border: 'none', color: C.muted, cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', padding: 0,
+                  }}>
+                    <IconX size={11} color={C.muted} />
+                  </button>
+                </div>
+              ) : (
+                <span style={{ fontSize: 13, color: C.text, fontWeight: 600, flex: 1 }}>Estantería de {playerName}</span>
+              )}
 
+              {/* Buscar por título/autor dentro de esta estantería */}
+              {!showShelfSearch && (
+                <button onClick={() => setShowShelfSearch(true)} title="Buscar en esta estantería" style={{
+                  background: C.surfaceHi, border: '1px solid transparent',
+                  borderRadius: 8, width: 32, height: 28, color: C.muted,
+                  cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  transition: 'all 0.15s', flexShrink: 0,
+                }}>
+                  <IconSearch size={13} color={C.muted} />
+                </button>
+              )}
+
+              {/* El resto de botones se oculta (con animación) mientras el
+                  buscador está expandido — en móvil, con el campo de texto Y
+                  todos estos botones a la vez, la barra desbordaba. */}
+              <AnimatePresence initial={false}>
+              {!showShelfSearch && (
+                <motion.div key="resto-botones" layout
+                  initial={{ opacity: 0, width: 0 }} animate={{ opacity: 1, width: 'auto' }} exit={{ opacity: 0, width: 0 }}
+                  transition={{ duration: 0.2, ease: 'easeInOut' }}
+                  style={{ display: 'flex', alignItems: 'center', gap: 8, overflow: 'hidden' }}>
               {/* Colapsar/expandir todo — igual que en la propia estantería,
                   solo afecta a los bloques de año dentro de "Leídos". */}
               <button onClick={toggleAllCollapsed} title={anyBlockExpanded ? 'Colapsar todo' : 'Expandir todo'} style={{
@@ -4018,6 +4494,9 @@ function FriendShelfView({ playerId, playerName, onBack }) {
                   }}>{icon}</button>
                 ))}
               </div>
+                </motion.div>
+              )}
+              </AnimatePresence>
             </div>
 
             {loading && (
@@ -4036,7 +4515,8 @@ function FriendShelfView({ playerId, playerName, onBack }) {
                   entries={sorted}
                   viewMode={viewMode}
                   sort={sort}
-                  onSelect={setSelected}
+                  onSelect={selectBook}
+                  scrollContainerRef={shelfScrollRef}
                   collapsedReading={collapsedReading}
                   onToggleReadingCollapsed={() => setCollapsedReading(v => !v)}
                   collapsedRead={collapsedRead}
@@ -4426,6 +4906,10 @@ export default function LunitecaV2({ player }) {
   }
   const [shelf,       setShelf]       = useState([])
   const [filters,     setFilters]     = useState(EMPTY_FILTERS)
+  // Búsqueda por texto dentro de la propia estantería (por título o autor)
+  // — ver el mismo mecanismo en FriendShelfView.
+  const [shelfQuery,      setShelfQuery]      = useState('')
+  const [showShelfSearch, setShowShelfSearch] = useState(false)
   const vmKey = `luni_viewmode_${player.id}`
   const [viewMode, setViewMode] = useState(() => localStorage.getItem(vmKey) || 'list')
 
@@ -4506,6 +4990,29 @@ export default function LunitecaV2({ player }) {
     })
   }
   const [selected,    setSelected]    = useState(null)
+  // Mantener el scroll de la lista al entrar a la ficha de un libro y
+  // volver — issue reportada: PersonalShelfSections se desmonta del todo al
+  // abrir un libro (AnimatePresence mode="wait" con key distinta para
+  // detalle/lista) y remonta desde cero al volver, perdiendo el scrollTop.
+  // Mismo patrón que en pokemongo (guardar la posición fuera del estado que
+  // se destruye, restaurarla al remontar), pero con ref-callback en vez de
+  // un useLayoutEffect sobre [selected]: con mode="wait", al volver la
+  // lista NO remonta en el mismo render en que `selected` pasa a null —
+  // espera a que la ficha termine su animación de salida — así que un
+  // efecto atado a ese cambio de estado se disparaba demasiado pronto,
+  // contra un ref todavía sin nodo, y nunca volvía a intentarlo. El
+  // ref-callback restaura justo cuando el nodo del scroll llega a existir
+  // de verdad, sea cual sea el momento.
+  const shelfScrollNode = useRef(null)
+  const shelfScrollPos  = useRef(0)
+  const shelfScrollRef = useCallback((node) => {
+    shelfScrollNode.current = node
+    if (node) node.scrollTop = shelfScrollPos.current
+  }, [])
+  function selectBook(entry) {
+    if (shelfScrollNode.current) shelfScrollPos.current = shelfScrollNode.current.scrollTop
+    setSelected(entry)
+  }
   const [showSearch,  setShowSearch]  = useState(false)
   const [manualAdd,   setManualAdd]   = useState(false)
   const [showFilters, setShowFilters] = useState(false)
@@ -4549,13 +5056,22 @@ export default function LunitecaV2({ player }) {
     return () => window.removeEventListener('luni:ws', onWs)
   }, [player.id])
 
+  // La búsqueda (SearchOverlay) nunca manda `status` — siempre "Por leer" por
+  // defecto, como hasta ahora. El selector rápido de "Relacionados" sí manda
+  // uno explícito (el que haya elegido en su popover), y aquí se respeta en
+  // vez de pisarlo.
   async function addBook(book) {
-    await fetch('/api/shelf/personal', {
+    const r = await fetch('/api/shelf/personal', {
       method: 'POST', credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...book, status: 'want_to_read', origin: 'search' }),
+      body: JSON.stringify({ ...book, status: book.status || 'want_to_read', origin: 'search' }),
     })
-    loadShelf()
+    // Antes no se comprobaba r.ok — si el añadido fallaba (p.ej. 409 porque
+    // ya lo tenías), el que llama no tenía forma de saberlo y algunos sitios
+    // (el selector rápido de "Relacionados") daban la sensación de que se
+    // había añadido igualmente. Ahora sí se propaga.
+    if (r.ok) loadShelf()
+    return r.ok
   }
 
   async function updateEntry(id, data) {
@@ -4602,6 +5118,12 @@ export default function LunitecaV2({ player }) {
       if (pages && pages > parseInt(filters.maxPages)) return false
     }
     if (filters.genre && e.book.genre !== filters.genre) return false
+    if (shelfQuery.trim()) {
+      const q = shelfQuery.trim().toLowerCase()
+      const inTitle  = e.book.title?.toLowerCase().includes(q)
+      const inAuthor = e.book.author?.toLowerCase().includes(q)
+      if (!inTitle && !inAuthor) return false
+    }
     return true
   })
 
@@ -4724,6 +5246,7 @@ export default function LunitecaV2({ player }) {
                 onUpdateEntry={updateEntry}
                 onUpdateBook={updateBook}
                 onDelete={() => deleteEntry(selected.id)}
+                onQuickAdd={addBook}
               />
             </motion.div>
           ) : (
@@ -4734,8 +5257,48 @@ export default function LunitecaV2({ player }) {
               padding: '11px 16px', borderBottom: `1px solid ${C.border}`,
               display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0,
             }}>
-              <span style={{ fontSize: 13, color: C.text, fontWeight: 600, flex: 1 }}>Mi estantería</span>
+              {showShelfSearch ? (
+                <div style={{
+                  flex: 1, display: 'flex', alignItems: 'center', gap: 6,
+                  background: C.surfaceHi, borderRadius: 8, padding: '0 8px', height: 28,
+                }}>
+                  <IconSearch size={12} color={C.muted} />
+                  <input autoFocus value={shelfQuery} onChange={ev => setShelfQuery(ev.target.value)}
+                    placeholder="Buscar por título o autor…"
+                    style={{ flex: 1, background: 'none', border: 'none', outline: 'none', color: C.text, fontSize: 12 }} />
+                  <button onClick={() => { setShelfQuery(''); setShowShelfSearch(false) }} title="Cerrar búsqueda" style={{
+                    background: 'none', border: 'none', color: C.muted, cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', padding: 0,
+                  }}>
+                    <IconX size={11} color={C.muted} />
+                  </button>
+                </div>
+              ) : (
+                <span style={{ fontSize: 13, color: C.text, fontWeight: 600, flex: 1 }}>Mi estantería</span>
+              )}
 
+              {/* Buscar por título/autor dentro de la estantería */}
+              {!showShelfSearch && (
+                <button onClick={() => setShowShelfSearch(true)} title="Buscar en mi estantería" style={{
+                  background: C.surfaceHi, border: '1px solid transparent',
+                  borderRadius: 8, width: 32, height: 28, color: C.muted,
+                  cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  transition: 'all 0.15s', flexShrink: 0,
+                }}>
+                  <IconSearch size={13} color={C.muted} />
+                </button>
+              )}
+
+              {/* El resto de botones se oculta (con animación, no de golpe)
+                  mientras el buscador está expandido — issue reportada: en
+                  móvil, con el campo de texto Y todos estos botones a la
+                  vez, la barra desbordaba y lo empujaba todo de mala manera. */}
+              <AnimatePresence initial={false}>
+              {!showShelfSearch && (
+                <motion.div key="resto-botones" layout
+                  initial={{ opacity: 0, width: 0 }} animate={{ opacity: 1, width: 'auto' }} exit={{ opacity: 0, width: 0 }}
+                  transition={{ duration: 0.2, ease: 'easeInOut' }}
+                  style={{ display: 'flex', alignItems: 'center', gap: 8, overflow: 'hidden' }}>
               {/* Botón colapsar/expandir todo */}
               <button onClick={toggleAllCollapsed} title={anyBlockExpanded ? 'Colapsar todo' : 'Expandir todo'} style={{
                 background: C.surfaceHi, border: '1px solid transparent',
@@ -4882,6 +5445,9 @@ export default function LunitecaV2({ player }) {
               )}
               </AnimatePresence>
               </div>
+                </motion.div>
+              )}
+              </AnimatePresence>
             </div>
 
             {sorted.length === 0 && (
@@ -4896,7 +5462,8 @@ export default function LunitecaV2({ player }) {
                   entries={sorted}
                   viewMode={viewMode}
                   sort={sort}
-                  onSelect={setSelected}
+                  onSelect={selectBook}
+                  scrollContainerRef={shelfScrollRef}
                   collapsedReading={collapsedReading}
                   onToggleReadingCollapsed={toggleReadingCollapsed}
                   collapsedRead={collapsedRead}
