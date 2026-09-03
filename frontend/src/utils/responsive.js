@@ -26,6 +26,38 @@ export function setWindowModePref(playerId, mode) {
   window.dispatchEvent(new Event(WINDOW_MODE_EVENT))
 }
 
+// Preferencia de "ocultar la barra inferior de apps" en modo móvil/tablet
+// (MobileBottomNav en GatOS.jsx) — pensada para quien casi siempre usa solo
+// Luniteca desde el móvil y prefiere aprovechar esos ~64px de más. Ajustes
+// sigue accesible igual (se entra desde el menú GatOS, no desde esta barra),
+// así que ocultarla nunca deja sin forma de volver a mostrarla. Mismo
+// criterio que el modo tablet: por dispositivo, no por cuenta.
+const BOTTOM_NAV_EVENT = 'gatos:bottomnav'
+function bottomNavKey(playerId) {
+  return `gatos_hide_bottom_nav_${playerId}`
+}
+export function getBottomNavHidden(playerId) {
+  if (!playerId) return false
+  return localStorage.getItem(bottomNavKey(playerId)) === '1'
+}
+export function setBottomNavHidden(playerId, hidden) {
+  if (!playerId) return
+  if (hidden) localStorage.setItem(bottomNavKey(playerId), '1')
+  else localStorage.removeItem(bottomNavKey(playerId))
+  window.dispatchEvent(new Event(BOTTOM_NAV_EVENT))
+}
+export function useBottomNavHidden() {
+  const playerId = useAuth()?.player?.id
+  const [hidden, setHidden] = useState(() => getBottomNavHidden(playerId))
+  useEffect(() => {
+    setHidden(getBottomNavHidden(playerId))
+    function onPrefChange() { setHidden(getBottomNavHidden(playerId)) }
+    window.addEventListener(BOTTOM_NAV_EVENT, onPrefChange)
+    return () => window.removeEventListener(BOTTOM_NAV_EVENT, onPrefChange)
+  }, [playerId])
+  return hidden
+}
+
 // Única fuente de verdad para móvil vs desktop: ancho de viewport (reactivo
 // a resize/rotación — encoger la ventana del navegador en desktop también
 // activa el modo móvil), forzado además a "true" cuando el jugador ha

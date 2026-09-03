@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react'
 import { AnimatePresence } from 'framer-motion'
-import { useIsMobile, getWindowModePref, setWindowModePref } from '../../../utils/responsive'
+import { useIsMobile, getWindowModePref, setWindowModePref, getBottomNavHidden, setBottomNavHidden } from '../../../utils/responsive'
 import PlayerAvatar from '../PlayerAvatar'
 import AvatarCropModal from '../AvatarCropModal'
 import { PRESET_AVATARS } from '../../../utils/presetAvatars'
@@ -42,8 +42,26 @@ function IconTablet({ size = 15, color = 'currentColor' }) {
     </svg>
   )
 }
+function IconBack({ size = 15, color = 'currentColor' }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" style={{ display: 'block', flexShrink: 0 }}>
+      <path d="M10 3 5 8l5 5" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+function IconDock({ size = 15, color = 'currentColor' }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" style={{ display: 'block', flexShrink: 0 }}>
+      <rect x="2" y="2" width="12" height="12" rx="1.5" stroke={color} strokeWidth="1.35" />
+      <path d="M2 10.5h12" stroke={color} strokeWidth="1.35" />
+      <circle cx="5.5" cy="12.2" r="0.8" fill={color} />
+      <circle cx="8" cy="12.2" r="0.8" fill={color} />
+      <circle cx="10.5" cy="12.2" r="0.8" fill={color} />
+    </svg>
+  )
+}
 
-export default function SettingsApp({ player, onProfileUpdate }) {
+export default function SettingsApp({ player, onProfileUpdate, onBackToLuniteca }) {
   const isMobile = useIsMobile()
   const fileInputRef = useRef(null)
 
@@ -68,6 +86,16 @@ export default function SettingsApp({ player, onProfileUpdate }) {
   function chooseWindowMode(mode) {
     setWindowModePref(player.id, mode)
     setWindowModeState(mode)
+  }
+
+  // Barra inferior de apps en móvil/tablet — quien casi siempre usa solo
+  // Luniteca desde el móvil puede ocultarla para aprovechar esos ~64px.
+  // Ajustes se sigue abriendo igual (desde el menú GatOS), así que ocultarla
+  // nunca deja sin forma de volver a mostrarla.
+  const [hideBottomNav, setHideBottomNavState] = useState(() => getBottomNavHidden(player.id))
+  function chooseBottomNav(hidden) {
+    setBottomNavHidden(player.id, hidden)
+    setHideBottomNavState(hidden)
   }
 
   // PIN
@@ -174,9 +202,15 @@ export default function SettingsApp({ player, onProfileUpdate }) {
   const btnPrimary = { background: '#5865f2', border: 'none', borderRadius: 8, padding: '8px 20px', color: 'white', cursor: 'pointer', fontWeight: 600, fontSize: 13 }
   const btnGhost   = { background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, padding: '7px 14px', color: 'rgba(255,255,255,0.75)', cursor: 'pointer', fontSize: 12.5 }
 
+  // Con la barra inferior oculta, Ajustes es la única pantalla que se puede
+  // quedar sin forma de volver a Luniteca (es la única con el interruptor
+  // que la esconde) — este botón flotante es esa vuelta, siempre en el mismo
+  // sitio sin depender de hacer scroll hasta la sección de arriba.
+  const showBackButton = isMobile && hideBottomNav && !!onBackToLuniteca
+
   return (
     <div style={{ height: '100%', position: 'relative', background: '#111827', fontFamily: 'system-ui, sans-serif' }}>
-      <div style={{ height: '100%', overflowY: 'auto', overflowX: 'hidden' }}>
+      <div style={{ height: '100%', overflowY: 'auto', overflowX: 'hidden', paddingBottom: showBackButton ? 64 : 0, boxSizing: 'border-box' }}>
       <div style={{
         maxWidth: 440, margin: '0 auto',
         padding: isMobile ? '24px 18px 40px' : '36px 32px 48px',
@@ -288,6 +322,43 @@ export default function SettingsApp({ player, onProfileUpdate }) {
           </div>
         </section>
 
+        {/* Barra inferior de apps en móvil/tablet — solo tiene sentido si el
+            modo táctil está activo (viewport móvil real, o modo tablet elegido
+            arriba); en escritorio con ventanas esta barra ni existe. */}
+        {isMobile && (
+          <section style={cardStyle}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <IconDock size={13} color="rgba(255,255,255,0.5)" />
+              <h3 style={{ fontSize: 13, fontWeight: 700, color: 'rgba(255,255,255,0.85)' }}>Barra inferior de apps</h3>
+            </div>
+            <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)', margin: 0 }}>
+              Si casi siempre usas solo Luniteca desde el móvil, puedes ocultar la barra de cambio
+              de apps para aprovechar más espacio de pantalla. Ajustes sigue estando disponible
+              igual, desde el menú de arriba.
+            </p>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              {[
+                [false, 'Mostrar barra inferior', IconDock],
+                [true, 'Ocultar barra inferior', IconTablet],
+              ].map(([hidden, label, Icon]) => {
+                const active = hideBottomNav === hidden
+                return (
+                  <button type="button" key={String(hidden)} onClick={() => chooseBottomNav(hidden)} style={{
+                    display: 'flex', alignItems: 'center', gap: 8,
+                    background: active ? 'rgba(88,101,242,0.18)' : 'rgba(255,255,255,0.06)',
+                    border: active ? '1px solid #5865f2' : '1px solid rgba(255,255,255,0.1)',
+                    borderRadius: 9, padding: '9px 14px', color: active ? '#8b95f8' : 'rgba(255,255,255,0.7)',
+                    cursor: 'pointer', fontSize: 12.5, fontWeight: 600,
+                  }}>
+                    <Icon size={14} color={active ? '#8b95f8' : 'rgba(255,255,255,0.5)'} />
+                    {label}
+                  </button>
+                )
+              })}
+            </div>
+          </section>
+        )}
+
         {/* Cambiar PIN */}
         <section style={cardStyle}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -349,6 +420,27 @@ export default function SettingsApp({ player, onProfileUpdate }) {
         </section>
       </div>
       </div>
+
+      {showBackButton && (
+        <div style={{
+          position: 'absolute', left: 0, right: 0, bottom: 0,
+          height: 'calc(64px + env(safe-area-inset-bottom))',
+          paddingBottom: 'env(safe-area-inset-bottom)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'rgba(20,18,28,0.8)', backdropFilter: 'blur(24px)',
+          borderTop: '1px solid rgba(255,255,255,0.12)',
+        }}>
+          <button type="button" onClick={onBackToLuniteca} style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            background: '#5865f2', border: 'none', borderRadius: 10,
+            padding: '11px 22px', color: 'white', fontWeight: 700, fontSize: 13.5,
+            cursor: 'pointer',
+          }}>
+            <IconBack size={15} color="white" />
+            Volver a Luniteca
+          </button>
+        </div>
+      )}
 
       <AnimatePresence>
         {cropFile && (

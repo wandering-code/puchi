@@ -48,6 +48,25 @@ function AppIconLuniteca({ size = 44 }) {
   )
 }
 
+function AppIconLuniteca3({ size = 44 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 44 44" fill="none">
+      <defs>
+        <linearGradient id="g-luni3" x1="0" y1="0" x2="44" y2="44" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#c97d5a" />
+          <stop offset="100%" stopColor="#8c4a3a" />
+        </linearGradient>
+      </defs>
+      <rect width="44" height="44" rx="9" fill="url(#g-luni3)" />
+      {/* Libro cerrado, de canto — distinto del abierto de Luniteca (v2) */}
+      <rect x="12" y="9" width="20" height="26" rx="2" fill="white" opacity="0.92" />
+      <rect x="12" y="9" width="5" height="26" rx="2" fill="white" opacity="0.55" />
+      <line x1="22" y1="15" x2="28" y2="15" stroke="#8c4a3a" strokeWidth="1.6" strokeLinecap="round" opacity="0.7" />
+      <line x1="22" y1="20" x2="28" y2="20" stroke="#8c4a3a" strokeWidth="1.6" strokeLinecap="round" opacity="0.7" />
+    </svg>
+  )
+}
+
 function AppIconPirestore({ size = 44 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 44 44" fill="none">
@@ -115,6 +134,7 @@ function AppIconAdmin({ size = 44 }) {
 export const DOCK_ICONS = {
   diskordkito: AppIconDiskordkito,
   luniteca2:   AppIconLuniteca,
+  luniteca3:   AppIconLuniteca3,
   pirestore:   AppIconPirestore,
   settings:    AppIconSettings,
   admin:       AppIconAdmin,

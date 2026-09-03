@@ -5,7 +5,7 @@ import MenuBar, { MENU_BAR_H } from './MenuBar'
 import Dock, { DOCK_RESERVED } from './Dock'
 import { MOBILE_TAB_APPS, visibleTabApps, launcherApps } from './MobileLauncher'
 import MobileBottomNav, { MOBILE_BOTTOM_NAV_H } from './MobileBottomNav'
-import { useIsMobile } from '../../utils/responsive'
+import { useIsMobile, useBottomNavHidden } from '../../utils/responsive'
 import { wallpaperCss } from '../../utils/wallpaper'
 import { getDeviceId } from '../../utils/deviceId'
 // Renombrado en el import: "Notification" a secas taparía la API nativa
@@ -18,6 +18,7 @@ import CallPiP                from './CallPiP'
 import Diskordkito   from './apps/Diskordkito'
 import Luniteca      from './apps/Luniteca'
 import LunitecaV2    from './apps/LunitecaV2'
+import LunitecaV3    from './apps/LunitecaV3'
 import SettingsApp   from './apps/SettingsApp'
 import Pirestore     from './apps/Pirestore'
 import AdminPanel    from './apps/AdminPanel'
@@ -58,6 +59,7 @@ const GROUP_CALL_SIGNAL_TYPES = new Set([
 
 export default function GatOS({ player: initialPlayer, onLogout, onProfileUpdate: _onProfileUpdate, onExitPC }) {
   const isMobile = useIsMobile()
+  const hideBottomNav = useBottomNavHidden()
   const [player,       setPlayer]       = useState(initialPlayer)
   const [windows,      setWindows]      = useState([])
   const [topZ,         setTopZ]         = useState(200)
@@ -1109,7 +1111,7 @@ export default function GatOS({ player: initialPlayer, onLogout, onProfileUpdate
     // así que tienen que estar aquí también, no solo las 3 de pestaña fija.
     // Centralizado aquí para que no haga falta acordarse de llamar también a
     // switchMobileApp en cada sitio que abre una app directamente.
-    if (isMobile && (MOBILE_TAB_APPS.includes(appId) || appId === 'settings' || appId === 'admin')) {
+    if (isMobile && (MOBILE_TAB_APPS.includes(appId) || appId === 'settings' || appId === 'admin' || appId === 'luniteca3')) {
       setMobileActiveTab(appId)
     }
     setWindows(prev => {
@@ -1259,7 +1261,9 @@ export default function GatOS({ player: initialPlayer, onLogout, onProfileUpdate
                                     onExposeCallRestore={fn => { callRestoreRef.current = fn }} />
       case 'luniteca':    return <Luniteca    player={player} />
       case 'luniteca2':   return <LunitecaV2  player={player} />
-case 'settings':    return <SettingsApp player={player} onProfileUpdate={onProfileUpdate} />
+      case 'luniteca3':   return <LunitecaV3  player={player} />
+      case 'settings':    return <SettingsApp player={player} onProfileUpdate={onProfileUpdate}
+                                    onBackToLuniteca={isMobile ? () => switchMobileApp('luniteca2') : undefined} />
       case 'pirestore':   return <Pirestore   player={player} onProfileUpdate={onProfileUpdate} />
       case 'admin':       return <AdminPanel  player={player} />
       default:            return null
@@ -1285,16 +1289,28 @@ case 'settings':    return <SettingsApp player={player} onProfileUpdate={onProfi
   const tabApps = visibleTabApps(player)
   const mobileSettingsWindow = windows.find(w => w.appId === 'settings' && !w.minimized)
   const mobileAdminWindow    = windows.find(w => w.appId === 'admin'    && !w.minimized)
+  const mobileLuniteca3Window = windows.find(w => w.appId === 'luniteca3' && !w.minimized)
   const mobileActiveTabApp =
-    (mobileActiveTab === 'settings' && mobileSettingsWindow) ? 'settings' :
-    (mobileActiveTab === 'admin'    && mobileAdminWindow)    ? 'admin'    :
-    (mobileActiveTab && tabApps.includes(mobileActiveTab))   ? mobileActiveTab :
+    (mobileActiveTab === 'settings'  && mobileSettingsWindow)  ? 'settings'  :
+    (mobileActiveTab === 'admin'     && mobileAdminWindow)     ? 'admin'     :
+    (mobileActiveTab === 'luniteca3' && mobileLuniteca3Window) ? 'luniteca3' :
+    (mobileActiveTab && tabApps.includes(mobileActiveTab))     ? mobileActiveTab :
     tabApps[0]
+
+  // Con una sola app visible, la barra no aportaría nada (no hay entre qué
+  // cambiar) — y además, ajustable a mano desde Ajustes (ver useBottomNavHidden
+  // en utils/responsive.js) para quien casi siempre usa solo Luniteca desde
+  // el móvil. Ajustes es la única pantalla desde la que se puede activar esa
+  // preferencia, así que es la única que necesita (y tiene, ver SettingsApp)
+  // su propio botón de "Volver a Luniteca" para cuando la deja oculta — no
+  // hace falta forzar la barra entera solo para eso (y así no se puede acabar
+  // sin querer en otra app con la barra ya escondida detrás).
+  const showBottomNav = launcherApps(player).length > 1 && !hideBottomNav
 
   // App realmente visible ahora mismo, sea cual sea el modo — usado para
   // decidir si la notificación de llamada entrante es redundante o no.
   const foregroundAppId = isMobile
-    ? (mobileSettingsWindow ? 'settings' : mobileAdminWindow ? 'admin' : mobileActiveTabApp)
+    ? (mobileSettingsWindow ? 'settings' : mobileAdminWindow ? 'admin' : mobileLuniteca3Window ? 'luniteca3' : mobileActiveTabApp)
     : activeWindow?.appId
 
   // PiP de llamada (grupal o 1-to-1): se muestra siempre que estemos dentro
@@ -1345,7 +1361,7 @@ case 'settings':    return <SettingsApp player={player} onProfileUpdate={onProfi
       speakerPlayer={pipSpeakerPlayer}
       participantCount={pipParticipantCount}
       onRestore={restoreCallView}
-      bottomOffset={isMobile && launcherApps(player).length > 1 ? MOBILE_BOTTOM_NAV_H + 8 : 0}
+      bottomOffset={isMobile && showBottomNav ? MOBILE_BOTTOM_NAV_H + 8 : 0}
     />
   )
 
@@ -1454,10 +1470,10 @@ case 'settings':    return <SettingsApp player={player} onProfileUpdate={onProfi
             lanzador flotante, igual que entre cualquiera de las tres. */}
         <div style={{
           position: 'absolute', top: MENU_BAR_H, left: 0, right: 0,
-          bottom: `calc(${MOBILE_BOTTOM_NAV_H}px + env(safe-area-inset-bottom))`,
+          bottom: showBottomNav ? `calc(${MOBILE_BOTTOM_NAV_H}px + env(safe-area-inset-bottom))` : 'env(safe-area-inset-bottom)',
           overflow: 'hidden',
         }}>
-          {[...tabApps, ...(mobileSettingsWindow ? ['settings'] : []), ...(mobileAdminWindow ? ['admin'] : [])].map(id => {
+          {[...tabApps, ...(mobileSettingsWindow ? ['settings'] : []), ...(mobileAdminWindow ? ['admin'] : []), ...(mobileLuniteca3Window ? ['luniteca3'] : [])].map(id => {
             const active = mobileActiveTabApp === id
             return (
               <motion.div
@@ -1542,7 +1558,7 @@ case 'settings':    return <SettingsApp player={player} onProfileUpdate={onProfi
             nada — se oculta. Ofrece TODAS las apps visibles (como el Dock de
             escritorio), no solo las 3 de pestaña — mismo criterio que el
             lanzador flotante que sustituye (ver launcherApps). */}
-        {launcherApps(player).length > 1 && (
+        {showBottomNav && (
           <MobileBottomNav activeAppId={mobileActiveTabApp} onSelect={switchMobileApp} player={player} />
         )}
 

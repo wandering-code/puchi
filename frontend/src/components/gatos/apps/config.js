@@ -25,6 +25,15 @@ export const APPS = {
     width:  820,
     height: 560,
   },
+  luniteca3: {
+    id:     'luniteca3',
+    title:  'Luniteca (nueva)',
+    icon:   '📖',
+    color:  '#b5603c',
+    width:  820,
+    height: 560,
+    adminOnly: true, // rediseño en curso (issue #8) — solo wander, mientras se prueba
+  },
   settings: {
     id:     'settings',
     title:  'Ajustes',

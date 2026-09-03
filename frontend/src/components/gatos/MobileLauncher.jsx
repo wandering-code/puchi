@@ -9,7 +9,12 @@ import { DOCK_ICONS } from './apps/DockIcons'
 // el abanico del lanzador (ver launcherApps más abajo) — Ajustes se entra
 // únicamente desde el menú GatOS, a propósito, para no duplicar el mismo
 // destino en dos sitios.
-export const MOBILE_TAB_APPS = ['diskordkito', 'luniteca2', 'pirestore']
+// Luniteca primero a propósito: es la app por defecto en móvil para todo el
+// mundo (tabApps[0] en GatOS.jsx cae aquí la primera vez que se entra en
+// modo móvil, o si nunca se guardó una pestaña visitada) — con más miembros
+// usando casi solo Luniteca desde el móvil, tiene más sentido que abrir en
+// Diskordkito.
+export const MOBILE_TAB_APPS = ['luniteca2', 'diskordkito', 'pirestore']
 
 // Igual que Dock — quien no es miembro del club solo ve Luniteca.
 export function visibleTabApps(player) {

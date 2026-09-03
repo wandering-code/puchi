@@ -1,4 +1,5 @@
 @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&display=swap'); /* Luniteca (nueva), issue #8 */
 
 @tailwind base;
 @tailwind components;
@@ -79,4 +80,81 @@ canvas {
   --luni-railInactive: rgba(17,24,39,0.32);
   --luni-railHover:    rgba(17,24,39,0.05);
   --luni-railDot:      rgba(17,24,39,0.18);
+}
+
+/* Luniteca (nueva) — issue #8, rediseño en curso, admin-only mientras se
+   prueba. Dirección "editorial cálido" acordada en el canvas de diseño:
+   tipografía recta (Public Sans, sin serif/itálica), radios mínimos, paleta
+   crema/terracota. Sin variante oscura todavía — se añadirá si hace falta,
+   igual que .luni-light arriba para la Luniteca actual. */
+.luniteca3-root {
+  --luni3-bg:        #f7f3ee;
+  --luni3-surface:   #fdfbf9;
+  --luni3-surfaceHi: #ece5db;
+  --luni3-border:    #e2d9cc;
+  --luni3-text:      #241f1a;
+  --luni3-sub:       #7a6f63;
+  --luni3-muted:     #948a7c;
+  --luni3-accent:    #b5603c;
+  --luni3-accentBg:  rgba(181,96,60,0.12);
+  --luni3-accentBd:  rgba(181,96,60,0.35);
+  --luni3-read:      #3f6b52;
+  --luni3-want:      #9a9184;
+  --luni3-dropped:   #a4432b;
+
+  /* Mismos colores que --luni3-*, en tripletes HSL — convención que espera
+     shadcn/ui (sus componentes usan clases Tailwind como bg-background,
+     text-muted-foreground, etc., mapeadas en tailwind.config.js a
+     hsl(var(--background)) y compañía). Se define aquí, dentro de
+     .luniteca3-root, en vez de en :root — así ni un solo componente fuera de
+     Luniteca (nueva) hereda estos tokens ni cambia de aspecto. */
+  --background: 33 36% 95%;
+  --foreground: 30 16% 12%;
+  --card: 30 50% 98%;
+  --card-foreground: 30 16% 12%;
+  --primary: 18 50% 47%;
+  --primary-foreground: 30 50% 98%;
+  --secondary: 35 31% 89%;
+  --secondary-foreground: 30 16% 12%;
+  --muted: 35 31% 89%;
+  --muted-foreground: 31 10% 43%;
+  --accent: 35 31% 89%;
+  --accent-foreground: 30 16% 12%;
+  --destructive: 12 58% 41%;
+  --destructive-foreground: 30 50% 98%;
+  --border: 35 27% 84%;
+  --input: 35 27% 84%;
+  --ring: 18 50% 47%;
+  --radius: 0.25rem;
+}
+
+/* Fila "Leyendo" — es un carrusel de scroll propio, no una lista con barra
+   visible (mismo criterio que el resto de la app para tiras horizontales). */
+.luni3-hscroll {
+  scrollbar-width: none;
+}
+.luni3-hscroll::-webkit-scrollbar {
+  display: none;
+}
+
+/* Contenedor con scroll vertical de la estantería — barra fina y discreta
+   en vez de la nativa del sistema, pero sin ocultarla del todo (a
+   diferencia del carrusel de "Leyendo"): en escritorio es la única pista de
+   que hay más contenido al bajar. */
+.luni3-vscroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(36,31,26,0.18) transparent;
+}
+.luni3-vscroll::-webkit-scrollbar {
+  width: 6px;
+}
+.luni3-vscroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.luni3-vscroll::-webkit-scrollbar-thumb {
+  background: rgba(36,31,26,0.18);
+  border-radius: 4px;
+}
+.luni3-vscroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(36,31,26,0.3);
 }

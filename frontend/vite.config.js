@@ -35,6 +35,12 @@ function versionFilePlugin() {
 
 export default defineConfig({
   plugins: [react(), versionFilePlugin()],
+  // Alias "@" -> src/ — usado por los componentes de shadcn/ui (Luniteca
+  // nueva, issue #8) para importar entre ellos con rutas absolutas, como
+  // espera el propio ecosistema de shadcn.
+  resolve: {
+    alias: { '@': resolve(__dirname, './src') },
+  },
   // Un `define` con un identificador global suelto (p.ej. `__APP_VERSION__`)
   // no se sustituye en modo dev con esta versión de Vite (comprobado: el
   // código se sirve tal cual, sin reemplazar) — solo funciona así en
