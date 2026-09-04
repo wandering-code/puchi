@@ -5403,6 +5403,17 @@ export default function LunitecaV2({ player }) {
                 {theme === 'dark' ? <IconSun color={C.muted} /> : <IconMoon color={C.muted} />}
               </button>
 
+                </motion.div>
+              )}
+              </AnimatePresence>
+
+              {/* "Añadir libro" fuera del contenedor `overflow:hidden` de arriba
+                  (necesario solo para la animación de colapso de los otros
+                  botones al abrir el buscador de la estantería) — dentro de
+                  ese contenedor, su desplegable quedaba recortado y parecía
+                  que el botón no hacía nada. Siempre visible a propósito,
+                  incluso con el buscador abierto: es la acción principal de
+                  la barra. */}
               <div ref={addChooserRef} style={{ position: 'relative', flexShrink: 0 }}>
               <button onClick={() => setShowAddChooser(v => !v)} title="Añadir libro" style={{
                 background: C.accent, border: 'none', borderRadius: 8,
@@ -5445,9 +5456,6 @@ export default function LunitecaV2({ player }) {
               )}
               </AnimatePresence>
               </div>
-                </motion.div>
-              )}
-              </AnimatePresence>
             </div>
 
             {sorted.length === 0 && (
