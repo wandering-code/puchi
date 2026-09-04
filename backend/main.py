@@ -1609,7 +1609,16 @@ async def update_book(
     if body.author    is not None: book.author    = body.author.strip()
     if body.genre     is not None: book.genre     = body.genre.strip()
     if body.synopsis  is not None: book.synopsis  = body.synopsis.strip()
-    if body.cover_url is not None: book.cover_url = await _cache_cover_url(body.cover_url.strip() or None)
+    if body.cover_url is not None:
+        book.cover_url = await _cache_cover_url(body.cover_url.strip() or None)
+        # Elegir una portada (de la API o subiendo un archivo aparte, ver
+        # POST /books/{id}/cover) deja constancia de quién la puso — antes
+        # solo se guardaba en book.cover_url sin más, así que esa elección
+        # nunca podía volver a aparecer en "tus portadas" más adelante. Si
+        # la URL ya está en la galería (una ya subida por alguien, o esta
+        # misma elegida antes), no se duplica ni se le cambia el autor.
+        if book.cover_url and not db.query(BookCover).filter_by(book_id=book.id, url=book.cover_url).first():
+            db.add(BookCover(book_id=book.id, uploaded_by=current.id, url=book.cover_url))
     if body.year      is not None: book.year      = body.year
     if body.isbn      is not None: book.isbn      = body.isbn.strip() or None
     if body.num_pages is not None: book.num_pages = body.num_pages
@@ -1673,9 +1682,6 @@ async def get_book_covers(
         if url and url not in seen:
             seen.add(url); covers.append(url)
 
-    if book.cover_url:
-        add(book.cover_url)
-
     if book.open_lib_key:
         clean = book.open_lib_key.lstrip('/')
         async with httpx.AsyncClient() as client:
@@ -1705,16 +1711,40 @@ async def get_book_covers(
         .order_by(BookCover.created_at.desc())
         .all()
     )
+    # Todas las subidas, siempre — antes se descartaba de esta lista
+    # cualquiera cuya URL coincidiera con la portada activa del libro
+    # (`seen`, pensado solo para no repetir automáticas entre sí), así que
+    # si la portada activa la habías subido tú mismo, desaparecía de "tus
+    # portadas"/"subidas por otros" sin dejar rastro de que existía.
     user_uploads = [
         {
             "url":             u.url,
             "uploaded_by":     u.uploader.name if u.uploader else None,
             "uploaded_by_id":  u.uploaded_by,
         }
-        for u in uploads if u.url not in seen
+        for u in uploads
     ]
 
-    return {"covers": covers, "user_uploads": user_uploads}
+    # La portada activa se añade a "covers" (automáticas) solo si no es
+    # ninguna subida ya listada arriba — cubre el caso de una URL pegada a
+    # mano hace tiempo, sin duplicar una subida real bajo dos apartados.
+    upload_urls = {u.url for u in uploads}
+    if book.cover_url and book.cover_url not in upload_urls:
+        add(book.cover_url)
+
+    # Para que el cliente pueda saber si una de "De la API" es la elegida
+    # ahora mismo, sin exponerle el mecanismo de cacheo: no basta comparar
+    # la URL tal cual, porque al elegir una portada externa se descarga y
+    # sirve desde una ruta local con nombre determinista (hash de la URL
+    # externa, ver _cover_cache_path) que nunca vuelve a coincidir con la
+    # URL externa aunque sea la misma imagen. Solo hashea (no comprueba si
+    # ya está cacheada de verdad) — es la misma cuenta que hará
+    # _cache_cover_url si se llega a elegir. Campo nuevo y aparte — el
+    # array `covers` en sí no cambia de forma (sigue siendo texto plano),
+    # así que no afecta a quien ya lo lea así (LunitecaV2.jsx).
+    cover_cache_map = {url: _cover_cache_path(url)[1] for url in covers}
+
+    return {"covers": covers, "user_uploads": user_uploads, "cover_cache_map": cover_cache_map}
 
 
 @app.get("/books/search")
@@ -2294,7 +2324,15 @@ async def update_personal_shelf(
     if body.current_page       is not None: entry.current_page       = body.current_page
     if body.custom_total_pages is not None: entry.custom_total_pages = body.custom_total_pages
     if body.folder             is not None: entry.folder             = body.folder or None
-    if body.cover_url          is not None: entry.cover_url          = await _cache_cover_url(body.cover_url.strip() or None)
+    if body.cover_url          is not None:
+        entry.cover_url = await _cache_cover_url(body.cover_url.strip() or None)
+        # Misma constancia de autoría que PATCH /books/{id} — elegir una
+        # portada para tu propia copia (aunque sea solo tuya, no la del
+        # libro compartido) también cuenta como "la subiste tú" de cara a
+        # "Tus portadas" en el selector, si esa URL no estaba ya en la
+        # galería del libro.
+        if entry.cover_url and not db.query(BookCover).filter_by(book_id=entry.book_id, url=entry.cover_url).first():
+            db.add(BookCover(book_id=entry.book_id, uploaded_by=current.id, url=entry.cover_url))
     # Recalcular progress cuando se actualizan páginas
     total = entry.custom_total_pages or (entry.book.num_pages if entry.book else None)
     if total and entry.current_page is not None:

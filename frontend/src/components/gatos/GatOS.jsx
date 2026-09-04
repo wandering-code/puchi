@@ -1166,6 +1166,13 @@ export default function GatOS({ player: initialPlayer, onLogout, onProfileUpdate
   // Si no hay ninguna pestaña activa al entrar en modo móvil (primera vez,
   // o todas minimizadas desde una sesión de escritorio), reabre la última
   // que se visitó (o la primera de la lista si no hay ninguna guardada).
+  //
+  // Excepción: para wander, y solo en local (import.meta.env.DEV — nunca en
+  // el build de producción del mini PC), la que se abre de primeras es
+  // Luniteca (nueva) en vez de la Luniteca real — para poder probar V3 en el
+  // móvil sin tener que ir a buscarla cada vez mientras está en curso el
+  // rediseño (issue #8). No toca MOBILE_TAB_APPS: el resto de gente (y el
+  // propio wander en producción) sigue entrando en la Luniteca de siempre.
   useEffect(() => {
     if (!isMobile) return
     const tabApps = visibleTabApps(player)
@@ -1175,9 +1182,12 @@ export default function GatOS({ player: initialPlayer, onLogout, onProfileUpdate
       // estado directo con ella en vez de dejarlo a null.
       setMobileActiveTab(activeWindow.appId)
     } else {
+      const devDefaultLuniteca3 = import.meta.env.DEV && player.name?.toLowerCase() === 'wander'
+      const knownTabs = devDefaultLuniteca3 ? [...tabApps, 'luniteca3'] : tabApps
+      const fallbackTab = devDefaultLuniteca3 ? 'luniteca3' : tabApps[0]
       let lastTab = null
       try { lastTab = localStorage.getItem(mobileTabKey) } catch {}
-      switchMobileApp(tabApps.includes(lastTab) ? lastTab : tabApps[0])
+      switchMobileApp(knownTabs.includes(lastTab) ? lastTab : fallbackTab)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isMobile, player.club_member])
