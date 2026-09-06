@@ -28,8 +28,13 @@ import React, { useEffect, useState } from 'react'
 //    una barra de scroll dentro de la franja: si ahí hay un elemento con
 //    overflow, la sonda lo marca con SCROLL.
 
-const CENTRO = [-1, -10, -32, -72, -130]   // px por encima de donde empieza el teclado
-const DERECHA = [-10, -72]
+// Desplazamientos respecto de donde empieza el teclado. Los POSITIVOS caen
+// dentro de la franja misma: si ahí sale null es que no hay página, y entonces
+// la franja es del navegador y no hay nada que arreglar en el layout. Los
+// negativos entran en la app, y sirven de control: si TODOS dan null otra vez,
+// el que está mal es el sistema de coordenadas, no la página.
+const CENTRO = [40, 8, -1, -10, -32, -72, -130]
+const DERECHA = [40, -10]
 
 // Nombre corto y reconocible de un elemento, para que quepa en la pantalla del
 // móvil: tag + id + las dos primeras clases.
@@ -92,37 +97,52 @@ export default function ViewportDebug() {
 
     function snapshot(source) {
       const root = document.getElementById('root')
-      const rootTop = root ? root.getBoundingClientRect().top : 0
+      const rootRect = root ? root.getBoundingClientRect() : { top: 0, bottom: 0 }
+      const rootTop = rootRect.top
       const el = document.activeElement
       const isField = el?.matches?.('input, textarea, select, [contenteditable]')
       const r = isField ? el.getBoundingClientRect() : null
-      // Línea (en coordenadas del viewport de layout, las mismas que
-      // devuelve getBoundingClientRect) donde debería empezar el teclado.
-      const kbTop = vv.offsetTop + vv.height
       const clienth = document.documentElement.clientHeight
-      // El dato que decide todo lo demás y que nunca se había comprobado en el
-      // dispositivo: si Safari hace caso a interactive-widget=resizes-content
-      // (index.html). Si lo hace, al abrirse el teclado el viewport de LAYOUT
-      // se encoge y clientHeight baja hasta el alto visible; si no, clientHeight
-      // se queda como estaba y el navegador se limita a panear. Son dos
-      // regímenes con arreglos distintos, y del primero depende que --kbinset
-      // valga siempre 0 (ver measureKb en main.jsx).
+      // MEDIDO EN EL IPHONE (captura del 19:02, issue #14) — no es teoría:
+      //   root 775@-420 · vvh 355 · vvtop 420
+      // El overlay va dibujado en top:0 de #root con translateY(--vvtop), o sea
+      // en rect -420 + 420 = 0, y en la captura sale pegado al borde de arriba
+      // del área visible. Luego en coordenadas de getBoundingClientRect el 0 ES
+      // el borde superior visible, y el teclado empieza en vv.height (355) a
+      // secas. Sumar vv.offsetTop —que es lo que hacía la primera versión de
+      // esto— apuntaba a 775, unos 400px por DEBAJO del final del documento
+      // (#root acaba en rect 355): por eso la sonda devolvía null en los siete
+      // puntos. Ese null no decía nada de la franja, solo "fuera de la página".
+      const kbTop = vv.height
+      // Si algún día rootTop deja de valer exactamente -vvtop, esta cuenta deja
+      // de dar 0 y quiere decir que el sistema de coordenadas de ese dispositivo
+      // no es el de aquí — antes de creerse la sonda, mirar esto.
+      const desfase = Math.round(rootTop + vv.offsetTop)
+      // Si el navegador hiciera caso a interactive-widget=resizes-content
+      // (index.html), el viewport de layout se encogería con el teclado. OJO con
+      // clientHeight: html es position:fixed con height:100% (index.css), así
+      // que devuelve el alto del PROPIO html —775, resuelto contra el bloque
+      // contenedor inicial, que no encoge— y no el del viewport. La comparación
+      // que vale es innerHeight contra vv.height.
       const kbAbierto = vv.height < baseClient - 100
       return {
         source,
         kbAbierto,
-        resizes: !kbAbierto ? null : clienth <= vv.height + 30,
+        resizes: !kbAbierto ? null : window.innerHeight <= vv.height + 30,
         t: Math.round(performance.now() - t0),
         vvh: Math.round(vv.height),
         vvtop: Math.round(vv.offsetTop),
         rooth: root ? root.offsetHeight : 0,
         rootTop: Math.round(rootTop),
+        rootBottom: Math.round(rootRect.bottom),
+        desfase,
         innerh: window.innerHeight,
         baseClient,
         clienth,
         kb: Math.round(parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--kb')) || 0),
-        // Posición relativa a #root, para pintar la guía.
-        kbLine: Math.round(kbTop - rootTop),
+        // Posición relativa a #root. El overlay lleva translateY(--vvtop), así
+        // que hay que descontarlo aquí para que la línea caiga donde toca.
+        kbLine: Math.round(kbTop - rootTop - vv.offsetTop),
         field: isField ? (el.tagName.toLowerCase() + (el.name ? `[${el.name}]` : '')) : '—',
         top: r ? Math.round(r.top) : null,
         bottom: r ? Math.round(r.bottom) : null,
@@ -135,13 +155,12 @@ export default function ViewportDebug() {
       setLog(l => [s, ...l].slice(0, 3))
     }
 
-    // elementFromPoint trabaja en coordenadas del viewport de LAYOUT, las
-    // mismas de getBoundingClientRect. Cuando Safari panea la página para
-    // enseñar un campo, lo que se ve en la franja está en vv.offsetTop + y y no
-    // en y: sin sumar el offset la sonda mediría un sitio distinto del que sale
-    // en la captura.
+    // elementFromPoint usa las mismas coordenadas que getBoundingClientRect, y
+    // en el iPhone el 0 de esas coordenadas es el borde superior VISIBLE (ver
+    // el bloque MEDIDO EN EL IPHONE de snapshot). Así que el teclado empieza en
+    // vv.height a secas, sin sumarle vv.offsetTop.
     function medirFranja() {
-      const kbTop = vv.offsetTop + vv.height
+      const kbTop = vv.height
       const cx = Math.round(window.innerWidth / 2)
       const dx = Math.max(0, window.innerWidth - 3)
       const punto = (x, dy) => {
@@ -225,10 +244,19 @@ export default function ViewportDebug() {
         transform: 'translateY(var(--vvtop, 0px))',
       }}>
         <div style={{ color: '#fff' }}>
-          root {state.rooth}@{state.rootTop} · inner {state.innerh} · client {state.clienth}/{state.baseClient}
+          root {state.rooth} · rect {state.rootTop}→{state.rootBottom} · inner {state.innerh}
         </div>
         <div style={{ color: '#fff' }}>
-          vvh {state.vvh} · vvtop {state.vvtop} · --kb {state.kb}
+          vvh {state.vvh} · vvtop {state.vvtop} · client {state.clienth}/{state.baseClient} · --kb {state.kb}
+        </div>
+        {/* rootBottom contra vvh es LA comparación: si coinciden, la app acaba
+            justo en el borde visible y la franja de #14 no es suya. desfase
+            distinto de 0 avisa de que las coordenadas no son las medidas en el
+            iPhone y de que la sonda estaría apuntando mal. */}
+        <div style={{ color: Math.abs(state.rootBottom - state.vvh) <= 2 ? '#7CFC98' : '#ffd166' }}>
+          rootBottom−vvh {state.rootBottom - state.vvh}
+          {Math.abs(state.rootBottom - state.vvh) <= 2 ? ' (la app llega al borde)' : ' (la app NO llega)'}
+          {state.desfase !== 0 ? ` · desfase ${state.desfase}!` : ''}
         </div>
         <div style={{ color: state.resizes === null ? '#888' : (state.resizes ? '#7CFC98' : '#ff8080') }}>
           {state.resizes === null
