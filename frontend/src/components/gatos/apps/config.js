@@ -33,6 +33,11 @@ export const APPS = {
     width:  820,
     height: 560,
     adminOnly: true, // rediseño en curso (issue #8) — solo wander, mientras se prueba
+    // Color de fondo de la app, para pintar con él el lienzo del documento
+    // mientras está en primer plano en móvil (ver GatOS.jsx, issue #13). Solo
+    // lo declaran las apps que NO son oscuras: el resto ya coincide con el
+    // fondo por defecto de html (index.css).
+    bg: '#f7f3ee', // = --luni3-bg
   },
   settings: {
     id:     'settings',

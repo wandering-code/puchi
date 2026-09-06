@@ -5,7 +5,7 @@ import MenuBar, { MENU_BAR_H } from './MenuBar'
 import Dock, { DOCK_RESERVED } from './Dock'
 import { MOBILE_TAB_APPS, visibleTabApps, launcherApps } from './MobileLauncher'
 import MobileBottomNav, { MOBILE_BOTTOM_NAV_H } from './MobileBottomNav'
-import { useIsMobile, useBottomNavHidden } from '../../utils/responsive'
+import { useIsMobile, useBottomNavHidden, useKeyboardOpen } from '../../utils/responsive'
 import { wallpaperCss } from '../../utils/wallpaper'
 import { getDeviceId } from '../../utils/deviceId'
 // Renombrado en el import: "Notification" a secas taparía la API nativa
@@ -60,6 +60,9 @@ const GROUP_CALL_SIGNAL_TYPES = new Set([
 export default function GatOS({ player: initialPlayer, onLogout, onProfileUpdate: _onProfileUpdate, onExitPC }) {
   const isMobile = useIsMobile()
   const hideBottomNav = useBottomNavHidden()
+  // Solo para esconder la barra inferior mientras se escribe — ver dónde se
+  // usa, más abajo, y el comentario largo de main.jsx sobre el teclado.
+  const keyboardOpen = useKeyboardOpen()
   const [player,       setPlayer]       = useState(initialPlayer)
   const [windows,      setWindows]      = useState([])
   const [topZ,         setTopZ]         = useState(200)
@@ -1323,6 +1326,38 @@ export default function GatOS({ player: initialPlayer, onLogout, onProfileUpdate
     ? (mobileSettingsWindow ? 'settings' : mobileAdminWindow ? 'admin' : mobileLuniteca3Window ? 'luniteca3' : mobileActiveTabApp)
     : activeWindow?.appId
 
+  // El lienzo del documento toma el color de la app que esté en primer plano
+  // (issue #13). Es la única superficie que puede pintar la franja que Safari
+  // destapa por debajo de la página cuando la sube para enseñar un campo
+  // tapado por el teclado: esa franja queda FUERA del viewport de layout, así
+  // que ningún elemento —ni #root, ni el fondo de escritorio, ni la propia
+  // app— puede llegar ahí; solo el fondo de html, que el navegador propaga al
+  // lienzo. Sin esto, con Luniteca (crema) delante asomaba una banda oscura
+  // entre el último campo y el teclado. Solo en móvil: en escritorio las apps
+  // son ventanas sobre el escritorio y el fondo de verdad es el oscuro.
+  useEffect(() => {
+    if (!isMobile) return
+    const bg = APPS[foregroundAppId]?.bg
+    // '' devuelve el valor de index.css, no lo pisa con otro color.
+    document.documentElement.style.background = bg || ''
+    // theme-color tiñe la INTERFAZ DE SAFARI: la franja de la barra de estado
+    // arriba y la de la barra de direcciones abajo. Esas dos zonas quedan
+    // fuera de la página —ningún elemento nuestro puede pintarlas, ni el
+    // fondo de html— y Safari las tiñe con este meta o, si no existe, con el
+    // color que le calcula a la página al cargarla: el oscuro de GatOS. De
+    // ahí la franja oscura entre la app y el teclado que costó media issue
+    // localizar (#13). En la app guardada en pantalla de inicio no existe
+    // ninguna de las dos zonas, así que esto solo se nota en Safari.
+    let meta = document.querySelector('meta[name="theme-color"]')
+    if (!meta) {
+      meta = document.createElement('meta')
+      meta.name = 'theme-color'
+      document.head.appendChild(meta)
+    }
+    meta.content = bg || '#1a1a2e' // el mismo de html/body en index.css
+    return () => { document.documentElement.style.background = '' }
+  }, [isMobile, foregroundAppId])
+
   // PiP de llamada (grupal o 1-to-1): se muestra siempre que estemos dentro
   // de una llamada salvo que Diskordkito esté en primer plano mostrando de
   // verdad su vista completa (el canal propio de la llamada, en vista chat
@@ -1423,6 +1458,26 @@ export default function GatOS({ player: initialPlayer, onLogout, onProfileUpdate
             style={{ position: 'absolute', inset: 0, background: wallpaperBg, zIndex: 0 }} />
         </AnimatePresence>
 
+        {/* Capa del color de la app que está delante, tapando el escritorio
+            entero (issue #13). Con el teclado abierto aparecían franjas del
+            fondo oscuro entre la app y el teclado, y cada vez por un motivo
+            distinto: el hueco reservado para la barra inferior, el borde de
+            abajo del contenedor de apps, o la propia página subida por Safari.
+            En vez de perseguir cuál de ellos la deja en cada caso, se pinta
+            TODO lo que hay detrás del color de la app: cualquier hueco que
+            quede, venga de donde venga, sale del color que toca en vez de
+            oscuro. Solo la declaran las apps que no son oscuras (config.js), y
+            solo en móvil, que es donde una app ocupa la pantalla entera. */}
+        {APPS[foregroundAppId]?.bg && (
+          <div style={{
+            // Desde debajo de la barra de GatOS, no desde arriba del todo: la
+            // barra es translúcida y sobre crema se vería lavada. Los huecos
+            // que hay que tapar están todos abajo.
+            position: 'absolute', top: MENU_BAR_H, left: 0, right: 0, bottom: 0,
+            background: APPS[foregroundAppId].bg, zIndex: 0,
+          }} />
+        )}
+
         <MenuBar
           player={player}
           activeAppTitle={APPS[foregroundAppId]?.title}
@@ -1441,10 +1496,22 @@ export default function GatOS({ player: initialPlayer, onLogout, onProfileUpdate
             listado (mismo contenedor, mismo crossfade, sin cabecera propia)
             en cuanto se abren una vez — se navega a otra app con el
             lanzador flotante, igual que entre cualquiera de las tres. */}
+        {/* Este contenedor no cambia de tamaño con el teclado, a propósito
+            (issue #13): encogerlo dejaba el layout perfecto pero cortaba el
+            fondo de la app, y por detrás asomaba el escritorio de GatOS. Lo
+            que hace es publicar --kbinset —cuánto tapa el teclado de ESTE
+            contenedor, descontada la barra inferior— para que cada app aparte
+            su contenido con un padding-bottom, que aparta el contenido sin
+            mover el fondo. El hueco de la barra inferior se sigue reservando
+            aunque la barra se esconda al escribir: así no se recoloca nada
+            mientras aparece el teclado. */}
         <div style={{
           position: 'absolute', top: MENU_BAR_H, left: 0, right: 0,
           bottom: showBottomNav ? `calc(${MOBILE_BOTTOM_NAV_H}px + env(safe-area-inset-bottom))` : 'env(safe-area-inset-bottom)',
           overflow: 'hidden',
+          '--kbinset': showBottomNav
+            ? `max(0px, calc(var(--kb, 0px) - ${MOBILE_BOTTOM_NAV_H}px - env(safe-area-inset-bottom)))`
+            : 'max(0px, calc(var(--kb, 0px) - env(safe-area-inset-bottom)))',
         }}>
           {[...tabApps, ...(mobileSettingsWindow ? ['settings'] : []), ...(mobileAdminWindow ? ['admin'] : []), ...(mobileLuniteca3Window ? ['luniteca3'] : [])].map(id => {
             const active = mobileActiveTabApp === id
@@ -1531,9 +1598,28 @@ export default function GatOS({ player: initialPlayer, onLogout, onProfileUpdate
             nada — se oculta. Ofrece TODAS las apps visibles (como el Dock de
             escritorio), no solo las 3 de pestaña — mismo criterio que el
             lanzador flotante que sustituye (ver launcherApps). */}
-        {showBottomNav && (
-          <MobileBottomNav activeAppId={mobileActiveTabApp} onSelect={switchMobileApp} player={player} />
-        )}
+        {/* Se esconde mientras el teclado está abierto (issue #13). Con el
+            paneo nativo de iOS —que ya no se compensa, ver main.jsx— la barra
+            subiría con el teclado y acabaría flotando encima de él; esconderla
+            es lo que hacen las apps nativas, y es lo que permite no pelearse
+            con el viewport. Animada, como todo lo que aparece y desaparece en
+            Puchi. El hueco que ocupa se sigue reservando arriba, así que el
+            contenido no se recoloca al esconderse. */}
+        <AnimatePresence>
+          {showBottomNav && !keyboardOpen && (
+            <motion.div key="bottomnav"
+              initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 12 }}
+              transition={{ duration: 0.16, ease: 'easeOut' }}
+              // Posicionado él mismo, y no un simple envoltorio suelto: al
+              // animarse lleva un transform, y un ancestro con transform pasa
+              // a ser el "containing block" de sus descendientes absolutos —
+              // la barra de dentro es uno, así que sin esto se descolgaría al
+              // final del flujo en cuanto empezara la animación.
+              style={{ position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 9999 }}>
+              <MobileBottomNav activeAppId={mobileActiveTabApp} onSelect={switchMobileApp} player={player} />
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {callAudioSinks}
         {callPiPElement}

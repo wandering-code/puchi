@@ -35,6 +35,15 @@ export default function MenuBar({ player, activeAppTitle, online, onOpenApp, onL
         zIndex: 10000,
         fontSize: 13,
         color: 'rgba(255,255,255,0.85)',
+        // Pegada al borde de arriba de lo que SE VE, no al de la página
+        // (issue #13). Cuando el teclado del móvil obliga a Safari a subir la
+        // página entera para enseñar un campo, --vvtop dice cuánto la ha
+        // subido (la publica usePublishViewportVars, main.jsx) y esta barra se
+        // baja lo mismo, así que se queda a la vista en vez de irse por
+        // arriba. Es una compensación local de una barra de 28px, no la del
+        // documento entero — esa se probó y era justo la que se peleaba con
+        // Safari y provocaba toda la familia de fallos de esta issue.
+        transform: 'translateY(var(--vvtop, 0px))',
       }}
     >
       {/* Menú GatOS */}

@@ -87,3 +87,52 @@ export function useIsMobile() {
 
   return viewportMobile || forcedTablet
 }
+
+// ¿Está el teclado del móvil abierto ahora mismo? Se mide comparando el alto
+// del viewport visual con el del viewport de layout: el teclado es lo único
+// que se come esa diferencia de golpe. El umbral descarta las diferencias
+// pequeñas de la barra de Safari, que se encoge y se estira sola al hacer
+// scroll; un teclado real nunca mide tan poco.
+//
+// Es una MEDIDA, no un mecanismo: no mueve ni encoge nada (issue #13 — esa
+// familia de trucos se retiró entera, ver el comentario largo de main.jsx).
+// Lo único que se hace con ella es esconder la barra inferior mientras se
+// escribe, porque con el paneo nativo de iOS acabaría flotando encima del
+// teclado.
+export function useKeyboardOpen() {
+  const [open, setOpen] = useState(false)
+  useEffect(() => {
+    const vv = window.visualViewport
+    if (!vv) return
+    let focused = false
+    // Dos señales, porque ninguna vale por sí sola:
+    //  · Que haya un campo de texto enfocado. Es la única que funciona con
+    //    interactive-widget=resizes-content (index.html), donde el navegador
+    //    encoge el viewport de layout Y el visual a la vez: la resta de abajo
+    //    da 0 aunque el teclado esté abierto de par en par.
+    //  · La diferencia de altos, para cuando el teclado se abre sin que haya
+    //    campo enfocado en esta página (autocompletar del sistema, teclados de
+    //    terceros) y para cerrarlo antes de que llegue el focusout.
+    // El umbral descarta las diferencias pequeñas de la barra de Safari, que
+    // se encoge y se estira sola.
+    function check() {
+      setOpen(focused || document.documentElement.clientHeight - vv.height > 100)
+    }
+    function onFocusIn(ev) {
+      if (!ev.target?.matches?.('input, textarea, [contenteditable=""], [contenteditable="true"]')) return
+      focused = true
+      check()
+    }
+    function onFocusOut() { focused = false; check() }
+    check()
+    vv.addEventListener('resize', check)
+    document.addEventListener('focusin', onFocusIn)
+    document.addEventListener('focusout', onFocusOut)
+    return () => {
+      vv.removeEventListener('resize', check)
+      document.removeEventListener('focusin', onFocusIn)
+      document.removeEventListener('focusout', onFocusOut)
+    }
+  }, [])
+  return open
+}

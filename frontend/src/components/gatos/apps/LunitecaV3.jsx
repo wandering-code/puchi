@@ -1480,6 +1480,25 @@ const YEAR_OPTIONS = (() => {
 // visto). 2000 páginas cubre de sobra el caso normal.
 const PAGE_OPTIONS = Array.from({ length: 2000 }, (_, i) => i + 1)
 
+// Los <option> de Año (~1030) y Páginas (2000) suman más de 3000 elementos
+// que React tiene que crear y reconciliar. Montados junto al resto del
+// formulario, la vista entra de golpe y con tirón — "los inputs tardan en
+// cargar y aparecen de forma brusca", reportado por Wander en el móvil.
+//
+// Se montan un frame después: el formulario aparece al instante y las listas
+// se rellenan enseguida, mucho antes de que dé tiempo a desplegar nada. El
+// valor actual sí se pinta desde el primer momento, para que un desplegable
+// que ya tiene algo elegido (editar un libro) no parpadee vacío.
+function DeferredOptions({ items, current }) {
+  const [ready, setReady] = useState(false)
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setReady(true))
+    return () => cancelAnimationFrame(id)
+  }, [])
+  if (!ready) return current ? <option value={current}>{current}</option> : null
+  return <>{items.map(v => <option key={v} value={v}>{v}</option>)}</>
+}
+
 // Buscar portada — misma lógica (no estética) que SearchOverlay en
 // LunitecaV2.jsx: GET /books/search?q= (busca en la BD local y en Open
 // Library, devuelve varios candidatos, cada uno con su propia cover_url).
@@ -1721,14 +1740,14 @@ function BookEditForm({ entry, draft, setDraft, isMobile, onSave, onCancel, onDe
           <label style={FIELD_LABEL}>Año</label>
           <select value={draft.year} onChange={set('year')} style={tintedSelectField('year')}>
             <option value="">–</option>
-            {YEAR_OPTIONS.map(y => <option key={y} value={y}>{y}</option>)}
+            <DeferredOptions items={YEAR_OPTIONS} current={draft.year} />
           </select>
         </div>
         <div style={{ flex: 1 }}>
           <label style={FIELD_LABEL}>Páginas</label>
           <select value={draft.num_pages} onChange={set('num_pages')} style={tintedSelectField('pages')}>
             <option value="">–</option>
-            {PAGE_OPTIONS.map(p => <option key={p} value={p}>{p}</option>)}
+            <DeferredOptions items={PAGE_OPTIONS} current={draft.num_pages} />
           </select>
         </div>
       </div>
@@ -2251,14 +2270,14 @@ function ManualAddForm({ existingGenres, onAdd, onUploadCover, onClose }) {
           <label style={FIELD_LABEL}>Año</label>
           <select value={draft.year} onChange={set('year')} style={tintedSelectField('year')}>
             <option value="">–</option>
-            {YEAR_OPTIONS.map(y => <option key={y} value={y}>{y}</option>)}
+            <DeferredOptions items={YEAR_OPTIONS} current={draft.year} />
           </select>
         </div>
         <div style={{ flex: 1 }}>
           <label style={FIELD_LABEL}>Páginas</label>
           <select value={draft.num_pages} onChange={set('num_pages')} style={tintedSelectField('pages')}>
             <option value="">–</option>
-            {PAGE_OPTIONS.map(p => <option key={p} value={p}>{p}</option>)}
+            <DeferredOptions items={PAGE_OPTIONS} current={draft.num_pages} />
           </select>
         </div>
       </div>
@@ -2453,49 +2472,6 @@ function ScanTab({ onDetect }) {
   )
 }
 
-// Alto disponible desde el borde superior de `ref` hasta donde empieza a
-// tapar el teclado — mismo cálculo que CenteredModal (más arriba,
-// var(--vvh) + var(--vvtop)), pero localizado: CenteredModal es
-// position:fixed con top:0, así que le basta esa suma directamente; este
-// panel vive más abajo, dentro del layout normal de ShelfTab (no es un
-// modal — ver comentario grande de "Añadir libro" aquí debajo, issue #12,
-// sobre por qué no lo es), así que hace falta restar dónde empieza de
-// verdad `ref` en pantalla. `getBoundingClientRect().top` ya devuelve la
-// posición real (tras el translateY que useLockViewportToKeyboard, en
-// main.jsx, le aplica a #root), así que no hace falta duplicar esa cuenta
-// aquí — solo restarla del hueco visible total. Se recalcula en cada
-// evento de visualViewport, igual que useLockViewportToKeyboard — issue
-// #13: la estantería y "Añadir libro" tenían el hueco de scroll con altura
-// fija ajena al teclado (`bottom:0` sin más), así que un campo como
-// Sinopsis, más abajo del formulario, no tenía sitio de sobra para
-// desplazarse por encima del teclado al enfocarlo.
-function useAvailableHeight(ref, ready) {
-  const [height, setHeight] = useState(null)
-  // `ready` (no solo `ref`, que como tal nunca cambia de identidad y no
-  // dispararía una nueva ejecución) — mismo motivo/patrón que el
-  // ResizeObserver de scrollWidth más abajo en ShelfTab: mientras la
-  // estantería está cargando, `ref.current` todavía es null (el nodo real
-  // no existe hasta que se deja de mostrar "Cargando…"), así que hace
-  // falta reintentar el efecto justo cuando esa transición ocurre.
-  useEffect(() => {
-    const vv = window.visualViewport
-    const el = ref.current
-    if (!vv || !el) return
-    function update() {
-      const top = el.getBoundingClientRect().top
-      setHeight(Math.max(120, vv.height + vv.offsetTop - top))
-    }
-    update()
-    vv.addEventListener('resize', update)
-    vv.addEventListener('scroll', update)
-    return () => {
-      vv.removeEventListener('resize', update)
-      vv.removeEventListener('scroll', update)
-    }
-  }, [ref, ready])
-  return height
-}
-
 // "Añadir libro" — issue #12: vivía en un CenteredModal (position:fixed +
 // backdrop) que competía con la gestión de viewport del teclado móvil
 // (#root, --vvh, MobileBottomNav) y nunca quedó bien resuelto pese a varios
@@ -2678,10 +2654,6 @@ function ShelfTab({ player, isMobile, container }) {
     ro.observe(el)
     return () => ro.disconnect()
   }, [shelf === null])
-
-  // Alto disponible para "Añadir libro" por encima del teclado — ver
-  // useAvailableHeight más arriba (issue #13).
-  const addPanelHeight = useAvailableHeight(scrollNode, shelf === null)
 
   useEffect(() => {
     let cancelled = false
@@ -3063,7 +3035,18 @@ function ShelfTab({ player, isMobile, container }) {
         </div>
         </div>
 
-        <div ref={scrollRef} className="luni3-vscroll" style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: isMobile ? '0 0 20px' : '30px 0 40px', position: 'relative' }}>
+        {/* Envoltorio que NO hace scroll (issue #13). El panel de "Añadir
+            libro" es `position:absolute` y necesita un ancestro posicionado
+            que no se mueva: cuando colgaba del contenedor con scroll de aquí
+            debajo, el scrollIntoView del campo enfocado desplazaba ESE
+            contenedor —no el panel— y el panel se iba hacia arriba con él,
+            saliéndose por el borde y dejando media pantalla de fondo vacío.
+            Ni `overflow:hidden` lo evitaría: un contenedor con overflow
+            hidden sigue siendo desplazable por JS. La única forma de que
+            nadie pueda arrastrar el panel es que su ancestro posicionado no
+            sea un contenedor con scroll en absoluto. */}
+        <div style={{ flex: 1, position: 'relative', minHeight: 0 }}>
+        <div ref={scrollRef} className="luni3-vscroll" style={{ position: 'absolute', inset: 0, overflowY: 'auto', overflowX: 'hidden', padding: isMobile ? '0 0 20px' : '30px 0 40px' }}>
         {/* La estantería NUNCA se desmonta al entrar/salir de "añadir" — issue
             #12: desmontar y remontar de golpe cientos de tarjetas con
             portada daba tirones al volver. "Añadir" flota encima en
@@ -3102,27 +3085,29 @@ function ShelfTab({ player, isMobile, container }) {
           <CollapsibleSection label="Dropeados" entries={dropped} viewMode={viewMode} isMobile={isMobile} columns={columns}
             collapsed={collapsedDropped} onToggle={toggleCollapsedDropped} onSelect={openBook} />
         </div>
+        </div>{/* fin del contenedor con scroll */}
 
+        {/* Hermano del contenedor con scroll, no hijo suyo — ver el
+            comentario del envoltorio, más arriba. */}
         <AnimatePresence initial={false}>
         {showAddModal && (
           <motion.div key="add" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.18 }}
             style={{
               position: 'absolute', left: 0, right: 0, top: 0, maxWidth: 460, overflow: 'hidden',
               display: 'flex', flexDirection: 'column',
-              // Alto = hueco disponible por encima del teclado de verdad
-              // (useAvailableHeight, más arriba — mismo principio que
-              // CenteredModal con --vvh/--vvtop, pero calculado desde donde
-              // este panel empieza de verdad en pantalla, no desde el borde
-              // físico superior). Antes esto era bottom:0 a secas (todo el
-              // hueco del contenedor, ajeno al teclado) o altura automática
-              // sin más — ninguna de las dos deja al navegador sitio de
-              // sobra para desplazar un campo (p.ej. Sinopsis, en A mano)
-              // por encima del teclado al enfocarlo — issue #13, reportada
-              // por Wander con captura. Con esto, el panel entero (no solo
-              // "Buscar") se encoge de verdad cuando aparece el teclado, y
-              // overflowY:auto aquí mismo le da scroll propio a Escanear/A
-              // mano cuando su contenido no cabe en ese hueco reducido.
-              height: addPanelHeight ? `${addPanelHeight}px` : undefined,
+              // Anclado arriba y abajo, sin medir nada (issue #13). Antes esto
+              // era una altura en píxeles calculada en JS a partir de dónde
+              // estaba el panel en pantalla en ese instante, para dejarlo por
+              // encima del teclado — y en cuanto algo movía esa posición, la
+              // altura se quedaba obsoleta y el panel acababa cortado a media
+              // pantalla. Ya no hace falta apartarse del teclado a mano: es
+              // Safari quien sube el campo enfocado, y nadie se lo impide.
+              bottom: 0,
+              // El panel entero (no solo "Buscar") se queda así por encima
+              // del teclado, y este overflowY le da scroll propio a Escanear
+              // y A mano cuando su contenido no cabe en el hueco reducido —
+              // que es lo que permite que un campo de más abajo, como
+              // Sinopsis, se pueda traer a la vista al enfocarlo (issue #13).
               overflowY: 'auto',
               margin: isMobile ? '4px auto 0' : '8px auto 0',
             }}>
@@ -3237,6 +3222,18 @@ export default function LunitecaV3({ player }) {
     <div ref={rootRef} className="luniteca3-root" style={{
       display: 'flex', flexDirection: isMobile ? 'column' : 'row', height: '100%',
       background: V3.bg, fontFamily: V3_FONT, color: V3.text, overflow: 'hidden',
+      // La pieza que resuelve la issue #13. PADDING, no altura: con
+      // box-sizing:border-box (global, index.css) el fondo sigue pintando los
+      // '100%' enteros mientras el contenido se queda en lo que hay por
+      // encima del teclado. Encogiendo la caja —lo que se intentó primero— el
+      // layout quedaba igual de bien pero el fondo se cortaba con el
+      // contenido y asomaba el escritorio oscuro de GatOS por detrás de la
+      // barra flotante de Safari; y sin apartar nada, Safari sube la página
+      // entera al enfocar un campo tapado y deja al descubierto el fondo del
+      // documento por debajo. Las dos cosas se veían igual: una franja oscura
+      // encima del teclado. --kbinset la publica el contenedor de apps de
+      // GatOS.jsx y vale 0 mientras no haya teclado.
+      paddingBottom: 'var(--kbinset, 0px)',
     }}>
 
       {!isMobile && (

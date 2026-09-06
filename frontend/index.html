@@ -2,16 +2,22 @@
 <html lang="es">
   <head>
     <meta charset="UTF-8" />
-    <!-- Nada de interactive-widget aquí — probados resizes-content y
-         overlays-content (issue larga, ver historial): ninguno de los dos
-         se comportó de fiar en la práctica (confirmado por Daniel en
-         dispositivo real, no solo en el simulador) — con overlays-content
-         el "paneo" nativo al enfocar un input seguía arrastrando cabecera y
-         barra inferior exactamente igual que sin él. Vuelta al mecanismo
-         de siempre, JS con visualViewport (useLockViewportToKeyboard en
-         main.jsx) — menos elegante pero es el que de verdad se puede
-         verificar y controlar por completo. -->
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <!-- interactive-widget=resizes-content: al abrirse el teclado, el
+         viewport de LAYOUT se encoge hasta donde empieza el teclado. Así
+         #root (height:100%) termina justo ahí y no queda ninguna franja por
+         debajo — esa zona que iOS destapa al subir la página queda fuera del
+         documento y NINGÚN elemento puede pintarla (probado: ni el fondo de
+         html, ni una capa a pantalla completa dentro de #root).
+         Se probó en su día y se descartó, pero en aquel momento convivía con
+         useLockViewportToKeyboard, que movía #root en sentido contrario al
+         paneo del navegador: los dos peleaban y no se podía saber cuál de los
+         dos fallaba. Esa compensación ya no existe (ver el comentario largo
+         de main.jsx, issue #13), así que esto vuelve a estar sobre la mesa —
+         ahora es el navegador el único que decide, que es lo que se busca.
+         Con el layout ya encogido, --kb vale 0 solo y el padding que aparta
+         el contenido no llega ni a aplicarse; se queda como red de seguridad
+         para donde el navegador no haga caso de esto. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content" />
     <title>Puchi</title>
     <link rel="icon" type="image/svg+xml" href="/paw-icon.svg" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
