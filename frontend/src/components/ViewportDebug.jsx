@@ -79,11 +79,58 @@ function tieneScroll(el) {
   return el.scrollHeight > el.clientHeight + 1 && /auto|scroll/.test(o.overflowY)
 }
 
+// Cuánto miden de verdad los viewports, con unidades CSS en vez de con
+// propiedades del DOM. Hace falta porque las dos medidas obvias están las dos
+// contaminadas en esta app: documentElement.clientHeight devuelve el alto del
+// propio <html>, que es position:fixed con height:100% (index.css) resuelto
+// contra el bloque contenedor inicial —que no encoge con el teclado—; y
+// window.innerHeight en iOS sigue al viewport visual, así que coincide con
+// vv.height pase lo que pase y el veredicto saldría "sí" siempre. Un elemento
+// con height:100dvh no depende de su bloque contenedor: mide el viewport
+// dinámico y punto. Si dvh baja hasta vv.height con el teclado abierto, el
+// navegador ha encogido el viewport de layout (interactive-widget=resizes-
+// content, index.html); si se queda en lvh, lo está ignorando.
+function medirUnidades() {
+  const d = document.createElement('div')
+  d.style.cssText = 'position:absolute;top:0;left:0;width:0;visibility:hidden;pointer-events:none'
+  document.body.appendChild(d)
+  const alto = u => { d.style.height = u; return d.offsetHeight }
+  const r = { dvh: alto('100dvh'), lvh: alto('100lvh'), svh: alto('100svh') }
+  d.remove()
+  return r
+}
+
 export default function ViewportDebug() {
   const on = typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('vvdebug')
   const [state, setState] = useState(null)
   const [log, setLog] = useState([])
   const [sonda, setSonda] = useState(null)
+
+  // `?lienzo=ff00ff` pinta html y body de ese color. Es el experimento que
+  // decide el arreglo de #14: la sonda ya demostró que dentro de la franja no
+  // hay ningún elemento de la página (null en +40 y +8, con los puntos de
+  // control negativos dando divs de verdad), o sea que la banda es del
+  // navegador. Lo único que la app puede cambiar de una zona que no es suya es
+  // el color con el que Safari la tinta, y el candidato es el fondo del lienzo
+  // del documento — hoy #1a1a2e (index.css). Un color chillón lo contesta de
+  // una sola captura sin margen de interpretación: si la franja se vuelve
+  // magenta, el lienzo es la palanca; si sigue azul oscura, no lo es.
+  // Se probó algo así en la issue (intento 7) y se dio por descartado, pero
+  // entonces se creía que la franja era parte de la página y la geometría era
+  // otra. Con lo de ahora vuelve a estar sobre la mesa.
+  useEffect(() => {
+    if (!on) return
+    const lienzo = new URLSearchParams(window.location.search).get('lienzo')
+    if (!lienzo) return
+    const color = /^#/.test(lienzo) ? lienzo : `#${lienzo}`
+    const previo = [document.documentElement.style.background, document.body.style.background]
+    document.documentElement.style.background = color
+    document.body.style.background = color
+    return () => {
+      document.documentElement.style.background = previo[0]
+      document.body.style.background = previo[1]
+    }
+  }, [on])
 
   useEffect(() => {
     if (!on) return
@@ -118,17 +165,16 @@ export default function ViewportDebug() {
       // de dar 0 y quiere decir que el sistema de coordenadas de ese dispositivo
       // no es el de aquí — antes de creerse la sonda, mirar esto.
       const desfase = Math.round(rootTop + vv.offsetTop)
-      // Si el navegador hiciera caso a interactive-widget=resizes-content
-      // (index.html), el viewport de layout se encogería con el teclado. OJO con
-      // clientHeight: html es position:fixed con height:100% (index.css), así
-      // que devuelve el alto del PROPIO html —775, resuelto contra el bloque
-      // contenedor inicial, que no encoge— y no el del viewport. La comparación
-      // que vale es innerHeight contra vv.height.
+      // Ni clientHeight ni innerHeight sirven para saber si el viewport de
+      // layout se encoge con el teclado — las dos están contaminadas, ver
+      // medirUnidades(). Va con 100dvh.
+      const u = medirUnidades()
       const kbAbierto = vv.height < baseClient - 100
       return {
         source,
         kbAbierto,
-        resizes: !kbAbierto ? null : window.innerHeight <= vv.height + 30,
+        ...u,
+        resizes: !kbAbierto ? null : u.dvh <= vv.height + 30,
         t: Math.round(performance.now() - t0),
         vvh: Math.round(vv.height),
         vvtop: Math.round(vv.offsetTop),
@@ -248,6 +294,9 @@ export default function ViewportDebug() {
         </div>
         <div style={{ color: '#fff' }}>
           vvh {state.vvh} · vvtop {state.vvtop} · client {state.clienth}/{state.baseClient} · --kb {state.kb}
+        </div>
+        <div style={{ color: '#fff' }}>
+          dvh {state.dvh} · lvh {state.lvh} · svh {state.svh}
         </div>
         {/* rootBottom contra vvh es LA comparación: si coinciden, la app acaba
             justo en el borde visible y la franja de #14 no es suya. desfase
