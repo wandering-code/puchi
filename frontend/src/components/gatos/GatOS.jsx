@@ -1375,14 +1375,6 @@ export default function GatOS({ player: initialPlayer, onLogout, onProfileUpdate
     />
   )
 
-  // Modo "kiosco" — quien no es miembro del club solo tiene una app
-  // (Luniteca), así que directamente no hay nada que gestionar: sin Dock,
-  // sin ventanas movibles/redimensionables/cerrables, Luniteca ocupa toda la
-  // pantalla desde el principio, fija. Igual en móvil y escritorio. El admin
-  // nunca entra aquí aunque por lo que sea tuviera club_member a false.
-  const isAdmin = player.name?.toLowerCase() === 'wander'
-  const kiosk = !player.club_member && !isAdmin
-
   // Aviso a pantalla completa cuando el admin desactiva/borra la cuenta con
   // la sesión ya abierta — tapa todo lo demás a propósito (aunque el backend
   // ya bloquea cualquier petición nueva, más vale dejarlo claro que fallos
@@ -1415,35 +1407,6 @@ export default function GatOS({ player: initialPlayer, onLogout, onProfileUpdate
       </div>
     </div>
   )
-
-  if (kiosk) {
-    return (
-      <div ref={containerRef} className="relative overflow-hidden select-none"
-        style={{ width: '100%', height: '100%' }}>
-        <AnimatePresence>
-          <motion.div key={wallpaperBg}
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            transition={{ duration: 0.6, ease: 'easeInOut' }}
-            style={{ position: 'absolute', inset: 0, background: wallpaperBg, zIndex: 0 }} />
-        </AnimatePresence>
-
-        <MenuBar
-          player={player}
-          activeAppTitle={APPS.luniteca2?.title}
-          online={online}
-          onOpenApp={openApp}
-          onLogout={onLogout}
-          onExitPC={onExitPC}
-          compact={isMobile}
-        />
-
-        <div style={{ position: 'absolute', top: MENU_BAR_H, left: 0, right: 0, bottom: 0, overflow: 'hidden' }}>
-          {appContent('luniteca2')}
-        </div>
-        {forcedLogoutOverlay}
-      </div>
-    )
-  }
 
   if (isMobile) {
     return (

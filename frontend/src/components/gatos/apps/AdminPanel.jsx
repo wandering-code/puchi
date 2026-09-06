@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import PlayerAvatar from '../PlayerAvatar'
 import { useIsMobile } from '../../../utils/responsive'
+import { grantableApps } from './config'
 
 const C = {
   bg: '#111827', card: '#1e1f2e', border: 'rgba(255,255,255,0.06)',
@@ -11,6 +12,7 @@ const C = {
 const TABS = [
   { id: 'pending',     label: 'Pendientes' },
   { id: 'players',     label: 'Jugadores' },
+  { id: 'apps',        label: 'Apps' },
   { id: 'deactivated', label: 'Desactivados' },
 ]
 
@@ -56,6 +58,14 @@ export default function AdminPanel({ player }) {
   }
   function toggleClubMember(id, value) {
     updatePlayer(id, { club_member: value })
+  }
+  // Concede/retira a mano el acceso a una app "adminOnly" concreta — p.ej.
+  // dejar que alguien que no es del club pruebe Luniteca (nueva) mientras
+  // está en desarrollo, sin dársela a todo el mundo (issue #8).
+  function toggleAppAccess(id, appId, granted) {
+    const current = players.find(p => p.id === id)?.extra_apps || []
+    const next = granted ? [...new Set([...current, appId])] : current.filter(a => a !== appId)
+    updatePlayer(id, { extra_apps: next })
   }
   // Pausa reversible: pierde el acceso y desaparece de lo social (feed,
   // sidebar de Diskordkito...) pero conserva su estantería/libros — y si
@@ -197,6 +207,43 @@ export default function AdminPanel({ player }) {
             </div>
           )
         })}
+
+        {!loading && tab === 'apps' && (() => {
+          const apps = grantableApps()
+          const others = approved.filter(p => p.id !== player.id)
+          if (apps.length === 0) {
+            return <p style={{ color: C.muted, fontSize: 12, textAlign: 'center', marginTop: 30 }}>No hay ninguna app que se pueda ceder así todavía.</p>
+          }
+          if (others.length === 0) {
+            return <p style={{ color: C.muted, fontSize: 12, textAlign: 'center', marginTop: 30 }}>No hay otros jugadores aprobados a los que dar acceso.</p>
+          }
+          return (
+            <>
+              <p style={{ color: C.sub, fontSize: 11.5, marginBottom: 4 }}>
+                Da acceso a apps normalmente solo para admin (p.ej. Luniteca (nueva), en desarrollo) a jugadores concretos, sin abrirlas a todo el mundo.
+              </p>
+              {others.map(p => (
+                <div key={p.id} style={rowStyle}>
+                  <div style={infoGroupStyle}>
+                    <PlayerAvatar emoji={p.avatar_emoji} url={p.avatar_url} size={34} />
+                    <p style={{ fontSize: 13.5, fontWeight: 700, color: p.color, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</p>
+                  </div>
+                  <div style={{ ...actionsGroupStyle, flexWrap: 'wrap' }}>
+                    {apps.map(app => (
+                      <label key={app.id} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: C.sub, cursor: 'pointer', flexShrink: 0 }}>
+                        <input type="checkbox"
+                          checked={(p.extra_apps || []).includes(app.id)}
+                          onChange={ev => toggleAppAccess(p.id, app.id, ev.target.checked)}
+                        />
+                        {app.title}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </>
+          )
+        })()}
 
         {!loading && tab === 'deactivated' && deactivated.length === 0 && (
           <p style={{ color: C.muted, fontSize: 12, textAlign: 'center', marginTop: 30 }}>No hay cuentas desactivadas.</p>

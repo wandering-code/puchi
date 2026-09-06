@@ -28,6 +28,14 @@ class Player(Base):
     customization  = Column(JSON, nullable=False, default=dict)
     status         = Column(String, nullable=False, default="approved")   # pending | approved | rejected
     club_member    = Column(Boolean, nullable=False, default=True)
+    # Apps marcadas "adminOnly" (ver frontend/apps/config.js) a las que este
+    # jugador tiene acceso aunque no sea admin — p.ej. dejar que alguien sin
+    # ser del club pruebe Luniteca (nueva) mientras está en desarrollo, sin
+    # tener que dársela a todo el mundo. Lista de ids de app (["luniteca3"]),
+    # gestionada desde el panel Admin. Nunca incluye "admin" en sí — eso se
+    # comprueba aparte (ver isAppVisible), dar el panel de admin a alguien no
+    # es "una app más" que conceder por aquí.
+    extra_apps     = Column(JSON, nullable=False, default=list)
     created_at     = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     personal_shelf   = relationship("PersonalShelf", back_populates="player")
@@ -41,6 +49,13 @@ class Book(Base):
 
     id           = Column(Integer, primary_key=True, index=True)
     title        = Column(String, nullable=False)
+    # Título original (normalmente inglés) resuelto vía la "obra" de Open
+    # Library — solo para buscar en fuentes que no siempre tienen alias en
+    # español (Wikidata, ver issue #8: "La voluntad de muchos" no se
+    # encontraba buscando con su título en español). Nunca se muestra en
+    # pantalla, `title` sigue siendo el único que ve el jugador. Se rellena
+    # solo (y una vez) la primera vez que hace falta — null hasta entonces.
+    original_title = Column(String, nullable=True)
     author       = Column(String, nullable=True)
     cover_url    = Column(String, nullable=True)
     isbn         = Column(String, nullable=True)

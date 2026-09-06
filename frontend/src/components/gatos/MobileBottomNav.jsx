@@ -13,6 +13,13 @@ export const MOBILE_BOTTOM_NAV_H = 64
 export default function MobileBottomNav({ activeAppId, onSelect, player }) {
   const apps = launcherApps(player)
 
+  // Nada de portal a document.body — se probó (issue larga, ver historial)
+  // pensando que así quedaría "a salvo" del paneo nativo del teclado, pero
+  // fuera de #root es EXACTAMENTE donde no le llega la compensación de
+  // useLockViewportToKeyboard (main.jsx), que solo mueve #root — así que
+  // portada quedaba MÁS expuesta al paneo, no menos. Dentro del árbol,
+  // position:absolute anclado al fondo de #root (que si acaso cambia de
+  // tamaño/posición lo hace junto con TODO lo demás, de forma coherente).
   return (
     <div style={{
       position: 'absolute', left: 0, right: 0, bottom: 0,

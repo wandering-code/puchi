@@ -2,6 +2,15 @@
 <html lang="es">
   <head>
     <meta charset="UTF-8" />
+    <!-- Nada de interactive-widget aquí — probados resizes-content y
+         overlays-content (issue larga, ver historial): ninguno de los dos
+         se comportó de fiar en la práctica (confirmado por Daniel en
+         dispositivo real, no solo en el simulador) — con overlays-content
+         el "paneo" nativo al enfocar un input seguía arrastrando cabecera y
+         barra inferior exactamente igual que sin él. Vuelta al mecanismo
+         de siempre, JS con visualViewport (useLockViewportToKeyboard en
+         main.jsx) — menos elegante pero es el que de verdad se puede
+         verificar y controlar por completo. -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <title>Puchi</title>
     <link rel="icon" type="image/svg+xml" href="/paw-icon.svg" />

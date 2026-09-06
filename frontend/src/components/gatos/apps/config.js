@@ -41,7 +41,13 @@ export const APPS = {
     color:  '#4b5563',
     width:  480,
     height: 440,
-    requires: 'club_member', // sin acceso al club, solo hay Luniteca — nada de perfil/estética
+    // Visible para cualquier jugador aprobado, sea o no del club — issue
+    // reportada: antes llevaba requires:'club_member', pero Ajustes es solo
+    // cuenta personal (nombre, avatar, PIN, borrado) y preferencias de
+    // comportamiento del dispositivo (modo ventana, barra inferior), nunca
+    // nada específico del club — eso (fondos de pantalla) va aparte en
+    // Pirestore, que sí sigue restringido. No tiene sentido que alguien sin
+    // club no pueda ni cambiar su propio PIN.
   },
   pirestore: {
     id:     'pirestore',
@@ -70,7 +76,20 @@ export const APPS = {
 // para que no sepa que existen.
 export function isAppVisible(app, player, isAdmin) {
   if (!app) return false
-  if (app.adminOnly) return !!isAdmin
+  // El admin ve todo siempre; cualquier otro jugador puede tener acceso a
+  // una app "adminOnly" concreta si se le ha concedido a mano desde el
+  // panel Admin (player.extra_apps, ver AdminPanel.jsx) — pensado para
+  // dejar probar algo en desarrollo (p.ej. Luniteca (nueva)) a alguien que
+  // no es del club, sin abrírselo a todo el mundo. El panel de Admin en sí
+  // nunca se concede así, solo por ser admin de verdad.
+  if (app.adminOnly) return !!isAdmin || (app.id !== 'admin' && !!player?.extra_apps?.includes(app.id))
   if (app.requires === 'club_member') return !!player?.club_member
   return true
+}
+
+// Apps "adminOnly" que sí se pueden conceder a mano a un jugador concreto
+// (todas salvo el propio panel de Admin) — usado por AdminPanel.jsx para
+// no tener que mantener esa lista por separado ahí.
+export function grantableApps() {
+  return Object.values(APPS).filter(a => a.adminOnly && a.id !== 'admin' && !a.hidden)
 }
