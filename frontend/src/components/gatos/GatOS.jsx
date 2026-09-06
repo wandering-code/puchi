@@ -1327,27 +1327,35 @@ export default function GatOS({ player: initialPlayer, onLogout, onProfileUpdate
     : activeWindow?.appId
 
   // El lienzo del documento toma el color de la app que esté en primer plano
-  // (issue #13). Es la única superficie que puede pintar la franja que Safari
-  // destapa por debajo de la página cuando la sube para enseñar un campo
-  // tapado por el teclado: esa franja queda FUERA del viewport de layout, así
-  // que ningún elemento —ni #root, ni el fondo de escritorio, ni la propia
-  // app— puede llegar ahí; solo el fondo de html, que el navegador propaga al
-  // lienzo. Sin esto, con Luniteca (crema) delante asomaba una banda oscura
-  // entre el último campo y el teclado. Solo en móvil: en escritorio las apps
-  // son ventanas sobre el escritorio y el fondo de verdad es el oscuro.
+  // (issues #13 y #14). Es la única superficie que puede pintar la franja que
+  // queda entre el final de la página y el teclado: MEDIDO en el iPhone con la
+  // sonda de ViewportDebug (?vvdebug=1), elementFromPoint devuelve null en
+  // todos los puntos de esa banda mientras los de justo encima devuelven divs
+  // de verdad de la app — o sea que ahí no hay ningún elemento al que agarrarse
+  // y está fuera de #root. Diez intentos de la issue #14 fracasaron moviendo o
+  // pintando cosas DENTRO de la página para tapar algo que está fuera.
+  //
+  // HAY QUE PINTAR html Y body, no solo html. Esto ya ponía el color en html a
+  // secas y la banda seguía saliendo oscura en el dispositivo (capturas de
+  // 19:02 y 19:12 en #14, con Luniteca crema delante y html ya en #f7f3ee).
+  // Con los dos, la banda toma el color: verificado a lo bruto pintándolos de
+  // magenta (`?lienzo=ff00ff`) y viéndola salir magenta. El motivo es que
+  // index.css le da a body el mismo #1a1a2e que a html, y body —position:fixed
+  // cubriendo todo— es el que acaba mandando; la propagación del fondo del
+  // elemento raíz al lienzo no basta aquí. Solo en móvil: en escritorio las
+  // apps son ventanas sobre el escritorio y el fondo de verdad es el oscuro.
   useEffect(() => {
     if (!isMobile) return
     const bg = APPS[foregroundAppId]?.bg
     // '' devuelve el valor de index.css, no lo pisa con otro color.
     document.documentElement.style.background = bg || ''
-    // theme-color tiñe la INTERFAZ DE SAFARI: la franja de la barra de estado
-    // arriba y la de la barra de direcciones abajo. Esas dos zonas quedan
-    // fuera de la página —ningún elemento nuestro puede pintarlas, ni el
-    // fondo de html— y Safari las tiñe con este meta o, si no existe, con el
-    // color que le calcula a la página al cargarla: el oscuro de GatOS. De
-    // ahí la franja oscura entre la app y el teclado que costó media issue
-    // localizar (#13). En la app guardada en pantalla de inicio no existe
-    // ninguna de las dos zonas, así que esto solo se nota en Safari.
+    document.body.style.background = bg || ''
+    // theme-color tiñe la interfaz de Safari. OJO: en la captura del magenta
+    // este meta valía #f7f3ee y la franja de arriba —la de la barra de estado—
+    // siguió saliendo oscura, así que aquí no está haciendo nada; coincide con
+    // el intento 9 de #14 ("no cambió nada"). Se deja porque no estorba y
+    // porque quitarlo es otra prueba en dispositivo, pero no es lo que arregla
+    // la banda de abajo: eso es el lienzo, justo arriba.
     let meta = document.querySelector('meta[name="theme-color"]')
     if (!meta) {
       meta = document.createElement('meta')
@@ -1355,7 +1363,10 @@ export default function GatOS({ player: initialPlayer, onLogout, onProfileUpdate
       document.head.appendChild(meta)
     }
     meta.content = bg || '#1a1a2e' // el mismo de html/body en index.css
-    return () => { document.documentElement.style.background = '' }
+    return () => {
+      document.documentElement.style.background = ''
+      document.body.style.background = ''
+    }
   }, [isMobile, foregroundAppId])
 
   // PiP de llamada (grupal o 1-to-1): se muestra siempre que estemos dentro
