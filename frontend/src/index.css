@@ -24,9 +24,15 @@ html, body {
      no hay documento que mover, así que ese rebote no tiene ningún sitio al
      que ir y se queda contenido dentro del propio modal (ver también
      overscrollBehavior en CenteredModal). No hace falta ningún JS para
-     compensar el teclado (como antes, useLockViewportToKeyboard, retirado)
-     porque interactive-widget=overlays-content (index.html) ya deja el
-     viewport intacto — el teclado no re-tamaña ni desplaza nada. */
+     compensar el teclado (como antes, useLockViewportToKeyboard, retirado):
+     con interactive-widget=resizes-content (index.html) el navegador es el
+     único que decide, encogiendo el viewport de LAYOUT hasta donde empieza el
+     teclado. Ojo: esta nota decía overlays-content ("el teclado no re-tamaña
+     ni desplaza nada") de cuando el meta era ese; el meta cambió al rehacer el
+     manejo del teclado (issue #13) y esta línea se quedó sin actualizar. Si
+     vuelve a cambiar, cambia también esta nota — y si hace falta saber cuál de
+     los dos manda de verdad en el dispositivo, el overlay de ?vvdebug=1 lo
+     dice a la cara (ViewportDebug.jsx). */
   position: fixed;
   inset: 0;
   width: 100%;
