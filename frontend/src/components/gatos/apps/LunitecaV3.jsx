@@ -2453,6 +2453,49 @@ function ScanTab({ onDetect }) {
   )
 }
 
+// Alto disponible desde el borde superior de `ref` hasta donde empieza a
+// tapar el teclado — mismo cálculo que CenteredModal (más arriba,
+// var(--vvh) + var(--vvtop)), pero localizado: CenteredModal es
+// position:fixed con top:0, así que le basta esa suma directamente; este
+// panel vive más abajo, dentro del layout normal de ShelfTab (no es un
+// modal — ver comentario grande de "Añadir libro" aquí debajo, issue #12,
+// sobre por qué no lo es), así que hace falta restar dónde empieza de
+// verdad `ref` en pantalla. `getBoundingClientRect().top` ya devuelve la
+// posición real (tras el translateY que useLockViewportToKeyboard, en
+// main.jsx, le aplica a #root), así que no hace falta duplicar esa cuenta
+// aquí — solo restarla del hueco visible total. Se recalcula en cada
+// evento de visualViewport, igual que useLockViewportToKeyboard — issue
+// #13: la estantería y "Añadir libro" tenían el hueco de scroll con altura
+// fija ajena al teclado (`bottom:0` sin más), así que un campo como
+// Sinopsis, más abajo del formulario, no tenía sitio de sobra para
+// desplazarse por encima del teclado al enfocarlo.
+function useAvailableHeight(ref, ready) {
+  const [height, setHeight] = useState(null)
+  // `ready` (no solo `ref`, que como tal nunca cambia de identidad y no
+  // dispararía una nueva ejecución) — mismo motivo/patrón que el
+  // ResizeObserver de scrollWidth más abajo en ShelfTab: mientras la
+  // estantería está cargando, `ref.current` todavía es null (el nodo real
+  // no existe hasta que se deja de mostrar "Cargando…"), así que hace
+  // falta reintentar el efecto justo cuando esa transición ocurre.
+  useEffect(() => {
+    const vv = window.visualViewport
+    const el = ref.current
+    if (!vv || !el) return
+    function update() {
+      const top = el.getBoundingClientRect().top
+      setHeight(Math.max(120, vv.height + vv.offsetTop - top))
+    }
+    update()
+    vv.addEventListener('resize', update)
+    vv.addEventListener('scroll', update)
+    return () => {
+      vv.removeEventListener('resize', update)
+      vv.removeEventListener('scroll', update)
+    }
+  }, [ref, ready])
+  return height
+}
+
 // "Añadir libro" — issue #12: vivía en un CenteredModal (position:fixed +
 // backdrop) que competía con la gestión de viewport del teclado móvil
 // (#root, --vvh, MobileBottomNav) y nunca quedó bien resuelto pese a varios
@@ -2635,6 +2678,10 @@ function ShelfTab({ player, isMobile, container }) {
     ro.observe(el)
     return () => ro.disconnect()
   }, [shelf === null])
+
+  // Alto disponible para "Añadir libro" por encima del teclado — ver
+  // useAvailableHeight más arriba (issue #13).
+  const addPanelHeight = useAvailableHeight(scrollNode, shelf === null)
 
   useEffect(() => {
     let cancelled = false
@@ -3060,8 +3107,23 @@ function ShelfTab({ player, isMobile, container }) {
         {showAddModal && (
           <motion.div key="add" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.18 }}
             style={{
-              position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, maxWidth: 460, overflow: 'hidden',
+              position: 'absolute', left: 0, right: 0, top: 0, maxWidth: 460, overflow: 'hidden',
               display: 'flex', flexDirection: 'column',
+              // Alto = hueco disponible por encima del teclado de verdad
+              // (useAvailableHeight, más arriba — mismo principio que
+              // CenteredModal con --vvh/--vvtop, pero calculado desde donde
+              // este panel empieza de verdad en pantalla, no desde el borde
+              // físico superior). Antes esto era bottom:0 a secas (todo el
+              // hueco del contenedor, ajeno al teclado) o altura automática
+              // sin más — ninguna de las dos deja al navegador sitio de
+              // sobra para desplazar un campo (p.ej. Sinopsis, en A mano)
+              // por encima del teclado al enfocarlo — issue #13, reportada
+              // por Wander con captura. Con esto, el panel entero (no solo
+              // "Buscar") se encoge de verdad cuando aparece el teclado, y
+              // overflowY:auto aquí mismo le da scroll propio a Escanear/A
+              // mano cuando su contenido no cabe en ese hueco reducido.
+              height: addPanelHeight ? `${addPanelHeight}px` : undefined,
+              overflowY: 'auto',
               margin: isMobile ? '4px auto 0' : '8px auto 0',
             }}>
             {/* Buscar/Escanear/A mano cambiaban de golpe (sin transición) —
@@ -3125,12 +3187,12 @@ function ShelfTab({ player, isMobile, container }) {
                 </motion.div>
               ) : addMode === 'scan' ? (
                 <motion.div key="scan" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}
-                  className="luni3-vscroll" style={{ height: '100%', overflowY: 'auto', overflowX: 'hidden', paddingLeft: ADD_PANEL_HPAD, paddingRight: ADD_PANEL_HPAD }}>
+                  style={{ paddingLeft: ADD_PANEL_HPAD, paddingRight: ADD_PANEL_HPAD }}>
                   <ScanTab onDetect={handleAddIsbnDetected} />
                 </motion.div>
               ) : (
                 <motion.div key="manual" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}
-                  className="luni3-vscroll" style={{ height: '100%', overflowY: 'auto', overflowX: 'hidden', paddingLeft: ADD_PANEL_HPAD, paddingRight: ADD_PANEL_HPAD }}>
+                  style={{ paddingLeft: ADD_PANEL_HPAD, paddingRight: ADD_PANEL_HPAD }}>
                   <ManualAddForm existingGenres={[...new Set(shelf.map(x => x.book.genre).filter(Boolean))].sort()}
                     onAdd={addToShelf} onUploadCover={uploadCover} onClose={closeAddBook} />
                 </motion.div>
