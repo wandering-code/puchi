@@ -7,9 +7,10 @@ import { EMPTY_FILTERS, agruparEstanteria, opcionesDeFiltro, readingDatesLabel }
 import { Cover, NotaBadge, PagesLabel, ProgressBar, StarRating } from './piezas'
 import BookDetail from './BookDetail'
 import {
-  IconChevron, IconFilter, IconGrid, IconList, IconSearch, IconX,
+  IconChevron, IconFilter, IconGrid, IconList, IconPlus, IconSearch, IconX,
 } from '../../ui/icons'
 import HojaFiltros from './HojaFiltros'
+import AnadirLibro from './AnadirLibro'
 import { useHoja } from './HojaInferior'
 import { useCapa } from '../../platform/capas'
 
@@ -27,6 +28,7 @@ export default function Luniteca() {
   const [sort, setSort] = useState({ field: '', dir: 'asc' })
   const [filters, setFilters] = useState(EMPTY_FILTERS)
   const hojaFiltros = useHoja()
+  const hojaAnadir = useHoja()
   const [plegadas, setPlegadas] = useState({ want: false, read: false, dropped: true })
   const [anosPlegados, setAnosPlegados] = useState(() => new Set())
 
@@ -136,6 +138,10 @@ export default function Luniteca() {
 
   const cerrarFicha = ficha.cerrar
 
+  const libroAnadido = useCallback((entrada) => {
+    setShelf(prev => (prev || []).some(x => x.id === entrada.id) ? prev : [...(prev || []), entrada])
+  }, [])
+
   const grupos = useMemo(
     () => agruparEstanteria(shelf, { filters, query, sort }),
     [shelf, filters, query, sort],
@@ -182,6 +188,7 @@ export default function Luniteca() {
         query={query} onQuery={setQuery}
         buscando={buscando} onBuscando={setBuscando}
         onAbrirHoja={hojaFiltros.abrir}
+        onAnadir={hojaAnadir.abrir}
         ordenActivo={!!sort.field}
         filtrosActivos={grupos.filtrosActivos}
       />
@@ -191,7 +198,7 @@ export default function Luniteca() {
       {grupos.vacia && !error && (
         <Aviso
           titulo="Todavía no hay nada aquí"
-          texto="Los libros se añaden desde la Puchi actual mientras esta versión no tenga su propio buscador. Los que añadas ahí aparecen aquí solos."
+          texto="Toca el + de arriba para buscar un libro y añadirlo. También aparecen aquí los que añadas desde la Puchi actual."
         />
       )}
 
@@ -266,6 +273,8 @@ export default function Luniteca() {
         />
       </div>
 
+      <AnadirLibro abierta={hojaAnadir.abierta} onCerrar={hojaAnadir.cerrar} onAnadido={libroAnadido} />
+
       <HojaFiltros
         abierta={hojaFiltros.abierta}
         onCerrar={hojaFiltros.cerrar}
@@ -318,7 +327,7 @@ function Aviso({ titulo, texto }) {
 // ─── Barra de herramientas ─────────────────────────────────────────────────
 function Herramientas({
   vista, onVista, query, onQuery, buscando, onBuscando,
-  onAbrirHoja, ordenActivo, filtrosActivos,
+  onAbrirHoja, onAnadir, ordenActivo, filtrosActivos,
 }) {
   // Se queda pegada arriba al bajar por una estantería larga: con 300 libros,
   // volver arriba solo para filtrar es la diferencia entre usarlo y no usarlo.
@@ -400,6 +409,12 @@ function Herramientas({
                 {(filtrosActivos || ordenActivo) && (
                   <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-accent" />
                 )}
+              </BotonHerramienta>
+
+              {/* Añadir libro: la acción que hace que esta versión se pueda
+                  usar sin volver a la Puchi actual. */}
+              <BotonHerramienta onClick={onAnadir} etiqueta="Añadir libro">
+                <IconPlus className="h-[18px] w-[18px]" />
               </BotonHerramienta>
 
               <div className="flex-1" />
