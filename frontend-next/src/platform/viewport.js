@@ -145,11 +145,13 @@ export function useMobileViewport() {
   useScrollFocusedIntoView()
 }
 
-// ¿Está el usuario escribiendo? La barra inferior sube con el teclado en iOS
-// (no se compensa el paneo, ver arriba), así que la solución adoptada en la
-// Puchi actual es sencillamente ocultarla mientras se escribe — que es lo que
-// hacen las apps nativas. Se mira el foco, no --kb: con
-// interactive-widget=resizes-content --kb vale 0 casi siempre.
+// ¿Está el usuario escribiendo? Cualquier barra anclada abajo sube con el
+// teclado en iOS (no se compensa el paneo, ver arriba), y la solución adoptada
+// en la Puchi actual es ocultarla mientras se escribe, como hacen las apps
+// nativas. Ahora mismo no hay ninguna — la navegación se fue al menú lateral —
+// pero esto vuelve a hacer falta en cuanto una pantalla tenga barra de
+// acciones. Se mira el foco, no --kb: con interactive-widget=resizes-content
+// --kb vale 0 casi siempre.
 export function useIsTyping() {
   const [typing, setTyping] = useState(false)
   useEffect(() => {

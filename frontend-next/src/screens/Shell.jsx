@@ -2,19 +2,59 @@ import { useEffect, useState } from 'react'
 import { NavLink, Route, Routes, useLocation } from 'react-router-dom'
 import { AnimatePresence, motion } from 'motion/react'
 import { useAuth } from '../platform/auth'
-import { useIsTyping } from '../platform/viewport'
 import { isIOS, isStandalone, safeInsets } from '../platform/pwa'
-import { IconBooks, IconExit, IconHome, IconSettings } from '../ui/icons'
+import { IconBooks, IconExit, IconHome, IconMenu, IconPaw, IconSettings } from '../ui/icons'
 
-const TABS = [
-  { to: '/',          label: 'Inicio',     Icon: IconHome },
+const SECCIONES = [
+  { to: '/',           label: 'Inicio',     Icon: IconHome },
   { to: '/biblioteca', label: 'Biblioteca', Icon: IconBooks },
   { to: '/ajustes',    label: 'Ajustes',    Icon: IconSettings },
 ]
 
 export default function Shell() {
   const location = useLocation()
-  const typing = useIsTyping()
+  const [menuAbierto, setMenuAbierto] = useState(false)
+
+  // El botón atrás de Android (y el gesto de volver) tiene que cerrar el menú,
+  // no salir de la app: instalada no hay barra de navegador que deshaga nada, y
+  // salirse de golpe al querer cerrar un panel se siente roto. Se consigue
+  // metiendo una entrada en el historial al abrirlo.
+  useEffect(() => {
+    if (!menuAbierto) return
+    window.history.pushState({ drawer: true }, '')
+    const alVolver = () => setMenuAbierto(false)
+    window.addEventListener('popstate', alVolver)
+    return () => window.removeEventListener('popstate', alVolver)
+  }, [menuAbierto])
+
+  // Cerrar el menú SIN navegar (botón de fuera, velo, arrastre, Escape):
+  // se deshace la entrada del historial que metió el efecto de arriba —
+  // history.back() dispara popstate, que es quien baja el estado— para no
+  // dejar una entrada muerta que obligue a pulsar atrás dos veces.
+  function cerrarMenu() {
+    if (window.history.state?.drawer) window.history.back()
+    else setMenuAbierto(false)
+  }
+
+  // Cerrar el menú AL NAVEGAR a una sección desde dentro. Aquí no se puede
+  // tocar el historial: el router hace su propio pushState en el mismo clic y
+  // el history.back() se aplicaría después, deshaciendo esa navegación — con
+  // el efecto, visto en captura, de pulsar "Biblioteca" y acabar en "Inicio".
+  // La entrada del menú se queda enterrada y sin efecto, porque que el menú
+  // esté abierto es estado de React: volver a ella no lo reabre.
+  function cerrarMenuAlNavegar() {
+    setMenuAbierto(false)
+  }
+
+  // Escape para el escritorio; en móvil no estorba.
+  useEffect(() => {
+    if (!menuAbierto) return
+    const alPulsar = (ev) => { if (ev.key === 'Escape') cerrarMenu() }
+    window.addEventListener('keydown', alPulsar)
+    return () => window.removeEventListener('keydown', alPulsar)
+  }, [menuAbierto])
+
+  const seccion = SECCIONES.find(s => s.to === location.pathname)
 
   return (
     <div className="relative flex h-full w-full flex-col bg-bg">
@@ -29,7 +69,7 @@ export default function Shell() {
       />
       <div aria-hidden className="pointer-events-none absolute inset-0 grain" />
 
-      <TopBar />
+      <TopBar titulo={seccion?.label} onAbrirMenu={() => setMenuAbierto(true)} />
 
       <main className="relative z-10 flex-1 overflow-hidden">
         {/* Cada ruta es su propia capa a pantalla completa con su scroll: así
@@ -53,69 +93,149 @@ export default function Shell() {
         </AnimatePresence>
       </main>
 
-      <BottomNav hidden={typing} />
+      <MenuLateral abierto={menuAbierto} onCerrar={cerrarMenu} onNavegar={cerrarMenuAlNavegar} />
     </div>
   )
 }
 
-function TopBar() {
+function TopBar({ titulo, onAbrirMenu }) {
   const { player } = useAuth()
   return (
     <header className="relative z-20 shrink-0 border-b border-line backdrop-blur-xl pt-safe">
-      <div className="flex h-14 items-center gap-3 px-5">
-        <div
-          className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full border border-line"
-          style={{ background: player?.color || '#333' }}
+      <div className="flex h-14 items-center gap-3 px-3">
+        <button
+          onClick={onAbrirMenu}
+          aria-label="Abrir menú"
+          // 44px de lado: por debajo de eso, en el móvil se falla el toque.
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl2 text-ink transition-colors active:bg-surface-2"
         >
-          {player?.avatar_url
-            ? <img src={player.avatar_url} alt="" className="h-full w-full object-cover" />
-            : <span>{player?.avatar_emoji || '⭐'}</span>}
+          <IconMenu className="h-6 w-6" />
+        </button>
+
+        {/* La sección actual, en el centro, solo cuando hay sitio: en un móvil
+            estrecho compite con el nombre, y ahí el título grande del propio
+            contenido ya dice dónde estás. */}
+        <div className="hidden min-w-0 flex-1 text-center sm:block">
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.p
+              key={titulo}
+              className="truncate text-sm text-ink-dim"
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -4 }}
+              transition={{ duration: 0.18 }}
+            >
+              {titulo}
+            </motion.p>
+          </AnimatePresence>
         </div>
-        <div className="min-w-0 flex-1">
-          <p className="truncate font-display text-lg font-semibold leading-tight tracking-[-0.01em]">{player?.name}</p>
-          <p className="text-[10px] uppercase tracking-[0.18em] text-ink-mute leading-tight">Puchi nueva</p>
+
+        <div className="flex min-w-0 flex-1 items-center justify-end gap-2 sm:flex-none">
+          <p className="max-w-[10rem] truncate font-display text-base font-semibold leading-tight tracking-[-0.01em]">
+            {player?.name}
+          </p>
+          <div
+            className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-line"
+            style={{ background: player?.color || 'var(--color-surface-2)' }}
+          >
+            {player?.avatar_url
+              ? <img src={player.avatar_url} alt="" className="h-full w-full object-cover" />
+              : <span>{player?.avatar_emoji || '⭐'}</span>}
+          </div>
         </div>
       </div>
     </header>
   )
 }
 
-function BottomNav({ hidden }) {
+function MenuLateral({ abierto, onCerrar, onNavegar }) {
+  const { player } = useAuth()
   return (
-    // Se va con el teclado en vez de pelearse con él: en iOS el paneo la
-    // subiría por encima del teclado, y es lo que hacen las apps nativas.
-    <motion.nav
-      className="z-20 shrink-0 border-t border-line bg-bg/85 backdrop-blur-xl pb-safe"
-      animate={{ y: hidden ? 120 : 0, opacity: hidden ? 0 : 1 }}
-      transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-      style={{ pointerEvents: hidden ? 'none' : undefined }}
-    >
-      <div className="flex h-16 items-stretch">
-        {TABS.map(({ to, label, Icon }) => (
-          <NavLink key={to} to={to} end={to === '/'} className="relative flex flex-1 items-center justify-center">
-            {({ isActive }) => (
-              <>
-                {/* layoutId: la pastilla se DESPLAZA de una pestaña a otra en
-                    vez de desaparecer y reaparecer. Es lo que hace que el
-                    cambio de sección se lea como un movimiento y no como un
-                    parpadeo. */}
-                {isActive && (
-                  <motion.span
-                    layoutId="tab-pill"
-                    className="absolute inset-x-3 inset-y-2 rounded-xl2 bg-surface-2"
-                    transition={{ type: 'spring', stiffness: 420, damping: 34 }}
-                  />
-                )}
-                <span className="relative flex flex-col items-center gap-1">
-                  <Icon className={`h-6 w-6 transition-colors duration-200 ${isActive ? 'text-accent' : 'text-ink-mute'}`} />
-                  <span className={`text-[11px] transition-colors duration-200 ${isActive ? 'text-ink' : 'text-ink-mute'}`}>{label}</span>
-                </span>
-              </>
-            )}
-          </NavLink>
-        ))}
-      </div>
-    </motion.nav>
+    <AnimatePresence>
+      {abierto && (
+        <>
+          {/* El velo se pinta con la tinta de la paleta, no con negro: sobre el
+              crema, un negro puro corta demasiado. */}
+          <motion.div
+            className="fixed inset-0 z-40 bg-ink/25"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            onClick={onCerrar}
+          />
+
+          <motion.aside
+            role="dialog"
+            aria-label="Menú"
+            className="fixed inset-y-0 left-0 z-50 flex w-[78%] max-w-[320px] flex-col border-r border-line bg-surface pt-safe pb-safe pl-safe"
+            initial={{ x: '-100%' }}
+            animate={{ x: 0 }}
+            exit={{ x: '-100%' }}
+            transition={{ type: 'spring', stiffness: 460, damping: 42 }}
+            // Arrastrar hacia la izquierda para cerrarlo: es como se cierra un
+            // panel así en cualquier app del móvil, y sin ello hay que apuntar
+            // al velo con el pulgar. Solo hacia la izquierda (right: 0), para
+            // que no se pueda separar del borde.
+            drag="x"
+            dragConstraints={{ left: -360, right: 0 }}
+            dragElastic={0.08}
+            dragMomentum={false}
+            onDragEnd={(_, info) => {
+              // O se ha arrastrado lo bastante, o se ha lanzado con fuerza: lo
+              // segundo es lo que hace que un gesto rápido y corto también
+              // cierre, que es como se maneja esto con el pulgar.
+              if (info.offset.x < -70 || info.velocity.x < -420) onCerrar()
+            }}
+          >
+            <div className="flex items-center gap-3 px-5 py-5">
+              <IconPaw className="h-7 w-7 text-accent" />
+              <div className="min-w-0">
+                <p className="font-display text-xl font-semibold leading-none tracking-[-0.02em]">Puchi</p>
+                <p className="mt-1 text-[10px] uppercase tracking-[0.18em] text-ink-mute">Versión nueva</p>
+              </div>
+            </div>
+
+            <nav className="flex-1 overflow-y-auto overscroll-contain px-3">
+              {SECCIONES.map(({ to, label, Icon }) => (
+                <NavLink
+                  key={to}
+                  to={to}
+                  end={to === '/'}
+                  onClick={onNavegar}
+                  className="relative mb-1 flex h-12 items-center gap-3 rounded-xl2 px-3"
+                >
+                  {({ isActive }) => (
+                    <>
+                      {/* layoutId: al cambiar de sección la pastilla se
+                          desplaza de una entrada a otra en vez de aparecer y
+                          desaparecer. */}
+                      {isActive && (
+                        <motion.span
+                          layoutId="menu-activo"
+                          className="absolute inset-0 rounded-xl2 bg-accent-soft"
+                          transition={{ type: 'spring', stiffness: 420, damping: 34 }}
+                        />
+                      )}
+                      <Icon className={`relative h-5 w-5 ${isActive ? 'text-accent' : 'text-ink-mute'}`} />
+                      <span className={`relative text-[15px] ${isActive ? 'font-semibold text-accent' : 'text-ink-dim'}`}>
+                        {label}
+                      </span>
+                    </>
+                  )}
+                </NavLink>
+              ))}
+            </nav>
+
+            <div className="border-t border-line px-5 py-4">
+              <p className="truncate text-sm text-ink-dim">
+                Sesión de <span className="text-ink">{player?.name}</span>
+              </p>
+            </div>
+          </motion.aside>
+        </>
+      )}
+    </AnimatePresence>
   )
 }
 
