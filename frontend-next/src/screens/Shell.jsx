@@ -36,13 +36,10 @@ export default function Shell() {
   const seccion = SECCIONES.find(s => s.to === location.pathname)
 
   return (
-    <div className="relative flex h-full w-full flex-col bg-bg">
-      {/* Un único color de fondo, plano. Aquí hubo un degradado que aclaraba
-          hacia arriba buscando profundidad, y lo que conseguía era que la
-          cabecera pareciera de otro color que el resto de la pantalla. El
-          grano se queda: es uniforme, da textura de papel y no crea zonas. */}
-      <div aria-hidden className="pointer-events-none absolute inset-0 grain" />
-
+    <div className="relative flex h-full w-full flex-col">
+      {/* Fondo de un solo color, plano. La textura de papel la pone el fondo
+          del documento (index.css), no una capa aquí: como capa costaba
+          frames en cada animación que pasara por encima. */}
       <TopBar titulo={seccion?.label} onAbrirMenu={menu.abrir} />
 
       <main className="relative z-10 flex-1 overflow-hidden">

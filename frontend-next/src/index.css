@@ -116,7 +116,16 @@
     /* El viewport meta ya bloquea el pellizco; esto quita además el
        doble-tap-para-zoom y el retardo de 300ms al tocar. */
     touch-action: manipulation;
-    background: var(--color-bg);
+    /* El color de fondo y, encima, un tile de 128px de ruido: da textura de
+       papel y evita el banding de una superficie lisa en pantallas OLED.
+       Va aquí, en el fondo del documento, en vez de en una capa a pantalla
+       completa dentro de la app (que es como estaba) por sencillez: un nodo y
+       una capa menos, y la opacidad dentro del propio SVG en lugar de un
+       mix-blend-mode. En fotogramas por segundo da igual: se cambió creyendo
+       que esa capa costaba frames, y la medición con calentamiento demostró
+       que no era ella. */
+    background-color: var(--color-bg);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='128' height='128'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='128' height='128' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
     color: var(--color-ink);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
@@ -166,15 +175,3 @@
    platform/viewport.js). Encogiendo la caja el fondo se corta y asoma lo de
    detrás — eso ya se probó en la Puchi actual y se descartó. */
 @utility pb-kb { padding-bottom: calc(var(--kb, 0px) + env(safe-area-inset-bottom, 0px)); }
-
-/* Grano muy fino, para poner encima del fondo. Un plano de color liso a
-   pantalla completa se ve muerto en el móvil (y en pantallas OLED marca el
-   banding de los degradados); una textura estática de 128px tileada lo rompe
-   sin coste de render: no se anima, se pinta una vez y se queda. */
-@utility grain {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='128' height='128'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='128' height='128' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
-  /* Sobre fondo claro el overlay del arranque ensuciaba el crema: multiply
-     muy flojo deja textura de papel sin apagarlo. */
-  opacity: 0.05;
-  mix-blend-mode: multiply;
-}

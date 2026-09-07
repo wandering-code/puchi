@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { EMPTY_FILTERS, MAX_PAGES_OPTIONS, MIN_RATING_OPTIONS, SORT_FIELDS } from './shelf'
 import { IconChevron } from '../../ui/icons'
 import HojaInferior from './HojaInferior'
@@ -99,7 +100,7 @@ function Apartado({ titulo, children }) {
 // El <select> se queda (en el móvil abre la rueda del sistema, que con el
 // pulgar no la mejora ninguna lista hecha a mano), pero con appearance:none y
 // flecha propia. Sin eso, iOS lo pinta con su estilo nativo e ignora el
-// redondeo: eran los únicos recuadros con esquinas rectas de toda la app.
+// redondeo: eran los únicos recuadros de esquinas rectas de toda la app.
 function Desplegable({ label, value, onChange, options, formato = v => v }) {
   return (
     <label className="flex flex-col gap-1.5">
@@ -113,7 +114,7 @@ function Desplegable({ label, value, onChange, options, formato = v => v }) {
           }`}
         >
           <option value="">Cualquiera</option>
-          {options.map(o => <option key={o} value={o}>{formato(o)}</option>)}
+          <OpcionesDiferidas items={options} actual={value} formato={formato} />
         </select>
         <IconChevron
           className={`pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 ${value ? 'text-accent' : 'text-ink-mute'}`}
@@ -121,4 +122,25 @@ function Desplegable({ label, value, onChange, options, formato = v => v }) {
       </div>
     </label>
   )
+}
+
+// Las opciones se montan un frame DESPUÉS de que aparezca la hoja.
+//
+// Medido con una estantería de 300 libros (300 autores, 40 géneros, 12
+// carpetas): entre todos los desplegables salían 387 <option>, y crearlos
+// hacía que la hoja tardara 362ms en aparecer la primera vez y 131ms las
+// siguientes, con tareas largas de 68-105ms que se comían los primeros
+// fotogramas de la animación. Un frame después, la hoja entra limpia y las
+// listas se rellenan mucho antes de que dé tiempo a desplegar ninguna.
+//
+// El valor ya elegido sí se pinta desde el primer momento: si no, un filtro
+// puesto parpadearía vacío al abrir.
+function OpcionesDiferidas({ items, actual, formato }) {
+  const [listas, setListas] = useState(false)
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setListas(true))
+    return () => cancelAnimationFrame(id)
+  }, [])
+  if (!listas) return actual ? <option value={actual}>{formato(actual)}</option> : null
+  return <>{items.map(o => <option key={o} value={o}>{formato(o)}</option>)}</>
 }

@@ -216,7 +216,6 @@ function Aurora() {
         animate={{ scale: [1.1, 1, 1.1], opacity: [0.08, 0.14, 0.08] }}
         transition={{ duration: 18, repeat: Infinity, ease: 'easeInOut' }}
       />
-      <div className="absolute inset-0 grain" />
     </div>
   )
 }

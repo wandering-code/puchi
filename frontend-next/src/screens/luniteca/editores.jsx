@@ -85,19 +85,34 @@ function CamposFecha({ value, onChange }) {
   }
 
   const estilo = 'h-11 appearance-none rounded-xl2 border border-line bg-bg px-2.5 text-sm text-ink outline-none'
+  // Las opciones, un frame después de que aparezca la hoja: entre los tres
+  // desplegables y las dos fechas son más de doscientas, y crearlas a la vez
+  // que la hoja le come los primeros fotogramas a la animación.
+  const [listas, setListas] = useState(false)
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setListas(true))
+    return () => cancelAnimationFrame(id)
+  }, [])
+
   return (
     <div className="grid grid-cols-[1fr_1.6fr_1.2fr] gap-2">
       <select value={d ?? ''} onChange={e => cambiar('d', e.target.value)} className={estilo} aria-label="Día">
         <option value="">—</option>
-        {Array.from({ length: diasDelMes }, (_, i) => i + 1).map(n => <option key={n} value={n}>{n}</option>)}
+        {listas
+          ? Array.from({ length: diasDelMes }, (_, i) => i + 1).map(n => <option key={n} value={n}>{n}</option>)
+          : d && <option value={d}>{d}</option>}
       </select>
       <select value={m ?? ''} onChange={e => cambiar('m', e.target.value)} className={estilo} aria-label="Mes">
         <option value="">—</option>
-        {MESES.map((nombre, i) => <option key={nombre} value={i + 1}>{nombre}</option>)}
+        {listas
+          ? MESES.map((nombre, i) => <option key={nombre} value={i + 1}>{nombre}</option>)
+          : m && <option value={m}>{MESES[m - 1]}</option>}
       </select>
       <select value={a ?? ''} onChange={e => cambiar('a', e.target.value)} className={estilo} aria-label="Año">
         <option value="">—</option>
-        {ANOS.map(n => <option key={n} value={n}>{n}</option>)}
+        {listas
+          ? ANOS.map(n => <option key={n} value={n}>{n}</option>)
+          : a && <option value={a}>{a}</option>}
       </select>
     </div>
   )
