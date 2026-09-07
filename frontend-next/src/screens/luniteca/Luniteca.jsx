@@ -512,21 +512,20 @@ function PortadaAnimable({ entry, activa, className, children }) {
 
 const PortadaLibro = memo(function PortadaLibro({ entry, onAbrir, activa }) {
   return (
-    /* flex y no el flujo normal del botón: Safari centra verticalmente el
-       contenido de un <button>, así que en una fila donde unos títulos ocupan
-       una línea y otros dos, las portadas de los cortos bajaban media línea y
-       la fila quedaba descuadrada (no se reproduce en Chromium, es cosa de
-       WebKit). Y el título tiene sitio para dos líneas SIEMPRE, ocupe una o
-       dos, para que todas las tarjetas midan lo mismo ocurra lo que ocurra. */
+    /* Sin título debajo: la portada ya dice qué libro es, y quien quiera
+       comprobarlo entra en la ficha. De paso, todas las celdas miden
+       exactamente lo mismo — la portada — así que ninguna fila puede
+       descuadrarse. El título va en aria-label, que si no el botón se queda
+       sin nombre para un lector de pantalla. */
     <button
       onClick={() => onAbrir(entry)}
-      className="flex flex-col items-stretch justify-start text-left transition-transform duration-150 active:scale-[0.96]"
+      aria-label={entry.book.title}
+      className="transition-transform duration-150 active:scale-[0.96]"
     >
       <PortadaAnimable entry={entry} activa={activa} className="relative">
         <NotaBadge rating={entry.rating} />
-        <Cover url={entry.book.cover_url} className="shadow-sm" />
+        <Cover url={entry.book.cover_url} title={entry.book.title} className="shadow-sm" />
       </PortadaAnimable>
-      <p className="mt-1.5 line-clamp-2 h-[2lh] text-[11px] leading-tight text-ink-dim">{entry.book.title}</p>
     </button>
   )
 })

@@ -6,7 +6,7 @@ import { STATUS_COLOR, STATUS_LABEL, progressPct, totalPages } from './shelf'
 // Proporción de libro fija (2/3) para que la cuadrícula sea una rejilla de
 // verdad y no una escalera: las portadas que devuelve Open Library vienen con
 // alturas dispares, y recortando con object-cover se alinean todas.
-export function Cover({ url, className = '', priority = false }) {
+export function Cover({ url, title, className = '', priority = false }) {
   const [roto, setRoto] = useState(false)
   const [cargada, setCargada] = useState(false)
   const [urlPrevia, setUrlPrevia] = useState(url)
@@ -18,9 +18,15 @@ export function Cover({ url, className = '', priority = false }) {
 
   return (
     <div className={`relative aspect-[2/3] overflow-hidden rounded-md bg-surface-2 ${className}`}>
+      {/* Sin portada se pinta el título dentro del hueco. En la cuadrícula el
+          título ya no va debajo (la portada identifica el libro de sobra), así
+          que un libro sin imagen se quedaría sin nada que lo identifique. */}
       {!hayImagen && (
-        <div className="flex h-full w-full items-center justify-center">
+        <div className="flex h-full w-full flex-col items-center justify-center gap-1 px-1.5 text-center">
           <LomoSinPortada />
+          {title && (
+            <span className="line-clamp-4 text-[9px] leading-tight text-ink-mute">{title}</span>
+          )}
         </div>
       )}
       {hayImagen && (
