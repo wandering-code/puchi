@@ -3,15 +3,13 @@ import { AnimatePresence, motion } from 'motion/react'
 import { useAuth } from '../../platform/auth'
 import { api } from '../../platform/api'
 import { useLiveUpdates } from '../../platform/live'
-import {
-  EMPTY_FILTERS, MAX_PAGES_OPTIONS, SORT_FIELDS,
-  agruparEstanteria, opcionesDeFiltro, readingDatesLabel,
-} from './shelf'
+import { EMPTY_FILTERS, agruparEstanteria, opcionesDeFiltro, readingDatesLabel } from './shelf'
 import { Cover, NotaBadge, PagesLabel, ProgressBar, StatusDot } from './piezas'
 import BookDetail from './BookDetail'
 import {
-  IconChevron, IconFilter, IconGrid, IconList, IconSearch, IconSort, IconX,
+  IconChevron, IconFilter, IconGrid, IconList, IconSearch, IconX,
 } from '../../ui/icons'
+import HojaFiltros from './HojaFiltros'
 
 export default function Luniteca() {
   const { player } = useAuth()
@@ -24,7 +22,7 @@ export default function Luniteca() {
   const [buscando, setBuscando] = useState(false)
   const [sort, setSort] = useState({ field: '', dir: 'asc' })
   const [filters, setFilters] = useState(EMPTY_FILTERS)
-  const [panel, setPanel] = useState(null)      // null | 'filtros' | 'orden'
+  const [hojaAbierta, setHojaAbierta] = useState(false)
   const [plegadas, setPlegadas] = useState({ want: false, read: false, dropped: true })
   const [anosPlegados, setAnosPlegados] = useState(() => new Set())
 
@@ -79,6 +77,11 @@ export default function Luniteca() {
     return () => window.removeEventListener('popstate', alVolver)
   }, [abierto?.id])
 
+  function cerrarHoja(opciones = {}) {
+    if (!opciones.desdeHistorial && window.history.state?.hoja) window.history.back()
+    else setHojaAbierta(false)
+  }
+
   function cerrarFicha() {
     if (window.history.state?.ficha) window.history.back()
     else setAbierto(null)
@@ -129,10 +132,9 @@ export default function Luniteca() {
         vista={vista} onVista={cambiarVista}
         query={query} onQuery={setQuery}
         buscando={buscando} onBuscando={setBuscando}
-        panel={panel} onPanel={setPanel}
-        sort={sort} onSort={setSort}
-        filters={filters} onFilters={setFilters}
-        opciones={opciones} filtrosActivos={grupos.filtrosActivos}
+        onAbrirHoja={() => setHojaAbierta(true)}
+        ordenActivo={!!sort.field}
+        filtrosActivos={grupos.filtrosActivos}
       />
 
       {error && <p className="mt-4 text-sm text-danger">{error}</p>}
@@ -215,6 +217,15 @@ export default function Luniteca() {
         />
       </div>
 
+      <HojaFiltros
+        abierta={hojaAbierta}
+        onCerrar={cerrarHoja}
+        sort={sort} onSort={setSort}
+        filters={filters} onFilters={setFilters}
+        opciones={opciones}
+        visibles={grupos.visible.length}
+      />
+
       <AnimatePresence>
         {abierto && (
           <BookDetail
@@ -253,7 +264,7 @@ function Aviso({ titulo, texto }) {
 // ─── Barra de herramientas ─────────────────────────────────────────────────
 function Herramientas({
   vista, onVista, query, onQuery, buscando, onBuscando,
-  panel, onPanel, sort, onSort, filters, onFilters, opciones, filtrosActivos,
+  onAbrirHoja, ordenActivo, filtrosActivos,
 }) {
   // Se queda pegada arriba al bajar por una estantería larga: con 300 libros,
   // volver arriba solo para filtrar es la diferencia entre usarlo y no usarlo.
@@ -262,32 +273,27 @@ function Herramientas({
       <div className="flex items-center gap-1">
         <BotonHerramienta
           activo={buscando}
-          onClick={() => { onBuscando(!buscando); if (buscando) onQuery(''); onPanel(null) }}
+          onClick={() => { onBuscando(!buscando); if (buscando) onQuery('') }}
           etiqueta="Buscar"
         >
           <IconSearch className="h-[18px] w-[18px]" />
         </BotonHerramienta>
 
+        {/* Un solo botón para filtrar y ordenar: los dos viven en la misma
+            hoja, así que dos botones que abren lo mismo solo confunden. */}
         <BotonHerramienta
-          activo={panel === 'filtros' || filtrosActivos}
-          onClick={() => onPanel(panel === 'filtros' ? null : 'filtros')}
-          etiqueta="Filtros"
+          activo={filtrosActivos || ordenActivo}
+          onClick={onAbrirHoja}
+          etiqueta="Filtrar y ordenar"
         >
           <IconFilter className="h-[18px] w-[18px]" />
-          {filtrosActivos && <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-accent" />}
-        </BotonHerramienta>
-
-        <BotonHerramienta
-          activo={panel === 'orden' || !!sort.field}
-          onClick={() => onPanel(panel === 'orden' ? null : 'orden')}
-          etiqueta="Ordenar"
-        >
-          <IconSort className="h-[18px] w-[18px]" />
+          {(filtrosActivos || ordenActivo) && (
+            <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-accent" />
+          )}
         </BotonHerramienta>
 
         <div className="flex-1" />
 
-        {/* Cuadrícula o lista, con la pastilla deslizándose entre las dos. */}
         {/* Píldora dentro de píldora: el recuadro era rounded-xl2 (20px) con la
             pastilla a 10px y 2px de separación, así que la curva de dentro no
             podía seguir a la de fuera y la selección se salía por las esquinas.
@@ -333,58 +339,6 @@ function Herramientas({
           </div>
         </div>
       </Plegable>
-
-      <Plegable abierta={panel === 'orden'}>
-        <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-line pt-3">
-          {SORT_FIELDS.map(({ field, label }) => {
-            const activo = sort.field === field
-            return (
-              <button
-                key={field}
-                onClick={() => onSort(activo
-                  // Tocar el que ya está activo alterna el sentido, y al
-                  // tercer toque lo quita: no hace falta un botón aparte.
-                  ? (sort.dir === 'asc' ? { field, dir: 'desc' } : { field: '', dir: 'asc' })
-                  : { field, dir: 'asc' })}
-                className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm transition-colors ${
-                  activo ? 'border-accent-line bg-accent-soft text-accent' : 'border-line text-ink-dim'
-                }`}
-              >
-                {label}
-                {activo && (
-                  <IconChevron className={`h-3.5 w-3.5 transition-transform ${sort.dir === 'asc' ? 'rotate-180' : ''}`} />
-                )}
-              </button>
-            )
-          })}
-        </div>
-      </Plegable>
-
-      <Plegable abierta={panel === 'filtros'}>
-        <div className="mt-2 grid grid-cols-2 gap-2 border-t border-line pt-3">
-          <Desplegable label="Género"  value={filters.genre}  onChange={v => onFilters({ ...filters, genre: v })}  options={opciones.generos} />
-          <Desplegable label="Autor"   value={filters.author} onChange={v => onFilters({ ...filters, author: v })} options={opciones.autores} />
-          <Desplegable label="Carpeta" value={filters.folder} onChange={v => onFilters({ ...filters, folder: v })} options={opciones.carpetas} />
-          <Desplegable
-            label="Máx. páginas" value={filters.maxPages}
-            onChange={v => onFilters({ ...filters, maxPages: v })}
-            options={MAX_PAGES_OPTIONS}
-          />
-          <Desplegable
-            label="Nota mínima" value={filters.minRating}
-            onChange={v => onFilters({ ...filters, minRating: v })}
-            options={['1', '2', '3', '4', '5']}
-          />
-          {filtrosActivos && (
-            <button
-              onClick={() => onFilters(EMPTY_FILTERS)}
-              className="self-end rounded-xl2 border border-line px-3 py-2.5 text-sm text-ink-dim"
-            >
-              Quitar filtros
-            </button>
-          )}
-        </div>
-      </Plegable>
     </div>
   )
 }
@@ -401,27 +355,6 @@ function BotonHerramienta({ activo, onClick, etiqueta, children }) {
     >
       {children}
     </button>
-  )
-}
-
-// Un <select> nativo, no un desplegable propio: en el móvil el nativo abre la
-// rueda del sistema, que se maneja con el pulgar mucho mejor que cualquier
-// lista flotante hecha a mano.
-function Desplegable({ label, value, onChange, options }) {
-  return (
-    <label className="flex flex-col gap-1">
-      <span className="px-1 text-[11px] uppercase tracking-[0.12em] text-ink-mute">{label}</span>
-      <select
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        className={`h-11 rounded-xl2 border bg-surface px-3 text-[15px] outline-none ${
-          value ? 'border-accent-line text-accent' : 'border-line text-ink-dim'
-        }`}
-      >
-        <option value="">Cualquiera</option>
-        {options.map(o => <option key={o} value={o}>{o}</option>)}
-      </select>
-    </label>
   )
 }
 
