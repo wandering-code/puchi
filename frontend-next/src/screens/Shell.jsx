@@ -276,14 +276,17 @@ function Ajustes() {
   )
 }
 
-// Provisional, mientras se decide cómo debe abrirse la ficha de un libro: se
-// prueban las cuatro en el móvil y se deja la que gane.
+// Preferencia de cada jugador: cómo se abre la ficha de un libro. Se guarda en
+// el perfil, así que se elige una vez y vale en todos sus dispositivos.
 function AnimacionDeFicha() {
-  const [elegida, setElegida] = useState(leerVariante)
+  const { player, login } = useAuth()
+  const elegida = leerVariante(player)
 
   function elegir(id) {
-    guardarVariante(id)
-    setElegida(id)
+    // login() aquí no inicia sesión: es como el AuthProvider guarda el jugador
+    // ya actualizado, y lo que hace que Ajustes y Luniteca vean el cambio a la
+    // vez sin esperar al servidor.
+    guardarVariante(id, player, (customization) => login({ ...player, customization }))
   }
 
   return (
@@ -318,7 +321,7 @@ function AnimacionDeFicha() {
         })}
       </div>
       <p className="border-t border-line px-4 py-2.5 text-xs text-ink-mute">
-        Se aplica al siguiente libro que abras. Cuando decidas, quito las otras tres.
+        Se aplica al siguiente libro que abras, y te acompaña en cualquier dispositivo.
       </p>
     </div>
   )

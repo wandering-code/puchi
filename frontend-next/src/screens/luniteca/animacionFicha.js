@@ -1,6 +1,13 @@
-// Cuatro formas de abrir y cerrar la ficha de un libro, para probarlas en el
-// móvil y quedarse con una. Se elige en Ajustes y se guarda en el navegador;
-// cuando esté decidido, se deja la elegida y esto desaparece.
+// Cuatro formas de abrir y cerrar la ficha de un libro. No es una prueba
+// temporal: es una preferencia de cada jugador, que se elige en Ajustes.
+//
+// Se guarda en el perfil (Player.customization, el mismo sitio que el fondo de
+// pantalla), así que viaja con la cuenta y no se queda en el navegador donde
+// se eligió. Y también en localStorage, que es de donde se lee al arrancar:
+// así la primera ficha que abras ya sale como la dejaste, sin esperar a que
+// el perfil llegue del servidor.
+import { api } from '../../platform/api'
+
 const CLAVE = 'luni_anim_ficha'
 
 export const VARIANTES = [
@@ -26,17 +33,30 @@ export const VARIANTES = [
   },
 ]
 
-export function leerVariante() {
-  try {
-    const v = localStorage.getItem(CLAVE)
-    return VARIANTES.some(x => x.id === v) ? v : 'portada'
-  } catch {
-    return 'portada'
-  }
+function valida(v) {
+  return VARIANTES.some(x => x.id === v) ? v : null
 }
 
-export function guardarVariante(id) {
-  try { localStorage.setItem(CLAVE, id) } catch { /* modo privado: se queda la de por defecto */ }
+export function leerVariante(player) {
+  let guardada = null
+  try { guardada = localStorage.getItem(CLAVE) } catch { /* modo privado */ }
+  // El perfil manda: es lo que vale en todos los dispositivos. La copia local
+  // solo cubre el arranque, antes de que el perfil esté disponible.
+  return valida(player?.customization?.animacionFicha) || valida(guardada) || 'portada'
+}
+
+// Guarda en el perfil y deja la copia local. El PATCH del servidor reemplaza
+// el objeto entero de personalización, así que hay que mandarlo completo: si
+// solo se enviara esta clave, se borraría el fondo de pantalla elegido.
+export async function guardarVariante(id, player, refrescarPlayer) {
+  try { localStorage.setItem(CLAVE, id) } catch { /* modo privado */ }
+  const customization = { ...(player?.customization || {}), animacionFicha: id }
+  refrescarPlayer?.(customization)
+  try {
+    await api(`/players/${player.id}/customization`, { method: 'PATCH', body: { customization } })
+  } catch {
+    // Sin conexión se queda con la copia local; el próximo cambio lo reintenta.
+  }
 }
 
 const SUAVE = { type: 'spring', stiffness: 420, damping: 40 }

@@ -89,7 +89,7 @@ export default function Luniteca() {
   const [origen, setOrigen] = useState(null)
 
   const abrirLibro = useCallback((entrada, evento) => {
-    const v = leerVariante()
+    const v = leerVariante(player)
     setVariante(v)
     // Punto desde el que crece la variante "zoom": el centro de la portada que
     // se acaba de tocar.
@@ -98,7 +98,7 @@ export default function Luniteca() {
     if (v === 'portada') setEnTransicion(entrada.id)
     ficha.abrir(entrada)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [player])
 
   function cerrarFicha(opciones) {
     if (abierto && variante === 'portada') setEnTransicion(abierto.id)
