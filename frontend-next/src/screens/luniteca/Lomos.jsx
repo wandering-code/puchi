@@ -67,6 +67,8 @@ function tipografiaDe(entry, h) {
   return TIPOGRAFIAS[h % TIPOGRAFIAS.length]
 }
 
+function paginasDe(entry) { return totalPages(entry) }
+
 function medidas(entry) {
   const h = huella(`${entry.book.title}·${entry.book.author || ''}`)
   const paginas = totalPages(entry)
@@ -78,11 +80,27 @@ function medidas(entry) {
   // Los libros de una balda no miden todos lo mismo: el alto varía un poco,
   // siempre igual para el mismo libro.
   const alto = ALTO_MIN + (h % 100) / 100 * (ALTO_MAX - ALTO_MIN)
+  // Uno de cada ocho libros, más o menos, va torcido: en una balda de verdad
+  // nunca están todos a plomo. El ángulo es pequeño y siempre el mismo para el
+  // mismo libro, y se apoya en su esquina de abajo, como se apoyaría de
+  // verdad. Los vecinos no se mueven de sitio (el giro no ocupa espacio), así
+  // que se solapan un poco entre ellos, que es justo lo que pasa.
+  // El signo y la magnitud salen de OTROS bits del número, no del mismo que
+  // decide si va torcido: como ese exige un múltiplo, el resto siempre daba
+  // par y todos los torcidos salían idénticos (medido: 2 de 40, los dos a -2°).
+  const torcido = h % 7 === 0 ? (((h >> 3) % 2 ? 1 : -1) * (2 + ((h >> 5) % 3))) : 0
+  // Los libros gordos van encuadernados en tapa dura: lomo redondeado, con sus
+  // cofias arriba y abajo. Los finos son rústica y tienen el lomo plano.
+  const tapaDura = (paginasDe(entry) || 0) >= 500
+
   // El título ocupa el lomo a lo largo, así que su tamaño va con el grosor:
   // en un lomo de 22px una letra de 13 no cabe, y en uno de 46 una de 9 se
   // pierde.
   const tamano = Math.round(9 + (ancho - ANCHO_MIN) / (ANCHO_MAX - ANCHO_MIN) * 5)
-  return { ancho: Math.round(ancho), alto: Math.round(alto), color: colorDeLomo(h), tamano, tipografia: tipografiaDe(entry, h) }
+  return {
+    ancho: Math.round(ancho), alto: Math.round(alto), color: colorDeLomo(h),
+    tamano, tipografia: tipografiaDe(entry, h), torcido, tapaDura,
+  }
 }
 
 export default function Lomos({ entries, onAbrir }) {
@@ -110,10 +128,8 @@ export default function Lomos({ entries, onAbrir }) {
 const FRANJA = 0.04
 
 const Lomo = memo(function Lomo({ entry, onAbrir }) {
-  const { ancho, alto, color, tamano, tipografia } = medidas(entry)
+  const { ancho, alto, color, tamano, tipografia, torcido, tapaDura } = medidas(entry)
   const libro = entry.book
-  const paginas = totalPages(entry)
-
   // El color de la portada llega después (hay que cargarla y leerla), así que
   // el lomo nace con su color de reserva y cambia al de verdad en cuanto está.
   const [colorReal, setColorReal] = useState(null)
@@ -125,7 +141,7 @@ const Lomo = memo(function Lomo({ entry, onAbrir }) {
 
   // Nervios: las bandas en relieve del lomo de una tapa dura. Solo en los
   // libros gruesos, que son los que se encuadernan así.
-  const conNervios = paginas && paginas >= 500
+  const conNervios = tapaDura
   // El autor solo cabe en los lomos anchos; en uno de 24px estorbaría al
   // título en vez de aportar.
   const cabeElAutor = ancho >= 30 && libro.author
@@ -138,11 +154,20 @@ const Lomo = memo(function Lomo({ entry, onAbrir }) {
         onClick={() => onAbrir(entry)}
         aria-label={libro.title}
         title={`${libro.title}${libro.author ? ` — ${libro.author}` : ''}`}
-        className="relative overflow-hidden rounded-[2px] shadow-sm transition-[background-color,transform] duration-300 active:translate-y-[-4px]"
+        className="relative overflow-hidden transition-[background-color,transform] duration-300 active:translate-y-[-4px]"
         style={{
           width: ancho,
           height: alto,
           backgroundColor: colorReal || color,
+          // Tapa dura: lomo redondeado. Rústica: plano.
+          borderRadius: tapaDura ? '4px / 6px' : '2px',
+          // Se apoya en su esquina de abajo, que es donde tocaría la balda.
+          transform: torcido ? `rotate(${torcido}deg)` : undefined,
+          transformOrigin: 'bottom left',
+          // Dos sombras: la que un libro proyecta sobre el de su derecha, y la
+          // de contacto con la balda. Es lo que hace que la fila parezca tener
+          // fondo en vez de ser un montón de rectángulos pegados.
+          boxShadow: '3px 0 6px -2px rgba(60,40,20,.45), 0 2px 3px -1px rgba(60,40,20,.35)',
           ...(libro.cover_url && {
             backgroundImage: `url(${libro.cover_url})`,
             // 1/0.04 = 2500%: el 4% izquierdo ocupa todo el ancho del lomo.
@@ -186,8 +211,24 @@ const Lomo = memo(function Lomo({ entry, onAbrir }) {
           />
         ))}
 
-        {/* El brillo del borde por donde se abre el libro. */}
-        <span className="pointer-events-none absolute inset-y-0 right-0 w-[2px] bg-white/10" />
+        {/* El canto de las páginas asomando por el borde de delante: una franja
+            de papel con sus rayas finas, no un simple brillo. En un libro real
+            es lo único que se ve del interior desde la balda. */}
+        <span
+          className="pointer-events-none absolute inset-y-[3px] right-0 w-[3px] opacity-70"
+          style={{
+            background: 'repeating-linear-gradient(to bottom, rgba(245,238,225,.9) 0 1px, rgba(180,168,150,.75) 1px 2px)',
+          }}
+        />
+
+        {/* Textura: el mismo grano del fondo de la app, muy flojo, para que el
+            lomo no se lea como un plano de color liso sino como tela o papel. */}
+        <span
+          className="pointer-events-none absolute inset-0 opacity-[.18] mix-blend-overlay"
+          style={{
+            backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='64' height='64' filter='url(%23n)' opacity='0.6'/%3E%3C/svg%3E\")",
+          }}
+        />
 
         <span
           className="absolute inset-0 flex items-center px-[2px] py-3 text-center"
@@ -198,26 +239,26 @@ const Lomo = memo(function Lomo({ entry, onAbrir }) {
           // que el título crece a lo largo del lomo y el autor se queda al pie.
           style={{ writingMode: 'vertical-rl', textOrientation: 'mixed' }}
         >
+          {/* Una sola línea a lo largo del lomo, recortada con puntos suspensivos
+              si no cabe. Antes el título se partía en dos columnas cuando era
+              largo, y en un libro torcido el texto se salía del lomo. En
+              escritura vertical, text-align centra a lo largo del lomo. */}
           <span
-            className="line-clamp-1 flex-1 leading-tight text-white drop-shadow-[0_1px_2px_rgba(0,0,0,.55)]"
+            className="min-h-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap leading-tight text-white drop-shadow-[0_1px_2px_rgba(0,0,0,.55)]"
             style={{
               fontFamily: tipografia.familia,
               fontWeight: tipografia.peso,
               letterSpacing: tipografia.espaciado,
               textTransform: tipografia.mayusculas ? 'uppercase' : 'none',
               fontSize: tamano,
-              // El título ocupa el lomo entero de largo y va centrado, como en
-              // un libro de verdad: no una etiqueta pequeña arriba.
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
+              textAlign: 'center',
             }}
           >
             {libro.title}
           </span>
           {cabeElAutor && (
             <span
-              className="line-clamp-1 shrink-0 leading-tight text-white/75 drop-shadow-[0_1px_2px_rgba(0,0,0,.5)]"
+              className="max-h-[35%] shrink-0 overflow-hidden text-ellipsis whitespace-nowrap leading-tight text-white/75 drop-shadow-[0_1px_2px_rgba(0,0,0,.5)]"
               style={{ fontFamily: tipografia.familia, fontSize: Math.max(7, tamano - 4) }}
             >
               {libro.author}
