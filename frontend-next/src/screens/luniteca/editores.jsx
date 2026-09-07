@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
-import { createPortal } from 'react-dom'
 import { AnimatePresence, motion } from 'motion/react'
 import { STATUS_COLOR, STATUS_LABEL, STATUS_ORDER, readingDatesLabel, statusPatch } from './shelf'
-import { IconChevron, IconX } from '../../ui/icons'
+import { IconChevron } from '../../ui/icons'
+import HojaInferior, { useHoja } from './HojaInferior'
 
 // Los datos de la ficha se editan tocando el dato en sí, no rellenando un
 // formulario aparte: cada uno es una pastilla que enseña su valor y abre un
@@ -27,71 +27,23 @@ export function Pastilla({ children, onClick, color, activa }) {
   )
 }
 
-// Modal centrado, en portal a <body>: la ficha vive dentro de contenedores
-// con scroll y transform propios, y desde ahí un elemento fijo no puede
-// taparlo todo.
-export function ModalCentrado({ titulo, onCerrar, children }) {
-  useEffect(() => {
-    const alPulsar = (ev) => { if (ev.key === 'Escape') onCerrar() }
-    window.addEventListener('keydown', alPulsar)
-    return () => window.removeEventListener('keydown', alPulsar)
-  }, [onCerrar])
-
-  return createPortal(
-    <>
-      <motion.div
-        className="fixed inset-0 z-[60] bg-ink/25"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        transition={{ duration: 0.18 }}
-        onClick={onCerrar}
-      />
-      <motion.div
-        role="dialog"
-        aria-label={titulo}
-        className="fixed inset-x-0 top-1/2 z-[60] mx-auto w-[min(92vw,340px)] -translate-y-1/2 rounded-xl3 border border-line bg-surface p-5 shadow-xl"
-        initial={{ opacity: 0, scale: 0.94, y: '-46%' }}
-        animate={{ opacity: 1, scale: 1, y: '-50%' }}
-        exit={{ opacity: 0, scale: 0.94, y: '-46%' }}
-        transition={{ type: 'spring', stiffness: 460, damping: 34 }}
-      >
-        <div className="mb-4 flex items-center gap-3">
-          <h4 className="flex-1 text-[11px] uppercase tracking-[0.14em] text-ink-mute">{titulo}</h4>
-          <button
-            onClick={onCerrar}
-            aria-label="Cerrar"
-            className="flex h-8 w-8 items-center justify-center rounded-full text-ink-mute transition-colors active:bg-surface-2"
-          >
-            <IconX className="h-4 w-4" />
-          </button>
-        </div>
-        {children}
-      </motion.div>
-    </>,
-    document.body,
-  )
-}
-
 // ─── Estado ────────────────────────────────────────────────────────────────
 export function EditorEstado({ entry, onActualizar }) {
-  const [abierto, setAbierto] = useState(false)
+  const hoja = useHoja()
   return (
     <>
-      <Pastilla onClick={() => setAbierto(true)} color={STATUS_COLOR[entry.status]}>
+      <Pastilla onClick={hoja.abrir} color={STATUS_COLOR[entry.status]}>
         <span className="font-semibold uppercase tracking-[0.06em]">{STATUS_LABEL[entry.status]}</span>
       </Pastilla>
-      <AnimatePresence>
-        {abierto && (
-          <ModalCentrado titulo="Estado" onCerrar={() => setAbierto(false)}>
-            <div className="flex flex-col gap-2">
+      <HojaInferior abierta={hoja.abierta} titulo="Estado" onCerrar={hoja.cerrar}>
+            <div className="flex flex-col gap-2 pb-2">
               {STATUS_ORDER.map(id => {
                 const activo = id === entry.status
                 const color = STATUS_COLOR[id]
                 return (
                   <button
                     key={id}
-                    onClick={() => { setAbierto(false); if (id !== entry.status) onActualizar(statusPatch(id, entry)) }}
+                    onClick={() => { hoja.cerrar(); if (id !== entry.status) onActualizar(statusPatch(id, entry)) }}
                     className="rounded-xl2 border px-4 py-3 text-left text-sm font-semibold transition-colors"
                     style={{
                       borderColor: color,
@@ -104,9 +56,7 @@ export function EditorEstado({ entry, onActualizar }) {
                 )
               })}
             </div>
-          </ModalCentrado>
-        )}
-      </AnimatePresence>
+      </HojaInferior>
     </>
   )
 }
@@ -154,7 +104,7 @@ function CamposFecha({ value, onChange }) {
 }
 
 export function EditorFechas({ entry, onActualizar }) {
-  const [abierto, setAbierto] = useState(false)
+  const hoja = useHoja()
   const llevaInicio = ['reading', 'rereading', 'read', 'dropped'].includes(entry.status)
   const llevaFin = ['read', 'dropped'].includes(entry.status)
   if (!llevaInicio) return null
@@ -162,11 +112,9 @@ export function EditorFechas({ entry, onActualizar }) {
 
   return (
     <>
-      <Pastilla onClick={() => setAbierto(true)}>{etiqueta || 'Añadir fecha'}</Pastilla>
-      <AnimatePresence>
-        {abierto && (
-          <ModalCentrado titulo="Fechas de lectura" onCerrar={() => setAbierto(false)}>
-            <div className="flex flex-col gap-4">
+      <Pastilla onClick={hoja.abrir}>{etiqueta || 'Añadir fecha'}</Pastilla>
+      <HojaInferior abierta={hoja.abierta} titulo="Fechas de lectura" onCerrar={hoja.cerrar}>
+            <div className="flex flex-col gap-4 pb-2">
               <div>
                 <p className="mb-1.5 text-[13px] text-ink-dim">Empezado</p>
                 <CamposFecha
@@ -184,32 +132,28 @@ export function EditorFechas({ entry, onActualizar }) {
                 </div>
               )}
             </div>
-          </ModalCentrado>
-        )}
-      </AnimatePresence>
+      </HojaInferior>
     </>
   )
 }
 
 // ─── Carpeta ───────────────────────────────────────────────────────────────
 export function EditorCarpeta({ entry, carpetas, onActualizar }) {
-  const [abierto, setAbierto] = useState(false)
+  const hoja = useHoja()
   const [nueva, setNueva] = useState('')
 
   function elegir(nombre) {
-    setAbierto(false)
+    hoja.cerrar()
     if ((nombre || '') !== (entry.folder || '')) onActualizar({ folder: nombre })
   }
 
   return (
     <>
-      <Pastilla onClick={() => { setNueva(''); setAbierto(true) }} activa={!!entry.folder}>
+      <Pastilla onClick={() => { setNueva(''); hoja.abrir() }} activa={!!entry.folder}>
         {entry.folder || 'Sin carpeta'}
       </Pastilla>
-      <AnimatePresence>
-        {abierto && (
-          <ModalCentrado titulo="Carpeta" onCerrar={() => setAbierto(false)}>
-            <div className="mb-3 flex max-h-52 flex-col gap-1.5 overflow-y-auto overscroll-contain">
+      <HojaInferior abierta={hoja.abierta} titulo="Carpeta" onCerrar={hoja.cerrar}>
+            <div className="mb-3 flex flex-col gap-1.5">
               <BotonCarpeta activa={!entry.folder} onClick={() => elegir('')}>Sin carpeta</BotonCarpeta>
               {carpetas.map(c => (
                 <BotonCarpeta key={c} activa={entry.folder === c} onClick={() => elegir(c)}>{c}</BotonCarpeta>
@@ -233,9 +177,7 @@ export function EditorCarpeta({ entry, carpetas, onActualizar }) {
                 Crear
               </button>
             </form>
-          </ModalCentrado>
-        )}
-      </AnimatePresence>
+      </HojaInferior>
     </>
   )
 }
@@ -255,7 +197,7 @@ function BotonCarpeta({ activa, onClick, children }) {
 
 // ─── Veces leído ───────────────────────────────────────────────────────────
 export function EditorLecturas({ entry, onActualizar }) {
-  const [abierto, setAbierto] = useState(false)
+  const hoja = useHoja()
   const veces = entry.times_read || 1
   // Nunca por debajo de 1: si está marcado como leído, se ha leído al menos
   // una vez, y un 0 ahí solo puede ser un error de conteo.
@@ -263,13 +205,11 @@ export function EditorLecturas({ entry, onActualizar }) {
 
   return (
     <>
-      <Pastilla onClick={() => setAbierto(true)}>
+      <Pastilla onClick={hoja.abrir}>
         {veces === 1 ? '1 lectura' : `×${veces} lecturas`}
       </Pastilla>
-      <AnimatePresence>
-        {abierto && (
-          <ModalCentrado titulo="Veces leído" onCerrar={() => setAbierto(false)}>
-            <div className="flex items-center justify-center gap-6">
+      <HojaInferior abierta={hoja.abierta} titulo="Veces leído" onCerrar={hoja.cerrar}>
+            <div className="flex items-center justify-center gap-6 py-2">
               <BotonPaso onClick={() => paso(-1)} deshabilitado={veces <= 1} etiqueta="Una menos">−</BotonPaso>
               <motion.span
                 key={veces}
@@ -282,9 +222,7 @@ export function EditorLecturas({ entry, onActualizar }) {
               </motion.span>
               <BotonPaso onClick={() => paso(1)} etiqueta="Una más">+</BotonPaso>
             </div>
-          </ModalCentrado>
-        )}
-      </AnimatePresence>
+      </HojaInferior>
     </>
   )
 }

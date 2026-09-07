@@ -96,36 +96,69 @@ function FilaEstrellas({ valor, size }) {
   )
 }
 
-// Puntuar arrastrando o tocando: la mitad izquierda de una estrella es media
-// puntuación. Es como se puntúa en el móvil sin abrir ningún diálogo.
-export function EditableRating({ rating, onChange, size = 28 }) {
-  const fila = useRef(null)
+// Mantener pulsado, arrastrar y soltar. Mismo gesto que en la Luniteca nueva
+// de la Puchi actual, y por los mismos motivos:
+//
+// - No se puntúa con un toque suelto. Las estrellas van dentro de una lista
+//   que se scrollea con el dedo justo encima de ellas; puntuar al primer roce
+//   sería puntuar sin querer cada dos por tres.
+// - Al mantener, la fila se AMPLÍA. Cinco estrellas a tamaño de lectura son
+//   demasiado poco recorrido para elegir medios puntos con el pulgar; grande,
+//   cada medio punto cae en una zona que se acierta.
+// - Solo se guarda al soltar, así que se puede recorrer arriba y abajo hasta
+//   dar con la nota sin mandar una petición por cada paso.
+export const MANTENER_MS = 320
+const ZOOM_PUNTUACION = 1.6
+
+export function EditableRating({ rating, onChange, size = 26 }) {
+  const [editando, setEditando] = useState(false)
   const [previo, setPrevio] = useState(null)
-  const mostrado = previo ?? rating ?? 0
+  const fila = useRef(null)
+  const temporizador = useRef(null)
+  const arrastrando = useRef(false)
 
   function valorEn(clientX) {
     const caja = fila.current?.getBoundingClientRect()
     if (!caja) return 0
-    const x = Math.min(Math.max(clientX - caja.left, 0), caja.width)
-    const bruto = (x / caja.width) * 5
-    // A medias estrellas, con mínimo de 0,5: por debajo se entiende "quitar".
-    const medio = Math.round(bruto * 2) / 2
-    return medio < 0.5 ? 0 : medio
+    const proporcion = Math.max(0, Math.min(1, (clientX - caja.left) / caja.width))
+    // A medias, con mínimo de 0,5: la fila nunca se queda "en blanco" a mitad
+    // de un gesto, que se leería como que se ha borrado la nota.
+    return Math.max(0.5, Math.min(5, Math.round(proporcion * 5 * 2) / 2))
   }
+
+  function terminar(guardar) {
+    clearTimeout(temporizador.current)
+    if (!arrastrando.current) return
+    arrastrando.current = false
+    setEditando(false)
+    if (guardar && previo != null && previo !== rating) onChange(previo)
+    setPrevio(null)
+  }
+
+  const mostrado = editando ? previo : (rating || 0)
 
   return (
     <motion.div
       ref={fila}
-      className="inline-flex touch-none items-center"
-      animate={{ scale: previo !== null ? 1.06 : 1 }}
-      transition={{ type: 'spring', stiffness: 500, damping: 26 }}
-      onPointerDown={(ev) => { ev.currentTarget.setPointerCapture(ev.pointerId); setPrevio(valorEn(ev.clientX)) }}
-      onPointerMove={(ev) => { if (previo !== null) setPrevio(valorEn(ev.clientX)) }}
-      onPointerUp={() => {
-        if (previo !== null && previo !== rating) onChange(previo)
-        setPrevio(null)
+      onPointerDown={(ev) => {
+        temporizador.current = setTimeout(() => {
+          arrastrando.current = true
+          setEditando(true)
+          setPrevio(rating || 0)
+          try { ev.target.setPointerCapture(ev.pointerId) } catch { /* el navegador puede negarlo; el gesto sigue valiendo */ }
+        }, MANTENER_MS)
       }}
-      onPointerCancel={() => setPrevio(null)}
+      onPointerMove={(ev) => { if (arrastrando.current) setPrevio(valorEn(ev.clientX)) }}
+      onPointerUp={() => terminar(true)}
+      onPointerCancel={() => terminar(false)}
+      onContextMenu={(ev) => { if (editando) ev.preventDefault() }}
+      animate={{ scale: editando ? ZOOM_PUNTUACION : 1 }}
+      transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+      title="Mantén pulsado para puntuar"
+      // touch-action fijo, no solo mientras se edita: si el scroll de la
+      // página gana la carrera antes de que se cumpla la espera, el gesto se
+      // pierde a medias.
+      className="inline-flex touch-none select-none items-center"
       role="slider"
       aria-label="Puntuación"
       aria-valuemin={0}

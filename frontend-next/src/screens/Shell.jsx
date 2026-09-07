@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { NavLink, Route, Routes, useLocation } from 'react-router-dom'
 import { AnimatePresence, motion } from 'motion/react'
 import { useAuth } from '../platform/auth'
 import { isIOS, isStandalone, safeInsets } from '../platform/pwa'
+import { cerrarCapa, useCapaHistorial } from '../platform/capas'
 import Luniteca from './luniteca/Luniteca'
 import { IconBooks, IconExit, IconHome, IconMenu, IconPaw, IconSettings } from '../ui/icons'
 
@@ -16,26 +17,13 @@ export default function Shell() {
   const location = useLocation()
   const [menuAbierto, setMenuAbierto] = useState(false)
 
-  // El botón atrás de Android (y el gesto de volver) tiene que cerrar el menú,
-  // no salir de la app: instalada no hay barra de navegador que deshaga nada, y
-  // salirse de golpe al querer cerrar un panel se siente roto. Se consigue
-  // metiendo una entrada en el historial al abrirlo.
-  useEffect(() => {
-    if (!menuAbierto) return
-    window.history.pushState({ drawer: true }, '')
-    const alVolver = () => setMenuAbierto(false)
-    window.addEventListener('popstate', alVolver)
-    return () => window.removeEventListener('popstate', alVolver)
-  }, [menuAbierto])
-
-  // Cerrar el menú SIN navegar (botón de fuera, velo, arrastre, Escape):
-  // se deshace la entrada del historial que metió el efecto de arriba —
-  // history.back() dispara popstate, que es quien baja el estado— para no
-  // dejar una entrada muerta que obligue a pulsar atrás dos veces.
-  function cerrarMenu() {
-    if (window.history.state?.drawer) window.history.back()
-    else setMenuAbierto(false)
-  }
+  // El botón atrás de Android (y el gesto de volver) cierra el menú en vez de
+  // salir de la app: instalada no hay barra de navegador que deshaga nada, y
+  // salirse de golpe al querer cerrar un panel se siente roto. La pila de
+  // capas (platform/capas.js) se encarga de que ese "atrás" cierre solo la
+  // capa de arriba cuando hay varias abiertas.
+  const cerrarMenu = useCallback(cerrarCapa(setMenuAbierto), [])
+  useCapaHistorial(menuAbierto, cerrarMenu)
 
   // Cerrar el menú AL NAVEGAR a una sección desde dentro. Aquí no se puede
   // tocar el historial: el router hace su propio pushState en el mismo clic y
@@ -46,14 +34,6 @@ export default function Shell() {
   function cerrarMenuAlNavegar() {
     setMenuAbierto(false)
   }
-
-  // Escape para el escritorio; en móvil no estorba.
-  useEffect(() => {
-    if (!menuAbierto) return
-    const alPulsar = (ev) => { if (ev.key === 'Escape') cerrarMenu() }
-    window.addEventListener('keydown', alPulsar)
-    return () => window.removeEventListener('keydown', alPulsar)
-  }, [menuAbierto])
 
   const seccion = SECCIONES.find(s => s.to === location.pathname)
 

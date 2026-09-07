@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { AnimatePresence, motion } from 'motion/react'
-import { totalPages } from './shelf'
-import { Cover, EditableRating, ProgressBar } from './piezas'
+import { statusPatch, totalPages } from './shelf'
+import { Cover, EditableRating, MANTENER_MS, ProgressBar } from './piezas'
 import { EditorCarpeta, EditorEstado, EditorFechas, EditorLecturas, Sinopsis } from './editores'
 import { IconArrowLeft } from '../../ui/icons'
 
@@ -76,12 +76,10 @@ export default function BookDetail({ entry, carpetas, onCerrar, onActualizar }) 
             {llevaLecturas && <EditorLecturas entry={entry} onActualizar={onActualizar} />}
           </div>
 
+          {/* Sin número debajo: la nota ya se lee en las propias estrellas. */}
           {puedePuntuar && (
-            <div className="mt-5 flex flex-col items-center gap-1.5">
+            <div className="mt-5">
               <EditableRating rating={entry.rating} onChange={r => onActualizar({ rating: r })} size={26} />
-              <span className="text-xs text-ink-mute">
-                {entry.rating ? `Tu nota: ${entry.rating.toLocaleString('es')}` : 'Sin puntuar'}
-              </span>
             </div>
           )}
 
@@ -116,13 +114,52 @@ function Apartado({ titulo, children }) {
   )
 }
 
-// Página actual con barra arrastrable. El PATCH no se manda en cada píxel del
-// arrastre — solo al soltar — para no disparar cien peticiones por gesto; lo
-// que se ve mientras tanto es estado local.
+// Mismo gesto que la puntuación: mantener pulsado, arrastrar, soltar guarda.
+//
+// El arrastre va por DESPLAZAMIENTO (3px por página) y no por la posición
+// absoluta del dedo sobre la barra: así la precisión no depende de lo ancha
+// que quepa la barra en el móvil, se puede seguir afinando más allá de su
+// borde, y si un gesto no basta, soltar y volver a mantener sigue ajustando
+// desde donde se quedó en vez de reiniciar.
+const PX_POR_PAGINA = 3
+const ZOOM_PROGRESO = 1.3
+
 function EditorProgreso({ entry, onActualizar }) {
   const total = totalPages(entry)
-  const [arrastrando, setArrastrando] = useState(null)
-  const pagina = arrastrando ?? entry.current_page ?? Math.round((entry.progress || 0) * (total || 0))
+  const [editando, setEditando] = useState(false)
+  const [previa, setPrevia] = useState(null)
+  const barra = useRef(null)
+  const temporizador = useRef(null)
+  const arrastrando = useRef(false)
+  const xInicial = useRef(0)
+  const paginaInicial = useRef(0)
+
+  // Un libro marcado como leído no siempre tiene página guardada (puede
+  // haberse marcado por otra vía): para la barra, se da por hecho el total.
+  const paginaBase = entry.current_page ?? (entry.status === 'read' ? total : 0)
+  const pagina = editando ? previa : paginaBase
+
+  function terminar(guardar) {
+    clearTimeout(temporizador.current)
+    if (!arrastrando.current) return
+    arrastrando.current = false
+    setEditando(false)
+    if (guardar && previa != null && previa !== paginaBase) {
+      if (previa >= total && entry.status !== 'read') {
+        // Llegar al final arrastrando es, en la práctica, decir "lo he
+        // terminado": se aplican las mismas reglas que al cambiar el estado a
+        // mano (fecha de fin, suma una lectura).
+        onActualizar(statusPatch('read', entry))
+      } else if (previa < total && entry.status === 'read') {
+        // Y al revés, bajar del final en uno ya leído lo devuelve a "leyendo"
+        // — nunca a "releyendo", que eso es una decisión que se toma a mano.
+        onActualizar({ ...statusPatch('reading', entry), current_page: previa })
+      } else {
+        onActualizar({ current_page: previa })
+      }
+    }
+    setPrevia(null)
+  }
 
   if (!total) {
     return (
@@ -132,44 +169,38 @@ function EditorProgreso({ entry, onActualizar }) {
     )
   }
 
-  function confirmar(valor) {
-    setArrastrando(null)
-    if (valor !== entry.current_page) onActualizar({ current_page: valor })
-  }
-
   return (
-    <div>
-      <div className="flex items-baseline justify-between">
-        <p className="font-display text-lg font-bold">{Math.round((pagina / total) * 100)}%</p>
-        <p className="text-xs text-ink-mute">{pagina} / {total} pág.</p>
+    <motion.div
+      ref={barra}
+      onPointerDown={(ev) => {
+        temporizador.current = setTimeout(() => {
+          arrastrando.current = true
+          setEditando(true)
+          xInicial.current = ev.clientX
+          paginaInicial.current = paginaBase
+          setPrevia(paginaBase)
+          try { barra.current.setPointerCapture(ev.pointerId) } catch { /* el navegador puede negarlo */ }
+        }, MANTENER_MS)
+      }}
+      onPointerMove={(ev) => {
+        if (!arrastrando.current) return
+        const paginas = (ev.clientX - xInicial.current) / PX_POR_PAGINA
+        setPrevia(Math.round(Math.max(0, Math.min(total, paginaInicial.current + paginas))))
+      }}
+      onPointerUp={() => terminar(true)}
+      onPointerCancel={() => terminar(false)}
+      onContextMenu={(ev) => { if (editando) ev.preventDefault() }}
+      animate={{ scale: editando ? ZOOM_PROGRESO : 1 }}
+      transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
+      title="Mantén pulsado para ajustar el progreso"
+      className="mx-auto w-full max-w-[300px] touch-none select-none rounded-xl2 border border-line px-3 py-2.5"
+    >
+      <div className={`mb-1.5 flex justify-between text-xs ${editando ? 'font-bold text-accent' : 'text-ink-dim'}`}>
+        <span>Pág. {pagina} de {total}</span>
+        <span>{Math.round((pagina / total) * 100)}%</span>
       </div>
-
-      <ProgressBar entry={{ ...entry, current_page: pagina }} className="mt-2" />
-
-      <input
-        type="range"
-        min={0}
-        max={total}
-        value={pagina}
-        onChange={e => setArrastrando(Number(e.target.value))}
-        onPointerUp={e => confirmar(Number(e.currentTarget.value))}
-        onKeyUp={e => confirmar(Number(e.currentTarget.value))}
-        aria-label="Página actual"
-        className="mt-2 h-10 w-full cursor-pointer appearance-none bg-transparent [&::-webkit-slider-runnable-track]:h-1 [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-runnable-track]:bg-transparent [&::-webkit-slider-thumb]:mt-[-9px] [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-accent [&::-webkit-slider-thumb]:shadow"
-      />
-
-      <div className="flex gap-2">
-        {[-10, -1, 1, 10].map(paso => (
-          <button
-            key={paso}
-            onClick={() => confirmar(Math.min(Math.max(pagina + paso, 0), total))}
-            className="h-9 flex-1 rounded-xl2 border border-line text-sm text-ink-dim transition-colors active:bg-surface-2"
-          >
-            {paso > 0 ? `+${paso}` : paso}
-          </button>
-        ))}
-      </div>
-    </div>
+      <ProgressBar entry={{ ...entry, current_page: pagina }} />
+    </motion.div>
   )
 }
 

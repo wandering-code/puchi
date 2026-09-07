@@ -10,6 +10,8 @@ import {
   IconChevron, IconFilter, IconGrid, IconList, IconSearch, IconX,
 } from '../../ui/icons'
 import HojaFiltros from './HojaFiltros'
+import { useHoja } from './HojaInferior'
+import { cerrarCapa, useCapaHistorial } from '../../platform/capas'
 
 export default function Luniteca() {
   const { player } = useAuth()
@@ -22,7 +24,7 @@ export default function Luniteca() {
   const [buscando, setBuscando] = useState(false)
   const [sort, setSort] = useState({ field: '', dir: 'asc' })
   const [filters, setFilters] = useState(EMPTY_FILTERS)
-  const [hojaAbierta, setHojaAbierta] = useState(false)
+  const hojaFiltros = useHoja()
   const [plegadas, setPlegadas] = useState({ want: false, read: false, dropped: true })
   const [anosPlegados, setAnosPlegados] = useState(() => new Set())
 
@@ -66,26 +68,10 @@ export default function Luniteca() {
     }
   }, [shelf])
 
-  // La ficha mete una entrada en el historial, igual que el menú lateral: en
-  // el móvil se cierra con el gesto de volver, que es lo que se intenta por
-  // instinto antes de buscar la flecha.
-  useEffect(() => {
-    if (!abierto) return
-    window.history.pushState({ ficha: true }, '')
-    const alVolver = () => setAbierto(null)
-    window.addEventListener('popstate', alVolver)
-    return () => window.removeEventListener('popstate', alVolver)
-  }, [abierto?.id])
-
-  function cerrarHoja(opciones = {}) {
-    if (!opciones.desdeHistorial && window.history.state?.hoja) window.history.back()
-    else setHojaAbierta(false)
-  }
-
-  function cerrarFicha() {
-    if (window.history.state?.ficha) window.history.back()
-    else setAbierto(null)
-  }
+  // La ficha es otra capa del historial: el gesto de volver la cierra, y si
+  // encima hay una hoja abierta, ese "atrás" cierra la hoja y no la ficha.
+  const cerrarFicha = useCallback(cerrarCapa(() => setAbierto(null)), [])
+  useCapaHistorial(!!abierto, cerrarFicha)
 
   const grupos = useMemo(
     () => agruparEstanteria(shelf, { filters, query, sort }),
@@ -132,7 +118,7 @@ export default function Luniteca() {
         vista={vista} onVista={cambiarVista}
         query={query} onQuery={setQuery}
         buscando={buscando} onBuscando={setBuscando}
-        onAbrirHoja={() => setHojaAbierta(true)}
+        onAbrirHoja={hojaFiltros.abrir}
         ordenActivo={!!sort.field}
         filtrosActivos={grupos.filtrosActivos}
       />
@@ -218,8 +204,8 @@ export default function Luniteca() {
       </div>
 
       <HojaFiltros
-        abierta={hojaAbierta}
-        onCerrar={cerrarHoja}
+        abierta={hojaFiltros.abierta}
+        onCerrar={hojaFiltros.cerrar}
         sort={sort} onSort={setSort}
         filters={filters} onFilters={setFilters}
         opciones={opciones}
