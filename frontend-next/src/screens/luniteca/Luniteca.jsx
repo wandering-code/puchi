@@ -11,6 +11,7 @@ import {
 } from '../../ui/icons'
 import HojaFiltros from './HojaFiltros'
 import AnadirLibro from './AnadirLibro'
+import { CajaSeccion, TituloSeccion, huecoEntreSecciones, leerSeparacion } from './separacion'
 import { useHoja } from './HojaInferior'
 import { useCapa } from '../../platform/capas'
 
@@ -31,6 +32,8 @@ export default function Luniteca() {
   const hojaAnadir = useHoja()
   const [plegadas, setPlegadas] = useState({ want: false, read: false, dropped: true })
   const [anosPlegados, setAnosPlegados] = useState(() => new Set())
+  // Cómo se separan las secciones: se está probando cuál gusta (ver separacion.jsx).
+  const [separacion] = useState(leerSeparacion)
 
   const cargar = useCallback(async () => {
     try {
@@ -209,21 +212,22 @@ export default function Luniteca() {
         />
       )}
 
-      <div className="mt-5 space-y-7">
+      <div className={`mt-5 ${huecoEntreSecciones(separacion)}`}>
         {grupos.reading.length > 0 && (
-          <section>
-            <TituloSeccion label="Leyendo" cuenta={grupos.reading.length} />
+          <CajaSeccion variante={separacion}>
+            <TituloSeccion variante={separacion} label="Leyendo" cuenta={grupos.reading.length} />
             <div className="mt-3 space-y-2">
               {grupos.reading.map(e => (
                 <TarjetaLeyendo key={e.id} entry={e} onAbrir={abrirLibro} />
               ))}
             </div>
-          </section>
+          </CajaSeccion>
         )}
 
         {grupos.readYearGroups.length > 0 && (
-          <section>
+          <CajaSeccion variante={separacion}>
             <TituloSeccion
+              variante={separacion}
               label="Leídos"
               cuenta={grupos.readYearGroups.reduce((n, g) => n + g.items.length, 0)}
               plegada={plegadas.read}
@@ -233,30 +237,28 @@ export default function Luniteca() {
               <div className="space-y-5 pt-3">
                 {grupos.readYearGroups.map(({ year, items }) => (
                   <div key={year}>
-                    <button
-                      onClick={() => alternarAno(year)}
-                      className="mb-2 flex w-full items-center gap-2 text-left"
-                    >
-                      <span className="font-display text-base font-semibold">
-                        {year === 'sin-fecha' ? 'Sin fecha' : year}
-                      </span>
-                      <span className="text-xs text-ink-mute">{items.length}</span>
-                      <span className="h-px flex-1 bg-line" />
-                      <IconChevron
-                        className={`h-4 w-4 shrink-0 text-ink-mute transition-transform duration-200 ${anosPlegados.has(year) ? '' : 'rotate-180'}`}
-                      />
-                    </button>
+                    <TituloSeccion
+                      variante={separacion}
+                      anidado
+                      label={year === 'sin-fecha' ? 'Sin fecha' : year}
+                      cuenta={items.length}
+                      plegada={anosPlegados.has(year)}
+                      onAlternar={() => alternarAno(year)}
+                    />
                     <Plegable abierta={!anosPlegados.has(year)}>
-                      <Coleccion entries={items} vista={vista} onAbrir={abrirLibro} />
+                      <div className="pt-2">
+                        <Coleccion entries={items} vista={vista} onAbrir={abrirLibro} />
+                      </div>
                     </Plegable>
                   </div>
                 ))}
               </div>
             </Plegable>
-          </section>
+          </CajaSeccion>
         )}
 
         <SeccionPlegable
+          variante={separacion}
           label="Por leer" entries={grupos.want} vista={vista}
           plegada={plegadas.want}
           onAlternar={alternarWant}
@@ -265,6 +267,7 @@ export default function Luniteca() {
         />
 
         <SeccionPlegable
+          variante={separacion}
           label="Dropeados" entries={grupos.dropped} vista={vista}
           plegada={plegadas.dropped}
           onAlternar={alternarDropped}
@@ -489,36 +492,17 @@ function Plegable({ abierta, children }) {
 }
 
 // ─── Secciones ─────────────────────────────────────────────────────────────
-function TituloSeccion({ label, cuenta, plegada, onAlternar }) {
-  const contenido = (
-    <>
-      <span className="font-display text-lg font-semibold tracking-[-0.01em]">{label}</span>
-      <span className="text-xs text-ink-mute">{cuenta}</span>
-      <span className="h-px flex-1 bg-line" />
-      {onAlternar && (
-        <IconChevron className={`h-4 w-4 shrink-0 text-ink-mute transition-transform duration-200 ${plegada ? '' : 'rotate-180'}`} />
-      )}
-    </>
-  )
-  if (!onAlternar) return <div className="flex items-center gap-2">{contenido}</div>
-  return (
-    <button onClick={onAlternar} className="flex w-full items-center gap-2 text-left">
-      {contenido}
-    </button>
-  )
-}
-
-const SeccionPlegable = memo(function SeccionPlegable({ label, entries, vista, plegada, onAlternar, onAbrir }) {
+const SeccionPlegable = memo(function SeccionPlegable({ variante, label, entries, vista, plegada, onAlternar, onAbrir }) {
   if (entries.length === 0) return null
   return (
-    <section>
-      <TituloSeccion label={label} cuenta={entries.length} plegada={plegada} onAlternar={onAlternar} />
+    <CajaSeccion variante={variante}>
+      <TituloSeccion variante={variante} label={label} cuenta={entries.length} plegada={plegada} onAlternar={onAlternar} />
       <Plegable abierta={!plegada}>
         <div className="pt-3">
           <Coleccion entries={entries} vista={vista} onAbrir={onAbrir} />
         </div>
       </Plegable>
-    </section>
+    </CajaSeccion>
   )
 })
 

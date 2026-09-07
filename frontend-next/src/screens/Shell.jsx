@@ -5,6 +5,7 @@ import { useAuth } from '../platform/auth'
 import { isIOS, isStandalone, safeInsets } from '../platform/pwa'
 import { useCapa } from '../platform/capas'
 import Luniteca from './luniteca/Luniteca'
+import { SelectorSeparacion, guardarSeparacion, leerSeparacion } from './luniteca/separacion'
 import { IconBooks, IconExit, IconHome, IconMenu, IconPaw, IconSettings } from '../ui/icons'
 
 const SECCIONES = [
@@ -246,6 +247,8 @@ function Ajustes() {
       <h2 className="font-display text-[1.75rem] font-bold tracking-[-0.02em]">Ajustes</h2>
       <p className="mt-2 text-sm text-ink-dim">Sesión de {player?.name}.</p>
 
+      <SeparacionDeSecciones />
+
       <div className="mt-6 overflow-hidden rounded-xl2 border border-line bg-surface">
         <p className="border-b border-line px-4 py-2 text-xs uppercase tracking-wider text-ink-mute">Diagnóstico</p>
         <dl className="divide-y divide-[color:var(--color-line)] text-sm">
@@ -268,6 +271,26 @@ function Ajustes() {
       </motion.button>
       <p className="mt-2 px-1 text-xs text-ink-mute">
         La sesión es la misma que la de la Puchi actual: al cerrarla aquí, se cierra también allí.
+      </p>
+    </div>
+  )
+}
+
+// Provisional, mientras se decide cómo separar las secciones de la estantería:
+// se prueban las cuatro en el móvil y se deja la que gane.
+function SeparacionDeSecciones() {
+  const [elegida, setElegida] = useState(leerSeparacion)
+  return (
+    <div className="mt-6 overflow-hidden rounded-xl2 border border-line bg-surface">
+      <p className="border-b border-line px-4 py-2 text-xs uppercase tracking-wider text-ink-mute">
+        Secciones de la estantería
+      </p>
+      <SelectorSeparacion
+        elegida={elegida}
+        onElegir={(id) => { guardarSeparacion(id); setElegida(id) }}
+      />
+      <p className="border-t border-line px-4 py-2.5 text-xs text-ink-mute">
+        Vuelve a Luniteca para verlo. Cuando decidas, quito las otras tres.
       </p>
     </div>
   )
