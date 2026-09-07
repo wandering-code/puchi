@@ -39,6 +39,13 @@ export const EMPTY_FILTERS = { genre: '', folder: '', author: '', maxPages: '', 
 // De 50 en 50: nadie filtra "máximo 437 páginas".
 export const MAX_PAGES_OPTIONS = Array.from({ length: 20 }, (_, i) => String((i + 1) * 100))
 
+// Todas las notas que se pueden poner, medias incluidas: se puntúa a medias
+// estrellas (ver EditableRating), así que un filtro que solo llegara a los
+// enteros no podría pedir "de 3,5 para arriba", que es justo el corte que se
+// quiere hacer. Empieza en 0,5, la nota más baja que existe — filtrar por ahí
+// es, en la práctica, "solo los que tienen nota".
+export const MIN_RATING_OPTIONS = Array.from({ length: 10 }, (_, i) => String((i + 1) / 2))
+
 // Se aplica sobre toda la estantería ANTES de repartir por estado, así que un
 // filtro por género o carpeta se nota en todas las secciones a la vez.
 export function matchesFilters(e, filters) {

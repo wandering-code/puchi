@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { AnimatePresence, motion } from 'motion/react'
-import { EMPTY_FILTERS, MAX_PAGES_OPTIONS, SORT_FIELDS } from './shelf'
+import { EMPTY_FILTERS, MAX_PAGES_OPTIONS, MIN_RATING_OPTIONS, SORT_FIELDS } from './shelf'
 import { IconChevron, IconX } from '../../ui/icons'
 
 // Filtros y orden en una hoja que sube desde abajo. Antes eran dos paneles que
@@ -121,7 +121,9 @@ export default function HojaFiltros({
                   <Desplegable
                     label="Nota mínima" value={filters.minRating}
                     onChange={v => onFilters({ ...filters, minRating: v })}
-                    options={['1', '2', '3', '4', '5']}
+                    options={MIN_RATING_OPTIONS}
+                    // El valor viaja con punto (es lo que compara el filtro),
+                    // pero se enseña con coma, que es como se escribe aquí.
                     formato={v => v.replace('.', ',')}
                   />
                 </div>
