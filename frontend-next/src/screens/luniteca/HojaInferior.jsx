@@ -2,6 +2,7 @@ import { createPortal } from 'react-dom'
 import { AnimatePresence, motion } from 'motion/react'
 import { IconX } from '../../ui/icons'
 import { useCapa } from '../../platform/capas'
+import { useArrastreParaCerrar } from '../../ui/arrastre'
 
 // La hoja que sube desde abajo, una sola para toda la app: filtros, estado,
 // fechas, carpeta… Todo lo que hay que elegir se pide igual, en el mismo sitio
@@ -11,6 +12,8 @@ import { useCapa } from '../../platform/capas'
 // En portal a <body>: quien la abre vive dentro de contenedores con scroll y
 // transform propios, y desde ahí un elemento fijo no puede taparlo todo.
 export default function HojaInferior({ abierta, titulo, onCerrar, children, pie }) {
+  const arrastre = useArrastreParaCerrar(onCerrar, { umbral: 90 })
+
   // El gesto de volver y Escape los gestiona useCapa (platform/capas.js).
   return createPortal(
     <AnimatePresence>
@@ -29,25 +32,21 @@ export default function HojaInferior({ abierta, titulo, onCerrar, children, pie 
             role="dialog"
             aria-label={titulo}
             className="fixed inset-x-0 bottom-0 z-[60] flex max-h-[85dvh] flex-col rounded-t-[28px] border-t border-line bg-surface pb-safe"
+            style={{ y: arrastre.y }}
             initial={{ y: '100%' }}
             animate={{ y: 0 }}
             exit={{ y: '100%' }}
             transition={{ type: 'spring', stiffness: 420, damping: 40 }}
-            // Se cierra tirando de ella hacia abajo, que es lo que se intenta
-            // por instinto. Solo hacia abajo (top: 0), para que no se pueda
-            // despegar del borde.
-            drag="y"
-            dragConstraints={{ top: 0, bottom: 0 }}
-            dragElastic={{ top: 0, bottom: 0.4 }}
-            dragMomentum={false}
-            onDragEnd={(_, info) => {
-              // Distancia O velocidad: un tirón corto y rápido también cierra.
-              if (info.offset.y > 90 || info.velocity.y > 500) onCerrar()
-            }}
           >
-            {/* El asa: además de indicar que se puede arrastrar, es la zona por
-                la que se agarra sin tocar ningún control. */}
-            <div className="flex shrink-0 cursor-grab justify-center pb-1 pt-3 active:cursor-grabbing">
+            {/* El asa: indica que se puede arrastrar y es, además, el único
+                sitio desde el que se arrastra. El gesto NO puede vivir en el
+                panel entero: Motion le pondría touch-action a un elemento que
+                contiene el scroll y dejaría el contenido sin poder desplazarse
+                con el dedo. */}
+            <div
+              {...arrastre.asa}
+              className="flex shrink-0 cursor-grab justify-center pb-2 pt-3 active:cursor-grabbing"
+            >
               <span className="h-1 w-10 rounded-full bg-line" />
             </div>
 

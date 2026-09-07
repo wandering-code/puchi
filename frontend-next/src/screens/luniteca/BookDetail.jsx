@@ -5,6 +5,7 @@ import { statusPatch, totalPages } from './shelf'
 import { Cover, EditableRating, MANTENER_MS, ProgressBar } from './piezas'
 import { EditorCarpeta, EditorEstado, EditorFechas, EditorLecturas, Sinopsis } from './editores'
 import { IconArrowLeft } from '../../ui/icons'
+import { useArrastreParaCerrar } from '../../ui/arrastre'
 
 // Distribución tomada de la Luniteca nueva de la Puchi actual: portada grande
 // centrada, título y autor debajo, la ficha técnica en una línea y los datos
@@ -24,40 +25,39 @@ export default function BookDetail({ entry, carpetas, onCerrar, onActualizar }) 
   // La ficha sube desde abajo, como los filtros y los editores: en esta app
   // todo lo que se abre encima de algo llega por el mismo sitio.
   //
-  // Se cierra tirando hacia abajo, pero la ficha también scrollea, así que el
-  // arrastre solo se escucha con el contenido arriba del todo — que es como se
-  // comportan las hojas nativas. Si no, bajar por la sinopsis la cerraría en
-  // vez de dejar leerla.
-  const [arriba, setArriba] = useState(true)
+  // Se cierra tirando de su asa. El gesto va SOLO ahí y no en toda la ficha:
+  // el drag de Motion le pone touch-action al elemento, y como aquí ese
+  // elemento es el que scrollea, la ficha se quedaba sin poder desplazarse con
+  // el dedo en el móvil.
+  const arrastre = useArrastreParaCerrar(onCerrar, { umbral: 110 })
 
   return createPortal(
     <motion.div
-      className="fixed inset-0 z-50 overflow-y-auto overscroll-contain rounded-t-[28px] border-t border-line bg-bg"
+      className="fixed inset-0 z-50 flex flex-col rounded-t-[28px] border-t border-line bg-bg"
+      style={{ y: arrastre.y }}
       initial={{ y: '100%' }}
       animate={{ y: 0 }}
       exit={{ y: '100%' }}
       transition={{ type: 'spring', stiffness: 420, damping: 40 }}
-      onScroll={(ev) => setArriba(ev.currentTarget.scrollTop <= 0)}
-      drag="y"
-      dragListener={arriba}
-      dragConstraints={{ top: 0, bottom: 0 }}
-      dragElastic={{ top: 0, bottom: 0.4 }}
-      dragMomentum={false}
-      onDragEnd={(_, info) => { if (info.offset.y > 110 || info.velocity.y > 550) onCerrar() }}
     >
+      <div {...arrastre.asa} className="flex shrink-0 cursor-grab justify-center pb-1 pt-2 pt-safe active:cursor-grabbing">
+        <span className="h-1 w-10 rounded-full bg-line" />
+      </div>
+
+      <div className="flex-1 overflow-y-auto overscroll-contain">
       {/* El botón de volver flota sobre la portada en vez de ocupar una barra
           propia: así la portada empieza arriba del todo y la ficha se lee como
           una página, no como una pantalla con cabecera. */}
-      <div className="pointer-events-none sticky top-0 z-10 flex justify-between px-3 pt-safe">
-        <motion.button
-          onClick={onCerrar}
-          aria-label="Volver a la estantería"
-          whileTap={{ scale: 0.92 }}
-          className="pointer-events-auto mt-3 flex h-10 w-10 items-center justify-center rounded-full border border-line bg-surface/90 text-ink shadow-sm backdrop-blur"
-        >
-          <IconArrowLeft className="h-5 w-5" />
-        </motion.button>
-      </div>
+        <div className="pointer-events-none sticky top-0 z-10 flex justify-between px-3">
+          <motion.button
+            onClick={onCerrar}
+            aria-label="Volver a la estantería"
+            whileTap={{ scale: 0.92 }}
+            className="pointer-events-auto mt-1 flex h-10 w-10 items-center justify-center rounded-full border border-line bg-surface/90 text-ink shadow-sm backdrop-blur"
+          >
+            <IconArrowLeft className="h-5 w-5" />
+          </motion.button>
+        </div>
 
       <div className="mx-auto w-full max-w-md px-6 pb-kb">
         <div className="flex flex-col items-center text-center">
@@ -114,6 +114,7 @@ export default function BookDetail({ entry, carpetas, onCerrar, onActualizar }) 
           <Apartado titulo="Tus notas">
             <EditorNotas notes={entry.notes} onGuardar={notes => onActualizar({ notes })} />
           </Apartado>
+        </div>
         </div>
       </div>
     </motion.div>,
