@@ -1,6 +1,7 @@
 import { memo, useEffect, useState } from 'react'
 import { totalPages } from './shelf'
 import { colorDePortada } from './colorPortada'
+import { alCargarFuentes, anchoPorPunto } from './medirTexto'
 
 // Vista de estantería: los libros de canto, como en una balda de verdad.
 //
@@ -79,11 +80,13 @@ const TAMANO_MINIMO = 6
 // los libros de título largo (medido: solo salía en la mitad de ellos).
 const TAMANO_MINIMO_AUTOR = 5
 
-// Lo que ocupa un texto, de largo, a un tamaño dado.
+// Lo que ocupa un texto, de largo, a un tamaño dado. La medida es la real de
+// la fuente (ver medirTexto.js), con un pelín de holgura: el navegador redondea
+// a subpíxeles al pintar y un texto calculado al milímetro se corta.
+const HOLGURA = 1.03
 function largoDe(texto, tipografia, tamano) {
   if (!texto) return 0
-  // Las mayúsculas ocupan bastante más que la caja baja.
-  return texto.length * tipografia.ancho * (tipografia.mayusculas ? 1.14 : 1) * tamano
+  return anchoPorPunto(texto, tipografia) * tamano * HOLGURA
 }
 
 // Un lomo de verdad no borra al autor cuando no cabe: lo abrevia. "Gabriel
@@ -104,65 +107,75 @@ function abreviaturasDe(nombre) {
   ].filter(Boolean))]
 }
 
-// Reparte el largo del lomo entre título y autor de forma que se lean LOS DOS
-// enteros. El autor se va abreviando hasta que quepa, y solo desaparece si ni
-// su apellido solo entra. Y si ni el título solo cabe de una tirada, pasa a
-// dos líneas, que es lo que hace un lomo de verdad.
+// Reparte el lomo entre título y autor buscando el TÍTULO MÁS GRANDE que
+// quepa entero, con los renglones que haga falta.
+//
+// Un lomo tiene dos medidas y las dos mandan: el largo (lo que da de sí de
+// arriba abajo) y el ancho (cuántos renglones caben de canto). Un título que
+// no entra de una tirada no se escribe en letra de hormiga: se parte en dos o
+// tres renglones, que es lo que hace cualquier lomo de verdad y lo que permite
+// que en un tocho de 46px el título se lea de lejos.
+//
+// El autor va detrás del título a lo LARGO del lomo, no a su lado: el texto
+// está de canto, así que lo que se apila a lo ancho son los renglones del
+// título, y el autor se lleva su trozo del largo esté el título en una línea o
+// en tres. Se abrevia hasta que quepa ("Gabriel García Márquez" → "G. García
+// Márquez" → "García Márquez" → "Márquez") y solo desaparece si ni el
+// apellido entra.
+const MAX_LINEAS = 3
+// Lo que ocupa de ANCHO un renglón, por cada punto de letra (interlineado
+// incluido).
+const ANCHO_RENGLON = 1.25
+// El aire entre el final del título y el nombre del autor, a lo largo del
+// lomo. Lo reserva el reparto y lo pinta el layout: tienen que ser el mismo
+// número o el autor sale pegado al título (se leía "SALVAJESR. Bolaño").
+export const SEPARACION_AUTOR = 6
+
 function repartirTexto({ titulo, autor, largoUtil, anchoLomo, tipografia, tamanoIdeal }) {
-  const idealAutor = Math.max(TAMANO_MINIMO_AUTOR, tamanoIdeal - 4)
-  const SEPARACION = 6
+  const SEPARACION = SEPARACION_AUTOR
+  const anchoLibre = anchoLomo - 4
   // El umbral de ancho es solo para que el autor no ahogue un lomo finísimo.
   const versiones = anchoLomo >= 26 ? abreviaturasDe(autor) : []
+  // El autor nunca es más grande que el título: va en segundo plano, como en
+  // un lomo impreso. Sin este tope, en un título largo (que baja mucho de
+  // tamaño para caber) el autor acababa siendo el texto grande del lomo.
+  const topeAutor = t => Math.min(Math.max(TAMANO_MINIMO_AUTOR, tamanoIdeal - 4), t)
 
-  // Manda el título: se prueba el tamaño más grande posible y, para ese tamaño,
-  // el nombre más completo que quepa en lo que sobra. Encogerlos a la vez
-  // guardando la proporción (que es lo que se hacía antes) tiraba el autor en
-  // todos los títulos largos, porque el título llegaba al mínimo primero y se
-  // llevaba al autor por delante aunque a él aún le sobrara sitio.
+  // ¿Cabe el título a este tamaño en el largo que le dejan? Devuelve en
+  // cuántos renglones, o null si no hay manera.
+  const renglonesDelTitulo = (t, largoAutor) => {
+    const disponible = largoUtil - largoAutor
+    if (disponible <= 0) return null
+    const largo = largoDe(titulo, tipografia, t)
+    // Al partir por palabras se pierde un poco al final de cada renglón.
+    const porRenglon = largo > disponible ? disponible * 0.92 : disponible
+    const lineas = Math.max(1, Math.ceil(largo / porRenglon))
+    if (lineas > MAX_LINEAS) return null
+    if (lineas * t * ANCHO_RENGLON > anchoLibre) return null
+    return lineas
+  }
+
+  // Primera vuelta: título lo más grande posible CON autor. Manda el tamaño de
+  // letra sobre lo completo del nombre — "Márquez" que se lee vale más que un
+  // "G. García Márquez" de 5px, que es lo que salía al revés—, así que para
+  // cada tamaño de título se busca la letra de autor más grande y, con ella,
+  // el nombre más completo que quepa.
   for (let t = tamanoIdeal; t >= TAMANO_MINIMO; t--) {
-    const sobra = largoUtil - largoDe(titulo, tipografia, t) - SEPARACION
-    if (sobra <= 0) continue
-    for (const version of versiones) {
-      const cabe = Math.floor(sobra / (largoDe(version, tipografia, 1) || 1))
-      const a = Math.min(idealAutor, cabe)
-      if (a >= TAMANO_MINIMO_AUTOR) {
-        return { tamanoTitulo: t, tamanoAutor: a, lineas: 1, autor: version }
+    for (let a = topeAutor(t); a >= TAMANO_MINIMO_AUTOR; a--) {
+      for (const version of versiones) {
+        const lineas = renglonesDelTitulo(t, largoDe(version, tipografia, a) + SEPARACION)
+        if (lineas) return { tamanoTitulo: t, tamanoAutor: a, lineas, autor: version }
       }
     }
   }
 
-  // No caben los dos en fila: el título pasa a dos líneas, si el lomo tiene
-  // ancho para ellas. Ahí el título ya no compite con el autor a lo largo del
-  // lomo (cada uno va en su columna) y el autor puede volver, con una columna
-  // más. Se intenta ANTES de resignarse a un título solo y diminuto: un lomo
-  // de verdad parte el título largo en dos renglones, no lo escribe en
-  // letra de hormiga para que quepa de una tirada.
-  const anchoLibre = anchoLomo - 4
-  const dos = Math.floor((largoUtil * 2) / (largoDe(titulo, tipografia, 1) || 1))
-  const tamanoDos = Math.max(TAMANO_MINIMO, Math.min(tamanoIdeal, dos))
-  // Aquí lo que aprieta es el ANCHO del lomo, no su largo: dos renglones de
-  // título más la columna del autor son tres columnas de letra. Así que el
-  // título también va bajando de tamaño hasta que la del autor quepa al lado.
-  for (let t = tamanoDos; t >= TAMANO_MINIMO; t--) {
-    if (t * 2.5 > anchoLibre) continue
-    for (const version of versiones) {
-      const cabeLargo = Math.floor(largoUtil / (largoDe(version, tipografia, 1) || 1))
-      const a = Math.min(idealAutor, cabeLargo)
-      if (a >= TAMANO_MINIMO_AUTOR && t * 2.5 + a * 1.5 <= anchoLibre) {
-        return { tamanoTitulo: t, tamanoAutor: a, lineas: 2, autor: version }
-      }
-    }
+  // Segunda vuelta: no hay sitio para el autor por ningún lado, manda el
+  // título entero.
+  for (let t = tamanoIdeal; t >= TAMANO_MINIMO; t--) {
+    const lineas = renglonesDelTitulo(t, 0)
+    if (lineas) return { tamanoTitulo: t, tamanoAutor: 0, lineas, autor: null }
   }
-
-  // Sin sitio para el autor por ningún lado: manda el título, entero.
-  const soloTitulo = Math.floor(largoUtil / (largoDe(titulo, tipografia, 1) || 1))
-  const tamano = Math.min(tamanoIdeal, soloTitulo)
-  if (tamano >= TAMANO_MINIMO) {
-    return { tamanoTitulo: tamano, tamanoAutor: 0, lineas: 1, autor: null }
-  }
-  return tamanoDos * 2.5 <= anchoLibre
-    ? { tamanoTitulo: tamanoDos, tamanoAutor: 0, lineas: 2, autor: null }
-    : { tamanoTitulo: TAMANO_MINIMO, tamanoAutor: 0, lineas: 1, autor: null }
+  return { tamanoTitulo: TAMANO_MINIMO, tamanoAutor: 0, lineas: 1, autor: null }
 }
 
 function paginasDe(entry) { return totalPages(entry) }
@@ -202,6 +215,11 @@ function medidas(entry) {
 }
 
 export default function Lomos({ entries, onAbrir }) {
+  // Las medidas del texto dependen de la fuente, y las fuentes propias llegan
+  // un momento después. Al llegar, se repinta con las medidas buenas.
+  const [, repintar] = useState(0)
+  useEffect(() => alCargarFuentes(() => repintar(n => n + 1)), [])
+
   return (
     <div
       className="flex flex-wrap items-end gap-x-1.5"
@@ -331,16 +349,6 @@ const Lomo = memo(function Lomo({ entry, onAbrir }) {
           />
         ))}
 
-        {/* El canto de las páginas asomando por el borde de delante: una franja
-            de papel con sus rayas finas, no un simple brillo. En un libro real
-            es lo único que se ve del interior desde la balda. */}
-        <span
-          className="pointer-events-none absolute inset-y-[3px] right-0 w-[3px] opacity-70"
-          style={{
-            background: 'repeating-linear-gradient(to bottom, rgba(245,238,225,.9) 0 1px, rgba(180,168,150,.75) 1px 2px)',
-          }}
-        />
-
         {/* Textura: el mismo grano del fondo de la app, muy flojo, para que el
             lomo no se lea como un plano de color liso sino como tela o papel. */}
         <span
@@ -357,7 +365,7 @@ const Lomo = memo(function Lomo({ entry, onAbrir }) {
           // convención anglosajona y en una balda española se ve del revés.
           // En escritura vertical el eje principal del flex es el vertical, así
           // que el título crece a lo largo del lomo y el autor se queda al pie.
-          style={{ writingMode: 'vertical-rl', textOrientation: 'mixed' }}
+          style={{ writingMode: 'vertical-rl', textOrientation: 'mixed', gap: texto.autor ? SEPARACION_AUTOR : 0 }}
         >
           {/* Una sola línea a lo largo del lomo, recortada con puntos suspensivos
               si no cabe. Antes el título se partía en dos columnas cuando era

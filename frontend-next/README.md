@@ -25,8 +25,9 @@ nginx directamente, igual que el frontend actual.
 - **Armazón**: login contra el backend real, menú lateral, y pantallas de Inicio
   (vacía), Luniteca y Ajustes.
 - **Luniteca**: la estantería completa contra los datos reales — sesiones por estado,
-  leídos agrupados por año, cuadrícula o lista, búsqueda, filtros y orden, ficha del
-  libro con todo lo editable, y edición de los datos del libro y su portada.
+  leídos agrupados por año, tres vistas (cuadrícula, lista y estantería de lomos),
+  búsqueda, filtros y orden, ficha del libro con todo lo editable, y edición de los
+  datos del libro y su portada.
 - **PWA**: manifest con iconos maskable, service worker y safe areas, para que añadida
   a la pantalla de inicio se comporte como una app.
 - **Avisos en vivo**: un WebSocket para toda la app (`platform/live.js`), con
@@ -96,6 +97,63 @@ Fijadas probando en el móvil; cambiarlas sin motivo rompe la coherencia:
   de otro color.
 - Paleta y tipografía: los tokens de `index.css` salen de la Luniteca nueva
   (`--luni3-*`), y los títulos van en Public Sans, la misma que usa allí.
+
+## La vista de estantería (lomos)
+
+Es la tercera vista de la Luniteca y vive entera en `screens/luniteca/Lomos.jsx` +
+`colorPortada.js` + `medirTexto.js`. Está aparte **a propósito**: si no acaba de
+convencer, se borran esos tres archivos y su entrada en el selector de vista, y las
+otras dos siguen exactamente igual.
+
+**Los lomos se dibujan, no se buscan.** No existe ninguna fuente de imágenes de lomos
+por ISBN: Open Library y Google Books sirven la portada (la cara frontal), y el lomo
+solo aparece en las contadísimas ediciones con la sobrecubierta entera escaneada. Así
+que cada lomo se construye con los datos del libro:
+
+- **Grosor** por páginas (22–46px), **alto** variable y **tapa dura** (lomo redondeado
+  con nervios) a partir de 500 páginas. Uno de cada siete va **torcido**, y el ancho
+  extra que ocupa al inclinarse se le reserva al lado que toca: son libros físicos y no
+  pueden atravesar al vecino.
+- **Color** sacado de la **franja izquierda de la portada** (`colorPortada.js`), que es
+  por donde continúa el lomo en un libro real. Un promedio de la portada entera saldría
+  gris. Limitación conocida: solo funciona con portadas del mismo origen (las cacheadas
+  en `/uploads`); con una de `covers.openlibrary.org` el navegador prohíbe leer los
+  píxeles del canvas y se usa un color estable sacado del título. Lo suyo, cuando esto
+  se asiente, es calcularlo en el servidor al cachear la portada.
+- **Tipografía** por género (ensayo e historia → romana; cómic → condensada de palo) y,
+  si no se sabe, estable por libro. La de la portada no se puede detectar: es una
+  imagen.
+
+### El reparto del texto
+
+Es la parte con más reglas, y todas salieron de mirar capturas:
+
+- **Se mide el texto de verdad**, con canvas (`medirTexto.js`), no con un "ancho de
+  letra media" por tipografía. La estimación fallaba por los dos lados: títulos
+  cortados por quedarse corta y títulos en letra de hormiga por pasarse. Se mide a
+  100px y se guarda el ancho por punto de tamaño, con caché; hasta que
+  `document.fonts.ready` resuelve se usa la estimación y luego se repinta.
+- **Manda el título**: se busca el tamaño más grande que quepa **entero**, partiéndolo
+  en hasta tres renglones si hace falta. Un lomo de verdad parte el título largo, no lo
+  escribe diminuto para que quepa de una tirada.
+- **El autor va detrás del título a lo largo del lomo, no a su lado.** El texto está de
+  canto (`writing-mode: vertical-rl`), así que lo que se apila a lo ancho son los
+  renglones del título; el autor se lleva su trozo del **largo**, esté el título en una
+  línea o en tres. Confundir esto cortaba títulos.
+- **El autor se abrevia antes que desaparecer**: "Gabriel García Márquez" → "G. García
+  Márquez" → "García Márquez" → "Márquez". Solo se va si ni el apellido entra.
+- **El autor nunca es más grande que el título**, y prima que se lea sobre que esté
+  completo: "Márquez" a 7px vale más que "G. García Márquez" a 5px.
+- El hueco entre título y autor (`SEPARACION_AUTOR`) lo reservan **la cuenta y el
+  layout con la misma constante**: cuando solo lo reservaba la cuenta, se leía
+  "SALVAJESR. Bolaño".
+
+Medido con 17 libros de anchos y títulos variados (`/tmp/luni-test/lomos-caben.mjs`):
+17 de 17 enseñan autor, ningún texto cortado, ningún libro solapado, y los tochos
+llevan el título a 10–14px en vez de a 6.
+
+Descartado por el camino: la franja de canto de páginas en el borde derecho del lomo.
+Quedaba rara — en una balda con los libros metidos ves el lomo y nada más.
 
 ## Rendimiento: lo medido
 
