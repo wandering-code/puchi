@@ -12,11 +12,109 @@ Vive en `puchi.wanderingcode.dev/next` hasta que sustituya a la actual.
   de respuesta se añade como endpoint nuevo, y las migraciones siguen siendo aditivas
   e idempotentes (`ADD COLUMN IF NOT EXISTS`).
 
+Decisión completa de la bifurcación: [issue #16](https://github.com/wandering-code/puchi/issues/16).
+
 ## Stack
 
 Vite + React 19 + Tailwind 4 + [Motion](https://motion.dev) + React Router 7 + PWA
 (`vite-plugin-pwa`). Se compila a `dist/` estático — no lleva Dockerfile, lo sirve
 nginx directamente, igual que el frontend actual.
+
+## Qué hay hecho
+
+- **Armazón**: login contra el backend real, menú lateral, y pantallas de Inicio
+  (vacía), Luniteca y Ajustes.
+- **Luniteca**: la estantería completa contra los datos reales — sesiones por estado,
+  leídos agrupados por año, cuadrícula o lista, búsqueda, filtros y orden, ficha del
+  libro con todo lo editable, y edición de los datos del libro y su portada.
+- **PWA**: manifest con iconos maskable, service worker y safe areas, para que añadida
+  a la pantalla de inicio se comporte como una app.
+- **Avisos en vivo**: un WebSocket para toda la app (`platform/live.js`), con
+  reconexión, que refresca cuando algo cambia desde otro dispositivo o desde la Puchi
+  actual.
+
+Lo que falta (añadir libros, importadores, Club y Amigos) está en
+[issue #18](https://github.com/wandering-code/puchi/issues/18).
+
+## Cómo está montado
+
+```
+src/
+├── platform/     lo que no es "pantalla": sesión, API, WebSocket, viewport, capas
+├── ui/           piezas sueltas reutilizables (iconos, gesto de arrastre)
+└── screens/
+    ├── Shell.jsx        armazón: barra superior, menú lateral, rutas
+    ├── LoginScreen.jsx
+    └── luniteca/        la app de libros
+        ├── shelf.js         reglas de negocio (portadas de la Luniteca actual)
+        ├── Luniteca.jsx     estantería: carga, filtros, secciones
+        ├── BookDetail.jsx   ficha de un libro
+        ├── BookEditForm.jsx edición de los datos del libro
+        ├── editores.jsx     estado, fechas, carpeta, veces leído, sinopsis
+        ├── HojaInferior.jsx la hoja que sube desde abajo (una para toda la app)
+        └── piezas.jsx       portada, estrellas, barra de progreso, insignias
+```
+
+### Reglas de negocio: no se inventan aquí
+
+`shelf.js` está portado de `LunitecaV3.jsx` de la Puchi actual: reparto por estado,
+agrupación por año, orden, filtros y sobre todo `statusPatch` — qué fechas se rellenan
+solas al cambiar de estado y cuándo suma una lectura. **Las dos Lunitecas escriben en
+las mismas tablas**, así que cambiar esto aquí las desincroniza. Lo que sí es nuevo es
+la presentación.
+
+### Qué es de quién
+
+- Del **libro** (compartido con todo el club, `PATCH /books/{id}`): título, autor,
+  género, año, páginas, sinopsis. Se editan desde el lápiz de la ficha.
+- De **tu copia** (`PATCH /shelf/personal/{id}`): estado, fechas, puntuación, notas,
+  carpeta, veces leído, progreso **y la portada**. Se tocan directamente en la ficha.
+  Que la portada sea personal es a propósito: cada jugador ve la que ha elegido.
+
+## Convenciones de interfaz
+
+Fijadas probando en el móvil; cambiarlas sin motivo rompe la coherencia:
+
+- **Todo lo que se abre encima de algo llega desde abajo** (`HojaInferior`): filtros,
+  estado, fechas, carpeta, portada y la propia ficha del libro. Mismo sitio, mismo
+  gesto para cerrar.
+- **El gesto de arrastrar para cerrar vive en el asa, nunca en el panel.** El `drag` de
+  Motion le pone `touch-action` al elemento, y si ese elemento es el que scrollea, el
+  contenido deja de poder desplazarse con el dedo. Ver `ui/arrastre.js`.
+- **Cada capa que se abre mete una entrada en el historial** para que el gesto de volver
+  la cierre (`platform/capas.js`). Un único listener de `popstate` y una pila: si no,
+  un solo "atrás" cierra varias capas a la vez, porque el evento llega a todas.
+- **Puntuar y ajustar páginas: mantener pulsado, se amplía, arrastrar, soltar guarda.**
+  Un toque suelto no cambia nada — están dentro de zonas que se scrollean con el dedo.
+- **Nunca `<input type="date">`**: el nativo de iOS lleva años roto. Tres `<select>` de
+  día/mes/año, como el `CustomDateInput` de la Puchi actual.
+- **Los `<select>` llevan `appearance: none`** y flecha propia: sin eso iOS los pinta
+  con su estilo y se saltan el redondeo del resto de la app.
+- **Las listas largas de `<option>` se montan un frame después** de que aparezca la
+  hoja. Con 300 libros son ~387 opciones y se comían los primeros fotogramas.
+- **Un solo color de fondo, plano.** Hubo un degradado y hacía que la cabecera pareciera
+  de otro color.
+- Paleta y tipografía: los tokens de `index.css` salen de la Luniteca nueva
+  (`--luni3-*`), y los títulos van en Public Sans, la misma que usa allí.
+
+## Rendimiento: lo medido
+
+Con Playwright, CPU a 1/4 y una estantería de 300 libros:
+
+- Las tarjetas y secciones van con `memo` y handlers estables. Sin eso, plegar una
+  sección bloqueaba 346 ms.
+- **Las tarjetas no son componentes de Motion.** Se midió sustituyéndolas: 300
+  `motion.button` eran casi todo el coste de teclear en el buscador. El "hundido" al
+  tocar es una transición CSS.
+- Las cinco estrellas son **un solo SVG** con el relleno recortado, no cinco con su
+  gradiente: en una estantería de 300 eran 1.500 SVG.
+- Resultado: teclear en el buscador y plegar secciones no producen ningún bloqueo;
+  cambiar de cuadrícula a lista cuesta 425 ms (era 752), que es remontar las 300
+  tarjetas. Bajarlo pide virtualizar y no compensa todavía.
+
+**Al medir, calienta primero.** La primera apertura de cualquier cosa paga su montaje,
+y comparar "la primera vez" contra "las siguientes" lleva a culpar a quien no es (aquí
+pasó: parecía el grano del fondo y era el montaje).
 
 ## Desarrollo
 
@@ -33,19 +131,24 @@ npm run dev     # https://<ip-lan>:5176/next/
 - El puerto 5176 no choca con el 5175 del frontend actual: los dos pueden correr a la vez.
 - `/api`, `/ws` y `/uploads` van por proxy al backend local (`localhost:8001`), que se
   levanta desde la raíz del repo con `docker compose up`.
+- `npm run build && npm run preview` sirve el `dist/` real en el puerto 5177: es la
+  única forma de probar la PWA (service worker y manifest están desactivados en `dev`).
 
-## Móvil: lo que no se toca sin probar en un iPhone de verdad
+### Probar en el móvil
+
+Lo que solo se puede comprobar en un iPhone de verdad (teclado, rebote elástico, safe
+areas) tiene su panel en **Ajustes → Diagnóstico**: si la app va instalada o en pestaña,
+las safe areas medidas, el viewport y `--kb`.
+
+Y al escribir pruebas automáticas de gestos, **usa eventos táctiles de verdad**. Un test
+que desplazaba con `scrollTo()` dio por bueno un scroll que en el móvil no funcionaba.
+
+### Lo que no se toca sin probar en un iPhone
 
 `src/platform/viewport.js` está portado tal cual de la Puchi actual y resume la issue
-#13 entera. Las reglas: no se compensa el paneo del teclado de iOS, el contenido se
-aparta con `padding-bottom` (nunca encogiendo la caja), y la barra inferior se oculta
-mientras se escribe en vez de pelearse con el teclado. `index.html` lleva
-`viewport-fit=cover` (sin él las safe areas valen 0 y la barra de gestos se come el
-borde inferior en la app instalada) e `interactive-widget=resizes-content`.
-
-La pantalla de **Ajustes** muestra un panel de diagnóstico con los valores que solo se
-pueden comprobar en el dispositivo real: si la app va instalada o en pestaña, las safe
-areas medidas, el tamaño del viewport y `--kb`.
+#13 entera: no se compensa el paneo del teclado de iOS, el contenido se aparta con
+`padding-bottom` (nunca encogiendo la caja), y lo que sube con el teclado se oculta.
+`index.html` lleva `viewport-fit=cover` e `interactive-widget=resizes-content`.
 
 ## Despliegue (mini PC)
 
@@ -80,7 +183,8 @@ location = /next/manifest.webmanifest {
 ```
 
 `sudo nginx -t && sudo systemctl reload nginx`. No hay que tocar cloudflared: el
-subdominio y el túnel ya existen.
+subdominio y el túnel ya existen. Checklist de comprobación tras desplegar, en
+[issue #17](https://github.com/wandering-code/puchi/issues/17).
 
 ## Cuando esta versión sustituya a la actual
 
