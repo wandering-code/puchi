@@ -17,10 +17,20 @@ export default function Shell() {
   const typing = useIsTyping()
 
   return (
-    <div className="flex h-full w-full flex-col bg-bg">
+    <div className="relative flex h-full w-full flex-col bg-bg">
+      {/* El fondo, aparte del contenido: un degradado que aclara hacia arriba
+          (da profundidad y sitio a la barra superior) más el grano. Los dos
+          son capas estáticas, así que no repintan al navegar ni al scrollear. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0"
+        style={{ background: 'radial-gradient(120% 70% at 50% 0%, #1c1d35 0%, var(--color-bg) 55%, var(--color-bg-deep) 100%)' }}
+      />
+      <div aria-hidden className="pointer-events-none absolute inset-0 grain" />
+
       <TopBar />
 
-      <main className="relative flex-1 overflow-hidden">
+      <main className="relative z-10 flex-1 overflow-hidden">
         {/* Cada ruta es su propia capa a pantalla completa con su scroll: así
             el scroll de una no arrastra al de la otra durante la transición. */}
         <AnimatePresence mode="wait" initial={false}>
@@ -50,7 +60,7 @@ export default function Shell() {
 function TopBar() {
   const { player } = useAuth()
   return (
-    <header className="z-20 shrink-0 border-b border-line bg-bg/80 backdrop-blur-xl pt-safe">
+    <header className="relative z-20 shrink-0 border-b border-line backdrop-blur-xl pt-safe">
       <div className="flex h-14 items-center gap-3 px-5">
         <div
           className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full border border-line"
@@ -61,8 +71,8 @@ function TopBar() {
             : <span>{player?.avatar_emoji || '⭐'}</span>}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="truncate font-display font-semibold leading-tight">{player?.name}</p>
-          <p className="text-xs text-ink-mute leading-tight">Puchi nueva</p>
+          <p className="truncate font-display text-lg font-semibold leading-tight tracking-[-0.01em]">{player?.name}</p>
+          <p className="text-[10px] uppercase tracking-[0.18em] text-ink-mute leading-tight">Puchi nueva</p>
         </div>
       </div>
     </header>
@@ -81,21 +91,24 @@ function BottomNav({ hidden }) {
     >
       <div className="flex h-16 items-stretch">
         {TABS.map(({ to, label, Icon }) => (
-          <NavLink key={to} to={to} end={to === '/'} className="relative flex flex-1 flex-col items-center justify-center gap-1">
+          <NavLink key={to} to={to} end={to === '/'} className="relative flex flex-1 items-center justify-center">
             {({ isActive }) => (
               <>
-                {/* layoutId: el subrayado se DESPLAZA de una pestaña a otra en
+                {/* layoutId: la pastilla se DESPLAZA de una pestaña a otra en
                     vez de desaparecer y reaparecer. Es lo que hace que el
-                    cambio de sección se lea como un movimiento. */}
+                    cambio de sección se lea como un movimiento y no como un
+                    parpadeo. */}
                 {isActive && (
                   <motion.span
-                    layoutId="tab-indicator"
-                    className="absolute top-0 h-0.5 w-10 rounded-full bg-accent"
+                    layoutId="tab-pill"
+                    className="absolute inset-x-3 inset-y-2 rounded-xl2 bg-surface-2"
                     transition={{ type: 'spring', stiffness: 420, damping: 34 }}
                   />
                 )}
-                <Icon className={`h-6 w-6 transition-colors ${isActive ? 'text-accent' : 'text-ink-mute'}`} />
-                <span className={`text-[11px] transition-colors ${isActive ? 'text-ink' : 'text-ink-mute'}`}>{label}</span>
+                <span className="relative flex flex-col items-center gap-1">
+                  <Icon className={`h-6 w-6 transition-colors duration-200 ${isActive ? 'text-accent' : 'text-ink-mute'}`} />
+                  <span className={`text-[11px] transition-colors duration-200 ${isActive ? 'text-ink' : 'text-ink-mute'}`}>{label}</span>
+                </span>
               </>
             )}
           </NavLink>
@@ -108,7 +121,7 @@ function BottomNav({ hidden }) {
 function Placeholder({ title, nota }) {
   return (
     <div className="py-8">
-      <h2 className="font-display text-2xl font-semibold">{title}</h2>
+      <h2 className="font-display text-[1.75rem] font-semibold tracking-[-0.02em]">{title}</h2>
       <p className="mt-2 max-w-prose text-sm leading-relaxed text-ink-dim">{nota}</p>
     </div>
   )
@@ -129,7 +142,7 @@ function Ajustes() {
 
   return (
     <div className="py-8">
-      <h2 className="font-display text-2xl font-semibold">Ajustes</h2>
+      <h2 className="font-display text-[1.75rem] font-semibold tracking-[-0.02em]">Ajustes</h2>
       <p className="mt-2 text-sm text-ink-dim">Sesión de {player?.name}.</p>
 
       <div className="mt-6 overflow-hidden rounded-xl2 border border-line bg-surface">

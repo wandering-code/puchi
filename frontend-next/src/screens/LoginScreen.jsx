@@ -55,8 +55,10 @@ export default function LoginScreen() {
               <IconPaw className="h-14 w-14 text-accent" />
             </motion.div>
             <div className="text-center">
-              <h1 className="font-display text-3xl font-semibold tracking-tight">Puchi</h1>
-              <p className="mt-1 text-sm text-ink-mute">Versión nueva · en construcción</p>
+              <h1 className="font-display text-[3.25rem] font-semibold leading-none tracking-[-0.03em]">Puchi</h1>
+              {/* Versalitas espaciadas: a este tamaño un texto normal se lee
+                  como una nota al pie: espaciado, se lee como parte de la marca. */}
+              <p className="mt-3 text-[11px] uppercase tracking-[0.22em] text-ink-mute">Versión nueva</p>
             </div>
           </Fade>
 
@@ -106,7 +108,7 @@ export default function LoginScreen() {
                 type="submit"
                 disabled={loading || !name.trim() || !pin}
                 whileTap={{ scale: 0.97 }}
-                className="mt-2 flex h-14 w-full items-center justify-center gap-2 rounded-xl2 bg-accent text-base font-semibold text-bg-deep transition-opacity disabled:opacity-35"
+                className="mt-2 flex h-14 w-full items-center justify-center gap-2 rounded-xl2 bg-accent text-base font-semibold text-bg-deep shadow-[0_10px_30px_-10px_var(--color-accent)] transition-colors disabled:bg-surface-2 disabled:text-ink-mute disabled:shadow-none"
               >
                 {loading ? 'Entrando…' : 'Entrar'}
                 {!loading && <IconArrow className="h-5 w-5" />}
@@ -149,7 +151,7 @@ function Field({ label, value, onChange, adornment, ...rest }) {
   const [focused, setFocused] = useState(false)
   const raised = focused || value.length > 0
   return (
-    <label className="relative flex items-center rounded-xl2 border border-line bg-surface/80 backdrop-blur transition-colors focus-within:border-accent/60">
+    <label className="relative flex items-center rounded-xl2 border border-line bg-surface/70 backdrop-blur-xl transition-colors focus-within:border-accent/60 focus-within:bg-surface">
       <motion.span
         className="pointer-events-none absolute left-4 origin-left text-ink-mute"
         animate={{ y: raised ? -12 : 0, scale: raised ? 0.78 : 1, opacity: raised ? 0.8 : 1 }}
@@ -212,6 +214,7 @@ function Aurora() {
         animate={{ scale: [1.1, 1, 1.1], opacity: [0.22, 0.34, 0.22] }}
         transition={{ duration: 18, repeat: Infinity, ease: 'easeInOut' }}
       />
+      <div className="absolute inset-0 grain" />
     </div>
   )
 }

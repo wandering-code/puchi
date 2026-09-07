@@ -12,6 +12,14 @@ import { resolve } from 'path'
 const CERTS = '../frontend/certs'
 const hasCerts = fs.existsSync(`${CERTS}/key.pem`) && fs.existsSync(`${CERTS}/fullchain.pem`)
 
+// El backend es el de siempre (docker compose up en la raíz del repo), el
+// mismo que usa la Puchi actual en local.
+const PROXY = {
+  '/api':     { target: 'http://localhost:8001', changeOrigin: true, rewrite: (p) => p.replace(/^\/api/, '') },
+  '/ws':      { target: 'http://localhost:8001', ws: true, changeOrigin: true },
+  '/uploads': { target: 'http://localhost:8001', changeOrigin: true },
+}
+
 export default defineConfig({
   // Se sirve bajo puchi.wanderingcode.dev/next/ durante toda la convivencia
   // con la Puchi actual. Sin este base los dos builds pedirían /assets/… y
@@ -77,10 +85,21 @@ export default defineConfig({
         cert: fs.readFileSync(`${CERTS}/fullchain.pem`),
       },
     }),
-    proxy: {
-      '/api':     { target: 'http://localhost:8001', changeOrigin: true, rewrite: (p) => p.replace(/^\/api/, '') },
-      '/ws':      { target: 'http://localhost:8001', ws: true, changeOrigin: true },
-      '/uploads': { target: 'http://localhost:8001', changeOrigin: true },
-    },
+    proxy: PROXY,
+  },
+  // `npm run build && npm run preview` sirve el dist/ real: es la única forma
+  // de probar la PWA en local, porque en dev el service worker y el manifest
+  // están desactivados (devOptions arriba). Es lo que hay que abrir en el
+  // móvil para "Añadir a pantalla de inicio" sin desplegar nada en el mini PC.
+  preview: {
+    host: '0.0.0.0',
+    port: 5177,
+    ...(hasCerts && {
+      https: {
+        key: fs.readFileSync(`${CERTS}/key.pem`),
+        cert: fs.readFileSync(`${CERTS}/fullchain.pem`),
+      },
+    }),
+    proxy: PROXY,
   },
 })

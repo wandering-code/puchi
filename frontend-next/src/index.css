@@ -1,5 +1,45 @@
 @import "tailwindcss";
 
+/* ── Tipografía ──────────────────────────────────────────────────────────
+   Self-hosted, no desde Google Fonts: en una PWA instalada una petición a un
+   tercero es una fuente que no carga sin cobertura, y el service worker ya
+   guarda estos .woff2 en su caché (globPatterns incluye woff2). Son las dos
+   variables completas, así que un solo archivo cubre todos los grosores.
+   El unicode-range hace que latin-ext (acentos raros de títulos y autores
+   extranjeros) solo se descargue si de verdad aparece alguno. */
+@font-face {
+  font-family: 'Fraunces';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('/next/fonts/fraunces-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Fraunces';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('/next/fonts/fraunces-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('/next/fonts/inter-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('/next/fonts/inter-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
 /* ── Tokens ──────────────────────────────────────────────────────────────
    Toda la estética nueva sale de aquí. Están como variables de @theme (no
    colores sueltos en los componentes) justamente porque la paleta se va a
@@ -21,12 +61,11 @@
   --radius-xl2: 1.25rem;
   --radius-xl3: 1.75rem;
 
-  /* Tipografía: de momento la del sistema (cero peticiones, cero salto de
-     fuente al arrancar, y en móvil es la que mejor se lee). Cuando se elija
-     una de verdad se self-hostea como .woff2 en public/ — el service worker
-     ya la mete en caché (globPatterns incluye woff2) — y se cambia aquí. */
-  --font-display: ui-rounded, "SF Pro Rounded", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  /* Fraunces para lo que titula (tiene eje óptico: a tamaño grande afina y
+     gana carácter, a tamaño pequeño engorda y se lee) e Inter para el resto.
+     El fallback del sistema va detrás, para el primer pintado. */
+  --font-display: 'Fraunces', ui-serif, Georgia, serif;
+  --font-sans: 'Inter', system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
 
   /* Una sola curva para todo lo que se mueve. Que todo comparta easing es la
      mitad de que una interfaz parezca cuidada. */
@@ -61,6 +100,9 @@
     color: var(--color-ink);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
+    /* Que Fraunces use su eje óptico según el tamaño en vez de escalar el
+       mismo dibujo — es la mitad de la gracia de esta fuente. */
+    font-optical-sizing: auto;
     /* Sin esto, mantener pulsado en iOS saca el menú de selección/copiar sobre
        botones y tarjetas, que en una app instalada se ve como un fallo. */
     -webkit-touch-callout: none;
@@ -107,3 +149,13 @@
    platform/viewport.js). Encogiendo la caja el fondo se corta y asoma lo de
    detrás — eso ya se probó en la Puchi actual y se descartó. */
 @utility pb-kb { padding-bottom: calc(var(--kb, 0px) + env(safe-area-inset-bottom, 0px)); }
+
+/* Grano muy fino, para poner encima del fondo. Un plano de color liso a
+   pantalla completa se ve muerto en el móvil (y en pantallas OLED marca el
+   banding de los degradados); una textura estática de 128px tileada lo rompe
+   sin coste de render: no se anima, se pinta una vez y se queda. */
+@utility grain {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='128' height='128'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='128' height='128' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
+  opacity: 0.22;
+  mix-blend-mode: overlay;
+}
