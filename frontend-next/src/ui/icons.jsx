@@ -91,3 +91,11 @@ export const IconPlegarTodo = ({ expandir = false, ...p }) => (
       : <path d="M8 8 12 4l4 4M8 16l4 4 4-4M4 12h16" />}
   </svg>
 )
+
+export const IconLomos = (p) => (
+  <svg {...base} {...p}>
+    <rect x="4" y="7" width="4" height="13" rx="1" />
+    <rect x="10" y="4" width="4" height="16" rx="1" />
+    <rect x="16" y="9" width="4" height="11" rx="1" />
+  </svg>
+)

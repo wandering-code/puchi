@@ -7,10 +7,11 @@ import { EMPTY_FILTERS, agruparEstanteria, opcionesDeFiltro, readingDatesLabel }
 import { Cover, NotaBadge, PagesLabel, ProgressBar, StarRating } from './piezas'
 import BookDetail from './BookDetail'
 import {
-  IconChevron, IconFilter, IconGrid, IconList, IconPlegarTodo, IconPlus, IconSearch, IconX,
+  IconChevron, IconFilter, IconGrid, IconList, IconLomos, IconPlegarTodo, IconPlus, IconSearch, IconX,
 } from '../../ui/icons'
 import HojaFiltros from './HojaFiltros'
 import AnadirLibro from './AnadirLibro'
+import Lomos from './Lomos'
 import { CajaSeccion, TituloSeccion, huecoEntreSecciones, leerSeparacion } from './separacion'
 import { useHoja } from './HojaInferior'
 import { useCapa } from '../../platform/capas'
@@ -442,13 +443,13 @@ function Herramientas({
               {/* Píldora dentro de píldora: las dos redondeadas del todo, que
                   con radios distintos la selección se salía por las esquinas. */}
               <div className="flex items-center rounded-full border border-line p-1">
-                {[['grid', IconGrid, 'Cuadrícula'], ['list', IconList, 'Lista']].map(([modo, Icono, etiqueta]) => (
+                {[['grid', IconGrid, 'Cuadrícula'], ['list', IconList, 'Lista'], ['lomos', IconLomos, 'Estantería']].map(([modo, Icono, etiqueta]) => (
                   <button
                     key={modo}
                     onClick={() => onVista(modo)}
                     aria-label={etiqueta}
                     aria-pressed={vista === modo}
-                    className="relative flex h-8 w-10 items-center justify-center"
+                    className="relative flex h-8 w-9 items-center justify-center"
                   >
                     {vista === modo && (
                       <motion.span
@@ -534,6 +535,10 @@ const SeccionPlegable = memo(function SeccionPlegable({ variante, label, entries
 })
 
 const Coleccion = memo(function Coleccion({ entries, vista, onAbrir }) {
+  // Vista de estantería: los libros de canto. Es una vista aparte y aislada —
+  // si no acaba de convencer se quita ella sola, sin tocar las otras dos.
+  if (vista === 'lomos') return <Lomos entries={entries} onAbrir={onAbrir} />
+
   if (vista === 'list') {
     return (
       <div className="divide-y divide-[color:var(--color-line)]">
