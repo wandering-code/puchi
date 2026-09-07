@@ -1,99 +1,105 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { AnimatePresence, motion } from 'motion/react'
-import { STATUS_LABEL, STATUS_ORDER, readingDatesLabel, statusPatch, totalPages } from './shelf'
-import { Chip, Cover, EditableRating, ProgressBar, StatusDot } from './piezas'
-import { IconArrowLeft, IconChevron } from '../../ui/icons'
+import { totalPages } from './shelf'
+import { Cover, EditableRating, ProgressBar } from './piezas'
+import { EditorCarpeta, EditorEstado, EditorFechas, EditorLecturas, Sinopsis } from './editores'
+import { IconArrowLeft } from '../../ui/icons'
 
-export default function BookDetail({ entry, onCerrar, onActualizar }) {
+// Distribución tomada de la Luniteca nueva de la Puchi actual: portada grande
+// centrada, título y autor debajo, la ficha técnica en una línea y los datos
+// que se pueden cambiar como pastillas que abren su propio editor — en vez de
+// una lista de bloques con encabezados, que era lo de antes y se parecía más a
+// la Luniteca vieja. Lo que se toca es el dato en sí.
+export default function BookDetail({ entry, carpetas, onCerrar, onActualizar }) {
   const libro = entry.book
-  const total = totalPages(entry)
+  const paginas = totalPages(entry)
 
-  // En un portal a <body>, no dentro de la pantalla: la ficha tapa la app
-  // entera, y ahí dentro no puede. El contenedor de la ruta vive dentro de un
-  // <main z-10> por debajo de la barra superior <header z-20> del armazón, y
-  // el z-index de un hijo nunca escapa del contexto de apilamiento de su
-  // padre — se vio en captura, con el título de la ficha y el de la barra
-  // pintados uno encima de otro.
+  // Puntuar algo que aún no has empezado no significa nada; en cuanto se ha
+  // leído (o se ha dejado a medias) sí.
+  const puedePuntuar = entry.status !== 'want_to_read'
+  const llevaProgreso = ['reading', 'rereading', 'read'].includes(entry.status)
+  const llevaLecturas = ['read', 'rereading'].includes(entry.status)
+
   return createPortal(
     <motion.div
-      className="fixed inset-0 z-50 flex flex-col bg-bg"
+      className="fixed inset-0 z-50 overflow-y-auto overscroll-contain bg-bg"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.2 }}
     >
-      <header className="shrink-0 border-b border-line bg-bg/90 backdrop-blur-xl pt-safe">
-        <div className="flex h-14 items-center gap-2 px-3">
-          <button
-            onClick={onCerrar}
-            aria-label="Volver a la estantería"
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl2 text-ink transition-colors active:bg-surface-2"
-          >
-            <IconArrowLeft className="h-5 w-5" />
-          </button>
-          <p className="min-w-0 flex-1 truncate text-sm text-ink-dim">{libro.title}</p>
-        </div>
-      </header>
+      {/* El botón de volver flota sobre la portada en vez de ocupar una barra
+          propia: así la portada empieza arriba del todo y la ficha se lee como
+          una página, no como una pantalla con cabecera. */}
+      <div className="pointer-events-none sticky top-0 z-10 flex justify-between px-3 pt-safe">
+        <motion.button
+          onClick={onCerrar}
+          aria-label="Volver a la estantería"
+          whileTap={{ scale: 0.92 }}
+          className="pointer-events-auto mt-3 flex h-10 w-10 items-center justify-center rounded-full border border-line bg-surface/90 text-ink shadow-sm backdrop-blur"
+        >
+          <IconArrowLeft className="h-5 w-5" />
+        </motion.button>
+      </div>
 
-      <div className="flex-1 overflow-y-auto overscroll-contain px-5 pb-kb">
-        <div className="mx-auto w-full max-w-md py-5">
-          <div className="flex gap-4">
-            {/* Misma layoutId que la portada de la estantería: al abrir, esa
-                misma portada crece hasta aquí en vez de aparecer otra. */}
-            <motion.div layoutId={`portada-${entry.id}`} className="w-28 shrink-0 sm:w-32">
-              <Cover url={libro.cover_url} className="shadow-md" priority />
-            </motion.div>
+      <div className="mx-auto w-full max-w-md px-6 pb-kb">
+        <div className="flex flex-col items-center text-center">
+          <motion.div layoutId={`portada-${entry.id}`} className="w-[168px] shrink-0">
+            <Cover
+              url={libro.cover_url}
+              title={libro.title}
+              priority
+              className="shadow-[0_6px_14px_rgba(60,40,20,0.18),0_18px_34px_-16px_rgba(60,40,20,0.4)]"
+            />
+          </motion.div>
 
-            <div className="min-w-0 flex-1">
-              <h2 className="font-display text-2xl font-bold leading-tight tracking-[-0.02em]">{libro.title}</h2>
-              {libro.author && <p className="mt-1 text-sm text-ink-dim">{libro.author}</p>}
-              <div className="mt-3 flex flex-wrap gap-1.5">
-                {libro.year && <Chip>{libro.year}</Chip>}
-                {libro.genre && <Chip>{libro.genre}</Chip>}
-                {total && <Chip>{total} pág.</Chip>}
-                {entry.times_read > 0 && (
-                  <Chip>{entry.times_read} {entry.times_read === 1 ? 'lectura' : 'lecturas'}</Chip>
-                )}
-                {entry.folder && <Chip>{entry.folder}</Chip>}
-              </div>
-            </div>
+          <h2 className="mt-5 font-display text-[1.6rem] font-bold leading-tight tracking-[-0.02em]">
+            {libro.title}
+          </h2>
+          {libro.author && <p className="mt-1.5 text-[15px] text-ink-dim">{libro.author}</p>}
+
+          {/* La ficha técnica del libro, que no se edita desde aquí: es del
+              libro compartido, no de tu copia. */}
+          {(libro.genre || libro.year || paginas) && (
+            <p className="mt-3 text-xs text-ink-mute">
+              {[libro.genre, libro.year, paginas && `${paginas} pág.`].filter(Boolean).join(' · ')}
+            </p>
+          )}
+
+          {/* Y esto sí es tuyo: cada pastilla enseña su valor y se toca para
+              cambiarlo. */}
+          <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+            <EditorEstado entry={entry} onActualizar={onActualizar} />
+            <EditorFechas entry={entry} onActualizar={onActualizar} />
+            <EditorCarpeta entry={entry} carpetas={carpetas} onActualizar={onActualizar} />
+            {llevaLecturas && <EditorLecturas entry={entry} onActualizar={onActualizar} />}
           </div>
 
-          <Bloque titulo="Estado">
-            <SelectorEstado
-              status={entry.status}
-              onCambiar={(nuevo) => onActualizar(statusPatch(nuevo, entry))}
-            />
-            {readingDatesLabel(entry) && (
-              <p className="mt-3 text-xs text-ink-mute">{readingDatesLabel(entry)}</p>
-            )}
-          </Bloque>
-
-          <Bloque titulo="Tu puntuación">
-            <div className="flex items-center gap-3">
-              <EditableRating rating={entry.rating} onChange={(r) => onActualizar({ rating: r })} />
-              <span className="text-sm text-ink-mute">
-                {entry.rating ? entry.rating.toFixed(1).replace('.0', '') : 'Sin puntuar'}
+          {puedePuntuar && (
+            <div className="mt-5 flex flex-col items-center gap-1.5">
+              <EditableRating rating={entry.rating} onChange={r => onActualizar({ rating: r })} size={26} />
+              <span className="text-xs text-ink-mute">
+                {entry.rating ? `Tu nota: ${entry.rating.toLocaleString('es')}` : 'Sin puntuar'}
               </span>
             </div>
-          </Bloque>
+          )}
 
-          {['reading', 'rereading'].includes(entry.status) && (
-            <Bloque titulo="Progreso">
+          {llevaProgreso && (
+            <div className="mt-6 w-full">
               <EditorProgreso entry={entry} onActualizar={onActualizar} />
-            </Bloque>
+            </div>
           )}
+        </div>
 
-          {libro.synopsis && (
-            <Bloque titulo="Sinopsis">
-              <Sinopsis texto={libro.synopsis} />
-            </Bloque>
-          )}
+        <div className="mt-9">
+          <Apartado titulo="Sinopsis">
+            <Sinopsis texto={libro.synopsis} />
+          </Apartado>
 
-          <Bloque titulo="Tus notas">
-            <EditorNotas notes={entry.notes} onGuardar={(notes) => onActualizar({ notes })} />
-          </Bloque>
+          <Apartado titulo="Tus notas">
+            <EditorNotas notes={entry.notes} onGuardar={notes => onActualizar({ notes })} />
+          </Apartado>
         </div>
       </div>
     </motion.div>,
@@ -101,44 +107,12 @@ export default function BookDetail({ entry, onCerrar, onActualizar }) {
   )
 }
 
-function Bloque({ titulo, children }) {
+function Apartado({ titulo, children }) {
   return (
-    <section className="mt-7">
+    <section className="mb-8">
       <h3 className="mb-2.5 text-[11px] uppercase tracking-[0.14em] text-ink-mute">{titulo}</h3>
       {children}
     </section>
-  )
-}
-
-function SelectorEstado({ status, onCambiar }) {
-  return (
-    <div className="flex flex-wrap gap-2">
-      {STATUS_ORDER.map(s => {
-        const activo = s === status
-        return (
-          <motion.button
-            key={s}
-            onClick={() => !activo && onCambiar(s)}
-            whileTap={{ scale: 0.96 }}
-            className={`relative flex items-center gap-2 rounded-full border px-3.5 py-2 text-sm transition-colors ${
-              activo ? 'border-accent-line text-accent' : 'border-line text-ink-dim'
-            }`}
-          >
-            {activo && (
-              // La pastilla se desplaza del estado viejo al nuevo: el cambio se
-              // ve como un movimiento, no como dos parpadeos.
-              <motion.span
-                layoutId="estado-activo"
-                className="absolute inset-0 rounded-full bg-accent-soft"
-                transition={{ type: 'spring', stiffness: 420, damping: 34 }}
-              />
-            )}
-            <StatusDot status={s} className="relative" />
-            <span className="relative">{STATUS_LABEL[s]}</span>
-          </motion.button>
-        )
-      })}
-    </div>
   )
 }
 
@@ -151,7 +125,11 @@ function EditorProgreso({ entry, onActualizar }) {
   const pagina = arrastrando ?? entry.current_page ?? Math.round((entry.progress || 0) * (total || 0))
 
   if (!total) {
-    return <p className="text-sm text-ink-mute">Este libro no tiene número de páginas, así que no se puede llevar la cuenta.</p>
+    return (
+      <p className="text-center text-xs text-ink-mute">
+        Sin número de páginas no se puede llevar la cuenta de por dónde vas.
+      </p>
+    )
   }
 
   function confirmar(valor) {
@@ -162,8 +140,8 @@ function EditorProgreso({ entry, onActualizar }) {
   return (
     <div>
       <div className="flex items-baseline justify-between">
-        <p className="font-display text-xl font-semibold">{Math.round((pagina / total) * 100)}%</p>
-        <p className="text-sm text-ink-mute">{pagina} / {total} pág.</p>
+        <p className="font-display text-lg font-bold">{Math.round((pagina / total) * 100)}%</p>
+        <p className="text-xs text-ink-mute">{pagina} / {total} pág.</p>
       </div>
 
       <ProgressBar entry={{ ...entry, current_page: pagina }} className="mt-2" />
@@ -177,58 +155,20 @@ function EditorProgreso({ entry, onActualizar }) {
         onPointerUp={e => confirmar(Number(e.currentTarget.value))}
         onKeyUp={e => confirmar(Number(e.currentTarget.value))}
         aria-label="Página actual"
-        className="mt-3 h-11 w-full cursor-pointer appearance-none bg-transparent [&::-webkit-slider-runnable-track]:h-1 [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-runnable-track]:bg-surface-2 [&::-webkit-slider-thumb]:mt-[-9px] [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-accent [&::-webkit-slider-thumb]:shadow"
+        className="mt-2 h-10 w-full cursor-pointer appearance-none bg-transparent [&::-webkit-slider-runnable-track]:h-1 [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-runnable-track]:bg-transparent [&::-webkit-slider-thumb]:mt-[-9px] [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-accent [&::-webkit-slider-thumb]:shadow"
       />
 
-      <div className="mt-1 flex gap-2">
+      <div className="flex gap-2">
         {[-10, -1, 1, 10].map(paso => (
           <button
             key={paso}
             onClick={() => confirmar(Math.min(Math.max(pagina + paso, 0), total))}
-            className="h-9 flex-1 rounded-xl2 border border-line text-sm text-ink-dim active:bg-surface-2"
+            className="h-9 flex-1 rounded-xl2 border border-line text-sm text-ink-dim transition-colors active:bg-surface-2"
           >
             {paso > 0 ? `+${paso}` : paso}
           </button>
         ))}
       </div>
-    </div>
-  )
-}
-
-const LINEAS_SINOPSIS = 6
-
-function Sinopsis({ texto }) {
-  const [abierta, setAbierta] = useState(false)
-  const [desborda, setDesborda] = useState(false)
-  const parrafo = useRef(null)
-
-  // Solo se ofrece "Leer más" si de verdad hay texto cortado: preguntárselo al
-  // DOM en vez de contar caracteres, que con la fuente y el ancho reales falla.
-  useEffect(() => {
-    const el = parrafo.current
-    if (el) setDesborda(el.scrollHeight > el.clientHeight + 4)
-  }, [texto])
-
-  return (
-    <div>
-      <motion.p
-        ref={parrafo}
-        className="overflow-hidden text-[15px] leading-relaxed text-ink-dim"
-        initial={false}
-        animate={{ WebkitLineClamp: abierta ? 999 : LINEAS_SINOPSIS }}
-        style={{ display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: LINEAS_SINOPSIS }}
-      >
-        {texto}
-      </motion.p>
-      {(desborda || abierta) && (
-        <button
-          onClick={() => setAbierta(v => !v)}
-          className="mt-1.5 flex items-center gap-1 text-sm text-accent"
-        >
-          {abierta ? 'Leer menos' : 'Leer más'}
-          <IconChevron className={`h-3.5 w-3.5 transition-transform ${abierta ? 'rotate-180' : ''}`} />
-        </button>
-      )}
     </div>
   )
 }

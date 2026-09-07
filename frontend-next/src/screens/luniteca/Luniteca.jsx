@@ -230,6 +230,7 @@ export default function Luniteca() {
         {abierto && (
           <BookDetail
             entry={abierto}
+            carpetas={opciones.carpetas}
             onCerrar={cerrarFicha}
             onActualizar={patch => actualizarEntrada(abierto.id, patch)}
           />
