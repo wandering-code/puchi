@@ -7,7 +7,7 @@ import { EMPTY_FILTERS, agruparEstanteria, opcionesDeFiltro, readingDatesLabel }
 import { Cover, NotaBadge, PagesLabel, ProgressBar, StarRating } from './piezas'
 import BookDetail from './BookDetail'
 import {
-  IconChevron, IconFilter, IconGrid, IconList, IconPlus, IconSearch, IconX,
+  IconChevron, IconFilter, IconGrid, IconList, IconPlegarTodo, IconPlus, IconSearch, IconX,
 } from '../../ui/icons'
 import HojaFiltros from './HojaFiltros'
 import AnadirLibro from './AnadirLibro'
@@ -167,6 +167,11 @@ export default function Luniteca() {
       return siguiente
     })
   }, [])
+  // Plegar o desplegar TODOS los años de golpe. Solo los años: los estados se
+  // pliegan uno a uno, que son cuatro y cada uno se mira por su cuenta.
+  const alternarTodosLosAnos = useCallback((anos) => {
+    setAnosPlegados(prev => (anos.every(y => prev.has(y)) ? new Set() : new Set(anos)))
+  }, [])
   const alternarWant    = useCallback(() => setPlegadas(p => ({ ...p, want: !p.want })), [])
   const alternarRead    = useCallback(() => setPlegadas(p => ({ ...p, read: !p.read })), [])
   const alternarDropped = useCallback(() => setPlegadas(p => ({ ...p, dropped: !p.dropped })), [])
@@ -232,6 +237,14 @@ export default function Luniteca() {
               cuenta={grupos.readYearGroups.reduce((n, g) => n + g.items.length, 0)}
               plegada={plegadas.read}
               onAlternar={alternarRead}
+              // Solo tiene sentido con la sección abierta y con más de un año:
+              // con uno, su propio chevron ya hace lo mismo.
+              accion={!plegadas.read && grupos.years.length > 1 && (
+                <BotonPlegarAnos
+                  todosPlegados={grupos.years.every(y => anosPlegados.has(y))}
+                  onAlternar={() => alternarTodosLosAnos(grupos.years)}
+                />
+              )}
             />
             <Plegable abierta={!plegadas.read}>
               <div className="space-y-5 pt-3">
@@ -492,6 +505,20 @@ function Plegable({ abierta, children }) {
 }
 
 // ─── Secciones ─────────────────────────────────────────────────────────────
+function BotonPlegarAnos({ todosPlegados, onAlternar }) {
+  return (
+    <motion.button
+      onClick={onAlternar}
+      whileTap={{ scale: 0.9 }}
+      aria-label={todosPlegados ? 'Desplegar todos los años' : 'Plegar todos los años'}
+      title={todosPlegados ? 'Desplegar todos los años' : 'Plegar todos los años'}
+      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-ink-mute transition-colors active:bg-surface-2"
+    >
+      <IconPlegarTodo expandir={todosPlegados} className="h-[18px] w-[18px]" />
+    </motion.button>
+  )
+}
+
 const SeccionPlegable = memo(function SeccionPlegable({ variante, label, entries, vista, plegada, onAlternar, onAbrir }) {
   if (entries.length === 0) return null
   return (

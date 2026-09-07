@@ -69,7 +69,7 @@ export function CajaSeccion({ variante, children }) {
 }
 
 // El título de una sección (o de un año dentro de "Leídos", más pequeño).
-export function TituloSeccion({ variante, label, cuenta, plegada, onAlternar, anidado = false }) {
+export function TituloSeccion({ variante, label, cuenta, plegada, onAlternar, anidado = false, accion = null }) {
   const contenido = <Contenido variante={variante} label={label} cuenta={cuenta} plegada={plegada} hayChevron={!!onAlternar} anidado={anidado} />
 
   // Los títulos que se quedan pegados bajo la barra de herramientas (56px)
@@ -103,8 +103,25 @@ export function TituloSeccion({ variante, label, cuenta, plegada, onAlternar, an
   // después en esta cadena — con w-full puesto, el título pegado se quedaba
   // corto por la derecha y por ahí asomaban los libros de detrás.
   const base = `flex items-center gap-2 text-left ${clasePegada || 'w-full'}`
-  if (!onAlternar) return <div className={base}>{contenido}</div>
-  return <button onClick={onAlternar} className={base}>{contenido}</button>
+
+  // La acción va FUERA del botón del título, en la misma fila: un botón dentro
+  // de otro botón no es HTML válido y el navegador lo deshace por su cuenta.
+  if (!onAlternar) {
+    return (
+      <div className={base}>
+        {contenido}
+        {accion}
+      </div>
+    )
+  }
+  return (
+    <div className={base}>
+      <button onClick={onAlternar} className="flex flex-1 items-center gap-2 text-left">
+        {contenido}
+      </button>
+      {accion}
+    </div>
+  )
 }
 
 function Contenido({ variante, label, cuenta, plegada, hayChevron, anidado }) {

@@ -82,3 +82,12 @@ export const IconPlus = (p) => (
 export const IconCheck = (p) => (
   <svg {...base} {...p}><path d="m5 13 4.5 4.5L19 7" /></svg>
 )
+
+// Flechas hacia dentro (plegar todo) o hacia fuera (desplegar todo).
+export const IconPlegarTodo = ({ expandir = false, ...p }) => (
+  <svg {...base} {...p}>
+    {expandir
+      ? <path d="M8 4 12 8l4-4M8 20l4-4 4 4M4 12h16" />
+      : <path d="M8 8 12 4l4 4M8 16l4 4 4-4M4 12h16" />}
+  </svg>
+)
