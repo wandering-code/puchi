@@ -70,3 +70,7 @@ export const IconX = (p) => (
 export const IconArrowLeft = (p) => (
   <svg {...base} {...p}><path d="M19 12H6m5-5-5 5 5 5" /></svg>
 )
+
+export const IconPencil = (p) => (
+  <svg {...base} {...p}><path d="M4 20h4L19 9a2.1 2.1 0 0 0-3-3L5 17z" /><path d="m14.5 6.5 3 3" /></svg>
+)

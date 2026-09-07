@@ -70,6 +70,68 @@ export default function Luniteca() {
     }
   }, [shelf])
 
+  // Los datos del LIBRO son compartidos con todo el club, a diferencia de los
+  // de la entrada (estado, fechas, notas…). Mismo patrón optimista: se aplica
+  // al momento y se revierte si el servidor dice que no.
+  const actualizarLibro = useCallback(async (bookId, patch) => {
+    const anterior = shelf?.find(x => x.book.id === bookId)?.book
+    const aplicar = (lista, libro) => lista.map(x => x.book.id === bookId ? { ...x, book: libro(x) } : x)
+    setShelf(prev => prev && aplicar(prev, x => ({ ...x.book, ...patch })))
+    ficha.reemplazar(prev => prev?.book.id === bookId ? { ...prev, book: { ...prev.book, ...patch } } : prev)
+    try {
+      const fresco = await api(`/books/${bookId}`, { method: 'PATCH', body: patch })
+      // La respuesta del libro no incluye la portada propia de cada jugador:
+      // se reaplica, o elegir una portada dejaría de verse al guardar.
+      const conPortadaPropia = (x) => ({ ...fresco, cover_url: x.own_cover_url || fresco.cover_url })
+      setShelf(prev => prev && aplicar(prev, conPortadaPropia))
+      ficha.reemplazar(prev => prev?.book.id === bookId ? { ...prev, book: conPortadaPropia(prev) } : prev)
+    } catch {
+      if (!anterior) return
+      setShelf(prev => prev && aplicar(prev, () => anterior))
+      ficha.reemplazar(prev => prev?.book.id === bookId ? { ...prev, book: anterior } : prev)
+    }
+  }, [shelf])
+
+  // Guardar la edición: lo que ha cambiado del libro va al libro; la portada
+  // va a TU entrada, porque cada jugador ve la que ha elegido.
+  const guardarLibro = useCallback(async (entrada, borrador) => {
+    const b = entrada.book
+    const patch = {}
+    if (borrador.title !== (b.title || '')) patch.title = borrador.title
+    if (borrador.author !== (b.author || '')) patch.author = borrador.author
+    if (borrador.genre !== (b.genre || '')) patch.genre = borrador.genre
+    const anio = borrador.year === '' ? null : Number(borrador.year)
+    const paginas = borrador.num_pages === '' ? null : Number(borrador.num_pages)
+    if (anio !== (b.year ?? null)) patch.year = anio
+    if (paginas !== (b.num_pages ?? null)) patch.num_pages = paginas
+    if (borrador.synopsis !== (b.synopsis || '')) patch.synopsis = borrador.synopsis
+    if (Object.keys(patch).length) await actualizarLibro(b.id, patch)
+    if (borrador.cover_url !== (entrada.own_cover_url || '')) {
+      await actualizarEntrada(entrada.id, { cover_url: borrador.cover_url })
+    }
+  }, [actualizarLibro, actualizarEntrada])
+
+  // Sube una foto a la galería del libro (compartida, con atribución) y
+  // devuelve su URL; quien la elige como portada es el formulario.
+  const subirPortada = useCallback(async (bookId, fichero) => {
+    const datos = new FormData()
+    datos.append('file', fichero)
+    const r = await api(`/books/${bookId}/cover`, { method: 'POST', body: datos })
+    return r.url
+  }, [])
+
+  const eliminarEntrada = useCallback(async (id) => {
+    const anterior = shelf
+    cerrarFicha()
+    setShelf(prev => prev && prev.filter(x => x.id !== id))
+    try {
+      await api(`/shelf/personal/${id}`, { method: 'DELETE' })
+    } catch {
+      setShelf(anterior)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shelf])
+
   const abrirLibro = useCallback((entrada) => ficha.abrir(entrada), [])
 
   const cerrarFicha = ficha.cerrar
@@ -218,6 +280,10 @@ export default function Luniteca() {
           <BookDetail
             entry={abierto}
             carpetas={opciones.carpetas}
+            generos={opciones.generos}
+            onGuardarLibro={(borrador) => guardarLibro(abierto, borrador)}
+            onSubirPortada={(fichero) => subirPortada(abierto.book.id, fichero)}
+            onEliminar={() => eliminarEntrada(abierto.id)}
             onCerrar={cerrarFicha}
             onActualizar={patch => actualizarEntrada(abierto.id, patch)}
           />

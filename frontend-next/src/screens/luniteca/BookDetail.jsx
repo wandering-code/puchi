@@ -4,7 +4,8 @@ import { AnimatePresence, motion } from 'motion/react'
 import { statusPatch, totalPages } from './shelf'
 import { Cover, EditableRating, MANTENER_MS, ProgressBar } from './piezas'
 import { EditorCarpeta, EditorEstado, EditorFechas, EditorLecturas, Sinopsis } from './editores'
-import { IconArrowLeft } from '../../ui/icons'
+import { IconArrowLeft, IconPencil } from '../../ui/icons'
+import BookEditForm from './BookEditForm'
 import { useArrastreParaCerrar } from '../../ui/arrastre'
 
 // Distribución tomada de la Luniteca nueva de la Puchi actual: portada grande
@@ -12,7 +13,7 @@ import { useArrastreParaCerrar } from '../../ui/arrastre'
 // que se pueden cambiar como pastillas que abren su propio editor — en vez de
 // una lista de bloques con encabezados, que era lo de antes y se parecía más a
 // la Luniteca vieja. Lo que se toca es el dato en sí.
-export default function BookDetail({ entry, carpetas, onCerrar, onActualizar }) {
+export default function BookDetail({ entry, carpetas, generos, onCerrar, onActualizar, onGuardarLibro, onSubirPortada, onEliminar }) {
   const libro = entry.book
   const paginas = totalPages(entry)
 
@@ -30,6 +31,11 @@ export default function BookDetail({ entry, carpetas, onCerrar, onActualizar }) 
   // elemento es el que scrollea, la ficha se quedaba sin poder desplazarse con
   // el dedo en el móvil.
   const arrastre = useArrastreParaCerrar(onCerrar, { umbral: 110 })
+
+  // Los datos del libro (título, autor, portada…) se editan en un formulario
+  // aparte, que sustituye al contenido de la ficha: son datos compartidos con
+  // todo el club, no como el estado o las notas, que se tocan en el sitio.
+  const [editando, setEditando] = useState(false)
 
   return createPortal(
     <motion.div
@@ -49,16 +55,38 @@ export default function BookDetail({ entry, carpetas, onCerrar, onActualizar }) 
           propia: así la portada empieza arriba del todo y la ficha se lee como
           una página, no como una pantalla con cabecera. */}
         <div className="pointer-events-none sticky top-0 z-10 flex justify-between px-3">
+          {/* Editando, la flecha sale de la edición y no de la ficha: si cerrara
+              del todo se perderían los cambios sin avisar. */}
           <motion.button
-            onClick={onCerrar}
-            aria-label="Volver a la estantería"
+            onClick={() => (editando ? setEditando(false) : onCerrar())}
+            aria-label={editando ? 'Descartar cambios' : 'Volver a la estantería'}
             whileTap={{ scale: 0.92 }}
             className="pointer-events-auto mt-1 flex h-10 w-10 items-center justify-center rounded-full border border-line bg-surface/90 text-ink shadow-sm backdrop-blur"
           >
             <IconArrowLeft className="h-5 w-5" />
           </motion.button>
+          {!editando && (
+            <motion.button
+              onClick={() => setEditando(true)}
+              aria-label="Editar los datos del libro"
+              whileTap={{ scale: 0.92 }}
+              className="pointer-events-auto mt-1 flex h-10 w-10 items-center justify-center rounded-full border border-line bg-surface/90 text-ink shadow-sm backdrop-blur"
+            >
+              <IconPencil className="h-[18px] w-[18px]" />
+            </motion.button>
+          )}
         </div>
 
+      {editando ? (
+        <BookEditForm
+          entry={entry}
+          generos={generos}
+          onCancelar={() => setEditando(false)}
+          onSubirPortada={onSubirPortada}
+          onEliminar={onEliminar}
+          onGuardar={async (borrador) => { await onGuardarLibro(borrador); setEditando(false) }}
+        />
+      ) : (
       <div className="mx-auto w-full max-w-md px-6 pb-kb">
         <div className="flex flex-col items-center text-center">
           <div className="w-[168px] shrink-0">
@@ -116,6 +144,7 @@ export default function BookDetail({ entry, carpetas, onCerrar, onActualizar }) 
           </Apartado>
         </div>
         </div>
+      )}
       </div>
     </motion.div>,
     document.body,
