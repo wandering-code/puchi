@@ -74,6 +74,10 @@ function tipografiaDe(entry, h) {
 // disponible. Se prefiere achicar la letra a cortar el texto: un lomo con
 // puntos suspensivos no dice qué libro es.
 const TAMANO_MINIMO = 6
+// El autor aguanta un punto menos que el título: va en segundo plano, como en
+// un lomo impreso, y con 6px como suelo para los dos se quedaba fuera en todos
+// los libros de título largo (medido: solo salía en la mitad de ellos).
+const TAMANO_MINIMO_AUTOR = 5
 
 // Lo que ocupa un texto, de largo, a un tamaño dado.
 function largoDe(texto, tipografia, tamano) {
@@ -82,43 +86,83 @@ function largoDe(texto, tipografia, tamano) {
   return texto.length * tipografia.ancho * (tipografia.mayusculas ? 1.14 : 1) * tamano
 }
 
-// Reparte el largo del lomo entre título y autor de forma que se lean LOS DOS
-// enteros. Si no hay sitio ni encogiéndolos al mínimo, desaparece el autor
-// antes que cortar nada: un nombre a medias no dice quién es, y el título
-// manda. Y si ni el título solo cabe de una tirada, pasa a dos líneas, que es
-// lo que hace un lomo de verdad.
-function repartirTexto({ titulo, autor, largoUtil, anchoLomo, tipografia, tamanoIdeal }) {
-  const idealAutor = Math.max(TAMANO_MINIMO, tamanoIdeal - 4)
-  const conAutor = autor && anchoLomo >= 30
-  const SEPARACION = 6
+// Un lomo de verdad no borra al autor cuando no cabe: lo abrevia. "Gabriel
+// García Márquez" pasa a "G. García Márquez", después a "García Márquez" y, en
+// el peor caso, al apellido solo. Es lo que hacen las editoriales, y es lo que
+// permite que el autor salga casi siempre en vez de desaparecer.
+function abreviaturasDe(nombre) {
+  if (!nombre) return []
+  const partes = nombre.trim().split(/\s+/)
+  if (partes.length === 1) return [nombre]
+  const apellidos = partes.slice(1).join(' ')
+  // Sin repetidos: con un nombre de dos palabras varias versiones coinciden.
+  return [...new Set([
+    nombre,                             // Gabriel García Márquez
+    `${partes[0][0]}. ${apellidos}`,    // G. García Márquez
+    apellidos,                          // García Márquez
+    partes[partes.length - 1],          // Márquez
+  ].filter(Boolean))]
+}
 
-  if (conAutor) {
-    const necesario = largoDe(titulo, tipografia, tamanoIdeal) + largoDe(autor, tipografia, idealAutor) + SEPARACION
-    if (necesario <= largoUtil) {
-      return { tamanoTitulo: tamanoIdeal, tamanoAutor: idealAutor, lineas: 1, conAutor: true }
+// Reparte el largo del lomo entre título y autor de forma que se lean LOS DOS
+// enteros. El autor se va abreviando hasta que quepa, y solo desaparece si ni
+// su apellido solo entra. Y si ni el título solo cabe de una tirada, pasa a
+// dos líneas, que es lo que hace un lomo de verdad.
+function repartirTexto({ titulo, autor, largoUtil, anchoLomo, tipografia, tamanoIdeal }) {
+  const idealAutor = Math.max(TAMANO_MINIMO_AUTOR, tamanoIdeal - 4)
+  const SEPARACION = 6
+  // El umbral de ancho es solo para que el autor no ahogue un lomo finísimo.
+  const versiones = anchoLomo >= 26 ? abreviaturasDe(autor) : []
+
+  // Manda el título: se prueba el tamaño más grande posible y, para ese tamaño,
+  // el nombre más completo que quepa en lo que sobra. Encogerlos a la vez
+  // guardando la proporción (que es lo que se hacía antes) tiraba el autor en
+  // todos los títulos largos, porque el título llegaba al mínimo primero y se
+  // llevaba al autor por delante aunque a él aún le sobrara sitio.
+  for (let t = tamanoIdeal; t >= TAMANO_MINIMO; t--) {
+    const sobra = largoUtil - largoDe(titulo, tipografia, t) - SEPARACION
+    if (sobra <= 0) continue
+    for (const version of versiones) {
+      const cabe = Math.floor(sobra / (largoDe(version, tipografia, 1) || 1))
+      const a = Math.min(idealAutor, cabe)
+      if (a >= TAMANO_MINIMO_AUTOR) {
+        return { tamanoTitulo: t, tamanoAutor: a, lineas: 1, autor: version }
+      }
     }
-    // Los dos encogen a la vez, manteniendo su proporción.
-    const escala = (largoUtil - SEPARACION) / (necesario - SEPARACION)
-    const t = Math.floor(tamanoIdeal * escala)
-    const a = Math.floor(idealAutor * escala)
-    if (t >= TAMANO_MINIMO && a >= TAMANO_MINIMO) {
-      return { tamanoTitulo: t, tamanoAutor: a, lineas: 1, conAutor: true }
-    }
-    // Al mínimo tampoco caben los dos: el autor se va.
   }
 
+  // No caben los dos en fila: el título pasa a dos líneas, si el lomo tiene
+  // ancho para ellas. Ahí el título ya no compite con el autor a lo largo del
+  // lomo (cada uno va en su columna) y el autor puede volver, con una columna
+  // más. Se intenta ANTES de resignarse a un título solo y diminuto: un lomo
+  // de verdad parte el título largo en dos renglones, no lo escribe en
+  // letra de hormiga para que quepa de una tirada.
+  const anchoLibre = anchoLomo - 4
+  const dos = Math.floor((largoUtil * 2) / (largoDe(titulo, tipografia, 1) || 1))
+  const tamanoDos = Math.max(TAMANO_MINIMO, Math.min(tamanoIdeal, dos))
+  // Aquí lo que aprieta es el ANCHO del lomo, no su largo: dos renglones de
+  // título más la columna del autor son tres columnas de letra. Así que el
+  // título también va bajando de tamaño hasta que la del autor quepa al lado.
+  for (let t = tamanoDos; t >= TAMANO_MINIMO; t--) {
+    if (t * 2.5 > anchoLibre) continue
+    for (const version of versiones) {
+      const cabeLargo = Math.floor(largoUtil / (largoDe(version, tipografia, 1) || 1))
+      const a = Math.min(idealAutor, cabeLargo)
+      if (a >= TAMANO_MINIMO_AUTOR && t * 2.5 + a * 1.5 <= anchoLibre) {
+        return { tamanoTitulo: t, tamanoAutor: a, lineas: 2, autor: version }
+      }
+    }
+  }
+
+  // Sin sitio para el autor por ningún lado: manda el título, entero.
   const soloTitulo = Math.floor(largoUtil / (largoDe(titulo, tipografia, 1) || 1))
   const tamano = Math.min(tamanoIdeal, soloTitulo)
   if (tamano >= TAMANO_MINIMO) {
-    return { tamanoTitulo: tamano, tamanoAutor: 0, lineas: 1, conAutor: false }
+    return { tamanoTitulo: tamano, tamanoAutor: 0, lineas: 1, autor: null }
   }
-
-  // Ni el título solo cabe en una línea: dos líneas, si el lomo da para ellas.
-  const dos = Math.floor((largoUtil * 2) / (largoDe(titulo, tipografia, 1) || 1))
-  const tamanoDos = Math.max(TAMANO_MINIMO, Math.min(tamanoIdeal, dos))
-  return tamanoDos * 2.5 <= anchoLomo - 4
-    ? { tamanoTitulo: tamanoDos, tamanoAutor: 0, lineas: 2, conAutor: false }
-    : { tamanoTitulo: TAMANO_MINIMO, tamanoAutor: 0, lineas: 1, conAutor: false }
+  return tamanoDos * 2.5 <= anchoLibre
+    ? { tamanoTitulo: tamanoDos, tamanoAutor: 0, lineas: 2, autor: null }
+    : { tamanoTitulo: TAMANO_MINIMO, tamanoAutor: 0, lineas: 1, autor: null }
 }
 
 function paginasDe(entry) { return totalPages(entry) }
@@ -194,7 +238,7 @@ const Lomo = memo(function Lomo({ entry, onAbrir }) {
   }, [libro.cover_url])
 
   // El largo aprovechable del lomo, quitando el aire de arriba y abajo.
-  const largoUtil = alto - 24
+  const largoUtil = alto - 16
   const texto = repartirTexto({
     titulo: libro.title,
     autor: libro.author,
@@ -207,8 +251,6 @@ const Lomo = memo(function Lomo({ entry, onAbrir }) {
   // Nervios: las bandas en relieve del lomo de una tapa dura. Solo en los
   // libros gruesos, que son los que se encuadernan así.
   const conNervios = tapaDura
-  // El autor solo cabe en los lomos anchos; en uno de 24px estorbaría al
-  // título en vez de aportar.
 
 
   // Un libro inclinado ocupa más sitio del que ocupa de pie: su parte de
@@ -309,7 +351,7 @@ const Lomo = memo(function Lomo({ entry, onAbrir }) {
         />
 
         <span
-          className="absolute inset-0 flex items-center px-[2px] py-3 text-center"
+          className="absolute inset-0 flex items-center px-[2px] py-2 text-center"
           // De arriba abajo, que es como se leen los lomos aquí: se inclina la
           // cabeza a la derecha y se lee. Al revés (de abajo arriba) es la
           // convención anglosajona y en una balda española se ve del revés.
@@ -338,12 +380,12 @@ const Lomo = memo(function Lomo({ entry, onAbrir }) {
           >
             {libro.title}
           </span>
-          {texto.conAutor && (
+          {texto.autor && (
             <span
               className="shrink-0 whitespace-nowrap leading-tight text-white/75 drop-shadow-[0_1px_2px_rgba(0,0,0,.5)]"
               style={{ fontFamily: tipografia.familia, fontSize: texto.tamanoAutor }}
             >
-              {libro.author}
+              {texto.autor}
             </span>
           )}
         </span>
