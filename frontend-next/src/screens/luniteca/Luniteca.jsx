@@ -424,15 +424,16 @@ const Coleccion = memo(function Coleccion({ entries, vista, onAbrir, abiertaId }
   // sale solo y las portadas se reparten lo que hay, sin recortarse — la
   // proporción 2/3 la sigue fijando Cover, aquí solo cambia cuánto miden.
   //
-  // El mínimo es 72px y no un número redondo cualquiera: medido en los anchos
-  // reales, con 76px un iPhone SE (375) solo admitía TRES columnas y las
-  // portadas se estiraban a 104px — enormes justo en la pantalla más pequeña,
-  // mientras que un Pro Max sacaba cuatro de 89px. Con 72 entran cuatro en el
-  // SE (75px) y el Pro Max se queda igual. Bajar a 68 metería una quinta
-  // columna en los Max y los dejaría todos entre 68 y 79px, si algún día se
-  // quieren aún más pequeñas.
+  // El mínimo es 68px y no un número redondo cualquiera: sale de medir los
+  // anchos reales. Con 76px un iPhone SE (375) solo admitía TRES columnas y
+  // las portadas se estiraban a 104px — enormes justo en la pantalla más
+  // pequeña — mientras que un Pro Max sacaba cuatro de 89px. Con 68 salen
+  // cuatro en el SE (75px), cuatro en un 14 (79px) y cinco en los Plus y Pro
+  // Max (68px): todas las pantallas quedan entre 68 y 79px, que es lo que hace
+  // que la app se vea igual en cualquier móvil en vez de depender de si el
+  // ancho llega justo al siguiente salto de columna.
   return (
-    <div className="grid grid-cols-[repeat(auto-fill,minmax(72px,1fr))] gap-3">
+    <div className="grid grid-cols-[repeat(auto-fill,minmax(68px,1fr))] gap-3">
       {entries.map(e => <PortadaLibro key={e.id} entry={e} onAbrir={onAbrir} activa={abiertaId === e.id} />)}
     </div>
   )
