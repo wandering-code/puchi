@@ -11,6 +11,7 @@ import {
 } from '../../ui/icons'
 import HojaFiltros from './HojaFiltros'
 import { useHoja } from './HojaInferior'
+import { leerVariante } from './animacionFicha'
 import { useCapa } from '../../platform/capas'
 
 
@@ -82,14 +83,25 @@ export default function Luniteca() {
     return () => clearTimeout(t)
   }, [enTransicion])
 
-  const abrirLibro = useCallback((entrada) => {
-    setEnTransicion(entrada.id)
+  // La variante se lee al abrir, no en cada render: cambiarla en Ajustes se
+  // nota en la siguiente ficha que abras, que es cuando importa.
+  const [variante, setVariante] = useState('portada')
+  const [origen, setOrigen] = useState(null)
+
+  const abrirLibro = useCallback((entrada, evento) => {
+    const v = leerVariante()
+    setVariante(v)
+    // Punto desde el que crece la variante "zoom": el centro de la portada que
+    // se acaba de tocar.
+    const caja = evento?.currentTarget?.getBoundingClientRect?.()
+    setOrigen(caja ? { x: caja.x + caja.width / 2, y: caja.y + caja.height / 2 } : null)
+    if (v === 'portada') setEnTransicion(entrada.id)
     ficha.abrir(entrada)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   function cerrarFicha(opciones) {
-    if (abierto) setEnTransicion(abierto.id)
+    if (abierto && variante === 'portada') setEnTransicion(abierto.id)
     ficha.cerrar(opciones)
   }
 
@@ -237,6 +249,8 @@ export default function Luniteca() {
           <BookDetail
             entry={abierto}
             carpetas={opciones.carpetas}
+            variante={variante}
+            origen={origen}
             onCerrar={cerrarFicha}
             onActualizar={patch => actualizarEntrada(abierto.id, patch)}
           />
@@ -503,7 +517,7 @@ const PortadaLibro = memo(function PortadaLibro({ entry, onAbrir, activa }) {
        descuadrarse. El título va en aria-label, que si no el botón se queda
        sin nombre para un lector de pantalla. */
     <button
-      onClick={() => onAbrir(entry)}
+      onClick={(ev) => onAbrir(entry, ev)}
       aria-label={entry.book.title}
       className="transition-transform duration-150 active:scale-[0.96]"
     >
@@ -525,7 +539,7 @@ const FilaLibro = memo(function FilaLibro({ entry, onAbrir, activa }) {
   const fechas = readingDatesLabel(entry)
   return (
     <button
-      onClick={() => onAbrir(entry)}
+      onClick={(ev) => onAbrir(entry, ev)}
       className="flex w-full items-center gap-3 py-2.5 text-left transition-transform duration-150 active:scale-[0.99]"
     >
       <PortadaAnimable entry={entry} activa={activa} className="w-10 shrink-0">
@@ -552,7 +566,7 @@ const TarjetaLeyendo = memo(function TarjetaLeyendo({ entry, onAbrir, activa }) 
   const fechas = readingDatesLabel(entry)
   return (
     <button
-      onClick={() => onAbrir(entry)}
+      onClick={(ev) => onAbrir(entry, ev)}
       className="flex w-full items-stretch gap-3 rounded-xl2 border border-line bg-surface p-3 text-left transition-transform duration-150 active:scale-[0.985]"
     >
       <PortadaAnimable entry={entry} activa={activa} className="w-14 shrink-0">

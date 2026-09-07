@@ -5,6 +5,7 @@ import { useAuth } from '../platform/auth'
 import { isIOS, isStandalone, safeInsets } from '../platform/pwa'
 import { useCapa } from '../platform/capas'
 import Luniteca from './luniteca/Luniteca'
+import { VARIANTES, guardarVariante, leerVariante } from './luniteca/animacionFicha'
 import { IconBooks, IconExit, IconHome, IconMenu, IconPaw, IconSettings } from '../ui/icons'
 
 const SECCIONES = [
@@ -246,6 +247,8 @@ function Ajustes() {
       <h2 className="font-display text-[1.75rem] font-bold tracking-[-0.02em]">Ajustes</h2>
       <p className="mt-2 text-sm text-ink-dim">Sesión de {player?.name}.</p>
 
+      <AnimacionDeFicha />
+
       <div className="mt-6 overflow-hidden rounded-xl2 border border-line bg-surface">
         <p className="border-b border-line px-4 py-2 text-xs uppercase tracking-wider text-ink-mute">Diagnóstico</p>
         <dl className="divide-y divide-[color:var(--color-line)] text-sm">
@@ -268,6 +271,54 @@ function Ajustes() {
       </motion.button>
       <p className="mt-2 px-1 text-xs text-ink-mute">
         La sesión es la misma que la de la Puchi actual: al cerrarla aquí, se cierra también allí.
+      </p>
+    </div>
+  )
+}
+
+// Provisional, mientras se decide cómo debe abrirse la ficha de un libro: se
+// prueban las cuatro en el móvil y se deja la que gane.
+function AnimacionDeFicha() {
+  const [elegida, setElegida] = useState(leerVariante)
+
+  function elegir(id) {
+    guardarVariante(id)
+    setElegida(id)
+  }
+
+  return (
+    <div className="mt-6 overflow-hidden rounded-xl2 border border-line bg-surface">
+      <p className="border-b border-line px-4 py-2 text-xs uppercase tracking-wider text-ink-mute">
+        Cómo se abre un libro
+      </p>
+      <div className="flex flex-col divide-y divide-[color:var(--color-line)]">
+        {VARIANTES.map(v => {
+          const activa = elegida === v.id
+          return (
+            <button key={v.id} onClick={() => elegir(v.id)} className="flex items-start gap-3 px-4 py-3 text-left">
+              <span
+                className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-colors ${
+                  activa ? 'border-accent bg-accent' : 'border-line'
+                }`}
+              >
+                {activa && (
+                  <motion.span
+                    layoutId="anim-elegida"
+                    className="h-2 w-2 rounded-full bg-on-accent"
+                    transition={{ type: 'spring', stiffness: 420, damping: 34 }}
+                  />
+                )}
+              </span>
+              <span className="min-w-0">
+                <span className={`block text-sm font-semibold ${activa ? 'text-accent' : 'text-ink'}`}>{v.nombre}</span>
+                <span className="mt-0.5 block text-xs leading-relaxed text-ink-mute">{v.detalle}</span>
+              </span>
+            </button>
+          )
+        })}
+      </div>
+      <p className="border-t border-line px-4 py-2.5 text-xs text-ink-mute">
+        Se aplica al siguiente libro que abras. Cuando decidas, quito las otras tres.
       </p>
     </div>
   )

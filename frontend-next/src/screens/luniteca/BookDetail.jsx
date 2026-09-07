@@ -5,13 +5,14 @@ import { statusPatch, totalPages } from './shelf'
 import { Cover, EditableRating, MANTENER_MS, ProgressBar } from './piezas'
 import { EditorCarpeta, EditorEstado, EditorFechas, EditorLecturas, Sinopsis } from './editores'
 import { IconArrowLeft } from '../../ui/icons'
+import { animacionDeFicha } from './animacionFicha'
 
 // Distribución tomada de la Luniteca nueva de la Puchi actual: portada grande
 // centrada, título y autor debajo, la ficha técnica en una línea y los datos
 // que se pueden cambiar como pastillas que abren su propio editor — en vez de
 // una lista de bloques con encabezados, que era lo de antes y se parecía más a
 // la Luniteca vieja. Lo que se toca es el dato en sí.
-export default function BookDetail({ entry, carpetas, onCerrar, onActualizar }) {
+export default function BookDetail({ entry, carpetas, variante, origen, onCerrar, onActualizar }) {
   const libro = entry.book
   const paginas = totalPages(entry)
 
@@ -21,13 +22,33 @@ export default function BookDetail({ entry, carpetas, onCerrar, onActualizar }) 
   const llevaProgreso = ['reading', 'rereading', 'read'].includes(entry.status)
   const llevaLecturas = ['read', 'rereading'].includes(entry.status)
 
+  // Cómo entra y sale la ficha se elige en Ajustes mientras se decide cuál
+  // gusta más (ver animacionFicha.js).
+  const anim = animacionDeFicha(variante, origen)
+
+  // En la variante "hoja" se cierra tirando hacia abajo, pero la ficha también
+  // scrollea: el arrastre solo se escucha con el contenido arriba del todo,
+  // que es como se comportan las hojas de las apps nativas. Si no, bajar por
+  // la sinopsis cerraría la ficha en vez de leerla.
+  const [arriba, setArriba] = useState(true)
+
   return createPortal(
     <motion.div
-      className="fixed inset-0 z-50 overflow-y-auto overscroll-contain bg-bg"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.2 }}
+      className={`fixed inset-0 z-50 overflow-y-auto overscroll-contain ${anim.className}`}
+      initial={anim.initial}
+      animate={anim.animate}
+      exit={anim.exit}
+      transition={anim.transition}
+      style={anim.style}
+      onScroll={anim.arrastrable ? (ev) => setArriba(ev.currentTarget.scrollTop <= 0) : undefined}
+      {...(anim.arrastrable ? {
+        drag: 'y',
+        dragListener: arriba,
+        dragConstraints: { top: 0, bottom: 0 },
+        dragElastic: { top: 0, bottom: 0.4 },
+        dragMomentum: false,
+        onDragEnd: (_, info) => { if (info.offset.y > 110 || info.velocity.y > 550) onCerrar() },
+      } : {})}
     >
       {/* El botón de volver flota sobre la portada en vez de ocupar una barra
           propia: así la portada empieza arriba del todo y la ficha se lee como
@@ -45,14 +66,14 @@ export default function BookDetail({ entry, carpetas, onCerrar, onActualizar }) 
 
       <div className="mx-auto w-full max-w-md px-6 pb-kb">
         <div className="flex flex-col items-center text-center">
-          <motion.div layoutId={`portada-${entry.id}`} className="w-[168px] shrink-0">
+          <PortadaDeFicha compartida={anim.portadaCompartida} id={entry.id}>
             <Cover
               url={libro.cover_url}
               title={libro.title}
               priority
               className="shadow-[0_6px_14px_rgba(60,40,20,0.18),0_18px_34px_-16px_rgba(60,40,20,0.4)]"
             />
-          </motion.div>
+          </PortadaDeFicha>
 
           <h2 className="mt-5 font-display text-[1.6rem] font-bold leading-tight tracking-[-0.02em]">
             {libro.title}
@@ -103,6 +124,14 @@ export default function BookDetail({ entry, carpetas, onCerrar, onActualizar }) 
     </motion.div>,
     document.body,
   )
+}
+
+// Solo la variante "la portada crece" necesita el layoutId compartido con la
+// tarjeta de la estantería; en las demás la portada es una imagen normal.
+function PortadaDeFicha({ compartida, id, children }) {
+  const clase = 'w-[168px] shrink-0'
+  if (!compartida) return <div className={clase}>{children}</div>
+  return <motion.div layoutId={`portada-${id}`} className={clase}>{children}</motion.div>
 }
 
 function Apartado({ titulo, children }) {
