@@ -4,7 +4,7 @@ import { useAuth } from '../../platform/auth'
 import { api } from '../../platform/api'
 import { useLiveUpdates } from '../../platform/live'
 import { EMPTY_FILTERS, agruparEstanteria, opcionesDeFiltro, readingDatesLabel } from './shelf'
-import { Cover, NotaBadge, PagesLabel, ProgressBar } from './piezas'
+import { Cover, NotaBadge, PagesLabel, ProgressBar, StarRating } from './piezas'
 import BookDetail from './BookDetail'
 import {
   IconChevron, IconFilter, IconGrid, IconList, IconSearch, IconX,
@@ -492,13 +492,13 @@ const FilaLibro = memo(function FilaLibro({ entry, onAbrir, activa }) {
         <p className="mt-0.5 truncate text-xs text-ink-mute">{entry.book.author || 'Sin autor'}</p>
         {fechas && <p className="mt-0.5 truncate text-[10px] leading-tight text-ink-mute/80">{fechas}</p>}
       </div>
-      {/* Sin punto de estado: cada sección de la lista es de un estado y ya lo
-          dice su título, así que el punto no añadía nada. */}
-      {entry.rating > 0 && (
-        <span className="shrink-0 rounded-full bg-accent-soft px-2 py-0.5 text-xs font-semibold text-accent">
-          {entry.rating.toLocaleString('es')}
-        </span>
-      )}
+      {/* La puntuación en estrellas, con las medias de verdad (el relleno se
+          recorta al porcentaje, no se redondea al entero). Aquí sí caben y se
+          leen; en la cuadrícula sigue siendo un número porque sobre una
+          portada de 68px cinco estrellas no se distinguen.
+          Sin punto de estado: cada sección de la lista es de un solo estado y
+          su título ya lo dice. */}
+      {entry.rating > 0 && <StarRating rating={entry.rating} size={11} className="shrink-0" />}
     </button>
   )
 })
