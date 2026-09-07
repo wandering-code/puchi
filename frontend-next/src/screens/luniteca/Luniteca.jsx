@@ -270,75 +270,112 @@ function Herramientas({
   // volver arriba solo para filtrar es la diferencia entre usarlo y no usarlo.
   return (
     <div className="sticky top-0 z-10 -mx-5 border-b border-line bg-bg/85 px-5 py-2 backdrop-blur-xl">
+      {/* Al buscar, el campo ocupa la fila entera y el resto de botones se
+          van: antes la barra se desplegaba DEBAJO y empujaba la estantería,
+          que es el mismo salto que ya se quitó de los filtros. La lupa se
+          queda fija en su sitio y el campo crece a partir de ella.
+          mode="popLayout": lo que sale deja de ocupar sitio en cuanto empieza
+          a irse, así que lo que entra ocupa su hueco con un solo movimiento en
+          vez de esperar a que termine la salida. */}
       <div className="flex items-center gap-1">
         <BotonHerramienta
           activo={buscando}
           onClick={() => { onBuscando(!buscando); if (buscando) onQuery('') }}
-          etiqueta="Buscar"
+          etiqueta={buscando ? 'Cerrar búsqueda' : 'Buscar'}
         >
           <IconSearch className="h-[18px] w-[18px]" />
         </BotonHerramienta>
 
-        {/* Un solo botón para filtrar y ordenar: los dos viven en la misma
-            hoja, así que dos botones que abren lo mismo solo confunden. */}
-        <BotonHerramienta
-          activo={filtrosActivos || ordenActivo}
-          onClick={onAbrirHoja}
-          etiqueta="Filtrar y ordenar"
-        >
-          <IconFilter className="h-[18px] w-[18px]" />
-          {(filtrosActivos || ordenActivo) && (
-            <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-accent" />
-          )}
-        </BotonHerramienta>
-
-        <div className="flex-1" />
-
-        {/* Píldora dentro de píldora: el recuadro era rounded-xl2 (20px) con la
-            pastilla a 10px y 2px de separación, así que la curva de dentro no
-            podía seguir a la de fuera y la selección se salía por las esquinas.
-            Con las dos redondeadas del todo encaja a cualquier tamaño. */}
-        <div className="flex items-center rounded-full border border-line p-1">
-          {[['grid', IconGrid, 'Cuadrícula'], ['list', IconList, 'Lista']].map(([modo, Icono, etiqueta]) => (
-            <button
-              key={modo}
-              onClick={() => onVista(modo)}
-              aria-label={etiqueta}
-              aria-pressed={vista === modo}
-              className="relative flex h-8 w-10 items-center justify-center"
+        <AnimatePresence initial={false} mode="popLayout">
+          {buscando ? (
+            <motion.div
+              key="campo"
+              layout
+              className="flex min-w-0 flex-1 items-center gap-2 rounded-xl2 border border-line bg-surface px-3"
+              // Crece desde la izquierda (originX 0), que es donde está la
+              // lupa: así parece que el campo sale de ella y no que aparece
+              // una caja nueva centrada.
+              initial={{ opacity: 0, scaleX: 0.6 }}
+              animate={{ opacity: 1, scaleX: 1 }}
+              exit={{ opacity: 0, scaleX: 0.6 }}
+              style={{ originX: 0 }}
+              transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
             >
-              {vista === modo && (
-                <motion.span
-                  layoutId="luni-vista"
-                  className="absolute inset-0 rounded-full bg-accent-soft"
-                  transition={{ type: 'spring', stiffness: 420, damping: 34 }}
-                />
-              )}
-              <Icono className={`relative h-[15px] w-[15px] ${vista === modo ? 'text-accent' : 'text-ink-mute'}`} />
-            </button>
-          ))}
-        </div>
-      </div>
+              <input
+                autoFocus
+                value={query}
+                onChange={e => onQuery(e.target.value)}
+                placeholder="Título o autor"
+                className="h-10 w-full min-w-0 bg-transparent text-[15px] outline-none placeholder:text-ink-mute"
+              />
+              <AnimatePresence>
+                {query && (
+                  <motion.button
+                    onClick={() => onQuery('')}
+                    aria-label="Limpiar"
+                    className="shrink-0 p-1 text-ink-mute"
+                    initial={{ opacity: 0, scale: 0.6 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.6 }}
+                    transition={{ duration: 0.15 }}
+                  >
+                    <IconX className="h-4 w-4" />
+                  </motion.button>
+                )}
+              </AnimatePresence>
+            </motion.div>
+          ) : (
+            <motion.div
+              key="acciones"
+              layout
+              className="flex flex-1 items-center gap-1"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+            >
+              {/* Un solo botón para filtrar y ordenar: los dos viven en la
+                  misma hoja, así que dos botones que abren lo mismo solo
+                  confunden. */}
+              <BotonHerramienta
+                activo={filtrosActivos || ordenActivo}
+                onClick={onAbrirHoja}
+                etiqueta="Filtrar y ordenar"
+              >
+                <IconFilter className="h-[18px] w-[18px]" />
+                {(filtrosActivos || ordenActivo) && (
+                  <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-accent" />
+                )}
+              </BotonHerramienta>
 
-      <Plegable abierta={buscando}>
-        <div className="pt-2">
-          <div className="flex items-center gap-2 rounded-xl2 border border-line bg-surface px-3">
-            <IconSearch className="h-4 w-4 shrink-0 text-ink-mute" />
-            <input
-              autoFocus
-              value={query}
-              onChange={e => onQuery(e.target.value)}
-              placeholder="Título o autor"
-              className="h-11 w-full bg-transparent text-[15px] outline-none placeholder:text-ink-mute"
-            />
-            {query && (
-              <button onClick={() => onQuery('')} aria-label="Limpiar" className="p-1 text-ink-mute">
-                <IconX className="h-4 w-4" />
-              </button>
-            )}
-          </div>
-        </div>
-      </Plegable>
+              <div className="flex-1" />
+
+              {/* Píldora dentro de píldora: las dos redondeadas del todo, que
+                  con radios distintos la selección se salía por las esquinas. */}
+              <div className="flex items-center rounded-full border border-line p-1">
+                {[['grid', IconGrid, 'Cuadrícula'], ['list', IconList, 'Lista']].map(([modo, Icono, etiqueta]) => (
+                  <button
+                    key={modo}
+                    onClick={() => onVista(modo)}
+                    aria-label={etiqueta}
+                    aria-pressed={vista === modo}
+                    className="relative flex h-8 w-10 items-center justify-center"
+                  >
+                    {vista === modo && (
+                      <motion.span
+                        layoutId="luni-vista"
+                        className="absolute inset-0 rounded-full bg-accent-soft"
+                        transition={{ type: 'spring', stiffness: 420, damping: 34 }}
+                      />
+                    )}
+                    <Icono className={`relative h-[15px] w-[15px] ${vista === modo ? 'text-accent' : 'text-ink-mute'}`} />
+                  </button>
+                ))}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
     </div>
   )
 }
