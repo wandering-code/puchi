@@ -60,27 +60,32 @@ const STAR_PATH = 'M10 1.3l2.68 5.62 6.12.62-4.55 4.24 1.24 6.05L10 14.77l-5.49 
 export function StarRating({ rating, size = 12, className = '' }) {
   if (!rating) return null
   return (
-    <div className={`flex items-center gap-[1px] ${className}`} aria-label={`${rating} de 5`}>
-      {[1, 2, 3, 4, 5].map(i => (
-        <Estrella key={i} llenado={Math.max(0, Math.min(1, rating - i + 1))} size={size} />
-      ))}
+    <div className={className} aria-label={`${rating} de 5`}>
+      <FilaEstrellas valor={rating} size={size} />
     </div>
   )
 }
 
-// Media estrella real (un clip a la mitad), no redondeo al entero: las
-// puntuaciones se guardan con decimal y redondear engañaría.
-function Estrella({ llenado, size }) {
-  const id = `st-${Math.round(llenado * 100)}-${size}`
+// UN SOLO <svg> para las cinco estrellas, con el relleno recortado por un
+// <rect>. La versión anterior montaba un <svg> con su propio <linearGradient>
+// por estrella: con 300 libros en pantalla eso son 1.500 SVG y 1.500
+// gradientes que crear al montar la estantería.
+function FilaEstrellas({ valor, size }) {
+  const ancho = Math.max(0, Math.min(5, valor)) / 5 * 100
+  const id = `luni-clip-${Math.round(ancho)}`
   return (
-    <svg width={size} height={size} viewBox="0 0 20 20" aria-hidden="true">
+    <svg width={size * 5 + 4} height={size} viewBox="0 0 104 20" aria-hidden="true">
       <defs>
-        <linearGradient id={id}>
-          <stop offset={`${llenado * 100}%`} stopColor="var(--color-accent)" />
-          <stop offset={`${llenado * 100}%`} stopColor="var(--color-line)" />
-        </linearGradient>
+        <clipPath id={id}>
+          <rect x="0" y="0" width={`${ancho}%`} height="20" />
+        </clipPath>
       </defs>
-      <path d={STAR_PATH} fill={`url(#${id})`} />
+      <g fill="var(--color-line)">
+        {[0, 21, 42, 63, 84].map(x => <path key={x} d={STAR_PATH} transform={`translate(${x} 0)`} />)}
+      </g>
+      <g fill="var(--color-accent)" clipPath={`url(#${id})`}>
+        {[0, 21, 42, 63, 84].map(x => <path key={x} d={STAR_PATH} transform={`translate(${x} 0)`} />)}
+      </g>
     </svg>
   )
 }
@@ -97,15 +102,17 @@ export function EditableRating({ rating, onChange, size = 28 }) {
     if (!caja) return 0
     const x = Math.min(Math.max(clientX - caja.left, 0), caja.width)
     const bruto = (x / caja.width) * 5
-    // A medias estrellas, con mínimo de 0,5: por debajo se considera "quitar".
+    // A medias estrellas, con mínimo de 0,5: por debajo se entiende "quitar".
     const medio = Math.round(bruto * 2) / 2
     return medio < 0.5 ? 0 : medio
   }
 
   return (
-    <div
+    <motion.div
       ref={fila}
-      className="flex touch-none items-center gap-1"
+      className="inline-flex touch-none items-center"
+      animate={{ scale: previo !== null ? 1.06 : 1 }}
+      transition={{ type: 'spring', stiffness: 500, damping: 26 }}
       onPointerDown={(ev) => { ev.currentTarget.setPointerCapture(ev.pointerId); setPrevio(valorEn(ev.clientX)) }}
       onPointerMove={(ev) => { if (previo !== null) setPrevio(valorEn(ev.clientX)) }}
       onPointerUp={() => {
@@ -119,16 +126,8 @@ export function EditableRating({ rating, onChange, size = 28 }) {
       aria-valuemax={5}
       aria-valuenow={mostrado}
     >
-      {[1, 2, 3, 4, 5].map(i => (
-        <motion.span
-          key={i}
-          animate={{ scale: previo !== null && Math.ceil(previo) === i ? 1.18 : 1 }}
-          transition={{ type: 'spring', stiffness: 500, damping: 26 }}
-        >
-          <Estrella llenado={Math.max(0, Math.min(1, mostrado - i + 1))} size={size} />
-        </motion.span>
-      ))}
-    </div>
+      <FilaEstrellas valor={mostrado} size={size} />
+    </motion.div>
   )
 }
 

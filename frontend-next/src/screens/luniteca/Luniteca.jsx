@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { useAuth } from '../../platform/auth'
 import { api } from '../../platform/api'
@@ -95,13 +95,22 @@ export default function Luniteca() {
     setVista(modo)
   }
 
-  function alternarAno(year) {
+  // Todos estos van con useCallback porque se pasan a componentes memoizados
+  // (las secciones y las tarjetas): si fueran flechas inline, serían una
+  // referencia nueva en cada render de esta pantalla y el memo no serviría de
+  // nada. Medido: sin esto, cambiar de vista bloqueaba 752 ms con 300 libros.
+  const alternarAno = useCallback((year) => {
     setAnosPlegados(prev => {
       const siguiente = new Set(prev)
       siguiente.has(year) ? siguiente.delete(year) : siguiente.add(year)
       return siguiente
     })
-  }
+  }, [])
+  const alternarWant    = useCallback(() => setPlegadas(p => ({ ...p, want: !p.want })), [])
+  const alternarRead    = useCallback(() => setPlegadas(p => ({ ...p, read: !p.read })), [])
+  const alternarDropped = useCallback(() => setPlegadas(p => ({ ...p, dropped: !p.dropped })), [])
+  // setAbierto ya es estable (viene de useState), así que se pasa tal cual: la
+  // tarjeta memoizada llama onAbrir(entry) desde dentro.
 
   if (shelf === null) return <Cargando />
 
@@ -148,7 +157,7 @@ export default function Luniteca() {
             <TituloSeccion label="Leyendo" cuenta={grupos.reading.length} />
             <div className="mt-3 space-y-2">
               {grupos.reading.map(e => (
-                <TarjetaLeyendo key={e.id} entry={e} onAbrir={() => setAbierto(e)} />
+                <TarjetaLeyendo key={e.id} entry={e} onAbrir={setAbierto} activa={abierto?.id === e.id} />
               ))}
             </div>
           </section>
@@ -157,8 +166,9 @@ export default function Luniteca() {
         <SeccionPlegable
           label="Por leer" entries={grupos.want} vista={vista}
           plegada={plegadas.want}
-          onAlternar={() => setPlegadas(p => ({ ...p, want: !p.want }))}
+          onAlternar={alternarWant}
           onAbrir={setAbierto}
+          abiertaId={abierto?.id}
         />
 
         {grupos.readYearGroups.length > 0 && (
@@ -167,7 +177,7 @@ export default function Luniteca() {
               label="Leídos"
               cuenta={grupos.readYearGroups.reduce((n, g) => n + g.items.length, 0)}
               plegada={plegadas.read}
-              onAlternar={() => setPlegadas(p => ({ ...p, read: !p.read }))}
+              onAlternar={alternarRead}
             />
             <Plegable abierta={!plegadas.read}>
               <div className="space-y-5 pt-3">
@@ -187,7 +197,7 @@ export default function Luniteca() {
                       />
                     </button>
                     <Plegable abierta={!anosPlegados.has(year)}>
-                      <Coleccion entries={items} vista={vista} onAbrir={setAbierto} />
+                      <Coleccion entries={items} vista={vista} onAbrir={setAbierto} abiertaId={abierto?.id} />
                     </Plegable>
                   </div>
                 ))}
@@ -199,8 +209,9 @@ export default function Luniteca() {
         <SeccionPlegable
           label="Dropeados" entries={grupos.dropped} vista={vista}
           plegada={plegadas.dropped}
-          onAlternar={() => setPlegadas(p => ({ ...p, dropped: !p.dropped }))}
+          onAlternar={alternarDropped}
           onAbrir={setAbierto}
+          abiertaId={abierto?.id}
         />
       </div>
 
@@ -450,64 +461,71 @@ function TituloSeccion({ label, cuenta, plegada, onAlternar }) {
   )
 }
 
-function SeccionPlegable({ label, entries, vista, plegada, onAlternar, onAbrir }) {
+const SeccionPlegable = memo(function SeccionPlegable({ label, entries, vista, plegada, onAlternar, onAbrir, abiertaId }) {
   if (entries.length === 0) return null
   return (
     <section>
       <TituloSeccion label={label} cuenta={entries.length} plegada={plegada} onAlternar={onAlternar} />
       <Plegable abierta={!plegada}>
         <div className="pt-3">
-          <Coleccion entries={entries} vista={vista} onAbrir={onAbrir} />
+          <Coleccion entries={entries} vista={vista} onAbrir={onAbrir} abiertaId={abiertaId} />
         </div>
       </Plegable>
     </section>
   )
-}
+})
 
-function Coleccion({ entries, vista, onAbrir }) {
+const Coleccion = memo(function Coleccion({ entries, vista, onAbrir, abiertaId }) {
   if (vista === 'list') {
     return (
       <div className="divide-y divide-[color:var(--color-line)]">
-        {entries.map(e => <FilaLibro key={e.id} entry={e} onAbrir={() => onAbrir(e)} />)}
+        {entries.map(e => <FilaLibro key={e.id} entry={e} onAbrir={onAbrir} activa={abiertaId === e.id} />)}
       </div>
     )
   }
   return (
     <div className="grid grid-cols-3 gap-3 sm:grid-cols-5 md:grid-cols-7">
-      {entries.map(e => <PortadaLibro key={e.id} entry={e} onAbrir={() => onAbrir(e)} />)}
+      {entries.map(e => <PortadaLibro key={e.id} entry={e} onAbrir={onAbrir} activa={abiertaId === e.id} />)}
     </div>
   )
+})
+
+// El botón es HTML normal y el "hundido" al tocar es una transición CSS, no
+// whileTap: con 300 libros en pantalla, 300 componentes de motion cuestan
+// medido 100 ms de bloqueo por cada tecla escrita en el buscador y ~280 ms del
+// cambio de vista. Solo la portada que se está abriendo se convierte en un
+// motion.div con layoutId, que es la única que necesita animar hasta la ficha
+// — y `activa` es un booleano, así que las otras 299 no se re-renderizan al
+// abrir una (el memo las compara: false seguía siendo false).
+function PortadaAnimable({ entry, activa, className, children }) {
+  if (!activa) return <div className={className}>{children}</div>
+  return <motion.div layoutId={`portada-${entry.id}`} className={className}>{children}</motion.div>
 }
 
-function PortadaLibro({ entry, onAbrir }) {
+const PortadaLibro = memo(function PortadaLibro({ entry, onAbrir, activa }) {
   return (
-    <motion.button
-      onClick={onAbrir}
-      whileTap={{ scale: 0.95 }}
-      transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-      className="group text-left"
+    <button
+      onClick={() => onAbrir(entry)}
+      className="text-left transition-transform duration-150 active:scale-[0.96]"
     >
-      {/* layoutId: al abrir la ficha, ESTA portada es la que crece hasta su
-          sitio en la ficha, en vez de aparecer una nueva encima. */}
-      <motion.div layoutId={`portada-${entry.id}`}>
+      <PortadaAnimable entry={entry} activa={activa}>
         <Cover url={entry.book.cover_url} className="shadow-sm" />
-      </motion.div>
+      </PortadaAnimable>
       <p className="mt-1.5 line-clamp-2 text-[11px] leading-tight text-ink-dim">{entry.book.title}</p>
       {entry.rating > 0 && <StarRating rating={entry.rating} size={9} className="mt-1" />}
-    </motion.button>
+    </button>
   )
-}
+})
 
-function FilaLibro({ entry, onAbrir }) {
+const FilaLibro = memo(function FilaLibro({ entry, onAbrir, activa }) {
   return (
-    <motion.button
-      onClick={onAbrir}
-      whileTap={{ scale: 0.99 }}
-      className="flex w-full items-center gap-3 py-2.5 text-left"
+    <button
+      onClick={() => onAbrir(entry)}
+      className="flex w-full items-center gap-3 py-2.5 text-left transition-transform duration-150 active:scale-[0.99]"
     >
-      <motion.div layoutId={`portada-${entry.id}`} className="w-10 shrink-0">
+      <PortadaAnimable entry={entry} activa={activa} className="w-10 shrink-0">
         <Cover url={entry.book.cover_url} />
-      </motion.div>
+      </PortadaAnimable>
       <div className="min-w-0 flex-1">
         <p className="truncate text-[15px] leading-tight">{entry.book.title}</p>
         <p className="mt-0.5 truncate text-xs text-ink-mute">{entry.book.author || 'Sin autor'}</p>
@@ -516,23 +534,21 @@ function FilaLibro({ entry, onAbrir }) {
         {entry.rating > 0 && <StarRating rating={entry.rating} size={10} />}
         <StatusDot status={entry.status} />
       </div>
-    </motion.button>
+    </button>
   )
-}
+})
 
 // Lo que se está leyendo va aparte y más grande: es lo que se viene a mirar.
-function TarjetaLeyendo({ entry, onAbrir }) {
+const TarjetaLeyendo = memo(function TarjetaLeyendo({ entry, onAbrir, activa }) {
   const fechas = readingDatesLabel(entry)
   return (
-    <motion.button
-      onClick={onAbrir}
-      whileTap={{ scale: 0.985 }}
-      transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-      className="flex w-full items-stretch gap-3 rounded-xl2 border border-line bg-surface p-3 text-left"
+    <button
+      onClick={() => onAbrir(entry)}
+      className="flex w-full items-stretch gap-3 rounded-xl2 border border-line bg-surface p-3 text-left transition-transform duration-150 active:scale-[0.985]"
     >
-      <motion.div layoutId={`portada-${entry.id}`} className="w-14 shrink-0">
+      <PortadaAnimable entry={entry} activa={activa} className="w-14 shrink-0">
         <Cover url={entry.book.cover_url} priority />
-      </motion.div>
+      </PortadaAnimable>
       <div className="flex min-w-0 flex-1 flex-col justify-between">
         <div className="min-w-0">
           <p className="truncate font-display text-base font-semibold leading-tight">{entry.book.title}</p>
@@ -546,6 +562,6 @@ function TarjetaLeyendo({ entry, onAbrir }) {
           </div>
         </div>
       </div>
-    </motion.button>
+    </button>
   )
-}
+})
