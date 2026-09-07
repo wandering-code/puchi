@@ -112,10 +112,9 @@ function TopBar({ titulo, onAbrirMenu }) {
           <IconMenu className="h-6 w-6" />
         </button>
 
-        {/* La sección actual, en el centro, solo cuando hay sitio: en un móvil
-            estrecho compite con el nombre, y ahí el título grande del propio
-            contenido ya dice dónde estás. */}
-        <div className="hidden min-w-0 flex-1 text-center sm:block">
+        {/* La sección actual, en el centro. Con el menú escondido detrás de un
+            botón hace falta algo que diga dónde estás. */}
+        <div className="min-w-0 flex-1 text-center">
           <AnimatePresence mode="wait" initial={false}>
             <motion.p
               key={titulo}
@@ -130,10 +129,11 @@ function TopBar({ titulo, onAbrirMenu }) {
           </AnimatePresence>
         </div>
 
-        <div className="flex min-w-0 flex-1 items-center justify-end gap-2 sm:flex-none">
-          <p className="max-w-[10rem] truncate font-display text-base font-semibold leading-tight tracking-[-0.01em]">
-            {player?.name}
-          </p>
+        {/* Solo el avatar: quién eres se ve al desplegar el menú, y el nombre
+            aquí competía con el título de la sección en un móvil estrecho.
+            Va dentro de un hueco del mismo ancho que el botón de menú, para
+            que el título quede centrado de verdad y no descuadrado. */}
+        <div className="flex h-11 w-11 shrink-0 items-center justify-end">
           <div
             className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-line"
             style={{ background: player?.color || 'var(--color-surface-2)' }}
@@ -227,10 +227,19 @@ function MenuLateral({ abierto, onCerrar, onNavegar }) {
               ))}
             </nav>
 
-            <div className="border-t border-line px-5 py-4">
-              <p className="truncate text-sm text-ink-dim">
-                Sesión de <span className="text-ink">{player?.name}</span>
-              </p>
+            <div className="flex items-center gap-3 border-t border-line px-5 py-4">
+              <div
+                className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-line"
+                style={{ background: player?.color || 'var(--color-surface-2)' }}
+              >
+                {player?.avatar_url
+                  ? <img src={player.avatar_url} alt="" className="h-full w-full object-cover" />
+                  : <span>{player?.avatar_emoji || '⭐'}</span>}
+              </div>
+              <div className="min-w-0">
+                <p className="truncate font-display font-semibold leading-tight">{player?.name}</p>
+                <p className="text-xs text-ink-mute leading-tight">Sesión iniciada</p>
+              </div>
             </div>
           </motion.aside>
         </>
