@@ -163,14 +163,6 @@ export default function Luniteca() {
           </section>
         )}
 
-        <SeccionPlegable
-          label="Por leer" entries={grupos.want} vista={vista}
-          plegada={plegadas.want}
-          onAlternar={alternarWant}
-          onAbrir={setAbierto}
-          abiertaId={abierto?.id}
-        />
-
         {grupos.readYearGroups.length > 0 && (
           <section>
             <TituloSeccion
@@ -205,6 +197,14 @@ export default function Luniteca() {
             </Plegable>
           </section>
         )}
+
+        <SeccionPlegable
+          label="Por leer" entries={grupos.want} vista={vista}
+          plegada={plegadas.want}
+          onAlternar={alternarWant}
+          onAbrir={setAbierto}
+          abiertaId={abierto?.id}
+        />
 
         <SeccionPlegable
           label="Dropeados" entries={grupos.dropped} vista={vista}
@@ -487,8 +487,12 @@ const Coleccion = memo(function Coleccion({ entries, vista, onAbrir, abiertaId }
       </div>
     )
   }
+  // Columnas por ancho disponible en vez de por breakpoints fijos: el número
+  // sale solo (unas cuatro en un móvil, más en tablet y escritorio) y las
+  // portadas quedan más pequeñas sin recortarse — la proporción 2/3 la sigue
+  // fijando Cover, aquí solo cambia cuánto miden.
   return (
-    <div className="grid grid-cols-3 gap-3 sm:grid-cols-5 md:grid-cols-7">
+    <div className="grid grid-cols-[repeat(auto-fill,minmax(76px,1fr))] gap-3">
       {entries.map(e => <PortadaLibro key={e.id} entry={e} onAbrir={onAbrir} activa={abiertaId === e.id} />)}
     </div>
   )
