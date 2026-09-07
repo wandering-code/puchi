@@ -1,8 +1,7 @@
-import { useCallback, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { AnimatePresence, motion } from 'motion/react'
 import { IconX } from '../../ui/icons'
-import { cerrarCapa, useCapaHistorial } from '../../platform/capas'
+import { useCapa } from '../../platform/capas'
 
 // La hoja que sube desde abajo, una sola para toda la app: filtros, estado,
 // fechas, carpeta… Todo lo que hay que elegir se pide igual, en el mismo sitio
@@ -12,10 +11,7 @@ import { cerrarCapa, useCapaHistorial } from '../../platform/capas'
 // En portal a <body>: quien la abre vive dentro de contenedores con scroll y
 // transform propios, y desde ahí un elemento fijo no puede taparlo todo.
 export default function HojaInferior({ abierta, titulo, onCerrar, children, pie }) {
-  // El gesto de volver (y Escape) la cierran, y solo a ella aunque haya otras
-  // capas abiertas debajo — ver platform/capas.js.
-  useCapaHistorial(abierta, onCerrar)
-
+  // El gesto de volver y Escape los gestiona useCapa (platform/capas.js).
   return createPortal(
     <AnimatePresence>
       {abierta && (
@@ -81,15 +77,6 @@ export default function HojaInferior({ abierta, titulo, onCerrar, children, pie 
   )
 }
 
-// Estado de una hoja, con el cierre que le corresponde: cerrar deshaciendo la
-// entrada del historial que metió al abrirse (history.back dispara el popstate
-// que baja el estado), salvo cuando es el propio gesto de volver quien la está
-// cerrando. Sin esto, cada sitio que abre una hoja repetiría estas cuatro
-// líneas y en alguno se colaría una entrada muerta que obliga a pulsar atrás
-// dos veces.
-export function useHoja() {
-  const [abierta, setAbierta] = useState(false)
-  const abrir = useCallback(() => setAbierta(true), [])
-  const cerrar = useCallback(cerrarCapa(setAbierta), [])
-  return { abierta, abrir, cerrar }
-}
+// La hoja usa el mecanismo de capas común, para que el gesto de volver cierre
+// solo la de arriba cuando hay varias abiertas.
+export const useHoja = useCapa

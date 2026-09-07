@@ -11,12 +11,14 @@ import {
 } from '../../ui/icons'
 import HojaFiltros from './HojaFiltros'
 import { useHoja } from './HojaInferior'
-import { cerrarCapa, useCapaHistorial } from '../../platform/capas'
+import { useCapa } from '../../platform/capas'
+
 
 export default function Luniteca() {
   const { player } = useAuth()
   const [shelf, setShelf] = useState(null)      // null = cargando
-  const [abierto, setAbierto] = useState(null)  // entrada abierta en la ficha
+  const ficha = useCapa(null)            // la entrada abierta, o null
+  const abierto = ficha.abierta
   const [error, setError] = useState(null)
 
   const [vista, setVista] = useState(() => localStorage.getItem('luni_vista') || 'grid')
@@ -35,7 +37,7 @@ export default function Luniteca() {
       setShelf(lista)
       // Si la ficha abierta se ha borrado desde otro sitio, se cierra sola; si
       // ha cambiado, se resincroniza con la versión fresca.
-      setAbierto(prev => prev ? (lista.find(x => x.id === prev.id) || null) : prev)
+      ficha.reemplazar(prev => prev ? (lista.find(x => x.id === prev.id) || null) : prev)
       setError(null)
     } catch (err) {
       setShelf([])
@@ -56,22 +58,40 @@ export default function Luniteca() {
     const anterior = shelf?.find(x => x.id === id)
     const aplicar = (lista) => lista.map(x => x.id === id ? { ...x, ...patch } : x)
     setShelf(prev => prev && aplicar(prev))
-    setAbierto(prev => prev?.id === id ? { ...prev, ...patch } : prev)
+    ficha.reemplazar(prev => prev?.id === id ? { ...prev, ...patch } : prev)
     try {
       const fresca = await api(`/shelf/personal/${id}`, { method: 'PATCH', body: patch })
       setShelf(prev => prev && prev.map(x => x.id === id ? fresca : x))
-      setAbierto(prev => prev?.id === id ? fresca : prev)
+      ficha.reemplazar(prev => prev?.id === id ? fresca : prev)
     } catch {
       if (!anterior) return
       setShelf(prev => prev && prev.map(x => x.id === id ? anterior : x))
-      setAbierto(prev => prev?.id === id ? anterior : prev)
+      ficha.reemplazar(prev => prev?.id === id ? anterior : prev)
     }
   }, [shelf])
 
-  // La ficha es otra capa del historial: el gesto de volver la cierra, y si
-  // encima hay una hoja abierta, ese "atrás" cierra la hoja y no la ficha.
-  const cerrarFicha = useCallback(cerrarCapa(() => setAbierto(null)), [])
-  useCapaHistorial(!!abierto, cerrarFicha)
+  // Mientras la ficha está abierta, la portada de su tarjeta en la estantería
+  // NO puede llevar el layoutId compartido: con dos elementos que dicen ser el
+  // mismo montados a la vez, Motion los reconcilia en cada render y la portada
+  // de la ficha da un salto cada vez que se toca cualquier cosa (puntuar, por
+  // ejemplo). Solo lo lleva mientras dura el viaje de ida o de vuelta.
+  const [enTransicion, setEnTransicion] = useState(null)
+  useEffect(() => {
+    if (enTransicion == null) return
+    const t = setTimeout(() => setEnTransicion(null), 420)
+    return () => clearTimeout(t)
+  }, [enTransicion])
+
+  const abrirLibro = useCallback((entrada) => {
+    setEnTransicion(entrada.id)
+    ficha.abrir(entrada)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  function cerrarFicha(opciones) {
+    if (abierto) setEnTransicion(abierto.id)
+    ficha.cerrar(opciones)
+  }
 
   const grupos = useMemo(
     () => agruparEstanteria(shelf, { filters, query, sort }),
@@ -98,8 +118,8 @@ export default function Luniteca() {
   const alternarWant    = useCallback(() => setPlegadas(p => ({ ...p, want: !p.want })), [])
   const alternarRead    = useCallback(() => setPlegadas(p => ({ ...p, read: !p.read })), [])
   const alternarDropped = useCallback(() => setPlegadas(p => ({ ...p, dropped: !p.dropped })), [])
-  // setAbierto ya es estable (viene de useState), así que se pasa tal cual: la
-  // tarjeta memoizada llama onAbrir(entry) desde dentro.
+  // abrirLibro va con useCallback por lo mismo: la tarjeta memoizada lo llama
+  // como onAbrir(entrada) desde dentro.
 
   if (shelf === null) return <Cargando />
 
@@ -145,7 +165,7 @@ export default function Luniteca() {
             <TituloSeccion label="Leyendo" cuenta={grupos.reading.length} />
             <div className="mt-3 space-y-2">
               {grupos.reading.map(e => (
-                <TarjetaLeyendo key={e.id} entry={e} onAbrir={setAbierto} activa={abierto?.id === e.id} />
+                <TarjetaLeyendo key={e.id} entry={e} onAbrir={abrirLibro} activa={enTransicion === e.id} />
               ))}
             </div>
           </section>
@@ -177,7 +197,7 @@ export default function Luniteca() {
                       />
                     </button>
                     <Plegable abierta={!anosPlegados.has(year)}>
-                      <Coleccion entries={items} vista={vista} onAbrir={setAbierto} abiertaId={abierto?.id} />
+                      <Coleccion entries={items} vista={vista} onAbrir={abrirLibro} abiertaId={enTransicion} />
                     </Plegable>
                   </div>
                 ))}
@@ -190,16 +210,16 @@ export default function Luniteca() {
           label="Por leer" entries={grupos.want} vista={vista}
           plegada={plegadas.want}
           onAlternar={alternarWant}
-          onAbrir={setAbierto}
-          abiertaId={abierto?.id}
+          onAbrir={abrirLibro}
+          abiertaId={enTransicion}
         />
 
         <SeccionPlegable
           label="Dropeados" entries={grupos.dropped} vista={vista}
           plegada={plegadas.dropped}
           onAlternar={alternarDropped}
-          onAbrir={setAbierto}
-          abiertaId={abierto?.id}
+          onAbrir={abrirLibro}
+          abiertaId={enTransicion}
         />
       </div>
 
@@ -256,7 +276,7 @@ function Herramientas({
   // Se queda pegada arriba al bajar por una estantería larga: con 300 libros,
   // volver arriba solo para filtrar es la diferencia entre usarlo y no usarlo.
   return (
-    <div className="sticky top-0 z-10 -mx-5 border-b border-line bg-bg/85 px-5 py-2 backdrop-blur-xl">
+    <div className="sticky top-0 z-20 -mx-5 border-b border-line bg-bg/85 px-5 py-2 backdrop-blur-xl">
       {/* Al buscar, el campo ocupa la fila entera y el resto de botones se
           van: antes la barra se desplegaba DEBAJO y empujaba la estantería,
           que es el mismo salto que ya se quitó de los filtros. La lupa se
@@ -488,8 +508,8 @@ const PortadaLibro = memo(function PortadaLibro({ entry, onAbrir, activa }) {
       className="transition-transform duration-150 active:scale-[0.96]"
     >
       <PortadaAnimable entry={entry} activa={activa} className="relative">
-        <NotaBadge rating={entry.rating} />
         <Cover url={entry.book.cover_url} title={entry.book.title} className="shadow-sm" />
+        <NotaBadge rating={entry.rating} />
       </PortadaAnimable>
     </button>
   )

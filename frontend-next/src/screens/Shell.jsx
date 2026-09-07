@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { NavLink, Route, Routes, useLocation } from 'react-router-dom'
 import { AnimatePresence, motion } from 'motion/react'
 import { useAuth } from '../platform/auth'
 import { isIOS, isStandalone, safeInsets } from '../platform/pwa'
-import { cerrarCapa, useCapaHistorial } from '../platform/capas'
+import { useCapa } from '../platform/capas'
 import Luniteca from './luniteca/Luniteca'
 import { IconBooks, IconExit, IconHome, IconMenu, IconPaw, IconSettings } from '../ui/icons'
 
@@ -15,15 +15,13 @@ const SECCIONES = [
 
 export default function Shell() {
   const location = useLocation()
-  const [menuAbierto, setMenuAbierto] = useState(false)
+  const menu = useCapa()
 
   // El botón atrás de Android (y el gesto de volver) cierra el menú en vez de
   // salir de la app: instalada no hay barra de navegador que deshaga nada, y
-  // salirse de golpe al querer cerrar un panel se siente roto. La pila de
-  // capas (platform/capas.js) se encarga de que ese "atrás" cierre solo la
-  // capa de arriba cuando hay varias abiertas.
-  const cerrarMenu = useCallback(cerrarCapa(setMenuAbierto), [])
-  useCapaHistorial(menuAbierto, cerrarMenu)
+  // salirse de golpe al querer cerrar un panel se siente roto. De que ese
+  // "atrás" cierre solo la capa de arriba cuando hay varias abiertas se ocupa
+  // useCapa (platform/capas.js).
 
   // Cerrar el menú AL NAVEGAR a una sección desde dentro. Aquí no se puede
   // tocar el historial: el router hace su propio pushState en el mismo clic y
@@ -32,7 +30,7 @@ export default function Shell() {
   // La entrada del menú se queda enterrada y sin efecto, porque que el menú
   // esté abierto es estado de React: volver a ella no lo reabre.
   function cerrarMenuAlNavegar() {
-    setMenuAbierto(false)
+    menu.reemplazar(false)
   }
 
   const seccion = SECCIONES.find(s => s.to === location.pathname)
@@ -45,7 +43,7 @@ export default function Shell() {
           grano se queda: es uniforme, da textura de papel y no crea zonas. */}
       <div aria-hidden className="pointer-events-none absolute inset-0 grain" />
 
-      <TopBar titulo={seccion?.label} onAbrirMenu={() => setMenuAbierto(true)} />
+      <TopBar titulo={seccion?.label} onAbrirMenu={menu.abrir} />
 
       <main className="relative z-10 flex-1 overflow-hidden">
         {/* Cada ruta es su propia capa a pantalla completa con su scroll: así
@@ -69,7 +67,7 @@ export default function Shell() {
         </AnimatePresence>
       </main>
 
-      <MenuLateral abierto={menuAbierto} onCerrar={cerrarMenu} onNavegar={cerrarMenuAlNavegar} />
+      <MenuLateral abierto={menu.abierta} onCerrar={menu.cerrar} onNavegar={cerrarMenuAlNavegar} />
     </div>
   )
 }

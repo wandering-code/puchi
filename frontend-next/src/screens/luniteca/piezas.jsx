@@ -177,7 +177,12 @@ export function EditableRating({ rating, onChange, size = 26 }) {
 export function NotaBadge({ rating }) {
   if (!rating) return null
   return (
-    <span className="absolute right-1 top-1 z-10 rounded-full bg-accent px-1.5 py-0.5 text-[10px] font-semibold leading-none text-on-accent shadow-sm">
+    // Sin z-index: con z-10 competía de tú a tú con la barra de herramientas
+    // pegada arriba y, al ir después en el documento, ganaba — las notas se
+    // veían pasar POR ENCIMA de la barra al hacer scroll. Va después de la
+    // portada en el marcado, que es todo lo que necesita para pintarse encima
+    // de ella.
+    <span className="absolute right-1 top-1 rounded-full bg-accent px-1.5 py-0.5 text-[10px] font-semibold leading-none text-on-accent shadow-sm">
       {rating.toLocaleString('es')}
     </span>
   )
