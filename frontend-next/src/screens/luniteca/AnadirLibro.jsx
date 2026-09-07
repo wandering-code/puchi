@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'motion/react'
 import { api } from '../../platform/api'
 import { STATUS_LABEL } from './shelf'
 import { Cover } from './piezas'
-import HojaInferior from './HojaInferior'
+import PantallaInferior from './PantallaInferior'
 import { CamposFecha } from './editores'
 import { IconCheck, IconPlus, IconSearch, IconX } from '../../ui/icons'
 
@@ -12,36 +12,52 @@ import { IconCheck, IconPlus, IconSearch, IconX } from '../../ui/icons'
 //
 // Falta el escáner de código de barras que tiene la Puchi actual; irá en su
 // propia pasada, porque trae dependencia nueva y permisos de cámara.
-export default function AnadirLibro({ abierta, onCerrar, onAnadido }) {
+export default function AnadirLibro({ onCerrar, onAnadido }) {
   const [modo, setModo] = useState('buscar')
 
   return (
-    <HojaInferior abierta={abierta} titulo="Añadir libro" onCerrar={onCerrar}>
-      <div className="mb-4 flex gap-2">
-        {[['buscar', 'Buscar'], ['manual', 'A mano']].map(([id, texto]) => (
-          <button
-            key={id}
-            onClick={() => setModo(id)}
-            className={`relative flex-1 rounded-xl2 py-2.5 text-sm font-semibold transition-colors ${
-              modo === id ? 'text-accent' : 'text-ink-dim'
-            }`}
-          >
-            {modo === id && (
-              <motion.span
-                layoutId="anadir-modo"
-                className="absolute inset-0 rounded-xl2 bg-accent-soft"
-                transition={{ type: 'spring', stiffness: 420, damping: 34 }}
-              />
-            )}
-            <span className="relative">{texto}</span>
-          </button>
-        ))}
-      </div>
+    <PantallaInferior
+      onCerrar={onCerrar}
+      cabecera={
+        <div className="mx-auto w-full max-w-md px-6">
+          <div className="flex items-center gap-3 py-3">
+            <h2 className="flex-1 font-display text-xl font-bold tracking-[-0.01em]">Añadir libro</h2>
+            <button
+              onClick={onCerrar}
+              aria-label="Cerrar"
+              className="flex h-9 w-9 items-center justify-center rounded-full text-ink-mute transition-colors active:bg-surface-2"
+            >
+              <IconX className="h-4 w-4" />
+            </button>
+          </div>
 
-      {/* El cambio de pestaña se anima: lo que se va sale hacia su lado y lo
-          que entra llega desde el suyo, y la altura de la hoja acompaña en vez
-          de dar el salto. mode="wait" para que no se vean las dos a la vez. */}
-      <motion.div layout="size" transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}>
+          <div className="mb-4 flex gap-2">
+            {[['buscar', 'Buscar'], ['manual', 'A mano']].map(([id, texto]) => (
+              <button
+                key={id}
+                onClick={() => setModo(id)}
+                className={`relative flex-1 rounded-xl2 py-2.5 text-sm font-semibold transition-colors ${
+                  modo === id ? 'text-accent' : 'text-ink-dim'
+                }`}
+              >
+                {modo === id && (
+                  <motion.span
+                    layoutId="anadir-modo"
+                    className="absolute inset-0 rounded-xl2 bg-accent-soft"
+                    transition={{ type: 'spring', stiffness: 420, damping: 34 }}
+                  />
+                )}
+                <span className="relative">{texto}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      }
+    >
+      {/* A pantalla completa, el alto ya no cambia al pasar de una pestaña a
+          otra: solo se cruzan los contenidos. Antes era una hoja que crecía y
+          encogía según lo que hubiera dentro, y ese salto se notaba. */}
+      <div className="mx-auto w-full max-w-md px-6 pb-kb">
         <AnimatePresence mode="wait" initial={false}>
           <motion.div
             key={modo}
@@ -55,8 +71,8 @@ export default function AnadirLibro({ abierta, onCerrar, onAnadido }) {
               : <AltaManual onAnadido={onAnadido} onHecho={onCerrar} />}
           </motion.div>
         </AnimatePresence>
-      </motion.div>
-    </HojaInferior>
+      </div>
+    </PantallaInferior>
   )
 }
 

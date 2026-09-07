@@ -1,12 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
 import { AnimatePresence, motion } from 'motion/react'
 import { statusPatch, totalPages } from './shelf'
 import { Cover, EditableRating, MANTENER_MS, ProgressBar } from './piezas'
 import { EditorCarpeta, EditorEstado, EditorFechas, EditorLecturas, Sinopsis } from './editores'
 import { IconArrowLeft, IconPencil } from '../../ui/icons'
 import BookEditForm from './BookEditForm'
-import { useArrastreParaCerrar } from '../../ui/arrastre'
+import PantallaInferior from './PantallaInferior'
 
 // Distribución tomada de la Luniteca nueva de la Puchi actual: portada grande
 // centrada, título y autor debajo, la ficha técnica en una línea y los datos
@@ -23,37 +22,18 @@ export default function BookDetail({ entry, carpetas, generos, onCerrar, onActua
   const llevaProgreso = ['reading', 'rereading', 'read'].includes(entry.status)
   const llevaLecturas = ['read', 'rereading'].includes(entry.status)
 
-  // La ficha sube desde abajo, como los filtros y los editores: en esta app
-  // todo lo que se abre encima de algo llega por el mismo sitio.
-  //
-  // Se cierra tirando de su asa. El gesto va SOLO ahí y no en toda la ficha:
-  // el drag de Motion le pone touch-action al elemento, y como aquí ese
-  // elemento es el que scrollea, la ficha se quedaba sin poder desplazarse con
-  // el dedo en el móvil.
-  const arrastre = useArrastreParaCerrar(onCerrar, { umbral: 110 })
-
   // Los datos del libro (título, autor, portada…) se editan en un formulario
   // aparte, que sustituye al contenido de la ficha: son datos compartidos con
   // todo el club, no como el estado o las notas, que se tocan en el sitio.
   const [editando, setEditando] = useState(false)
 
-  return createPortal(
-    <motion.div
-      className="fixed inset-0 z-50 flex flex-col rounded-t-[28px] border-t border-line bg-bg"
-      style={{ y: arrastre.y }}
-      initial={{ y: '100%' }}
-      animate={{ y: 0 }}
-      exit={{ y: '100%' }}
-      transition={{ type: 'spring', stiffness: 420, damping: 40 }}
-    >
-      <div {...arrastre.asa} className="flex shrink-0 cursor-grab justify-center pb-1 pt-2 pt-safe active:cursor-grabbing">
-        <span className="h-1 w-10 rounded-full bg-line" />
-      </div>
-
-      <div className="flex-1 overflow-y-auto overscroll-contain">
-      {/* El botón de volver flota sobre la portada en vez de ocupar una barra
-          propia: así la portada empieza arriba del todo y la ficha se lee como
-          una página, no como una pantalla con cabecera. */}
+  return (
+    <PantallaInferior
+      onCerrar={onCerrar}
+      cabecera={
+        /* El botón de volver flota sobre la portada en vez de ocupar una barra
+           propia: así la portada empieza arriba del todo y la ficha se lee como
+           una página, no como una pantalla con cabecera. */
         <div className="pointer-events-none sticky top-0 z-10 flex justify-between px-3">
           {/* Editando, la flecha sale de la edición y no de la ficha: si cerrara
               del todo se perderían los cambios sin avisar. */}
@@ -76,7 +56,8 @@ export default function BookDetail({ entry, carpetas, generos, onCerrar, onActua
             </motion.button>
           )}
         </div>
-
+      }
+    >
       {editando ? (
         <BookEditForm
           entry={entry}
@@ -145,9 +126,7 @@ export default function BookDetail({ entry, carpetas, generos, onCerrar, onActua
         </div>
         </div>
       )}
-      </div>
-    </motion.div>,
-    document.body,
+    </PantallaInferior>
   )
 }
 

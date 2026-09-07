@@ -273,7 +273,11 @@ export default function Luniteca() {
         />
       </div>
 
-      <AnadirLibro abierta={hojaAnadir.abierta} onCerrar={hojaAnadir.cerrar} onAnadido={libroAnadido} />
+      <AnimatePresence>
+        {hojaAnadir.abierta && (
+          <AnadirLibro onCerrar={hojaAnadir.cerrar} onAnadido={libroAnadido} />
+        )}
+      </AnimatePresence>
 
       <HojaFiltros
         abierta={hojaFiltros.abierta}
