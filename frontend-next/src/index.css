@@ -1,0 +1,109 @@
+@import "tailwindcss";
+
+/* ── Tokens ──────────────────────────────────────────────────────────────
+   Toda la estética nueva sale de aquí. Están como variables de @theme (no
+   colores sueltos en los componentes) justamente porque la paleta se va a
+   mover mucho: cambiarla debe ser editar este bloque, no barrer el proyecto.
+   Tailwind 4 genera las utilidades solo (bg-surface, text-ink, rounded-xl2…). */
+@theme {
+  --color-bg:        #0f1020;
+  --color-bg-deep:   #080913;
+  --color-surface:   #191a2e;
+  --color-surface-2: #23253d;
+  --color-line:      #ffffff14;
+  --color-ink:       #ece9f5;
+  --color-ink-dim:   #a5a1bd;
+  --color-ink-mute:  #6f6c88;
+  --color-accent:    #f0b429;   /* el ámbar de la pata de Puchi */
+  --color-accent-2:  #7c6cf5;
+  --color-danger:    #f2555a;
+
+  --radius-xl2: 1.25rem;
+  --radius-xl3: 1.75rem;
+
+  /* Tipografía: de momento la del sistema (cero peticiones, cero salto de
+     fuente al arrancar, y en móvil es la que mejor se lee). Cuando se elija
+     una de verdad se self-hostea como .woff2 en public/ — el service worker
+     ya la mete en caché (globPatterns incluye woff2) — y se cambia aquí. */
+  --font-display: ui-rounded, "SF Pro Rounded", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+
+  /* Una sola curva para todo lo que se mueve. Que todo comparta easing es la
+     mitad de que una interfaz parezca cuidada. */
+  --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* ── Base ────────────────────────────────────────────────────────────────
+   Portado de la Puchi actual: html/body fijos + overscroll-behavior:none es
+   lo único que de verdad para el rebote elástico del documento en iOS
+   (overflow:hidden por sí solo no lo hace). No tocar sin probar en iPhone.
+
+   TODO va dentro de @layer base, y el `* { margin:0; padding:0 }` de la Puchi
+   actual NO se copia. Motivo, comprobado con captura: en Tailwind 4 las
+   utilidades viven en capas (@layer utilities) y cualquier regla escrita
+   FUERA de una capa le gana a todas ellas por especificidad de capa, no de
+   selector. Con aquel reset suelto, `padding:0` del `*` ganaba a px-6 y
+   `margin:0` a mx-auto: la pantalla de login salía con los campos desbordados
+   por los lados y el botón cortado. El preflight de Tailwind ya hace ese
+   reset (y el border-box) desde dentro de su capa, así que no hace falta. */
+@layer base {
+  html, body {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+    /* El viewport meta ya bloquea el pellizco; esto quita además el
+       doble-tap-para-zoom y el retardo de 300ms al tocar. */
+    touch-action: manipulation;
+    background: var(--color-bg-deep);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    /* Sin esto, mantener pulsado en iOS saca el menú de selección/copiar sobre
+       botones y tarjetas, que en una app instalada se ve como un fallo. */
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  #root { width: 100%; height: 100%; }
+
+  /* iOS hace zoom al enfocar un campo con letra menor de 16px, y con el
+     viewport bloqueado ese zoom se queda pegado sin forma de deshacerlo. */
+  @media (max-width: 768px) {
+    input, textarea, select { font-size: 16px !important; }
+  }
+
+  /* Los campos de texto sí deben poder seleccionarse pese al -webkit-touch-callout
+     de body. */
+  input, textarea, [contenteditable] { -webkit-user-select: text; user-select: text; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+
+}
+
+/* ── Safe areas ──────────────────────────────────────────────────────────
+   Solo valen algo con viewport-fit=cover en el meta viewport (index.html).
+   Instalada en el iPhone no hay barra de Safari debajo: sin esto, la barra de
+   gestos se come el contenido del borde inferior. Se usan como utilidades
+   (pt-safe, pb-safe) para no repetir el env() por todo el proyecto. */
+@utility pt-safe { padding-top: env(safe-area-inset-top, 0px); }
+@utility pb-safe { padding-bottom: env(safe-area-inset-bottom, 0px); }
+@utility pl-safe { padding-left: env(safe-area-inset-left, 0px); }
+@utility pr-safe { padding-right: env(safe-area-inset-right, 0px); }
+@utility inset-safe {
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+}
+/* Aparta el CONTENIDO del teclado sin encoger su caja (--kb lo publica
+   platform/viewport.js). Encogiendo la caja el fondo se corta y asoma lo de
+   detrás — eso ya se probó en la Puchi actual y se descartó. */
+@utility pb-kb { padding-bottom: calc(var(--kb, 0px) + env(safe-area-inset-bottom, 0px)); }

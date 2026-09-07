@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- viewport-fit=cover: sin esto env(safe-area-inset-*) vale siempre 0 y
+         la barra de gestos del iPhone se come el borde inferior en cuanto la
+         app se abre desde el icono de inicio (sin barra de Safari debajo).
+         interactive-widget=resizes-content: al abrirse el teclado el viewport
+         de LAYOUT se encoge hasta donde empieza el teclado, así que no queda
+         ninguna franja que ningún elemento pueda pintar. Las dos vienen de lo
+         aprendido en la Puchi actual (issue #13); no se reabren sin motivo. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content" />
+    <meta name="theme-color" content="#0f1020" />
+    <!-- iOS 17.4+ ya respeta el manifest, pero las versiones anteriores solo
+         miran estas dos metas para abrir sin barra de navegador. -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Puchi" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <title>Puchi</title>
+    <link rel="icon" type="image/svg+xml" href="/next/icons/icon.svg" />
+    <link rel="apple-touch-icon" href="/next/icons/apple-touch-icon.png" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
