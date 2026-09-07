@@ -4,7 +4,7 @@ import { useAuth } from '../../platform/auth'
 import { api } from '../../platform/api'
 import { useLiveUpdates } from '../../platform/live'
 import { EMPTY_FILTERS, agruparEstanteria, opcionesDeFiltro, readingDatesLabel } from './shelf'
-import { Cover, NotaBadge, PagesLabel, ProgressBar, StatusDot } from './piezas'
+import { Cover, NotaBadge, PagesLabel, ProgressBar } from './piezas'
 import BookDetail from './BookDetail'
 import {
   IconChevron, IconFilter, IconGrid, IconList, IconSearch, IconX,
@@ -484,14 +484,13 @@ const FilaLibro = memo(function FilaLibro({ entry, onAbrir, activa }) {
         <p className="mt-0.5 truncate text-xs text-ink-mute">{entry.book.author || 'Sin autor'}</p>
         {fechas && <p className="mt-0.5 truncate text-[10px] leading-tight text-ink-mute/80">{fechas}</p>}
       </div>
-      <div className="flex shrink-0 items-center gap-2">
-        {entry.rating > 0 && (
-          <span className="rounded-full bg-accent-soft px-2 py-0.5 text-xs font-semibold text-accent">
-            {entry.rating.toLocaleString('es')}
-          </span>
-        )}
-        <StatusDot status={entry.status} />
-      </div>
+      {/* Sin punto de estado: cada sección de la lista es de un estado y ya lo
+          dice su título, así que el punto no añadía nada. */}
+      {entry.rating > 0 && (
+        <span className="shrink-0 rounded-full bg-accent-soft px-2 py-0.5 text-xs font-semibold text-accent">
+          {entry.rating.toLocaleString('es')}
+        </span>
+      )}
     </button>
   )
 })
