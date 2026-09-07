@@ -55,7 +55,7 @@ export default function LoginScreen() {
               <IconPaw className="h-14 w-14 text-accent" />
             </motion.div>
             <div className="text-center">
-              <h1 className="font-display text-[3.25rem] font-semibold leading-none tracking-[-0.03em]">Puchi</h1>
+              <h1 className="font-display text-[3.25rem] font-bold leading-none tracking-[-0.03em]">Puchi</h1>
               {/* Versalitas espaciadas: a este tamaño un texto normal se lee
                   como una nota al pie: espaciado, se lee como parte de la marca. */}
               <p className="mt-3 text-[11px] uppercase tracking-[0.22em] text-ink-mute">Versión nueva</p>

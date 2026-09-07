@@ -117,7 +117,7 @@ export default function Luniteca() {
   return (
     <div className="py-6">
       <header className="mb-4">
-        <h2 className="font-display text-[1.75rem] font-semibold tracking-[-0.02em]">Luniteca</h2>
+        <h2 className="font-display text-[1.75rem] font-bold tracking-[-0.02em]">Luniteca</h2>
         <p className="mt-1 text-sm text-ink-dim">
           {grupos.vacia
             ? 'Tu estantería está vacía'

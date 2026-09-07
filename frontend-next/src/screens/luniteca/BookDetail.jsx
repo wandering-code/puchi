@@ -46,7 +46,7 @@ export default function BookDetail({ entry, onCerrar, onActualizar }) {
             </motion.div>
 
             <div className="min-w-0 flex-1">
-              <h2 className="font-display text-2xl font-semibold leading-tight tracking-[-0.02em]">{libro.title}</h2>
+              <h2 className="font-display text-2xl font-bold leading-tight tracking-[-0.02em]">{libro.title}</h2>
               {libro.author && <p className="mt-1 text-sm text-ink-dim">{libro.author}</p>}
               <div className="mt-3 flex flex-wrap gap-1.5">
                 {libro.year && <Chip>{libro.year}</Chip>}

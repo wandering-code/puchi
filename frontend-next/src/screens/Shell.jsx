@@ -252,7 +252,7 @@ function MenuLateral({ abierto, onCerrar, onNavegar }) {
 function Placeholder({ title, nota }) {
   return (
     <div className="py-8">
-      <h2 className="font-display text-[1.75rem] font-semibold tracking-[-0.02em]">{title}</h2>
+      <h2 className="font-display text-[1.75rem] font-bold tracking-[-0.02em]">{title}</h2>
       <p className="mt-2 max-w-prose text-sm leading-relaxed text-ink-dim">{nota}</p>
     </div>
   )
@@ -273,7 +273,7 @@ function Ajustes() {
 
   return (
     <div className="py-8">
-      <h2 className="font-display text-[1.75rem] font-semibold tracking-[-0.02em]">Ajustes</h2>
+      <h2 className="font-display text-[1.75rem] font-bold tracking-[-0.02em]">Ajustes</h2>
       <p className="mt-2 text-sm text-ink-dim">Sesión de {player?.name}.</p>
 
       <div className="mt-6 overflow-hidden rounded-xl2 border border-line bg-surface">

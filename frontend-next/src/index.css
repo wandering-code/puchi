@@ -8,19 +8,19 @@
    El unicode-range hace que latin-ext (acentos raros de títulos y autores
    extranjeros) solo se descargue si de verdad aparece alguno. */
 @font-face {
-  font-family: 'Fraunces';
+  font-family: 'Public Sans';
   font-style: normal;
-  font-weight: 400 700;
+  font-weight: 400 800;
   font-display: swap;
-  src: url('/next/fonts/fraunces-latin.woff2') format('woff2');
+  src: url('/next/fonts/public-sans-latin.woff2') format('woff2');
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 @font-face {
-  font-family: 'Fraunces';
+  font-family: 'Public Sans';
   font-style: normal;
-  font-weight: 400 700;
+  font-weight: 400 800;
   font-display: swap;
-  src: url('/next/fonts/fraunces-latin-ext.woff2') format('woff2');
+  src: url('/next/fonts/public-sans-latin-ext.woff2') format('woff2');
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
 }
 @font-face {
@@ -79,10 +79,13 @@
   --radius-xl2: 1.25rem;
   --radius-xl3: 1.75rem;
 
-  /* Fraunces para lo que titula (tiene eje óptico: a tamaño grande afina y
-     gana carácter, a tamaño pequeño engorda y se lee) e Inter para el resto.
+  /* Public Sans para lo que titula — la misma que usa la Luniteca nueva de la
+     Puchi actual (V3_FONT en lunitecaV3Theme.js): recta, sin gracias, que es
+     lo que pide esta paleta editorial. Los títulos se distinguen del texto por
+     peso y por el espaciado apretado, no por ser de otra familia. Inter se
+     queda para el resto, que es donde mejor está (textos pequeños de interfaz).
      El fallback del sistema va detrás, para el primer pintado. */
-  --font-display: 'Fraunces', ui-serif, Georgia, serif;
+  --font-display: 'Public Sans', system-ui, -apple-system, sans-serif;
   --font-sans: 'Inter', system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
 
   /* Una sola curva para todo lo que se mueve. Que todo comparta easing es la
@@ -118,9 +121,6 @@
     color: var(--color-ink);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
-    /* Que Fraunces use su eje óptico según el tamaño en vez de escalar el
-       mismo dibujo — es la mitad de la gracia de esta fuente. */
-    font-optical-sizing: auto;
     /* Sin esto, mantener pulsado en iOS saca el menú de selección/copiar sobre
        botones y tarjetas, que en una app instalada se ve como un fallo. */
     -webkit-touch-callout: none;
