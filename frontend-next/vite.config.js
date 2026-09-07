@@ -53,8 +53,8 @@ export default defineConfig({
         start_url: '/next/',
         display: 'standalone',
         orientation: 'portrait',
-        background_color: '#0f1020',
-        theme_color: '#0f1020',
+        background_color: '#f7f3ee',
+        theme_color: '#f7f3ee',
         lang: 'es',
         icons: [
           { src: 'icons/icon-192.png', sizes: '192x192', type: 'image/png' },

@@ -28,7 +28,7 @@ export default function UpdatePrompt() {
             <span className="text-sm text-ink">Hay una versión nueva</span>
             <button
               onClick={() => updateServiceWorker(true)}
-              className="rounded-full bg-accent px-3 py-1.5 text-sm font-semibold text-bg-deep active:scale-95 transition-transform"
+              className="rounded-full bg-accent px-3 py-1.5 text-sm font-semibold text-on-accent active:scale-95 transition-transform"
             >
               Recargar
             </button>

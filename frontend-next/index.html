@@ -10,11 +10,15 @@
          ninguna franja que ningún elemento pueda pintar. Las dos vienen de lo
          aprendido en la Puchi actual (issue #13); no se reabren sin motivo. -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content" />
-    <meta name="theme-color" content="#0f1020" />
+    <meta name="theme-color" content="#f7f3ee" />
     <!-- iOS 17.4+ ya respeta el manifest, pero las versiones anteriores solo
          miran estas dos metas para abrir sin barra de navegador. -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <!-- default, no black-translucent: con la paleta clara de Luniteca, la
+         barra de estado translúcida pinta su texto en blanco sobre el crema y
+         no se lee la hora. Con default iOS reserva su hueco y la pinta con el
+         theme-color de arriba. -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Puchi" />
     <meta name="mobile-web-app-capable" content="yes" />
     <title>Puchi</title>

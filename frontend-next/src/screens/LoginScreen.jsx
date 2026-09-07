@@ -108,7 +108,7 @@ export default function LoginScreen() {
                 type="submit"
                 disabled={loading || !name.trim() || !pin}
                 whileTap={{ scale: 0.97 }}
-                className="mt-2 flex h-14 w-full items-center justify-center gap-2 rounded-xl2 bg-accent text-base font-semibold text-bg-deep shadow-[0_10px_30px_-10px_var(--color-accent)] transition-colors disabled:bg-surface-2 disabled:text-ink-mute disabled:shadow-none"
+                className="mt-2 flex h-14 w-full items-center justify-center gap-2 rounded-xl2 bg-accent text-base font-semibold text-on-accent shadow-[0_10px_30px_-10px_var(--color-accent)] transition-colors disabled:bg-surface-2 disabled:text-ink-mute disabled:shadow-none"
               >
                 {loading ? 'Entrando…' : 'Entrar'}
                 {!loading && <IconArrow className="h-5 w-5" />}
@@ -196,22 +196,24 @@ function AvatarPreview({ player }) {
   )
 }
 
-// Fondo: dos manchas de color muy difuminadas que respiran despacio. Se
-// animan solo opacidad y transform (las dos van en el compositor, sin
-// repintar) — un blur animado sobre un móvil de gama media va a tirones.
+// Fondo: dos manchas muy difuminadas que respiran despacio, en el terracota y
+// el verde de la paleta. Sobre crema van a mucha menos opacidad que sobre el
+// fondo oscuro del arranque: aquí una mancha fuerte no da profundidad, mancha.
+// Se animan solo opacidad y transform (las dos van en el compositor, sin
+// repintar) — un blur animado en un móvil de gama media va a tirones.
 function Aurora() {
   return (
     <div className="absolute inset-0 overflow-hidden" aria-hidden="true">
       <motion.div
         className="absolute -left-24 -top-24 h-80 w-80 rounded-full blur-3xl"
-        style={{ background: 'radial-gradient(circle, #7c6cf5 0%, transparent 70%)' }}
-        animate={{ scale: [1, 1.15, 1], opacity: [0.35, 0.5, 0.35] }}
+        style={{ background: 'radial-gradient(circle, var(--color-accent) 0%, transparent 70%)' }}
+        animate={{ scale: [1, 1.15, 1], opacity: [0.1, 0.16, 0.1] }}
         transition={{ duration: 14, repeat: Infinity, ease: 'easeInOut' }}
       />
       <motion.div
         className="absolute -bottom-32 -right-20 h-96 w-96 rounded-full blur-3xl"
-        style={{ background: 'radial-gradient(circle, #f0b429 0%, transparent 70%)' }}
-        animate={{ scale: [1.1, 1, 1.1], opacity: [0.22, 0.34, 0.22] }}
+        style={{ background: 'radial-gradient(circle, var(--color-accent-2) 0%, transparent 70%)' }}
+        animate={{ scale: [1.1, 1, 1.1], opacity: [0.08, 0.14, 0.08] }}
         transition={{ duration: 18, repeat: Infinity, ease: 'easeInOut' }}
       />
       <div className="absolute inset-0 grain" />

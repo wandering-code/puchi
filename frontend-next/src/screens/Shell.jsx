@@ -19,12 +19,13 @@ export default function Shell() {
   return (
     <div className="relative flex h-full w-full flex-col bg-bg">
       {/* El fondo, aparte del contenido: un degradado que aclara hacia arriba
-          (da profundidad y sitio a la barra superior) más el grano. Los dos
-          son capas estáticas, así que no repintan al navegar ni al scrollear. */}
+          (da aire a la barra superior y asienta el contenido) más el grano,
+          que sobre crema se lee como textura de papel. Los dos son capas
+          estáticas: no repintan al navegar ni al scrollear. */}
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0"
-        style={{ background: 'radial-gradient(120% 70% at 50% 0%, #1c1d35 0%, var(--color-bg) 55%, var(--color-bg-deep) 100%)' }}
+        style={{ background: 'radial-gradient(120% 70% at 50% 0%, #fffdfa 0%, var(--color-bg) 55%, var(--color-bg-deep) 100%)' }}
       />
       <div aria-hidden className="pointer-events-none absolute inset-0 grain" />
 

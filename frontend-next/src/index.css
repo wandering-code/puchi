@@ -46,17 +46,35 @@
    mover mucho: cambiarla debe ser editar este bloque, no barrer el proyecto.
    Tailwind 4 genera las utilidades solo (bg-surface, text-ink, rounded-xl2…). */
 @theme {
-  --color-bg:        #0f1020;
-  --color-bg-deep:   #080913;
-  --color-surface:   #191a2e;
-  --color-surface-2: #23253d;
-  --color-line:      #ffffff14;
-  --color-ink:       #ece9f5;
-  --color-ink-dim:   #a5a1bd;
-  --color-ink-mute:  #6f6c88;
-  --color-accent:    #f0b429;   /* el ámbar de la pata de Puchi */
-  --color-accent-2:  #7c6cf5;
-  --color-danger:    #f2555a;
+  /* Paleta traída tal cual de Luniteca (nueva) — las variables --luni3-* de
+     frontend/src/index.css, ver lunitecaV3Theme.js. Editorial cálido: crema,
+     tinta parda y terracota. Los nombres de aquí son los genéricos de esta
+     app; la equivalencia con las de allí va en el comentario de cada línea,
+     para que si aquella paleta se retoca se sepa qué mover.
+
+     Es una paleta CLARA, al revés que el arranque de esta app: lo que
+     dependía de un fondo oscuro (barra de estado de iOS, splash de la PWA,
+     el grano, las manchas del login) está ajustado en consecuencia. */
+  --color-bg:        #f7f3ee;   /* luni3-bg */
+  --color-bg-deep:   #efe9e1;   /* un punto por debajo de bg: lo que queda "detrás" */
+  --color-surface:   #fdfbf9;   /* luni3-surface */
+  --color-surface-2: #ece5db;   /* luni3-surfaceHi */
+  --color-line:      #e2d9cc;   /* luni3-border */
+  --color-ink:       #241f1a;   /* luni3-text */
+  --color-ink-dim:   #7a6f63;   /* luni3-sub */
+  --color-ink-mute:  #948a7c;   /* luni3-muted */
+  --color-accent:    #b5603c;   /* luni3-accent */
+  --color-accent-soft: rgba(181,96,60,0.12);  /* luni3-accentBg */
+  --color-accent-line: rgba(181,96,60,0.35);  /* luni3-accentBd */
+  /* Sobre el terracota no se puede poner tinta: el texto de un botón sólido
+     va en el crema de las superficies. */
+  --color-on-accent: #fdfbf9;
+  --color-accent-2:  #3f6b52;   /* luni3-read, el verde de "leído" */
+  --color-danger:    #a4432b;   /* luni3-dropped */
+  /* Los otros dos estados de lectura de Luniteca, ya definidos para cuando se
+     porte la biblioteca. */
+  --color-read:      #3f6b52;   /* luni3-read */
+  --color-want:      #9a9184;   /* luni3-want */
 
   --radius-xl2: 1.25rem;
   --radius-xl3: 1.75rem;
@@ -156,6 +174,8 @@
    sin coste de render: no se anima, se pinta una vez y se queda. */
 @utility grain {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='128' height='128'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='128' height='128' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
-  opacity: 0.22;
-  mix-blend-mode: overlay;
+  /* Sobre fondo claro el overlay del arranque ensuciaba el crema: multiply
+     muy flojo deja textura de papel sin apagarlo. */
+  opacity: 0.05;
+  mix-blend-mode: multiply;
 }
