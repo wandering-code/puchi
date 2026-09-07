@@ -44,3 +44,29 @@ export const IconPaw = (p) => (
     <ellipse cx="42" cy="12" rx="6" ry="7.5" transform="rotate(8 42 12)" />
   </svg>
 )
+
+// ─── Luniteca ──────────────────────────────────────────────────────────────
+export const IconSearch = (p) => (
+  <svg {...base} {...p}><circle cx="11" cy="11" r="6.5" /><path d="m16 16 4 4" /></svg>
+)
+export const IconFilter = (p) => (
+  <svg {...base} {...p}><path d="M4 6h16M7 12h10M10 18h4" /></svg>
+)
+export const IconSort = (p) => (
+  <svg {...base} {...p}><path d="M7 4v16m0 0-3-3m3 3 3-3M17 20V4m0 0-3 3m3-3 3 3" /></svg>
+)
+export const IconGrid = (p) => (
+  <svg {...base} {...p}><rect x="4" y="4" width="6.5" height="6.5" rx="1" /><rect x="13.5" y="4" width="6.5" height="6.5" rx="1" /><rect x="4" y="13.5" width="6.5" height="6.5" rx="1" /><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1" /></svg>
+)
+export const IconList = (p) => (
+  <svg {...base} {...p}><path d="M4 6h16M4 12h16M4 18h16" /></svg>
+)
+export const IconChevron = (p) => (
+  <svg {...base} {...p}><path d="m6 9 6 6 6-6" /></svg>
+)
+export const IconX = (p) => (
+  <svg {...base} {...p}><path d="m6 6 12 12M18 6 6 18" /></svg>
+)
+export const IconArrowLeft = (p) => (
+  <svg {...base} {...p}><path d="M19 12H6m5-5-5 5 5 5" /></svg>
+)

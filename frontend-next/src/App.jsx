@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from 'motion/react'
 import { useAuth } from './platform/auth'
 import { useMobileViewport } from './platform/viewport'
+import { useLiveConnection } from './platform/live'
 import LoginScreen from './screens/LoginScreen'
 import Shell from './screens/Shell'
 import UpdatePrompt from './ui/UpdatePrompt'
@@ -8,6 +9,10 @@ import UpdatePrompt from './ui/UpdatePrompt'
 export default function App() {
   const { player, checking } = useAuth()
   useMobileViewport()
+  // Un solo WebSocket para toda la app, mientras haya sesión: es el que hace
+  // que un cambio hecho en otro dispositivo (o en la Puchi actual, que comparte
+  // base de datos) se vea aquí sin recargar.
+  useLiveConnection(player?.token)
 
   return (
     <div className="relative h-full w-full overflow-hidden bg-bg-deep">

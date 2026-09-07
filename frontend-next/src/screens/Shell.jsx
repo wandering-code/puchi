@@ -3,11 +3,12 @@ import { NavLink, Route, Routes, useLocation } from 'react-router-dom'
 import { AnimatePresence, motion } from 'motion/react'
 import { useAuth } from '../platform/auth'
 import { isIOS, isStandalone, safeInsets } from '../platform/pwa'
+import Luniteca from './luniteca/Luniteca'
 import { IconBooks, IconExit, IconHome, IconMenu, IconPaw, IconSettings } from '../ui/icons'
 
 const SECCIONES = [
   { to: '/',           label: 'Inicio',     Icon: IconHome },
-  { to: '/biblioteca', label: 'Biblioteca', Icon: IconBooks },
+  { to: '/luniteca',   label: 'Luniteca',   Icon: IconBooks },
   { to: '/ajustes',    label: 'Ajustes',    Icon: IconSettings },
 ]
 
@@ -85,7 +86,7 @@ export default function Shell() {
           >
             <Routes location={location}>
               <Route path="/"           element={<Placeholder title="Inicio" nota="Aquí irá lo que abra la app: novedades del club, lo que estás leyendo, accesos rápidos." />} />
-              <Route path="/biblioteca" element={<Placeholder title="Biblioteca" nota="Primera app a portar. Los libros son los reales: mismo backend y misma base de datos que la Puchi actual." />} />
+              <Route path="/luniteca"   element={<Luniteca />} />
               <Route path="/ajustes"    element={<Ajustes />} />
               <Route path="*"           element={<Placeholder title="Nada por aquí" nota="Esa ruta no existe (todavía)." />} />
             </Routes>
