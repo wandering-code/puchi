@@ -464,6 +464,13 @@ const PortadaLibro = memo(function PortadaLibro({ entry, onAbrir, activa }) {
 })
 
 const FilaLibro = memo(function FilaLibro({ entry, onAbrir, activa }) {
+  // Las fechas de lectura, cuando las hay: en la lista hay sitio para ellas y
+  // es lo que se viene a mirar cuando se pasa a esta vista. Van en su propia
+  // línea y no pegadas al autor, para que un autor largo no se las coma al
+  // truncar. Mismo texto que en la ficha y en las tarjetas de "Leyendo"
+  // ("inicio – fin", con "¿?" en el lado que falte), así que no hay dos
+  // formas distintas de escribir lo mismo por la app.
+  const fechas = readingDatesLabel(entry)
   return (
     <button
       onClick={() => onAbrir(entry)}
@@ -475,6 +482,7 @@ const FilaLibro = memo(function FilaLibro({ entry, onAbrir, activa }) {
       <div className="min-w-0 flex-1">
         <p className="truncate text-[15px] leading-tight">{entry.book.title}</p>
         <p className="mt-0.5 truncate text-xs text-ink-mute">{entry.book.author || 'Sin autor'}</p>
+        {fechas && <p className="mt-0.5 truncate text-[10px] leading-tight text-ink-mute/80">{fechas}</p>}
       </div>
       <div className="flex shrink-0 items-center gap-2">
         {entry.rating > 0 && (
