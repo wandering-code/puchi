@@ -53,11 +53,14 @@ function colorDeLomo(h) {
 // cómic y novela gráfica, a condensada de palo) y, si no, por el mismo número
 // estable que ya decide color y medidas. El resultado no cambia nunca para el
 // mismo libro.
+// `ancho` es lo que ocupa de largo una letra media, en proporción al tamaño
+// de la fuente: sirve para calcular cuánto va a medir un título antes de
+// pintarlo. Una condensada ocupa mucho menos que una romana.
 const TIPOGRAFIAS = [
-  { familia: "'Libre Baskerville', Georgia, serif", peso: 700, espaciado: '0.01em', mayusculas: false },
-  { familia: "'Archivo Narrow', 'Public Sans', sans-serif", peso: 700, espaciado: '0.06em', mayusculas: true },
-  { familia: "'Public Sans', system-ui, sans-serif", peso: 700, espaciado: '0.02em', mayusculas: false },
-  { familia: "'Libre Baskerville', Georgia, serif", peso: 400, espaciado: '0.04em', mayusculas: true },
+  { familia: "'Libre Baskerville', Georgia, serif", peso: 700, espaciado: '0.01em', mayusculas: false, ancho: 0.56 },
+  { familia: "'Archivo Narrow', 'Public Sans', sans-serif", peso: 700, espaciado: '0.06em', mayusculas: true, ancho: 0.50 },
+  { familia: "'Public Sans', system-ui, sans-serif", peso: 700, espaciado: '0.02em', mayusculas: false, ancho: 0.54 },
+  { familia: "'Libre Baskerville', Georgia, serif", peso: 400, espaciado: '0.04em', mayusculas: true, ancho: 0.62 },
 ]
 
 function tipografiaDe(entry, h) {
@@ -65,6 +68,57 @@ function tipografiaDe(entry, h) {
   if (/ensayo|historia|filosof|poes|clásic|clasic/.test(genero)) return TIPOGRAFIAS[h % 2 === 0 ? 0 : 3]
   if (/cómic|comic|gráfic|grafic|manga|infantil/.test(genero)) return TIPOGRAFIAS[1]
   return TIPOGRAFIAS[h % TIPOGRAFIAS.length]
+}
+
+// Cuánto tiene que medir la letra para que un texto quepa entero en el largo
+// disponible. Se prefiere achicar la letra a cortar el texto: un lomo con
+// puntos suspensivos no dice qué libro es.
+const TAMANO_MINIMO = 6
+
+// Lo que ocupa un texto, de largo, a un tamaño dado.
+function largoDe(texto, tipografia, tamano) {
+  if (!texto) return 0
+  // Las mayúsculas ocupan bastante más que la caja baja.
+  return texto.length * tipografia.ancho * (tipografia.mayusculas ? 1.14 : 1) * tamano
+}
+
+// Reparte el largo del lomo entre título y autor de forma que se lean LOS DOS
+// enteros. Si no hay sitio ni encogiéndolos al mínimo, desaparece el autor
+// antes que cortar nada: un nombre a medias no dice quién es, y el título
+// manda. Y si ni el título solo cabe de una tirada, pasa a dos líneas, que es
+// lo que hace un lomo de verdad.
+function repartirTexto({ titulo, autor, largoUtil, anchoLomo, tipografia, tamanoIdeal }) {
+  const idealAutor = Math.max(TAMANO_MINIMO, tamanoIdeal - 4)
+  const conAutor = autor && anchoLomo >= 30
+  const SEPARACION = 6
+
+  if (conAutor) {
+    const necesario = largoDe(titulo, tipografia, tamanoIdeal) + largoDe(autor, tipografia, idealAutor) + SEPARACION
+    if (necesario <= largoUtil) {
+      return { tamanoTitulo: tamanoIdeal, tamanoAutor: idealAutor, lineas: 1, conAutor: true }
+    }
+    // Los dos encogen a la vez, manteniendo su proporción.
+    const escala = (largoUtil - SEPARACION) / (necesario - SEPARACION)
+    const t = Math.floor(tamanoIdeal * escala)
+    const a = Math.floor(idealAutor * escala)
+    if (t >= TAMANO_MINIMO && a >= TAMANO_MINIMO) {
+      return { tamanoTitulo: t, tamanoAutor: a, lineas: 1, conAutor: true }
+    }
+    // Al mínimo tampoco caben los dos: el autor se va.
+  }
+
+  const soloTitulo = Math.floor(largoUtil / (largoDe(titulo, tipografia, 1) || 1))
+  const tamano = Math.min(tamanoIdeal, soloTitulo)
+  if (tamano >= TAMANO_MINIMO) {
+    return { tamanoTitulo: tamano, tamanoAutor: 0, lineas: 1, conAutor: false }
+  }
+
+  // Ni el título solo cabe en una línea: dos líneas, si el lomo da para ellas.
+  const dos = Math.floor((largoUtil * 2) / (largoDe(titulo, tipografia, 1) || 1))
+  const tamanoDos = Math.max(TAMANO_MINIMO, Math.min(tamanoIdeal, dos))
+  return tamanoDos * 2.5 <= anchoLomo - 4
+    ? { tamanoTitulo: tamanoDos, tamanoAutor: 0, lineas: 2, conAutor: false }
+    : { tamanoTitulo: TAMANO_MINIMO, tamanoAutor: 0, lineas: 1, conAutor: false }
 }
 
 function paginasDe(entry) { return totalPages(entry) }
@@ -139,17 +193,41 @@ const Lomo = memo(function Lomo({ entry, onAbrir }) {
     return () => { vigente = false }
   }, [libro.cover_url])
 
+  // El largo aprovechable del lomo, quitando el aire de arriba y abajo.
+  const largoUtil = alto - 24
+  const texto = repartirTexto({
+    titulo: libro.title,
+    autor: libro.author,
+    largoUtil,
+    anchoLomo: ancho,
+    tipografia,
+    tamanoIdeal: tamano,
+  })
+
   // Nervios: las bandas en relieve del lomo de una tapa dura. Solo en los
   // libros gruesos, que son los que se encuadernan así.
   const conNervios = tapaDura
   // El autor solo cabe en los lomos anchos; en uno de 24px estorbaría al
   // título en vez de aportar.
-  const cabeElAutor = ancho >= 30 && libro.author
+
+
+  // Un libro inclinado ocupa más sitio del que ocupa de pie: su parte de
+  // arriba se va hacia un lado. Ese ancho de más se le reserva al lado que
+  // corresponde, porque son libros físicos y no pueden atravesar al vecino.
+  // Sin esto, los torcidos se solapaban con el de al lado.
+  const desplazamiento = torcido ? Math.ceil(alto * Math.sin(Math.abs(torcido) * Math.PI / 180)) : 0
 
   return (
     // Cada lomo ocupa una fila de alto fijo y se apoya abajo, para que todos
     // descansen sobre la misma balda aunque midan distinto.
-    <div className="flex items-end" style={{ height: ALTO_FILA }}>
+    <div
+      className="flex items-end"
+      style={{
+        height: ALTO_FILA,
+        paddingRight: torcido > 0 ? desplazamiento : undefined,
+        paddingLeft: torcido < 0 ? desplazamiento : undefined,
+      }}
+    >
       <button
         onClick={() => onAbrir(entry)}
         aria-label={libro.title}
@@ -243,23 +321,27 @@ const Lomo = memo(function Lomo({ entry, onAbrir }) {
               si no cabe. Antes el título se partía en dos columnas cuando era
               largo, y en un libro torcido el texto se salía del lomo. En
               escritura vertical, text-align centra a lo largo del lomo. */}
+          {/* Una línea a lo largo del lomo, con la letra achicada lo que haga
+              falta para que el título quepa ENTERO: un lomo con puntos
+              suspensivos no dice qué libro es. En escritura vertical,
+              text-align es lo que centra a lo largo. */}
           <span
-            className="min-h-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap leading-tight text-white drop-shadow-[0_1px_2px_rgba(0,0,0,.55)]"
+            className={`min-h-0 flex-1 overflow-hidden leading-tight text-white drop-shadow-[0_1px_2px_rgba(0,0,0,.55)] ${texto.lineas === 1 ? 'whitespace-nowrap' : ''}`}
             style={{
               fontFamily: tipografia.familia,
               fontWeight: tipografia.peso,
               letterSpacing: tipografia.espaciado,
               textTransform: tipografia.mayusculas ? 'uppercase' : 'none',
-              fontSize: tamano,
+              fontSize: texto.tamanoTitulo,
               textAlign: 'center',
             }}
           >
             {libro.title}
           </span>
-          {cabeElAutor && (
+          {texto.conAutor && (
             <span
-              className="max-h-[35%] shrink-0 overflow-hidden text-ellipsis whitespace-nowrap leading-tight text-white/75 drop-shadow-[0_1px_2px_rgba(0,0,0,.5)]"
-              style={{ fontFamily: tipografia.familia, fontSize: Math.max(7, tamano - 4) }}
+              className="shrink-0 whitespace-nowrap leading-tight text-white/75 drop-shadow-[0_1px_2px_rgba(0,0,0,.5)]"
+              style={{ fontFamily: tipografia.familia, fontSize: texto.tamanoAutor }}
             >
               {libro.author}
             </span>
