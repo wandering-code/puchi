@@ -59,15 +59,10 @@ export default function Shell() {
 
   return (
     <div className="relative flex h-full w-full flex-col bg-bg">
-      {/* El fondo, aparte del contenido: un degradado que aclara hacia arriba
-          (da aire a la barra superior y asienta el contenido) más el grano,
-          que sobre crema se lee como textura de papel. Los dos son capas
-          estáticas: no repintan al navegar ni al scrollear. */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0"
-        style={{ background: 'radial-gradient(120% 70% at 50% 0%, #fffdfa 0%, var(--color-bg) 55%, var(--color-bg-deep) 100%)' }}
-      />
+      {/* Un único color de fondo, plano. Aquí hubo un degradado que aclaraba
+          hacia arriba buscando profundidad, y lo que conseguía era que la
+          cabecera pareciera de otro color que el resto de la pantalla. El
+          grano se queda: es uniforme, da textura de papel y no crea zonas. */}
       <div aria-hidden className="pointer-events-none absolute inset-0 grain" />
 
       <TopBar titulo={seccion?.label} onAbrirMenu={() => setMenuAbierto(true)} />
@@ -102,7 +97,7 @@ export default function Shell() {
 function TopBar({ titulo, onAbrirMenu }) {
   const { player } = useAuth()
   return (
-    <header className="relative z-20 shrink-0 border-b border-line backdrop-blur-xl pt-safe">
+    <header className="relative z-20 shrink-0 border-b border-line bg-bg/85 backdrop-blur-xl pt-safe">
       <div className="flex h-14 items-center gap-3 px-3">
         <button
           onClick={onAbrirMenu}

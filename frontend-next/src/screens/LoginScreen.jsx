@@ -34,7 +34,7 @@ export default function LoginScreen() {
   }
 
   return (
-    <div className="relative flex h-full w-full flex-col overflow-hidden bg-bg-deep">
+    <div className="relative flex h-full w-full flex-col overflow-hidden bg-bg">
       <Aurora />
 
       {/* pb-kb aparta el contenido del teclado con padding, sin encoger la

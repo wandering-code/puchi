@@ -288,19 +288,23 @@ function Herramientas({
         <div className="flex-1" />
 
         {/* Cuadrícula o lista, con la pastilla deslizándose entre las dos. */}
-        <div className="flex items-center rounded-xl2 border border-line p-0.5">
+        {/* Píldora dentro de píldora: el recuadro era rounded-xl2 (20px) con la
+            pastilla a 10px y 2px de separación, así que la curva de dentro no
+            podía seguir a la de fuera y la selección se salía por las esquinas.
+            Con las dos redondeadas del todo encaja a cualquier tamaño. */}
+        <div className="flex items-center rounded-full border border-line p-1">
           {[['grid', IconGrid, 'Cuadrícula'], ['list', IconList, 'Lista']].map(([modo, Icono, etiqueta]) => (
             <button
               key={modo}
               onClick={() => onVista(modo)}
               aria-label={etiqueta}
               aria-pressed={vista === modo}
-              className="relative flex h-8 w-9 items-center justify-center"
+              className="relative flex h-8 w-10 items-center justify-center"
             >
               {vista === modo && (
                 <motion.span
                   layoutId="luni-vista"
-                  className="absolute inset-0 rounded-[10px] bg-accent-soft"
+                  className="absolute inset-0 rounded-full bg-accent-soft"
                   transition={{ type: 'spring', stiffness: 420, damping: 34 }}
                 />
               )}

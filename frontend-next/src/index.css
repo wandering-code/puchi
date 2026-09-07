@@ -56,7 +56,6 @@
      dependía de un fondo oscuro (barra de estado de iOS, splash de la PWA,
      el grano, las manchas del login) está ajustado en consecuencia. */
   --color-bg:        #f7f3ee;   /* luni3-bg */
-  --color-bg-deep:   #efe9e1;   /* un punto por debajo de bg: lo que queda "detrás" */
   --color-surface:   #fdfbf9;   /* luni3-surface */
   --color-surface-2: #ece5db;   /* luni3-surfaceHi */
   --color-line:      #e2d9cc;   /* luni3-border */
@@ -117,7 +116,7 @@
     /* El viewport meta ya bloquea el pellizco; esto quita además el
        doble-tap-para-zoom y el retardo de 300ms al tocar. */
     touch-action: manipulation;
-    background: var(--color-bg-deep);
+    background: var(--color-bg);
     color: var(--color-ink);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;

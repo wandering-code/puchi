@@ -15,7 +15,7 @@ export default function App() {
   useLiveConnection(player?.token)
 
   return (
-    <div className="relative h-full w-full overflow-hidden bg-bg-deep">
+    <div className="relative h-full w-full overflow-hidden bg-bg">
       <UpdatePrompt />
       {/* mode="wait" para que la pantalla que se va termine antes de que
           entre la siguiente: solapadas se ven las dos a la vez medio segundo
@@ -58,7 +58,7 @@ function Splash() {
   return (
     <motion.div
       key="splash"
-      className="flex h-full w-full items-center justify-center bg-bg-deep"
+      className="flex h-full w-full items-center justify-center bg-bg"
       initial={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.25 }}
