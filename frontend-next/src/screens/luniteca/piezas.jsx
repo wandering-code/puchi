@@ -131,6 +131,19 @@ export function EditableRating({ rating, onChange, size = 28 }) {
   )
 }
 
+// Tu puntuación, en la esquina de la portada. Un número se lee de un vistazo
+// en una cuadrícula donde cada portada mide 76px; cinco estrellas a ese tamaño
+// hay que pararse a contarlas. Con coma decimal, que es como se escribe en
+// español (4,5 y no 4.5).
+export function NotaBadge({ rating }) {
+  if (!rating) return null
+  return (
+    <span className="absolute right-1 top-1 z-10 rounded-full bg-accent px-1.5 py-0.5 text-[10px] font-semibold leading-none text-on-accent shadow-sm">
+      {rating.toLocaleString('es')}
+    </span>
+  )
+}
+
 // ─── Progreso ──────────────────────────────────────────────────────────────
 export function ProgressBar({ entry, className = '' }) {
   const pct = progressPct(entry)

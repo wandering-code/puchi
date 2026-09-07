@@ -7,7 +7,7 @@ import {
   EMPTY_FILTERS, MAX_PAGES_OPTIONS, SORT_FIELDS,
   agruparEstanteria, opcionesDeFiltro, readingDatesLabel,
 } from './shelf'
-import { Cover, PagesLabel, ProgressBar, StarRating, StatusDot } from './piezas'
+import { Cover, NotaBadge, PagesLabel, ProgressBar, StatusDot } from './piezas'
 import BookDetail from './BookDetail'
 import {
   IconChevron, IconFilter, IconGrid, IconList, IconSearch, IconSort, IconX,
@@ -512,15 +512,21 @@ function PortadaAnimable({ entry, activa, className, children }) {
 
 const PortadaLibro = memo(function PortadaLibro({ entry, onAbrir, activa }) {
   return (
+    /* flex y no el flujo normal del botón: Safari centra verticalmente el
+       contenido de un <button>, así que en una fila donde unos títulos ocupan
+       una línea y otros dos, las portadas de los cortos bajaban media línea y
+       la fila quedaba descuadrada (no se reproduce en Chromium, es cosa de
+       WebKit). Y el título tiene sitio para dos líneas SIEMPRE, ocupe una o
+       dos, para que todas las tarjetas midan lo mismo ocurra lo que ocurra. */
     <button
       onClick={() => onAbrir(entry)}
-      className="text-left transition-transform duration-150 active:scale-[0.96]"
+      className="flex flex-col items-stretch justify-start text-left transition-transform duration-150 active:scale-[0.96]"
     >
-      <PortadaAnimable entry={entry} activa={activa}>
+      <PortadaAnimable entry={entry} activa={activa} className="relative">
+        <NotaBadge rating={entry.rating} />
         <Cover url={entry.book.cover_url} className="shadow-sm" />
       </PortadaAnimable>
-      <p className="mt-1.5 line-clamp-2 text-[11px] leading-tight text-ink-dim">{entry.book.title}</p>
-      {entry.rating > 0 && <StarRating rating={entry.rating} size={9} className="mt-1" />}
+      <p className="mt-1.5 line-clamp-2 h-[2lh] text-[11px] leading-tight text-ink-dim">{entry.book.title}</p>
     </button>
   )
 })
@@ -539,7 +545,11 @@ const FilaLibro = memo(function FilaLibro({ entry, onAbrir, activa }) {
         <p className="mt-0.5 truncate text-xs text-ink-mute">{entry.book.author || 'Sin autor'}</p>
       </div>
       <div className="flex shrink-0 items-center gap-2">
-        {entry.rating > 0 && <StarRating rating={entry.rating} size={10} />}
+        {entry.rating > 0 && (
+          <span className="rounded-full bg-accent-soft px-2 py-0.5 text-xs font-semibold text-accent">
+            {entry.rating.toLocaleString('es')}
+          </span>
+        )}
         <StatusDot status={entry.status} />
       </div>
     </button>
