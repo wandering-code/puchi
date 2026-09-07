@@ -23,6 +23,11 @@ export const SEPARACIONES = [
     detalle: 'Los libros de cada estado van dentro de una tarjeta, separadas unas de otras.',
   },
   {
+    id: 'mixto',
+    nombre: 'Bloque con el título pegado',
+    detalle: 'Las dos cosas: cada sección en su tarjeta, y su nombre se queda arriba mientras recorres esa tarjeta.',
+  },
+  {
     id: 'minimal',
     nombre: 'Solo el nombre, con aire',
     detalle: 'Sin líneas ni recuadros: el nombre en pequeño y mucho espacio entre secciones.',
@@ -42,18 +47,24 @@ export function guardarSeparacion(id) {
   try { localStorage.setItem(CLAVE, id) } catch { /* modo privado */ }
 }
 
+const CON_BLOQUE = ['bloque', 'mixto']
+
 // Cuánto separa una sección de la anterior.
 export function huecoEntreSecciones(variante) {
   if (variante === 'minimal') return 'space-y-12'
-  if (variante === 'bloque') return 'space-y-4'
+  if (CON_BLOQUE.includes(variante)) return 'space-y-4'
   return 'space-y-7'
 }
 
-// La caja que envuelve una sección entera: solo "bloque" tiene una.
+// La caja que envuelve una sección entera.
 export function CajaSeccion({ variante, children }) {
-  if (variante !== 'bloque') return <section>{children}</section>
+  if (!CON_BLOQUE.includes(variante)) return <section>{children}</section>
+  // El fondo de la tarjeta es opaco y no translúcido en la variante mixta: su
+  // título se queda pegado por encima de los libros de la propia sección, y
+  // con transparencia se verían pasar por debajo del texto.
+  const fondo = variante === 'mixto' ? 'bg-surface' : 'bg-surface/60'
   return (
-    <section className="rounded-xl3 border border-line bg-surface/60 p-4">{children}</section>
+    <section className={`rounded-xl3 border border-line p-4 ${fondo}`}>{children}</section>
   )
 }
 
@@ -61,23 +72,39 @@ export function CajaSeccion({ variante, children }) {
 export function TituloSeccion({ variante, label, cuenta, plegada, onAlternar, anidado = false }) {
   const contenido = <Contenido variante={variante} label={label} cuenta={cuenta} plegada={plegada} hayChevron={!!onAlternar} anidado={anidado} />
 
-  // "pegada" se queda bajo la barra de herramientas (que mide 56px) mientras
-  // se recorre la sección. Necesita fondo propio: si no, los libros se le ven
-  // por debajo al pasar.
+  // Los títulos que se quedan pegados bajo la barra de herramientas (56px)
+  // mientras se recorre su sección. Siempre con fondo propio: si no, los libros
+  // se les ven por debajo al pasar.
   //
   // Solo la cabecera de la sección, nunca la del año: con las dos pegadas se
   // amontonaban una encima de otra al llegar la segunda, y se leía fatal
   // (visto en captura). El año pasa de largo con su contenido.
-  const clasePegada = variante === 'pegada' && !anidado
-    ? 'sticky top-14 z-[5] -mx-5 border-b border-line bg-bg px-5 py-2.5'
-    : ''
+  //
+  // En "mixto" el título se pega DENTRO de su tarjeta: se despega solo cuando
+  // la tarjeta sale de la pantalla, así que siempre se sabe de qué sección son
+  // los libros que se están mirando, sin que el título de una sección se quede
+  // colgado sobre la siguiente. Se estira hasta los bordes de la tarjeta con
+  // márgenes negativos, para que tape de lado a lado.
+  const clasePegada = anidado
+    ? ''
+    : variante === 'pegada'
+      ? 'sticky top-14 z-[5] -mx-5 w-[calc(100%+2.5rem)] border-b border-line bg-bg px-5 py-2.5'
+      : variante === 'mixto'
+        // El ancho va explícito: con -mx-4 y w-full el elemento se queda corto
+        // por la derecha (w-full mide el padre, sin contar los márgenes
+        // negativos) y por ahí asomaban los libros y el título del año que
+        // pasaban por detrás.
+        ? 'sticky top-14 z-[5] -mx-4 -mt-4 w-[calc(100%+2rem)] rounded-t-[inherit] border-b border-line bg-surface px-4 pb-2.5 pt-4'
+        : ''
 
-  if (!onAlternar) return <div className={`flex items-center gap-2 ${clasePegada}`}>{contenido}</div>
-  return (
-    <button onClick={onAlternar} className={`flex w-full items-center gap-2 text-left ${clasePegada}`}>
-      {contenido}
-    </button>
-  )
+  // El ancho lo pone clasePegada cuando existe (necesita contar sus márgenes
+  // negativos). No se puede dejar también w-full: las dos son la misma
+  // propiedad y gana la que Tailwind ponga después en su hoja, no la que vaya
+  // después en esta cadena — con w-full puesto, el título pegado se quedaba
+  // corto por la derecha y por ahí asomaban los libros de detrás.
+  const base = `flex items-center gap-2 text-left ${clasePegada || 'w-full'}`
+  if (!onAlternar) return <div className={base}>{contenido}</div>
+  return <button onClick={onAlternar} className={base}>{contenido}</button>
 }
 
 function Contenido({ variante, label, cuenta, plegada, hayChevron, anidado }) {
