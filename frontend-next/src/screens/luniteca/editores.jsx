@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { STATUS_COLOR, STATUS_LABEL, STATUS_ORDER, readingDatesLabel, statusPatch } from './shelf'
 import { IconChevron } from '../../ui/icons'
@@ -71,17 +71,43 @@ const ANOS = (() => {
 // Tres <select>, nunca <input type="date">: el nativo de Safari en iOS lleva
 // años con fallos que no se han arreglado, y en la Puchi actual se acabó
 // resolviendo exactamente así (CustomDateInput). No se reabre esa discusión.
-function CamposFecha({ value, onChange }) {
-  const [a, m, d] = value ? value.split('-').map(Number) : [null, null, null]
+//
+// Las tres partes se guardan aquí dentro mientras se eligen. La primera
+// versión las derivaba del valor ya guardado, y como una fecha no se guarda
+// hasta tener día, mes y año, elegir el día no se recordaba al elegir el mes:
+// desde una fecha vacía era IMPOSIBLE poner una. Lo destapó una prueba
+// automática de alta de un libro leído, no el ojo.
+export function CamposFecha({ value, onChange }) {
+  const [partes, setPartes] = useState(() => partesDe(value))
+  const valorPrevio = useRef(value)
+  // Si el valor cambia desde fuera (otro dispositivo, o al abrir otra fecha),
+  // se adopta; lo que se está eligiendo aquí no se pisa.
+  if (valorPrevio.current !== value) {
+    valorPrevio.current = value
+    const llegadas = partesDe(value)
+    if (llegadas.a !== partes.a || llegadas.m !== partes.m || llegadas.d !== partes.d) setPartes(llegadas)
+  }
+
+  const { a, m, d } = partes
   const diasDelMes = m && a ? new Date(a, m, 0).getDate() : 31
 
   function cambiar(parte, valor) {
-    const nuevo = { a, m, d, [parte]: valor ? Number(valor) : null }
-    // Hasta que no están las tres partes no hay fecha que guardar; si se vacía
-    // cualquiera de ellas, se borra la fecha entera.
-    if (!nuevo.a || !nuevo.m || !nuevo.d) { onChange(''); return }
-    const dia = Math.min(nuevo.d, new Date(nuevo.a, nuevo.m, 0).getDate())
-    onChange(`${nuevo.a}-${String(nuevo.m).padStart(2, '0')}-${String(dia).padStart(2, '0')}`)
+    const siguiente = { ...partes, [parte]: valor ? Number(valor) : null }
+    // 31 de un mes que no lo tiene: se recorta al último día en vez de
+    // guardar una fecha que no existe.
+    if (siguiente.a && siguiente.m && siguiente.d) {
+      siguiente.d = Math.min(siguiente.d, new Date(siguiente.a, siguiente.m, 0).getDate())
+    }
+    setPartes(siguiente)
+    // Hasta que no están las tres partes no hay fecha que guardar. Si se vacía
+    // una habiendo fecha guardada, se borra; pero eligiendo desde cero no se
+    // manda nada hasta completarla, para no gastar dos peticiones en poner a
+    // vacío lo que ya está vacío.
+    if (!siguiente.a || !siguiente.m || !siguiente.d) {
+      if (value) onChange('')
+      return
+    }
+    onChange(`${siguiente.a}-${String(siguiente.m).padStart(2, '0')}-${String(siguiente.d).padStart(2, '0')}`)
   }
 
   const estilo = 'h-11 appearance-none rounded-xl2 border border-line bg-bg px-2.5 text-sm text-ink outline-none'
@@ -116,6 +142,12 @@ function CamposFecha({ value, onChange }) {
       </select>
     </div>
   )
+}
+
+function partesDe(valor) {
+  if (!valor) return { a: null, m: null, d: null }
+  const [a, m, d] = valor.split('-').map(Number)
+  return { a, m, d }
 }
 
 export function EditorFechas({ entry, onActualizar }) {

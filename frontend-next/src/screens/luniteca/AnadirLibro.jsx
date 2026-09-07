@@ -4,6 +4,7 @@ import { api } from '../../platform/api'
 import { STATUS_LABEL } from './shelf'
 import { Cover } from './piezas'
 import HojaInferior from './HojaInferior'
+import { CamposFecha } from './editores'
 import { IconCheck, IconPlus, IconSearch, IconX } from '../../ui/icons'
 
 // Añadir un libro a tu estantería: buscándolo (en lo que ya tiene el club y en
@@ -37,9 +38,24 @@ export default function AnadirLibro({ abierta, onCerrar, onAnadido }) {
         ))}
       </div>
 
-      {modo === 'buscar'
-        ? <Buscador onAnadido={onAnadido} />
-        : <AltaManual onAnadido={onAnadido} onHecho={onCerrar} />}
+      {/* El cambio de pestaña se anima: lo que se va sale hacia su lado y lo
+          que entra llega desde el suyo, y la altura de la hoja acompaña en vez
+          de dar el salto. mode="wait" para que no se vean las dos a la vez. */}
+      <motion.div layout="size" transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}>
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={modo}
+            initial={{ opacity: 0, x: modo === 'buscar' ? -16 : 16 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: modo === 'buscar' ? 16 : -16 }}
+            transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+          >
+            {modo === 'buscar'
+              ? <Buscador onAnadido={onAnadido} />
+              : <AltaManual onAnadido={onAnadido} onHecho={onCerrar} />}
+          </motion.div>
+        </AnimatePresence>
+      </motion.div>
     </HojaInferior>
   )
 }
@@ -206,12 +222,17 @@ function BotonAnadir({ estado, onAnadir }) {
 // Para lo que la búsqueda no encuentra: ediciones raras, libros que no están en
 // Open Library, o cosas que no son libros al uso.
 function AltaManual({ onAnadido, onHecho }) {
-  const [datos, setDatos] = useState({ title: '', author: '', genre: '', year: '', num_pages: '', status: 'want_to_read' })
+  const [datos, setDatos] = useState({
+    title: '', author: '', genre: '', year: '', num_pages: '',
+    status: 'want_to_read', started_at: '', finished_at: '',
+  })
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState(null)
   const primero = useRef(null)
 
   const set = (clave) => (ev) => setDatos(d => ({ ...d, [clave]: ev.target.value }))
+  const llevaInicio = datos.status === 'reading' || datos.status === 'read'
+  const llevaFin = datos.status === 'read'
 
   async function guardar(ev) {
     ev.preventDefault()
@@ -230,7 +251,15 @@ function AltaManual({ onAnadido, onHecho }) {
           origin: 'search',
         },
       })
-      onAnadido(entrada)
+      // El alta no admite fechas (el servidor solo las usa para registrar
+      // actividad), así que si se han puesto van en un segundo paso.
+      const fechas = {}
+      if (llevaInicio && datos.started_at) fechas.started_at = datos.started_at
+      if (llevaFin && datos.finished_at) fechas.finished_at = datos.finished_at
+      const conFechas = Object.keys(fechas).length
+        ? await api(`/shelf/personal/${entrada.id}`, { method: 'PATCH', body: fechas })
+        : entrada
+      onAnadido(conFechas)
       onHecho()
     } catch (err) {
       setError(err.message || 'No se ha podido añadir')
@@ -273,15 +302,37 @@ function AltaManual({ onAnadido, onHecho }) {
               key={id}
               type="button"
               onClick={() => setDatos(d => ({ ...d, status: id }))}
-              className={`rounded-full border px-3.5 py-2 text-sm transition-colors ${
-                datos.status === id ? 'border-accent-line bg-accent-soft text-accent' : 'border-line text-ink-dim'
+              className={`relative rounded-full border px-3.5 py-2 text-sm transition-colors ${
+                datos.status === id ? 'border-accent-line text-accent' : 'border-line text-ink-dim'
               }`}
             >
-              {STATUS_LABEL[id]}
+              {datos.status === id && (
+                <motion.span
+                  layoutId="alta-estado"
+                  className="absolute inset-0 rounded-full bg-accent-soft"
+                  transition={{ type: 'spring', stiffness: 420, damping: 34 }}
+                />
+              )}
+              <span className="relative">{STATUS_LABEL[id]}</span>
             </button>
           ))}
         </div>
       </Campo>
+
+      {/* Las fechas que tienen sentido para el estado elegido, y solo esas:
+          un libro por leer no tiene ninguna, uno que estás leyendo tiene
+          cuándo lo empezaste, y uno leído tiene las dos. Se pueden dejar en
+          blanco — se guarda lo que pongas. */}
+      <Plegable abierta={llevaInicio}>
+        <Campo etiqueta="Empezado">
+          <CamposFecha value={datos.started_at} onChange={v => setDatos(d => ({ ...d, started_at: v }))} />
+        </Campo>
+      </Plegable>
+      <Plegable abierta={llevaFin}>
+        <Campo etiqueta="Terminado">
+          <CamposFecha value={datos.finished_at} onChange={v => setDatos(d => ({ ...d, finished_at: v }))} />
+        </Campo>
+      </Plegable>
 
       <AnimatePresence>
         {error && (
@@ -305,6 +356,26 @@ function AltaManual({ onAnadido, onHecho }) {
         {guardando ? 'Añadiendo…' : 'Añadir a mi estantería'}
       </motion.button>
     </form>
+  )
+}
+
+// Alto animado con height:auto, que motion sí sabe interpolar: los campos de
+// fecha entran y salen, no aparecen de golpe.
+function Plegable({ abierta, children }) {
+  return (
+    <AnimatePresence initial={false}>
+      {abierta && (
+        <motion.div
+          className="overflow-hidden"
+          initial={{ height: 0, opacity: 0 }}
+          animate={{ height: 'auto', opacity: 1 }}
+          exit={{ height: 0, opacity: 0 }}
+          transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
+        >
+          {children}
+        </motion.div>
+      )}
+    </AnimatePresence>
   )
 }
 
