@@ -42,6 +42,31 @@ function colorDeLomo(h) {
   return `hsl(${tono} ${saturacion}% ${luz}%)`
 }
 
+// La tipografía del título, estable por libro.
+//
+// La fuente de una portada NO se puede detectar: es una imagen, y averiguarlo
+// pediría reconocimiento de texto y de tipos. Lo que sí se puede es dar a cada
+// libro una tipografía coherente con lo que es, que es lo que hace que una
+// balda real se vea variada: cada editorial y cada colección usan la suya.
+//
+// Se elige por género cuando se conoce (ensayo e historia tiran a romana;
+// cómic y novela gráfica, a condensada de palo) y, si no, por el mismo número
+// estable que ya decide color y medidas. El resultado no cambia nunca para el
+// mismo libro.
+const TIPOGRAFIAS = [
+  { familia: "'Libre Baskerville', Georgia, serif", peso: 700, espaciado: '0.01em', mayusculas: false },
+  { familia: "'Archivo Narrow', 'Public Sans', sans-serif", peso: 700, espaciado: '0.06em', mayusculas: true },
+  { familia: "'Public Sans', system-ui, sans-serif", peso: 700, espaciado: '0.02em', mayusculas: false },
+  { familia: "'Libre Baskerville', Georgia, serif", peso: 400, espaciado: '0.04em', mayusculas: true },
+]
+
+function tipografiaDe(entry, h) {
+  const genero = (entry.book.genre || '').toLowerCase()
+  if (/ensayo|historia|filosof|poes|clásic|clasic/.test(genero)) return TIPOGRAFIAS[h % 2 === 0 ? 0 : 3]
+  if (/cómic|comic|gráfic|grafic|manga|infantil/.test(genero)) return TIPOGRAFIAS[1]
+  return TIPOGRAFIAS[h % TIPOGRAFIAS.length]
+}
+
 function medidas(entry) {
   const h = huella(`${entry.book.title}·${entry.book.author || ''}`)
   const paginas = totalPages(entry)
@@ -53,7 +78,11 @@ function medidas(entry) {
   // Los libros de una balda no miden todos lo mismo: el alto varía un poco,
   // siempre igual para el mismo libro.
   const alto = ALTO_MIN + (h % 100) / 100 * (ALTO_MAX - ALTO_MIN)
-  return { ancho: Math.round(ancho), alto: Math.round(alto), color: colorDeLomo(h) }
+  // El título ocupa el lomo a lo largo, así que su tamaño va con el grosor:
+  // en un lomo de 22px una letra de 13 no cabe, y en uno de 46 una de 9 se
+  // pierde.
+  const tamano = Math.round(9 + (ancho - ANCHO_MIN) / (ANCHO_MAX - ANCHO_MIN) * 5)
+  return { ancho: Math.round(ancho), alto: Math.round(alto), color: colorDeLomo(h), tamano, tipografia: tipografiaDe(entry, h) }
 }
 
 export default function Lomos({ entries, onAbrir }) {
@@ -81,7 +110,7 @@ export default function Lomos({ entries, onAbrir }) {
 const FRANJA = 0.04
 
 const Lomo = memo(function Lomo({ entry, onAbrir }) {
-  const { ancho, alto, color } = medidas(entry)
+  const { ancho, alto, color, tamano, tipografia } = medidas(entry)
   const libro = entry.book
   const paginas = totalPages(entry)
 
@@ -161,20 +190,36 @@ const Lomo = memo(function Lomo({ entry, onAbrir }) {
         <span className="pointer-events-none absolute inset-y-0 right-0 w-[2px] bg-white/10" />
 
         <span
-          className="absolute inset-0 flex items-center justify-between px-[3px] py-3 text-center"
+          className="absolute inset-0 flex items-center px-[2px] py-3 text-center"
           // De arriba abajo, que es como se leen los lomos aquí: se inclina la
           // cabeza a la derecha y se lee. Al revés (de abajo arriba) es la
           // convención anglosajona y en una balda española se ve del revés.
-          // En vertical-rl el eje principal del flex es el vertical, así que
-          // justify-between deja el título arriba y el autor al pie, como en
-          // un lomo impreso.
+          // En escritura vertical el eje principal del flex es el vertical, así
+          // que el título crece a lo largo del lomo y el autor se queda al pie.
           style={{ writingMode: 'vertical-rl', textOrientation: 'mixed' }}
         >
-          <span className="line-clamp-1 text-[9px] font-semibold leading-tight text-white drop-shadow-[0_1px_2px_rgba(0,0,0,.5)]">
+          <span
+            className="line-clamp-1 flex-1 leading-tight text-white drop-shadow-[0_1px_2px_rgba(0,0,0,.55)]"
+            style={{
+              fontFamily: tipografia.familia,
+              fontWeight: tipografia.peso,
+              letterSpacing: tipografia.espaciado,
+              textTransform: tipografia.mayusculas ? 'uppercase' : 'none',
+              fontSize: tamano,
+              // El título ocupa el lomo entero de largo y va centrado, como en
+              // un libro de verdad: no una etiqueta pequeña arriba.
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
             {libro.title}
           </span>
           {cabeElAutor && (
-            <span className="line-clamp-1 text-[7px] leading-tight text-white/75 drop-shadow-[0_1px_2px_rgba(0,0,0,.5)]">
+            <span
+              className="line-clamp-1 shrink-0 leading-tight text-white/75 drop-shadow-[0_1px_2px_rgba(0,0,0,.5)]"
+              style={{ fontFamily: tipografia.familia, fontSize: Math.max(7, tamano - 4) }}
+            >
               {libro.author}
             </span>
           )}
