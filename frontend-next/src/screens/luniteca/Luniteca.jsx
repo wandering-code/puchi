@@ -421,11 +421,18 @@ const Coleccion = memo(function Coleccion({ entries, vista, onAbrir, abiertaId }
     )
   }
   // Columnas por ancho disponible en vez de por breakpoints fijos: el número
-  // sale solo (unas cuatro en un móvil, más en tablet y escritorio) y las
-  // portadas quedan más pequeñas sin recortarse — la proporción 2/3 la sigue
-  // fijando Cover, aquí solo cambia cuánto miden.
+  // sale solo y las portadas se reparten lo que hay, sin recortarse — la
+  // proporción 2/3 la sigue fijando Cover, aquí solo cambia cuánto miden.
+  //
+  // El mínimo es 72px y no un número redondo cualquiera: medido en los anchos
+  // reales, con 76px un iPhone SE (375) solo admitía TRES columnas y las
+  // portadas se estiraban a 104px — enormes justo en la pantalla más pequeña,
+  // mientras que un Pro Max sacaba cuatro de 89px. Con 72 entran cuatro en el
+  // SE (75px) y el Pro Max se queda igual. Bajar a 68 metería una quinta
+  // columna en los Max y los dejaría todos entre 68 y 79px, si algún día se
+  // quieren aún más pequeñas.
   return (
-    <div className="grid grid-cols-[repeat(auto-fill,minmax(76px,1fr))] gap-3">
+    <div className="grid grid-cols-[repeat(auto-fill,minmax(72px,1fr))] gap-3">
       {entries.map(e => <PortadaLibro key={e.id} entry={e} onAbrir={onAbrir} activa={abiertaId === e.id} />)}
     </div>
   )
