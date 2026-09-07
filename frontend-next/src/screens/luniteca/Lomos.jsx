@@ -1,5 +1,6 @@
-import { memo } from 'react'
+import { memo, useEffect, useState } from 'react'
 import { totalPages } from './shelf'
+import { colorDePortada } from './colorPortada'
 
 // Vista de estantería: los libros de canto, como en una balda de verdad.
 //
@@ -8,11 +9,11 @@ import { totalPages } from './shelf'
 // portada (la cara frontal), y el lomo solo aparece en las contadísimas
 // ediciones con la sobrecubierta entera escaneada.
 //
-// De momento el color sale de un hash del título y el autor. Si esta vista
-// convence, el siguiente paso es sacarlo de la portada real (calculado una vez
-// en el servidor al cachearla): el lomo pega entonces con el libro que ya
-// reconoces. En el navegador no se puede leer el color de una portada de Open
-// Library — es otro origen y el canvas lo bloquea.
+// El color sale de la propia portada cuando se puede leer (ver
+// colorPortada.js): así el lomo se parece al libro que tienes en la mano. Con
+// las portadas que sirve Open Library no se puede — son de otro origen y el
+// navegador prohíbe leer sus píxeles —, y ahí se usa un color estable sacado
+// del título y el autor.
 //
 // Es una vista aparte a propósito: si no acaba de funcionar, se quita este
 // archivo y su entrada en el selector, y las otras dos siguen igual.
@@ -75,6 +76,16 @@ const Lomo = memo(function Lomo({ entry, onAbrir }) {
   const { ancho, alto, color } = medidas(entry)
   const libro = entry.book
 
+  // El color de la portada llega después (hay que cargarla y leerla), así que
+  // el lomo nace con su color de reserva y cambia al de verdad en cuanto está.
+  // La transición lo hace un cambio, no un parpadeo.
+  const [colorReal, setColorReal] = useState(null)
+  useEffect(() => {
+    let vigente = true
+    colorDePortada(libro.cover_url).then(c => { if (vigente && c) setColorReal(c) })
+    return () => { vigente = false }
+  }, [libro.cover_url])
+
   return (
     // Cada lomo ocupa una fila de alto fijo y se apoya abajo, para que todos
     // descansen sobre la misma balda aunque midan distinto.
@@ -83,21 +94,30 @@ const Lomo = memo(function Lomo({ entry, onAbrir }) {
         onClick={() => onAbrir(entry)}
         aria-label={libro.title}
         title={`${libro.title}${libro.author ? ` — ${libro.author}` : ''}`}
-        className="relative overflow-hidden rounded-[2px] shadow-sm transition-transform duration-150 active:translate-y-[-4px]"
-        style={{ width: ancho, height: alto, background: color }}
+        className="relative overflow-hidden rounded-[2px] shadow-sm transition-[background-color,transform] duration-300 active:translate-y-[-4px]"
+        style={{ width: ancho, height: alto, backgroundColor: colorReal || color }}
       >
-        {/* Filetes: los dos cantos claros que tienen casi todos los lomos
-            arriba y abajo, y el brillo del borde por donde se abre el libro. */}
+        {/* Volumen: un lomo no es plano. Sombra en los dos cantos y una franja
+            de luz descentrada hacia la izquierda, que es como le da la luz a un
+            libro puesto de pie en una balda. */}
+        <span
+          className="pointer-events-none absolute inset-0"
+          style={{ background: 'linear-gradient(to right, rgba(0,0,0,.35) 0%, rgba(255,255,255,.10) 28%, rgba(0,0,0,.10) 62%, rgba(0,0,0,.32) 100%)' }}
+        />
+        {/* Los dos cantos claros que tienen casi todos los lomos arriba y
+            abajo, y el brillo del borde por donde se abre el libro. */}
         <span className="pointer-events-none absolute inset-x-0 top-2 h-px bg-white/25" />
         <span className="pointer-events-none absolute inset-x-0 bottom-2 h-px bg-white/25" />
         <span className="pointer-events-none absolute inset-y-0 right-0 w-[2px] bg-white/10" />
 
         <span
           className="absolute inset-0 flex items-center justify-center px-[3px] py-2 text-center text-[9px] font-semibold leading-tight text-white/90"
-          // Texto de abajo arriba, como en una estantería de verdad. El título
-          // se recorta si no cabe: un lomo no da para más, y el nombre entero
-          // está a un toque de distancia.
-          style={{ writingMode: 'vertical-rl', textOrientation: 'mixed', transform: 'rotate(180deg)' }}
+          // De arriba abajo, que es como se leen los lomos aquí: se inclina la
+          // cabeza a la derecha y se lee. Al revés (de abajo arriba) es la
+          // convención anglosajona y en una balda española se ve del revés.
+          // El título se recorta si no cabe: un lomo no da para más, y el
+          // nombre entero está a un toque de distancia.
+          style={{ writingMode: 'vertical-rl', textOrientation: 'mixed' }}
         >
           <span className="line-clamp-1">{libro.title}</span>
         </span>
