@@ -124,9 +124,12 @@ que cada lomo se construye con los datos del libro:
   en `/uploads`); con una de `covers.openlibrary.org` el navegador prohíbe leer los
   píxeles del canvas y se usa un color estable sacado del título. Lo suyo, cuando esto
   se asiente, es calcularlo en el servidor al cachear la portada.
-- **Tipografía** por género (ensayo e historia → romana; cómic → condensada de palo) y,
-  si no se sabe, estable por libro. La de la portada no se puede detectar: es una
-  imagen.
+- **Tipografía** por género (ensayo e historia → romana; cómic → condensada de palo;
+  fantasía → Cinzel, capitales romanas, que es lo que llevan de verdad esos lomos) y,
+  si no se sabe, una de las cuatro generales, estable por autor. La de la portada no se
+  puede detectar: es una imagen. Cinzel vive **fuera** de la lista del sorteo: si
+  entrara en ella le tocaría también a una novela negra. Y como no tiene caja baja, en
+  esos lomos el nombre del autor va en Libre Baskerville (`familiaAutor`).
 
 ### El reparto del texto
 

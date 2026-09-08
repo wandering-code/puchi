@@ -71,6 +71,19 @@ const TIPOGRAFIAS = [
   { familia: "'Libre Baskerville', Georgia, serif", peso: 400, espaciado: '0.04em', mayusculas: true, ancho: 0.62 },
 ]
 
+// Fantasía: capitales romanas, que es lo que llevan de verdad esos lomos.
+// Cinzel no tiene caja baja, así que el nombre del autor va aparte en la romana
+// de siempre — en versalitas se leería peor y a ese tamaño no se distinguiría
+// del título.
+//
+// Va FUERA de la lista de arriba a propósito: esa es la del sorteo por autor, y
+// si Cinzel entrara en ella le tocaría también a novela negra o a lo que fuera,
+// que es justo lo que no queremos (visto: "El problema final" salió en Cinzel).
+const FANTASIA = {
+  familia: "'Cinzel', 'Libre Baskerville', serif", peso: 600, espaciado: '0.05em', mayusculas: true, ancho: 0.66,
+  familiaAutor: "'Libre Baskerville', Georgia, serif",
+}
+
 // La tipografía se elige por AUTOR, no por libro: en una balda de verdad los
 // cuatro tomos del mismo escritor son de la misma colección y llevan el mismo
 // diseño de lomo. Eligiéndola por título salían cuatro lomos distintos del
@@ -90,6 +103,7 @@ function tipografiaDe(entry) {
   const h = huella(claveAutor(entry.book.author) || entry.book.title || '')
   if (/ensayo|historia|filosof|poes|clásic|clasic/.test(genero)) return TIPOGRAFIAS[h % 2 === 0 ? 0 : 3]
   if (/cómic|comic|gráfic|grafic|manga|infantil/.test(genero)) return TIPOGRAFIAS[1]
+  if (/fantas|épic|epic/.test(genero)) return FANTASIA
   return TIPOGRAFIAS[h % TIPOGRAFIAS.length]
 }
 
@@ -180,7 +194,11 @@ function repartirTexto({ titulo: tituloEntero, autor, largoUtil, anchoLomo, tipo
   // negrita, sin espaciado y sin mayúsculas, así que se mide con esas mismas
   // propiedades: medirlo como el título lo daba por más largo de lo que es y
   // se quedaba fuera algún nombre que sí cabía.
-  const tipoAutor = { ...tipografia, peso: 400, espaciado: '0', mayusculas: false }
+  const tipoAutor = {
+    ...tipografia,
+    familia: tipografia.familiaAutor || tipografia.familia,
+    peso: 400, espaciado: '0', mayusculas: false,
+  }
   const anchoVersion = new Map(versiones.map(v => [v, largoDe(v, tipoAutor, 1)]))
 
   // Cuántos renglones necesita el título a este tamaño, repartido POR PALABRAS
@@ -655,7 +673,7 @@ const Lomo = memo(function Lomo({ entry, onAbrir }) {
             <span
               data-parte="autor"
               className={`shrink-0 whitespace-nowrap leading-tight ${claro ? 'text-[#241f19]/85 drop-shadow-[0_1px_1px_rgba(255,255,255,.6)]' : 'text-white/90 drop-shadow-[0_1px_2px_rgba(0,0,0,.7)]'}`}
-              style={{ fontFamily: tipografia.familia, fontSize: texto.tamanoAutor }}
+              style={{ fontFamily: tipografia.familiaAutor || tipografia.familia, fontSize: texto.tamanoAutor }}
             >
               {texto.autor}
             </span>
