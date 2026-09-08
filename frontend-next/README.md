@@ -76,9 +76,14 @@ la presentación.
 
 Fijadas probando en el móvil; cambiarlas sin motivo rompe la coherencia:
 
-- **Todo lo que se abre encima de algo llega desde abajo** (`HojaInferior`): filtros,
-  estado, fechas, carpeta, portada y la propia ficha del libro. Mismo sitio, mismo
-  gesto para cerrar.
+- **Todo lo que se abre encima de algo llega desde abajo** (`HojaInferior` para lo
+  corto, `PantallaInferior` para la ficha y añadir libro): filtros, estado, fechas,
+  carpeta, portada y la propia ficha del libro. Mismo sitio, mismo gesto para cerrar.
+- **Ninguna llega hasta arriba del todo.** Queda una franja de la pantalla de debajo a
+  la vista, difuminada (`backdrop-blur`), como las hojas del propio iPhone: recuerda
+  que lo de abajo sigue ahí y que eso se cierra. En un móvil con notch la franja es la
+  zona segura, que ya deja el hueco justo bajo la barra de estado. Medido con 300
+  lomos detrás: el difuminado no cuesta nada (61 fps con y sin él, CPU a 1/4).
 - **El gesto de arrastrar para cerrar vive en el asa, nunca en el panel.** El `drag` de
   Motion le pone `touch-action` al elemento, y si ese elemento es el que scrollea, el
   contenido deja de poder desplazarse con el dedo. Ver `ui/arrastre.js`.

@@ -20,7 +20,10 @@ export default function HojaInferior({ abierta, titulo, onCerrar, children, pie 
       {abierta && (
         <>
           <motion.div
-            className="fixed inset-0 z-[60] bg-ink/25"
+            // Mismo velo difuminado que la pantalla completa (ver
+            // PantallaInferior): lo de detrás se reconoce sin competir con lo
+            // que hay delante.
+            className="fixed inset-0 z-[60] bg-ink/25 backdrop-blur-[6px]"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
