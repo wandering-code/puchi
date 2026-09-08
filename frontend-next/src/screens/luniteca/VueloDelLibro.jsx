@@ -196,8 +196,12 @@ export default function VueloDelLibro({ lomo, portada, destino, alTerminar }) {
               {portada
                 ? <img src={portada} alt="" className="h-full w-full object-cover" />
                 : <span className="block h-full w-full bg-surface-2" />}
-              {/* El canto de la tapa por la bisagra, en sombra */}
-              <span className="pointer-events-none absolute inset-y-0 left-0 w-[5px] bg-gradient-to-r from-black/40 to-transparent" />
+              {/* Nada de sombra en la bisagra: el lomo ya llega ahí con su
+                  canto oscurecido (lo trae de la balda), y las dos sombras
+                  juntas formaban una banda que se leía como un hueco entre el
+                  lomo y la portada. Un filo finísimo basta para marcar el
+                  pliegue. */}
+              <span className="pointer-events-none absolute inset-y-0 left-0 w-px bg-black/25" />
             </div>
 
             {/* El lomo, clonado del de la balda: es la cara que mira al frente
