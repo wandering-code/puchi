@@ -147,13 +147,53 @@ Es la parte con más reglas, y todas salieron de mirar capturas:
 - El hueco entre título y autor (`SEPARACION_AUTOR`) lo reservan **la cuenta y el
   layout con la misma constante**: cuando solo lo reservaba la cuenta, se leía
   "SALVAJESR. Bolaño".
+- **El subtítulo va aparte**, en pequeño y detrás del título, y es lo primero que
+  se cae si no hay sitio. Metiéndolo en el mismo texto, "Apocalipsis Z: El principio
+  del fin" salía a 9px en un lomo de 37px mientras su vecino, más estrecho, llevaba
+  el título a 12.
+- **Entre dos repartos parecidos gana el de menos renglones** (hasta 2px de
+  diferencia): "Apocalipsis" con una "Z" suelta debajo se lee peor que el título
+  entero dos puntos más pequeño.
+- **Ninguna palabra puede pasarse de largo**: el navegador parte por palabras, nunca
+  dentro de una, así que un título de una sola palabra ("Beloved") no cabe en dos
+  renglones por mucho que la cuenta lo divida.
+- **El aire de arriba y abajo va con el alto del libro** (9%), no en píxeles fijos:
+  con 8px sueltos el título quedaba pegado al canto en los lomos altos.
 
-Medido con 17 libros de anchos y títulos variados (`/tmp/luni-test/lomos-caben.mjs`):
-17 de 17 enseñan autor, ningún texto cortado, ningún libro solapado, y los tochos
-llevan el título a 10–14px en vez de a 6.
+### Legibilidad sobre la portada
+
+- **La tinta la decide la portada**: por encima del 58% de luminosidad (la real de la
+  franja, que `colorPortada` devuelve junto al color) el lomo se trata como un libro
+  de cubierta clara y el título va en negro. Antes era siempre blanco y en una
+  portada gris o crema no se leía.
+- **Un velo del propio color del lomo calma la portada estirada.** Esa franja trae
+  las bandas horizontales del diseño (cielo, tierra, la faja de color) y con tanto
+  contraste el texto competía con ellas.
+- El promedio de color **ignora los píxeles transparentes**. Sin eso, una portada con
+  alfa (un PNG recortado, un SVG) se iba a negro: el tono salía bien pero la
+  luminosidad daba 3 sobre 100, y con ella la decisión de la tinta.
+
+Y las medidas se toman con **la fuente de verdad**: `document.fonts.ready` no vale
+aquí, porque solo espera a las fuentes que ya se estaban usando y las de los lomos
+empiezan a cargarse justo al pintar el primer lomo. Se pregunta por cada fuente
+concreta (`fonts.check`/`load`) y, mientras no está, se usa la estimación sin
+guardarla en la caché. El repintado viaja **como prop hasta cada lomo**: están
+memoizados y sin eso se quedaban con el reparto hecho a ojo.
+
+Medido con 20 libros de anchos y títulos variados (`/tmp/luni-test/lomos-aire.mjs`):
+20 de 20 enseñan autor, ningún texto cortado, ningún libro solapado, el texto nunca a
+menos de 12px del canto, y los tochos llevan el título a 10–14px en vez de a 6.
+
+Otros detalles de encuadernación: **cabezada** (el hilo trenzado que asoma arriba y
+abajo) en los de tapa dura, y **la tipografía se elige por autor, no por libro**, para
+que los tomos del mismo escritor se vean de la misma colección, como en una balda de
+verdad.
 
 Descartado por el camino: la franja de canto de páginas en el borde derecho del lomo.
 Quedaba rara — en una balda con los libros metidos ves el lomo y nada más.
+
+Lo que queda por hacer en esta vista está en
+[issue #20](https://github.com/wandering-code/puchi/issues/20).
 
 ## Rendimiento: lo medido
 

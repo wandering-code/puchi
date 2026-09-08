@@ -136,8 +136,16 @@ const ANCHO_RENGLON = 1.25
 // número o el autor sale pegado al título (se leía "SALVAJESR. Bolaño").
 export const SEPARACION_AUTOR = 6
 
-function repartirTexto({ titulo, autor, largoUtil, anchoLomo, tipografia, tamanoIdeal }) {
+function repartirTexto({ titulo: tituloEntero, autor, largoUtil, anchoLomo, tipografia, tamanoIdeal }) {
   const SEPARACION = SEPARACION_AUTOR
+  // El subtítulo va aparte y en segundo plano, como en cualquier lomo
+  // impreso: "Apocalipsis Z: El principio del fin" es "Apocalipsis Z" en
+  // grande y el resto en pequeño debajo. Metiéndolo todo en el mismo texto, el
+  // título de ese libro salía a 9px en un lomo de 37 mientras su vecino, con
+  // un lomo más estrecho, lo llevaba a 12.
+  const dosPuntos = tituloEntero.indexOf(':')
+  const titulo = dosPuntos > 0 ? tituloEntero.slice(0, dosPuntos).trim() : tituloEntero
+  const subtitulo = dosPuntos > 0 ? tituloEntero.slice(dosPuntos + 1).trim() : ''
   const anchoLibre = anchoLomo - 4
   // El umbral de ancho es solo para que el autor no ahogue un lomo finísimo.
   const versiones = anchoLomo >= 26 ? abreviaturasDe(autor) : []
@@ -176,27 +184,64 @@ function repartirTexto({ titulo, autor, largoUtil, anchoLomo, tipografia, tamano
     return lineas
   }
 
+  // El subtítulo es lo último en entrar y lo primero en caerse: solo se pinta
+  // si, ya colocados título y autor, aún sobra largo para él en una línea.
+  const conSubtitulo = (reparto, largoOcupado) => {
+    if (!subtitulo || reparto.lineas > 1) return reparto
+    const sobra = largoUtil - largoOcupado - SEPARACION
+    const porPunto = largoDe(subtitulo, tipografia, 1) || 1
+    const sub = Math.min(Math.max(TAMANO_MINIMO_AUTOR, reparto.tamanoTitulo - 4), Math.floor(sobra / porPunto))
+    return sub >= TAMANO_MINIMO_AUTOR ? { ...reparto, sub: subtitulo, tamanoSub: sub } : reparto
+  }
+
   // Primera vuelta: título lo más grande posible CON autor. Manda el tamaño de
   // letra sobre lo completo del nombre — "Márquez" que se lee vale más que un
   // "G. García Márquez" de 5px, que es lo que salía al revés—, así que para
   // cada tamaño de título se busca la letra de autor más grande y, con ella,
   // el nombre más completo que quepa.
+  //
+  // Y entre dos repartos parecidos gana el de menos renglones: partir
+  // "Apocalipsis Z" en "Apocalipsis" y una "Z" suelta se lee peor que bajarle
+  // dos puntos a la letra y dejarlo de una tirada. Por eso, al encontrar uno
+  // que vale, se siguen probando tamaños dos puntos más pequeños por si alguno
+  // cabe en menos renglones.
+  const MARGEN_RENGLON = 2
+  let mejor = null
   for (let t = tamanoIdeal; t >= TAMANO_MINIMO; t--) {
+    if (mejor && (mejor.lineas === 1 || t < mejor.tamanoTitulo - MARGEN_RENGLON)) break
     for (let a = topeAutor(t); a >= TAMANO_MINIMO_AUTOR; a--) {
+      let encontrado = null
       for (const version of versiones) {
-        const lineas = renglonesDelTitulo(t, largoDe(version, tipoAutor, a) + SEPARACION)
-        if (lineas) return { tamanoTitulo: t, tamanoAutor: a, lineas, autor: version }
+        const largoAutor = largoDe(version, tipoAutor, a) + SEPARACION
+        const lineas = renglonesDelTitulo(t, largoAutor)
+        if (lineas) {
+          encontrado = {
+            tamanoTitulo: t, tamanoAutor: a, lineas, autor: version, titulo,
+            largoOcupado: largoDe(titulo, tipografia, t) + largoAutor,
+          }
+          break
+        }
+      }
+      if (encontrado) {
+        if (!mejor || encontrado.lineas < mejor.lineas) mejor = encontrado
+        break
       }
     }
   }
+  if (mejor) return conSubtitulo(mejor, mejor.largoOcupado)
 
   // Segunda vuelta: no hay sitio para el autor por ningún lado, manda el
   // título entero.
   for (let t = tamanoIdeal; t >= TAMANO_MINIMO; t--) {
     const lineas = renglonesDelTitulo(t, 0)
-    if (lineas) return { tamanoTitulo: t, tamanoAutor: 0, lineas, autor: null }
+    if (lineas) {
+      return conSubtitulo(
+        { tamanoTitulo: t, tamanoAutor: 0, lineas, autor: null, titulo },
+        largoDe(titulo, tipografia, t),
+      )
+    }
   }
-  return { tamanoTitulo: TAMANO_MINIMO, tamanoAutor: 0, lineas: 1, autor: null }
+  return { tamanoTitulo: TAMANO_MINIMO, tamanoAutor: 0, lineas: 1, autor: null, titulo }
 }
 
 function paginasDe(entry) { return totalPages(entry) }
@@ -354,7 +399,21 @@ const Lomo = memo(function Lomo({ entry, onAbrir }) {
             más; en uno claro aclara, porque ahí el título va en tinta oscura,
             como en un libro de verdad con la cubierta clara. */}
         {libro.cover_url && (
-          <span className={`pointer-events-none absolute inset-0 ${claro ? 'bg-white/35' : 'bg-ink/25'}`} />
+          <>
+            {/* La franja de la portada estirada trae sus bandas horizontales
+                (cielo, tierra, la faja de color), y con tanto contraste el
+                título tenía que competir con ellas. Un velo del propio color
+                del lomo las calma sin quitarle el carácter: el lomo sigue
+                siendo el de ese libro, pero de un color más uniforme, que es
+                justo lo que pasa en el lomo impreso. */}
+            {paleta && (
+              <span
+                className="pointer-events-none absolute inset-0"
+                style={{ backgroundColor: paleta.color, opacity: 0.45 }}
+              />
+            )}
+            <span className={`pointer-events-none absolute inset-0 ${claro ? 'bg-white/25' : 'bg-ink/20'}`} />
+          </>
         )}
 
         {/* Volumen: un lomo no es plano. Sombra en los dos cantos y una franja
@@ -448,11 +507,27 @@ const Lomo = memo(function Lomo({ entry, onAbrir }) {
               textAlign: 'center',
             }}
           >
-            {libro.title}
+            {texto.titulo}
           </span>
+          {texto.sub && (
+            // El subtítulo, en pequeño y algo apagado, como en el lomo
+            // impreso: se lee después del título, no compite con él.
+            <span
+              className={`shrink-0 whitespace-nowrap leading-tight ${claro ? 'text-[#241f19]/80 drop-shadow-[0_1px_1px_rgba(255,255,255,.5)]' : 'text-white/85 drop-shadow-[0_1px_2px_rgba(0,0,0,.55)]'}`}
+              style={{
+                fontFamily: tipografia.familia,
+                fontWeight: tipografia.peso,
+                letterSpacing: tipografia.espaciado,
+                textTransform: tipografia.mayusculas ? 'uppercase' : 'none',
+                fontSize: texto.tamanoSub,
+              }}
+            >
+              {texto.sub}
+            </span>
+          )}
           {texto.autor && (
             <span
-              className={`shrink-0 whitespace-nowrap leading-tight ${claro ? 'text-[#241f19]/75 drop-shadow-[0_1px_1px_rgba(255,255,255,.5)]' : 'text-white/75 drop-shadow-[0_1px_2px_rgba(0,0,0,.5)]'}`}
+              className={`shrink-0 whitespace-nowrap leading-tight ${claro ? 'text-[#241f19]/85 drop-shadow-[0_1px_1px_rgba(255,255,255,.6)]' : 'text-white/90 drop-shadow-[0_1px_2px_rgba(0,0,0,.7)]'}`}
               style={{ fontFamily: tipografia.familia, fontSize: texto.tamanoAutor }}
             >
               {texto.autor}
