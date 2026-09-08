@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { NavLink, Route, Routes, useLocation } from 'react-router-dom'
 import { AnimatePresence, motion } from 'motion/react'
 import { useAuth } from '../platform/auth'
+import { useVersion } from '../platform/version'
 import { isIOS, isStandalone, safeInsets } from '../platform/pwa'
 import { useCapa } from '../platform/capas'
 import Luniteca from './luniteca/Luniteca'
@@ -72,6 +73,7 @@ export default function Shell() {
 
 function TopBar({ titulo, onAbrirMenu }) {
   const { player } = useAuth()
+  const { version } = useVersion()
   return (
     <header className="relative z-20 shrink-0 border-b border-line bg-bg/85 backdrop-blur-xl pt-safe">
       <div className="flex h-14 items-center gap-3 px-3">
@@ -99,6 +101,10 @@ function TopBar({ titulo, onAbrirMenu }) {
               {titulo}
             </motion.p>
           </AnimatePresence>
+          {/* El commit, aquí a la vista mientras se está trasteando: evita
+              entrar en Ajustes cada vez para saber si el móvil ya tiene el
+              código nuevo. Fuera cuando esto se asiente. */}
+          <p className="truncate font-mono text-[10px] leading-none text-ink-mute/70">{version}</p>
         </div>
 
         {/* Solo el avatar: quién eres se ve al desplegar el menú, y el nombre
@@ -236,18 +242,11 @@ function Placeholder({ title, nota }) {
 function Ajustes() {
   const { player, logout } = useAuth()
   const [info, setInfo] = useState(() => snapshot())
-  // En dev el sello compilado se queda congelado al arrancar Vite, así que se
-  // pregunta al servidor, que lo calcula al momento (ver vite.config.js).
-  const [sello, setSello] = useState(null)
+  const sello = useVersion()
 
   useEffect(() => {
     const id = setInterval(() => setInfo(snapshot()), 500)
     return () => clearInterval(id)
-  }, [])
-
-  useEffect(() => {
-    if (!import.meta.env.DEV) return
-    fetch('/next/__version').then(r => r.json()).then(setSello).catch(() => {})
   }, [])
 
   return (
@@ -260,7 +259,7 @@ function Ajustes() {
       <div className="mt-6 overflow-hidden rounded-xl2 border border-line bg-surface">
         <p className="border-b border-line px-4 py-2 text-xs uppercase tracking-wider text-ink-mute">Diagnóstico</p>
         <dl className="divide-y divide-[color:var(--color-line)] text-sm">
-          {Object.entries(sello ? { ...info, versión: sello.version, compilado: sello.compilado } : info).map(([k, v]) => (
+          {Object.entries({ ...info, versión: sello.version, compilado: sello.compilado }).map(([k, v]) => (
             <div key={k} className="flex justify-between gap-4 px-4 py-2.5">
               <dt className="text-ink-mute">{k}</dt>
               <dd className="text-right font-mono text-[13px] text-ink">{String(v)}</dd>
@@ -313,8 +312,6 @@ function snapshot() {
     // dispositivo puede quedarse en una versión vieja sin que se note, y
     // entonces lo que se prueba en local y lo que se ve en el móvil no son el
     // mismo código. Aquí se ve el commit exacto que está corriendo.
-    versión:    __VERSION__,
-    compilado:  __FECHA_BUILD__,
     instalada:  isStandalone() ? 'sí' : 'no (pestaña)',
     plataforma: isIOS() ? 'iOS' : navigator.platform || '—',
     'safe top':    safe.top,
