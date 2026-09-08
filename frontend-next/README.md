@@ -158,7 +158,13 @@ Es la parte con más reglas, y todas salieron de mirar capturas:
 - **Entre dos repartos parecidos gana el de menos renglones** (hasta 2px de
   diferencia): "Apocalipsis" con una "Z" suelta debajo se lee peor que el título
   entero dos puntos más pequeño.
-- **Los renglones se reparten palabra a palabra, igual que lo hace el navegador**
+- **Los renglones los parte el código, no el navegador.** Cada uno se pinta en su
+  propio elemento, con el ancho y el interlineado que le toca en píxeles, así que el
+  número de renglones y el ancho del bloque son los que dice la cuenta y no lo que
+  decida cada motor. Dejándoselo al navegador, Safari no repartía igual que Chrome:
+  metía cinco renglones donde la cuenta permitía tres y el título se salía del lomo por
+  los dos lados (medido: -7,7px) mientras en Chrome se veía perfecto.
+- **El reparto se hace palabra a palabra, igual que lo haría el navegador**
   (meter palabras mientras quepan y saltar de renglón cuando una no entra). Dividir el
   largo total entre el disponible se quedaba corto: "El nombre del viento" salía a
   cuatro renglones donde la cuenta decía tres, y el bloque acababa siendo más ancho que
@@ -196,20 +202,29 @@ Es la parte con más reglas, y todas salieron de mirar capturas:
   alfa (un PNG recortado, un SVG) se iba a negro: el tono salía bien pero la
   luminosidad daba 3 sobre 100, y con ella la decisión de la tinta.
 
-Y las medidas se toman con **la fuente de verdad**: `document.fonts.ready` no vale
-aquí, porque solo espera a las fuentes que ya se estaban usando y las de los lomos
-empiezan a cargarse justo al pintar el primer lomo. Se pregunta por cada fuente
-concreta (`fonts.check`/`load`) y, mientras no está, se usa la estimación sin
-guardarla en la caché. El repintado viaja **como prop hasta cada lomo**: están
+Y las medidas se toman con **la fuente de verdad**, que tiene más miga de la que
+parece: `document.fonts.ready` no vale (solo espera a las fuentes que ya se estaban
+usando, y las de los lomos empiezan a cargarse justo al pintar el primer lomo) y
+`document.fonts.check` tampoco (en WebKit contesta que sí antes de tiempo: decía que
+Libre Baskerville estaba lista mientras el navegador seguía pintando con Georgia, más
+estrecha, y la cuenta daba por bueno un renglón de 104px en un hueco de 96). Lo único
+fiable es esperar a que resuelva el propio `fonts.load` de esa fuente concreta;
+mientras tanto se usa la estimación sin guardarla en la caché. El repintado viaja **como prop hasta cada lomo**: están
 memoizados y sin eso se quedaban con el reparto hecho a ojo.
 
 Los anchos se miden **una vez por libro** y luego solo se multiplican: el reparto
 prueba muchas combinaciones de tamaño, nombre y renglones, y medir dentro de ese bucle
 costaba 160 ms de más con 300 libros (CPU a 1/4).
 
-Medido con 20 libros de anchos y títulos variados (`/tmp/luni-test/lomos-aire.mjs`):
-20 de 20 enseñan autor, ningún texto cortado, ningún libro solapado, el texto nunca a
-menos de 12px del canto, y los tochos llevan el título a 10–14px en vez de a 6.
+**Las pruebas se pasan en los dos motores** (`MOTOR=webkit` en los scripts de
+`/tmp/luni-test`). Todo lo de arriba se descubrió porque durante días se probó solo en
+Chromium mientras el fallo se veía en Safari.
+
+Medido con 20 libros de anchos y títulos variados (`/tmp/luni-test/lomos-aire.mjs`) y
+con 216 combinaciones de título, tipografía y grosor (`tipos-titulos.mjs`), en
+Chromium y en WebKit: 20 de 20 enseñan autor, ningún texto cortado, ningún libro
+solapado, el texto nunca a menos de 3px del canto lateral ni de 12px del de arriba, y
+los tochos llevan el título a 10–16px en vez de a 6.
 
 Otros detalles de encuadernación: **cabezada** (el hilo trenzado que asoma arriba y
 abajo) en los de tapa dura, y **la tipografía se elige por autor, no por libro**, para

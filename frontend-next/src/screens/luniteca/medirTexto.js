@@ -19,21 +19,24 @@ const ctx = lienzo ? lienzo.getContext('2d') : null
 const CACHE = new Map()
 const BASE = 100
 
-// OJO con las fuentes: `document.fonts.ready` NO vale aquí. Solo espera a las
-// fuentes que ya se estaban usando cuando se le preguntó, y las de los lomos
-// (Libre Baskerville, Archivo Narrow) empiezan a cargarse justo cuando se
-// pinta el primer lomo. Midiendo con `ready` salía la fuente de reserva
-// (Georgia, bastante más estrecha) y por eso se cortaban títulos: la cuenta
-// creía que "BELOVED" medía 53px y en pantalla medía 75.
+// OJO con las fuentes: aquí no vale ni `document.fonts.ready` ni
+// `document.fonts.check`.
 //
-// Así que se pregunta por CADA fuente concreta: si no está lista, se pide y se
-// devuelve la estimación de siempre sin guardarla en la caché; cuando llega,
-// se avisa y la vista se repinta ya con la medida buena.
+// `ready` solo espera a las fuentes que ya se estaban usando, y las de los
+// lomos empiezan a cargarse justo cuando se pinta el primer lomo. Y `check`
+// contesta que sí antes de tiempo en WebKit: decía que Libre Baskerville
+// estaba lista cuando el navegador seguía pintando con Georgia, más estrecha,
+// así que la cuenta daba por bueno un renglón de 104px en un hueco de 96 y el
+// título salía cortado en Safari mientras en Chrome se veía perfecto.
+//
+// Lo único fiable es esperar a que resuelva nuestro propio `fonts.load` de esa
+// fuente concreta. Hasta entonces se usa la estimación de siempre, sin
+// guardarla, y al llegar la fuente se avisa para repintar con la medida buena.
+const listas = new Set()
 const pedidas = new Set()
 const avisos = new Set()
 
-// Solo el primer nombre de la lista: `fonts.check` con una familia genérica de
-// reserva ("serif") contesta que sí aunque la de verdad no esté.
+// Solo el primer nombre de la lista: el resto son las de reserva.
 function familiaPrincipal(familia) {
   return familia.split(',')[0].trim().replace(/^['"]|['"]$/g, '')
 }
@@ -41,10 +44,15 @@ function familiaPrincipal(familia) {
 function disponible(tipografia) {
   if (typeof document === 'undefined' || !document.fonts) return false
   const spec = `${tipografia.peso} ${BASE}px "${familiaPrincipal(tipografia.familia)}"`
-  if (document.fonts.check(spec)) return true
+  if (listas.has(spec)) return true
   if (!pedidas.has(spec)) {
     pedidas.add(spec)
-    document.fonts.load(spec).then(() => avisos.forEach(fn => fn())).catch(() => {})
+    document.fonts.load(spec).then(() => {
+      listas.add(spec)
+      // Fuera lo medido a ojo mientras no había fuente.
+      CACHE.clear()
+      avisos.forEach(fn => fn())
+    }).catch(() => {})
   }
   return false
 }
@@ -78,47 +86,29 @@ export function anchoPorPunto(texto, tipografia) {
   return ancho
 }
 
-// Lo que ocupa de ANCHO un bloque de renglones de esta tipografía, por punto
-// de tamaño: `base` es lo que mide un renglón suelto y `paso` lo que suma cada
-// renglón de más. Un bloque de N renglones ocupa (base + (N-1) * paso) * tamaño.
+// Lo que ocupa de ANCHO un renglón de esta tipografía, por punto de tamaño:
+// de la tilde más alta al descendente más bajo, o el interlineado si el dibujo
+// cabe dentro de él.
 //
-// Se mide en el DOM, no con las cotas del canvas. El canvas da el dibujo de las
-// letras, pero un renglón ocupa más que eso: el interlineado, y lo que los
-// ascendentes y descendentes sobresalen de su caja de línea. Con las cotas del
-// canvas la cuenta creía que un bloque de dos renglones de Archivo Narrow a
-// 12px medía 28px cuando en pantalla medía 31, y el título acababa a 1,7px del
-// canto del lomo.
-//
-// Cuesta dos medidas por tipografía (cuatro en toda la app) y se guardan.
+// Este número es el que se le da luego a cada renglón como ancho y como
+// interlineado, en píxeles, para que el bloque mida exactamente lo que la
+// cuenta dice. Es lo que permite que el lomo se vea igual en Chrome y en
+// Safari: sin ello, cada motor repartía el texto a su manera —WebKit metía
+// cinco renglones donde la cuenta permitía tres y el bloque se salía del lomo
+// por los dos lados— porque el envoltorio lo decidía el navegador.
 const MUESTRA = 'ÁQÑÍGJYPgjyp'
+const INTERLINEADO = 1.25
 
-export function medidasDeRenglon(tipografia) {
+export function anchoDeRenglonPorPunto(tipografia) {
   const clave = `renglon|${tipografia.familia}|${tipografia.peso}|${tipografia.mayusculas}`
   const guardado = CACHE.get(clave)
   if (guardado !== undefined) return guardado
-  // Sin fuente propia todavía: lo prudente, y se vuelve a medir al cargar.
-  if (typeof document === 'undefined' || !disponible(tipografia)) return { base: 1.35, paso: 1.25 }
-
-  const medir = (lineas) => {
-    const s = document.createElement('span')
-    s.textContent = Array(lineas).fill(MUESTRA).join(' ')
-    s.style.cssText = [
-      'position:fixed', 'top:-9999px', 'left:0', 'writing-mode:vertical-rl',
-      `font-family:${tipografia.familia}`, `font-weight:${tipografia.peso}`,
-      `letter-spacing:${tipografia.espaciado}`, `text-transform:${tipografia.mayusculas ? 'uppercase' : 'none'}`,
-      `font-size:${BASE}px`, 'line-height:1.25',
-      // El largo justo para que entre una muestra por renglón.
-      `height:${BASE * MUESTRA.length}px`,
-    ].join(';')
-    document.body.appendChild(s)
-    const ancho = s.getBoundingClientRect().width / BASE
-    s.remove()
-    return ancho
-  }
-
-  const una = medir(1)
-  const dos = medir(2)
-  const valor = { base: una, paso: Math.max(0.5, dos - una) }
+  if (!ctx || !disponible(tipografia)) return 1.4     // sin fuente, lo prudente
+  ctx.font = `${tipografia.peso} ${BASE}px ${tipografia.familia}`
+  const texto = tipografia.mayusculas ? MUESTRA.toUpperCase() : MUESTRA
+  const m = ctx.measureText(texto)
+  const dibujo = (m.actualBoundingBoxAscent + m.actualBoundingBoxDescent) / BASE
+  const valor = Math.max(INTERLINEADO, dibujo)
   CACHE.set(clave, valor)
   return valor
 }
