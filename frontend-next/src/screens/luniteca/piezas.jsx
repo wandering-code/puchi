@@ -7,15 +7,26 @@ import { STATUS_COLOR, STATUS_LABEL, progressPct, totalPages } from './shelf'
 // verdad y no una escalera: las portadas que devuelve Open Library vienen con
 // alturas dispares, y recortando con object-cover se alinean todas.
 // El acabado de libro de una portada: el lomo insinuado en el canto izquierdo y
-// un brillo de barniz cruzando. Se exporta porque lo comparten la portada de la
-// ficha y la tapa del libro que vuela hasta ella (VueloDelLibro): si no llevan
-// lo mismo, al aterrizar se nota el cambio.
-export const RELIEVE_LIBRO = [
-  // el lomo: sombra en el canto y un filo de luz justo después
-  'linear-gradient(to right, rgba(0,0,0,.42) 0, rgba(0,0,0,.14) 5px, rgba(255,255,255,.10) 8px, transparent 16px)',
-  // el barniz de la cubierta, cruzando
-  'linear-gradient(115deg, rgba(255,255,255,.16) 0%, transparent 32%, transparent 62%, rgba(255,255,255,.07) 100%)',
-].join(',')
+// un brillo de barniz cruzando. Lo comparten la portada de la ficha y la tapa
+// del libro que vuela hasta ella (VueloDelLibro): si no llevan lo mismo, al
+// aterrizar se nota el cambio.
+//
+// `factor` está para eso último: la franja del lomo va en píxeles, y la tapa en
+// vuelo llega agrandada, así que sin corregirlo esa franja se ve más ancha
+// mientras vuela y se encoge de golpe al acoplarse. Pasándole 1/escala, los dos
+// coinciden al milímetro en el relevo.
+export function relieveLibro(factor = 1) {
+  const px = n => `${(n * factor).toFixed(2)}px`
+  return [
+    // el lomo: sombra en el canto y un filo de luz justo después
+    `linear-gradient(to right, rgba(0,0,0,.42) 0, rgba(0,0,0,.14) ${px(5)}, rgba(255,255,255,.10) ${px(8)}, transparent ${px(16)})`,
+    // el barniz de la cubierta, cruzando. Va en porcentajes, así que la escala
+    // no le afecta.
+    'linear-gradient(115deg, rgba(255,255,255,.16) 0%, transparent 32%, transparent 62%, rgba(255,255,255,.07) 100%)',
+  ].join(',')
+}
+
+export const RELIEVE_LIBRO = relieveLibro()
 
 // `relieve`: le da a la portada el acabado de un libro —el lomo insinuado en el
 // canto izquierdo y un brillo de barniz en diagonal—. Se usa donde la portada
