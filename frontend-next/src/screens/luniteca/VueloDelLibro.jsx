@@ -31,7 +31,7 @@ import { createPortal } from 'react-dom'
 // dar por buena con las pruebas de siempre — hay que mirarla en un Safari de
 // verdad. Lo demás de la vista sí se comprueba en los dos motores.
 
-const DURACION = 620
+const DURACION = 760
 const CURVA = 'cubic-bezier(.32,.72,.24,1)'
 
 export default function VueloDelLibro({ lomo, portada, destino, alTerminar }) {
@@ -61,16 +61,21 @@ export default function VueloDelLibro({ lomo, portada, destino, alTerminar }) {
     // usuario, y luego cae al sitio, como cuando lo sacas de la balda.
     const viaje = exterior.current.animate([
       { transform: 'translate(0px, 0px) scale(1)' },
-      { transform: `translate(${x * 0.35}px, ${y * 0.3 - 12}px) scale(${1 + (escala - 1) * 0.45})`, offset: 0.45 },
+      // Primero se despega y crece un poco: el libro tiene que estar ya de
+      // buen tamaño cuando empiece a girar, o el giro no se aprecia.
+      { transform: `translate(${x * 0.2}px, ${y * 0.12 - 14}px) scale(${1 + (escala - 1) * 0.35})`, offset: 0.28 },
+      { transform: `translate(${x * 0.6}px, ${y * 0.55}px) scale(${1 + (escala - 1) * 0.7})`, offset: 0.66 },
       { transform: `translate(${x}px, ${y}px) scale(${escala})` },
     ], opciones)
-    // El giro se termina antes que el viaje: el libro se pone de cara mientras
-    // sale, y el último tramo ya es solo acercarse. Al revés —girando hasta el
-    // final— parece que se coloca solo al aterrizar.
+    // El giro va en el tramo de en medio, no al principio: antes ocupaba los
+    // primeros 150 ms de 620, con el libro todavía pequeño, y no se leía como
+    // un giro sino como que aparecía la portada de golpe. Ahora el libro sale
+    // de la balda, se gira delante del usuario y luego se acerca.
     const giro = interior.current.animate([
       { transform: 'rotateY(0deg) translateZ(0px)' },
-      { transform: 'rotateY(-58deg) translateZ(80px)', offset: 0.34 },
-      { transform: 'rotateY(-90deg) translateZ(24px)', offset: 0.62 },
+      { transform: 'rotateY(-8deg) translateZ(70px)', offset: 0.28 },
+      { transform: 'rotateY(-62deg) translateZ(110px)', offset: 0.52 },
+      { transform: 'rotateY(-90deg) translateZ(40px)', offset: 0.78 },
       { transform: 'rotateY(-90deg) translateZ(0px)' },
     ], opciones)
     viaje.onfinish = () => alTerminar?.()
@@ -94,7 +99,11 @@ export default function VueloDelLibro({ lomo, portada, destino, alTerminar }) {
         className="absolute"
         style={{ left: caja.left, top: caja.top, width: caja.ancho, height: caja.alto, transformOrigin: '0 0' }}
       >
-      <div className="h-full w-full" style={{ perspective: 1400 }}>
+      {/* La perspectiva, muy corta a propósito. Un lomo mide 30-56px: con los
+          1400px de antes el escorzo era tan pequeño que el giro parecía plano
+          —"se abre desde la portada, pero no hay 3D"—. A 520px la tapa se
+          abre de verdad. */}
+      <div className="h-full w-full" style={{ perspective: 520, perspectiveOrigin: '50% 45%' }}>
       <div
         ref={interior}
         className="relative h-full w-full"
