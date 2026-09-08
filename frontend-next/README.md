@@ -138,64 +138,77 @@ que cada lomo se construye con los datos del libro:
 
 ### El reparto del texto
 
-Es la parte con más reglas, y todas salieron de mirar capturas:
+Es la parte con más reglas, y todas salieron de mirar capturas y medir. En orden de
+importancia:
 
+- **Los renglones los parte el código, no el navegador.** Cada uno se pinta en su
+  propio elemento, con su ancho y su interlineado en píxeles, así que el número de
+  renglones y el ancho del bloque son los que dice la cuenta y no lo que decida cada
+  motor. Dejándoselo al navegador, Safari no repartía igual que Chrome: metía cinco
+  renglones donde la cuenta permitía tres y el título se salía del lomo por los dos
+  lados (medido: -7,7px) mientras en Chrome se veía perfecto.
+- **El reparto se hace palabra a palabra**, igual que lo haría el navegador: se meten
+  palabras mientras quepan y se salta de renglón cuando una no entra. Dividir el largo
+  total entre el disponible se quedaba corto ("El nombre del viento" necesitaba cuatro
+  renglones donde la cuenta decía tres) y además un título de una sola palabra
+  ("Beloved") no puede partirse en dos.
 - **Se mide el texto de verdad**, con canvas (`medirTexto.js`), no con un "ancho de
-  letra media" por tipografía. La estimación fallaba por los dos lados: títulos
-  cortados por quedarse corta y títulos en letra de hormiga por pasarse. Se mide a
-  100px y se guarda el ancho por punto de tamaño, con caché; hasta que
-  `document.fonts.ready` resuelve se usa la estimación y luego se repinta.
-- **Manda el título**: se busca el tamaño más grande que quepa **entero**, partiéndolo
-  en hasta tres renglones si hace falta. Un lomo de verdad parte el título largo, no lo
-  escribe diminuto para que quepa de una tirada.
+  letra media" por tipografía: esa estimación fallaba por los dos lados, cortando unos
+  títulos y dejando otros en letra de hormiga. Se mide a 100px y se guarda el ancho por
+  punto de tamaño, con caché.
+- **Y se mide con la fuente de verdad**, que tiene más miga de la que parece:
+  `document.fonts.ready` no vale (solo espera a las fuentes que ya se estaban usando, y
+  las de los lomos empiezan a cargarse justo al pintar el primer lomo) y
+  `document.fonts.check` tampoco (en WebKit contesta que sí antes de tiempo: decía que
+  Libre Baskerville estaba lista mientras el navegador seguía pintando con Georgia, más
+  estrecha, y la cuenta daba por bueno un renglón de 104px en un hueco de 96). Lo único
+  fiable es esperar a que resuelva el propio `fonts.load` de esa fuente concreta;
+  mientras tanto se usa la estimación **sin guardarla** en la caché, y al llegar la
+  fuente se repinta. El repintado viaja **como prop hasta cada lomo**: están memoizados
+  y sin eso se quedaban con el reparto hecho a ojo.
+- **Manda el título**: se busca el tamaño más grande que quepa **entero**, en hasta tres
+  renglones. Un lomo de verdad parte el título largo, no lo escribe diminuto para que
+  quepa de una tirada.
 - **El autor va detrás del título a lo largo del lomo, no a su lado.** El texto está de
   canto (`writing-mode: vertical-rl`), así que lo que se apila a lo ancho son los
   renglones del título; el autor se lleva su trozo del **largo**, esté el título en una
   línea o en tres. Confundir esto cortaba títulos.
 - **El autor se abrevia antes que desaparecer**: "Gabriel García Márquez" → "G. García
-  Márquez" → "García Márquez" → "Márquez". Solo se va si ni el apellido entra.
-- **El autor nunca es más grande que el título**, y prima que se lea sobre que esté
-  completo: "Márquez" a 7px vale más que "G. García Márquez" a 5px.
-- El hueco entre título y autor (`SEPARACION_AUTOR`) lo reservan **la cuenta y el
-  layout con la misma constante**: cuando solo lo reservaba la cuenta, se leía
-  "SALVAJESR. Bolaño".
-- **El subtítulo va aparte**, en pequeño y detrás del título, y es lo primero que
-  se cae si no hay sitio. Metiéndolo en el mismo texto, "Apocalipsis Z: El principio
-  del fin" salía a 9px en un lomo de 37px mientras su vecino, más estrecho, llevaba
-  el título a 12.
-- **Entre dos repartos parecidos gana el de menos renglones** (hasta 2px de
-  diferencia): "Apocalipsis" con una "Z" suelta debajo se lee peor que el título
-  entero dos puntos más pequeño.
-- **Los renglones los parte el código, no el navegador.** Cada uno se pinta en su
-  propio elemento, con el ancho y el interlineado que le toca en píxeles, así que el
-  número de renglones y el ancho del bloque son los que dice la cuenta y no lo que
-  decida cada motor. Dejándoselo al navegador, Safari no repartía igual que Chrome:
-  metía cinco renglones donde la cuenta permitía tres y el título se salía del lomo por
-  los dos lados (medido: -7,7px) mientras en Chrome se veía perfecto.
-- **El reparto se hace palabra a palabra, igual que lo haría el navegador**
-  (meter palabras mientras quepan y saltar de renglón cuando una no entra). Dividir el
-  largo total entre el disponible se quedaba corto: "El nombre del viento" salía a
-  cuatro renglones donde la cuenta decía tres, y el bloque acababa siendo más ancho que
-  el propio lomo (medido: 50px de texto en un lomo de 45). De paso, un título de una
-  sola palabra ("Beloved") ya no se manda a dos renglones, que es imposible.
-- **El bloque de renglones se centra ópticamente.** Los renglones se apilan desde el
-  canto derecho y cada uno reserva un interlineado entero aunque sus letras ocupen algo
-  menos; ese sobrante se quedaba todo del lado izquierdo (medido: 4,5px de aire a un
-  lado y 3,3 al otro).
-- **El ancho del bloque de renglones se mide en el DOM**, no se deduce: `medidasDeRenglon`
-  monta un span de prueba con esa tipografía y mide un renglón y dos, y de ahí salen lo
-  que ocupa uno suelto y lo que suma cada uno de más. Deducirlo de las cotas del canvas
-  (el dibujo de las letras) se queda corto, porque un renglón ocupa además el
-  interlineado y lo que ascendentes y descendentes sobresalen de su caja: la cuenta daba
-  28px a un bloque de dos renglones de Archivo Narrow a 12px que en pantalla medía 31, y
-  el título acababa a 1,7px del canto. Con 4px de margen a cada lado, que sin ellos el
-  texto queda pegado al canto y, con la curvatura y la sombra del lomo, parece cortado.
+  Márquez" → "García Márquez" → "Márquez". Solo se va si ni el apellido entra. Nunca es
+  más grande que el título, y prima que se lea sobre que esté completo: "Márquez" a 7px
+  vale más que "G. García Márquez" a 5px.
+- **El subtítulo va aparte**, en pequeño y detrás del título, y es lo primero que se cae
+  si no hay sitio. Metiéndolo en el mismo texto, "Apocalipsis Z: El principio del fin"
+  salía a 9px en un lomo de 37px mientras su vecino, más estrecho, llevaba el título a
+  12.
 - **Nada de palabras viudas**: si el último renglón se queda con una palabra de dos
-  letras ("APOCALIPSIS" y debajo una "Z" suelta) se prefiere bajar hasta tres puntos de
-  letra para juntarlo. Cada mejora tiene su precio en tamaño —juntar renglones solo
-  vale un punto— porque lo que manda sigue siendo que el título se lea.
-- **El aire de arriba y abajo va con el alto del libro** (9%), no en píxeles fijos:
-  con 8px sueltos el título quedaba pegado al canto en los lomos altos.
+  letras ("APOCALIPSIS" y debajo una "Z" suelta), se baja hasta tres puntos de letra
+  para juntarlo. Cada mejora tiene su precio en tamaño, porque lo que manda sigue siendo
+  que el título se lea: juntar renglones **no** vale ninguno (solo se prefiere a igualdad
+  de tamaño), y pagando un punto por ello los títulos salían de una tirada pero más
+  pequeños y con el lomo medio vacío.
+- **Los márgenes**: arriba y abajo, un 9% del alto del libro (con 8px fijos el título
+  quedaba pegado al canto en los lomos altos); a los lados, 4px, que sin ellos el texto
+  queda pegado al canto y, con la curvatura y la sombra del lomo, parece cortado. El
+  hueco entre título y autor (`SEPARACION_AUTOR`) lo reservan **la cuenta y el layout
+  con la misma constante**: cuando solo lo reservaba la cuenta, se leía "SALVAJESR.
+  Bolaño".
+
+Los anchos se miden **una vez por libro** y luego solo se multiplican: el reparto prueba
+muchas combinaciones de tamaño, nombre y renglones, y medir dentro de ese bucle costaba
+160 ms de más con 300 libros (CPU a 1/4).
+
+**Las pruebas se pasan en los dos motores** (`MOTOR=webkit` en los scripts de
+`/tmp/luni-test`). Casi todo lo de arriba se descubrió porque durante días se probó solo
+en Chromium mientras el fallo se veía en Safari. Los lomos llevan `data-parte` en cada
+pieza (`titulo`, `renglon`, `subtitulo`, `autor`) para que las pruebas no dependan de
+clases ni de estilos.
+
+Medido con 20 libros de anchos y títulos variados (`lomos-aire.mjs`), 87 en el barrido
+general (`barrido.mjs`) y 216 combinaciones de título, tipografía y grosor
+(`tipos-titulos.mjs`), en Chromium y en WebKit: 20 de 20 enseñan autor, ningún texto
+cortado, ningún libro solapado, el texto nunca a menos de 3px del canto lateral ni de
+12px del de arriba, y los tochos llevan el título a 10–16px en vez de a 6.
 
 ### Legibilidad sobre la portada
 
@@ -209,30 +222,6 @@ Es la parte con más reglas, y todas salieron de mirar capturas:
 - El promedio de color **ignora los píxeles transparentes**. Sin eso, una portada con
   alfa (un PNG recortado, un SVG) se iba a negro: el tono salía bien pero la
   luminosidad daba 3 sobre 100, y con ella la decisión de la tinta.
-
-Y las medidas se toman con **la fuente de verdad**, que tiene más miga de la que
-parece: `document.fonts.ready` no vale (solo espera a las fuentes que ya se estaban
-usando, y las de los lomos empiezan a cargarse justo al pintar el primer lomo) y
-`document.fonts.check` tampoco (en WebKit contesta que sí antes de tiempo: decía que
-Libre Baskerville estaba lista mientras el navegador seguía pintando con Georgia, más
-estrecha, y la cuenta daba por bueno un renglón de 104px en un hueco de 96). Lo único
-fiable es esperar a que resuelva el propio `fonts.load` de esa fuente concreta;
-mientras tanto se usa la estimación sin guardarla en la caché. El repintado viaja **como prop hasta cada lomo**: están
-memoizados y sin eso se quedaban con el reparto hecho a ojo.
-
-Los anchos se miden **una vez por libro** y luego solo se multiplican: el reparto
-prueba muchas combinaciones de tamaño, nombre y renglones, y medir dentro de ese bucle
-costaba 160 ms de más con 300 libros (CPU a 1/4).
-
-**Las pruebas se pasan en los dos motores** (`MOTOR=webkit` en los scripts de
-`/tmp/luni-test`). Todo lo de arriba se descubrió porque durante días se probó solo en
-Chromium mientras el fallo se veía en Safari.
-
-Medido con 20 libros de anchos y títulos variados (`/tmp/luni-test/lomos-aire.mjs`) y
-con 216 combinaciones de título, tipografía y grosor (`tipos-titulos.mjs`), en
-Chromium y en WebKit: 20 de 20 enseñan autor, ningún texto cortado, ningún libro
-solapado, el texto nunca a menos de 3px del canto lateral ni de 12px del de arriba, y
-los tochos llevan el título a 10–16px en vez de a 6.
 
 Otros detalles de encuadernación: **cabezada** (el hilo trenzado que asoma arriba y
 abajo) en los de tapa dura, y **la tipografía se elige por autor, no por libro**, para
@@ -282,6 +271,18 @@ npm run dev     # https://<ip-lan>:5176/next/
   levanta desde la raíz del repo con `docker compose up`.
 - `npm run build && npm run preview` sirve el `dist/` real en el puerto 5177: es la
   única forma de probar la PWA (service worker y manifest están desactivados en `dev`).
+
+**Si un cambio "no se ve", mira primero la versión.** Ajustes → Diagnóstico enseña el
+commit que está corriendo (`versión`) y cuándo se compiló. Con el service worker por
+medio, el 5177 y la app instalada en el móvil pueden quedarse en una versión vieja sin
+que se note —el `registerType` es `prompt`, así que no se actualiza hasta aceptar el
+aviso—, y entonces lo que se mide en local y lo que se ve en el móvil no son el mismo
+código. Para desarrollo, el 5176 va siempre al día.
+
+**Prueba en los dos motores.** Chromium y WebKit no maquetan igual, y hay fallos que
+solo se ven en uno: el texto de los lomos se salía por los lados en Safari mientras en
+Chrome estaba perfecto (84 casos de 216 contra 0), y estuvo días así porque todas las
+pruebas corrían en Chromium. Los scripts de `/tmp/luni-test` aceptan `MOTOR=webkit`.
 
 ### Probar en el móvil
 
