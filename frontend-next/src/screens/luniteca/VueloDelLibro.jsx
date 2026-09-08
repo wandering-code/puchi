@@ -63,6 +63,16 @@ export default function VueloDelLibro({ lomo, portada, destino, alTerminar }) {
     // El clon va derecho: el giro de la balda lo pone (y lo quita) la capa que
     // endereza, con el mismo punto de apoyo que usa la estantería.
     clon.style.transform = 'none'
+    // El lomo de la balda va redondeado por sus cuatro esquinas. Por el canto
+    // de la bisagra no puede estarlo: ahí es donde se pega la tapa, y el
+    // redondeo dejaba ver el fondo entre las dos caras.
+    clon.style.borderTopRightRadius = '0'
+    clon.style.borderBottomRightRadius = '0'
+    // Y sin la sombra que proyecta sobre el libro de al lado: en la balda
+    // separa un lomo de su vecino, pero aquí cae justo en la unión con la tapa
+    // y se ve como una rendija entre las dos caras. La sombra del vuelo la pone
+    // la tapa.
+    clon.style.boxShadow = 'none'
     // El lomo de la balda se marca como invisible en cuanto empieza el vuelo,
     // para que no se vea por duplicado, y el clon se hace DESPUÉS: hay que
     // quitarle esa marca o el clon nace invisible. Era el motivo de que en el
@@ -176,7 +186,10 @@ export default function VueloDelLibro({ lomo, portada, destino, alTerminar }) {
             <div
               className="absolute top-0 overflow-hidden rounded-l-[2px] rounded-r-md bg-surface-2 shadow-[0_10px_30px_-8px_rgba(60,40,20,.5)]"
               style={{
-                left: grosorLomo, width: anchoTapa, height: '100%',
+                // Medio píxel de solape con el lomo: los dos planos se juntan
+                // en la bisagra y, al redondear el navegador a subpíxeles, sin
+                // él se cuela una línea de fondo entre ambos.
+                left: grosorLomo - 0.5, width: anchoTapa + 0.5, height: '100%',
                 transformOrigin: '0% 50%', transform: 'rotateY(90deg)', backfaceVisibility: 'hidden',
               }}
             >
@@ -191,7 +204,11 @@ export default function VueloDelLibro({ lomo, portada, destino, alTerminar }) {
                 cuando el libro está en la estantería. */}
             <div
               className="absolute top-0 overflow-hidden"
-              style={{ left: 0, width: grosorLomo, height: '100%', borderRadius: 4, backfaceVisibility: 'hidden' }}
+              style={{
+                left: 0, width: grosorLomo, height: '100%',
+                // Redondeado solo por fuera; por la bisagra, a escuadra.
+                borderRadius: '4px 0 0 4px', backfaceVisibility: 'hidden',
+              }}
             >
               <span ref={nodo => { if (nodo && !nodo.firstChild) nodo.appendChild(caja.clon) }} className="block h-full w-full" />
             </div>
