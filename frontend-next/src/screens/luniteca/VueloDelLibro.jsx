@@ -1,194 +1,148 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 
-// El libro sale de la balda, se abre y se pone de cara: es la animación de
-// abrir un libro desde la vista de estantería.
+// El libro sale de la balda, gira y se pone de cara: es la animación de abrir
+// un libro desde la vista de estantería.
 //
 // No se anima el lomo de la lista ni la ficha: se anima UN clon, en una capa
-// aparte, con transform y opacity. Por eso da igual que detrás haya
-// trescientos lomos —no se vuelve a pintar ninguno— y por eso todo va por GPU.
+// aparte, con transform. Por eso da igual que detrás haya trescientos lomos
+// —no se vuelve a pintar ninguno— y por eso todo va por GPU.
 //
 // La cara del lomo es el nodo del lomo de verdad, clonado tal cual
 // (`cloneNode`): así lleva su color, su textura, sus filetes y su título sin
 // duplicar aquí ni una línea de cómo se dibuja un lomo.
 //
-// El volteo es un giro de verdad, con su escorzo, pero la perspectiva va
-// DENTRO del transform de cada cara —`perspective(420px) rotateY(...)`— y no
-// en un padre con `transform-style: preserve-3d`. Esa diferencia lo es todo en
-// Safari: con la perspectiva en el padre pinta las caras planas (el libro
-// pasaba del lomo a la portada "haciéndose grande", sin giro), y con la
-// perspectiva propia dibuja el trapecio en escorzo como Chrome. Comprobado con
-// una página mínima en los dos motores.
+// ES UN CUERPO RÍGIDO, no caras sueltas: el lomo, la tapa y el canto de las
+// páginas son las caras de un mismo objeto dentro de un `transform-style:
+// preserve-3d`, y lo que gira es el objeto entero. Hubo un rodeo por versiones
+// con cada cara girando por su cuenta (con la perspectiva metida en su propio
+// transform), y no valen: cada plano tiene su proyección, así que nunca forman
+// un volumen —se ve una carta que gira y un trozo pegado al lado—.
 //
-// Las dos caras comparten bisagra —el canto derecho del lomo— y giran a la vez
-// separadas 90°, pero el ORDEN importa: la tapa va por delante del lomo, como
-// en un libro de verdad, y lo va tapando según se abre. Al revés (el lomo
-// encima) el lomo se comía a la tapa y parecía que desaparecía de golpe.
+// El rodeo vino de un diagnóstico equivocado: el WebKit de Playwright no
+// compone 3D (ni una página mínima con `preserve-3d`), y di por hecho que
+// Safari tampoco. Safari sí lo compone. Así que ESTA VISTA NO SE PUEDE
+// VALIDAR con las pruebas automáticas de WebKit: lo que se ve ahí en 3D no
+// dice nada. Chromium sí sirve, y el iPhone es el juez.
 //
-// Y el lomo no gira los 90° enteros: se queda en -72° y asomando unos píxeles
-// por el canto derecho de la tapa. Eso es el grosor del libro, y es lo que
-// hace que se lea como un objeto sólido y no como dos imágenes planas que se
-// relevan.
-//
-// Se anima con la API del navegador (`element.animate`) y no con Motion: en
-// este portal Motion resolvía la animación de golpe, dejando el elemento en su
-// sitio final sin llegar a disparar ni el evento de arranque.
+// Lo que sí hay que respetar, y era el fallo original:
+//  - la perspectiva va CORTA (un lomo mide 30-56px: con 1400px el escorzo no
+//    se ve y el giro parece un fundido);
+//  - el giro tiene que durar (antes se comía 150 ms de 620 y no se percibía);
+//  - y el elemento que lleva la perspectiva no puede llevar además el
+//    transform animado, o Safari aplana el 3D.
 
 const DURACION = 980
 const CURVA = 'cubic-bezier(.32,.72,.24,1)'
-// Cuándo se cierra el lomo y cuándo se abre la portada, en tanto por uno de la
-// animación. Se solapan un pelín para que no haya un fotograma vacío.
-// Lo que asoma del lomo por detrás de la tapa abierta: el grosor del libro.
-const CANTO = 11
-
-// El giro se lleva la mayor parte del vuelo: es lo que hay que mirar. Con
-// menos, se percibe como un cambio de imagen en vez de como un libro que se
-// abre.
-const GIRO = [0.14, 0.8]
-// El giro tiene su propia curva, más suave que la del viaje: arranca despacio,
-// coge velocidad en medio y se posa. Con la del viaje, que frena al final,
-// el volteo se comía su tiempo al principio.
 const CURVA_GIRO = 'cubic-bezier(.5,.02,.3,1)'
-// Corta: un lomo mide 30-56px, y con una perspectiva larga el escorzo no se
-// aprecia. Va en el espacio del propio elemento, así que la escala del vuelo
-// la acompaña.
-const PERSPECTIVA = 340
+// Qué parte del vuelo se lleva el giro. Es lo que hay que mirar, así que se
+// lleva la mayor parte.
+const GIRO = [0.14, 0.8]
+const PERSPECTIVA = 380
 
 export default function VueloDelLibro({ lomo, portada, destino, alTerminar }) {
   const [caja, setCaja] = useState(null)
-  const exterior = useRef(null)
-  const caraLomo = useRef(null)
-  const caraPaginas = useRef(null)
-  const caraPortada = useRef(null)
-  const sombra = useRef(null)
+  const viaje = useRef(null)
+  const libro = useRef(null)
 
   useLayoutEffect(() => {
     if (!lomo || !destino) return
     const r = lomo.getBoundingClientRect()
-    setCaja({ left: r.left, right: r.right, top: r.top, ancho: r.width, alto: r.height, clon: lomo.cloneNode(true) })
+    const clon = lomo.cloneNode(true)
+    // El lomo de la balda se marca como invisible en cuanto empieza el vuelo,
+    // para que no se vea por duplicado, y el clon se hace DESPUÉS: hay que
+    // quitarle esa marca o el clon nace invisible. Era el motivo de que en el
+    // vuelo no se viera nunca el lomo, y de que todo pareciera una portada
+    // plana que crece.
+    clon.classList.remove('invisible')
+    clon.style.visibility = 'visible'
+    setCaja({ left: r.left, right: r.right, top: r.top, ancho: r.width, alto: r.height, clon })
   }, [lomo, destino])
 
-  // La portada tiene la misma proporción que la de la ficha (2/3), así que el
-  // vuelo es un escalado uniforme y no deforma nada. El contenedor ya tiene el
-  // tamaño de la portada y se apoya en la bisagra: el lomo va pegado a su
-  // derecha, ocupando lo que ocupaba en la balda.
-  const anchoPortada = caja ? caja.alto * (2 / 3) : 0
+  // La tapa tiene la misma proporción que la portada de la ficha (2/3), así que
+  // el vuelo es un escalado uniforme y no deforma nada. La caja del vuelo mide
+  // lo que la tapa y se apoya en la bisagra: el lomo va pegado a su derecha,
+  // con el grosor que tenía en la balda.
+  const anchoTapa = caja ? caja.alto * (2 / 3) : 0
   const escala = caja ? destino.height / caja.alto : 1
-  const izquierda = caja ? caja.right - anchoPortada : 0
+  const izquierda = caja ? caja.right - anchoTapa : 0
   const x = caja ? destino.left - izquierda : 0
   const y = caja ? destino.top - caja.top : 0
 
   useLayoutEffect(() => {
-    if (!caja || !exterior.current) return
-    const opciones = { duration: DURACION, easing: CURVA, fill: 'forwards' }
-    // El libro se despega hacia arriba, se abre delante del usuario y luego se
-    // acerca a su sitio.
-    const viaje = exterior.current.animate([
+    if (!caja || !viaje.current || !libro.current) return
+    // Se despega deprisa, se abre delante del usuario casi parado, y solo al
+    // final se acerca a su sitio.
+    const vuelo = viaje.current.animate([
       { transform: 'translate(0px, 0px) scale(1)' },
-      // Se despega deprisa y luego casi se para: mientras gira apenas viaja,
-      // para que el ojo pueda seguir la tapa. El último tramo es el acercarse.
       { transform: `translate(${x * 0.12}px, ${y * 0.06 - 18}px) scale(${1 + (escala - 1) * 0.26})`, offset: 0.16 },
       { transform: `translate(${x * 0.3}px, ${y * 0.24}px) scale(${1 + (escala - 1) * 0.45})`, offset: 0.8 },
       { transform: `translate(${x}px, ${y}px) scale(${escala})` },
-    ], opciones)
+    ], { duration: DURACION, easing: CURVA, fill: 'forwards' })
 
-    // El lomo gira de 0 a -90° y se apaga: al final está de canto y ya no se ve.
-    const opcionesGiro = { ...opciones, easing: CURVA_GIRO }
-    const cerrar = caraLomo.current.animate([
-      { transform: `perspective(${PERSPECTIVA}px) rotateY(0deg)`, filter: 'brightness(1)' },
-      { transform: `perspective(${PERSPECTIVA}px) rotateY(0deg)`, filter: 'brightness(1)', offset: GIRO[0] },
-      // Hasta -55°, no hasta el canto: el lomo se queda asomando por detrás de
-      // la tapa, formando la uve del libro entreabierto. Girando los 90°
-      // enteros desaparecía, y entonces lo que se ve girar es una imagen suelta
-      // en vez de un libro.
-      { transform: `perspective(${PERSPECTIVA}px) rotateY(-55deg)`, filter: 'brightness(.42)', offset: GIRO[1] },
-      { transform: `perspective(${PERSPECTIVA}px) rotateY(-55deg)`, filter: 'brightness(.42)' },
-    ], opcionesGiro)
+    // El objeto entero gira sobre la bisagra: el lomo se va de perfil y la tapa
+    // viene de canto a ponerse de frente, sin que ninguna cara se mueva por su
+    // cuenta. De paso se inclina un poco arriba (rotateX), que es como se mira
+    // un libro que sacas de la balda.
+    const giro = libro.current.animate([
+      { transform: 'rotateX(0deg) rotateY(0deg) translateZ(0px)' },
+      { transform: 'rotateX(-6deg) rotateY(-4deg) translateZ(60px)', offset: GIRO[0] },
+      { transform: 'rotateX(-8deg) rotateY(-52deg) translateZ(90px)', offset: (GIRO[0] + GIRO[1]) / 2 },
+      { transform: 'rotateX(0deg) rotateY(-90deg) translateZ(30px)', offset: GIRO[1] },
+      { transform: 'rotateX(0deg) rotateY(-90deg) translateZ(0px)' },
+    ], { duration: DURACION, easing: CURVA_GIRO, fill: 'forwards' })
 
-    // La portada va 90° por delante: empieza de canto y acaba de frente.
-    // El bloque de páginas asoma según se abre la tapa: es lo que convierte dos
-    // caras en un objeto con grosor. Sin él, el giro se lee como una imagen
-    // plana que se voltea, sobre todo porque el lomo lleva de fondo la propia
-    // portada estirada y se parece demasiado a ella.
-    const paginas = caraPaginas.current.animate([
-      { transform: `perspective(${PERSPECTIVA}px) rotateY(0deg)`, opacity: 0 },
-      { transform: `perspective(${PERSPECTIVA}px) rotateY(0deg)`, opacity: 0, offset: GIRO[0] },
-      { transform: `perspective(${PERSPECTIVA}px) rotateY(-30deg)`, opacity: 1, offset: (GIRO[0] + GIRO[1]) / 2 },
-      { transform: `perspective(${PERSPECTIVA}px) rotateY(-8deg)`, opacity: 1, offset: GIRO[1] },
-      { transform: `perspective(${PERSPECTIVA}px) rotateY(-8deg)`, opacity: 1 },
-    ], opcionesGiro)
-
-    const abrir = caraPortada.current.animate([
-      { transform: `perspective(${PERSPECTIVA}px) rotateY(90deg)` },
-      { transform: `perspective(${PERSPECTIVA}px) rotateY(90deg)`, offset: GIRO[0] },
-      { transform: `perspective(${PERSPECTIVA}px) rotateY(0deg)`, offset: GIRO[1] },
-      { transform: `perspective(${PERSPECTIVA}px) rotateY(0deg)` },
-    ], opcionesGiro)
-
-    // La luz que barre la tapa mientras gira: una cara que se abre hacia ti
-    // recibe la luz de lado, y sin eso el giro se ve de cartón.
-    const luz = sombra.current.animate([
-      { opacity: 0.9 },
-      { opacity: 0.9, offset: GIRO[0] },
-      { opacity: 0.35, offset: (GIRO[0] + GIRO[1]) / 2 },
-      { opacity: 0, offset: GIRO[1] },
-      { opacity: 0 },
-    ], opcionesGiro)
-
-    viaje.onfinish = () => alTerminar?.()
-    return () => [viaje, cerrar, paginas, abrir, luz].forEach(a => a.cancel())
+    vuelo.onfinish = () => alTerminar?.()
+    return () => { vuelo.cancel(); giro.cancel() }
   }, [caja, x, y, escala])
 
   if (!caja || !destino) return null
 
+  // El grosor del libro: lo que mide su lomo.
+  //
+  // Se probó a añadir el corte de las páginas como tercera cara, al otro
+  // extremo de la tapa. Se descarta: con la perspectiva tan corta se separa
+  // visualmente de la tapa y se lee como un trozo pegado al lado, no como el
+  // canto del libro. El volumen ya lo da el cuerpo girando.
+  const grosor = caja.ancho
+
   return createPortal(
+    // Tres capas y cada una con un solo trabajo: la fija, la que viaja y la que
+    // da la perspectiva. Safari aplana el 3D si la perspectiva y el transform
+    // animado caen en el mismo elemento.
     <div className="pointer-events-none fixed inset-0 z-[70]">
       <div
-        ref={exterior}
+        ref={viaje}
         className="absolute"
-        style={{ left: izquierda, top: caja.top, width: anchoPortada, height: caja.alto, transformOrigin: '0 0' }}
+        style={{ left: izquierda, top: caja.top, width: anchoTapa, height: caja.alto, transformOrigin: '0 0' }}
       >
-        {/* El lomo, clonado del de la balda, pegado a la bisagra */}
-        <div
-          ref={caraLomo}
-          className="absolute top-0 overflow-hidden"
-          style={{
-            // Asoma por el canto derecho de la tapa: es el grosor del libro.
-            right: -CANTO, width: caja.ancho, height: '100%',
-            transformOrigin: '100% 50%', borderRadius: 4, backfaceVisibility: 'hidden',
-          }}
-        >
-          <span ref={nodo => { if (nodo && !nodo.firstChild) nodo.appendChild(caja.clon) }} className="block h-full w-full" />
-        </div>
+        <div className="h-full w-full" style={{ perspective: PERSPECTIVA, perspectiveOrigin: '50% 42%' }}>
+          <div
+            ref={libro}
+            className="relative h-full w-full"
+            style={{ transformStyle: 'preserve-3d', transformOrigin: '100% 50%' }}
+          >
+            {/* La tapa, en el plano del objeto: parte de la bisagra hacia atrás */}
+            <div
+              className="absolute inset-0 overflow-hidden rounded-l-[2px] rounded-r-md bg-surface-2 shadow-[0_10px_30px_-8px_rgba(60,40,20,.5)]"
+              style={{ transformOrigin: '100% 50%', transform: 'rotateY(90deg)', backfaceVisibility: 'hidden' }}
+            >
+              {portada
+                ? <img src={portada} alt="" className="h-full w-full object-cover" />
+                : <span className="block h-full w-full bg-surface-2" />}
+              {/* El canto de la tapa por la bisagra, en sombra */}
+              <span className="pointer-events-none absolute inset-y-0 right-0 w-[4px] bg-gradient-to-l from-black/35 to-transparent" />
+            </div>
 
-        {/* El bloque de páginas, entre el lomo y la tapa: papel con sus rayas,
-            que es lo que se ve del interior de un libro entreabierto. */}
-        <div
-          ref={caraPaginas}
-          className="absolute top-[3px] bottom-[3px] overflow-hidden rounded-r-[2px]"
-          style={{
-            right: -CANTO + 1, width: caja.ancho, transformOrigin: '100% 50%',
-            background: 'repeating-linear-gradient(to bottom, rgba(246,240,229,1) 0 1.5px, rgba(198,186,166,1) 1.5px 3px)',
-            boxShadow: 'inset -2px 0 4px -1px rgba(60,40,20,.45)',
-            transform: `perspective(${PERSPECTIVA}px) rotateY(0deg)`,
-            opacity: 0,
-          }}
-        />
-
-        {/* La portada: se abre desde la bisagra, que es el canto derecho */}
-        <div
-          ref={caraPortada}
-          className="absolute inset-0 overflow-hidden rounded-l-[3px] rounded-r-md bg-surface-2 shadow-[0_10px_30px_-8px_rgba(60,40,20,.5)]"
-          style={{ transformOrigin: '100% 50%', backfaceVisibility: 'hidden', transform: `perspective(${PERSPECTIVA}px) rotateY(90deg)` }}
-        >
-          {portada
-            ? <img src={portada} alt="" className="h-full w-full object-cover" />
-            : <span className="block h-full w-full bg-surface-2" />}
-          <span
-            ref={sombra}
-            className="pointer-events-none absolute inset-0"
-            style={{ background: 'linear-gradient(to right, rgba(0,0,0,.75), rgba(0,0,0,.25) 45%, transparent)', opacity: 0 }}
-          />
+            {/* El lomo, clonado del de la balda: es la cara que mira al frente
+                cuando el libro está en la estantería. */}
+            <div
+              className="absolute top-0 overflow-hidden"
+              style={{ right: 0, width: grosor, height: '100%', borderRadius: 4, backfaceVisibility: 'hidden' }}
+            >
+              <span ref={nodo => { if (nodo && !nodo.firstChild) nodo.appendChild(caja.clon) }} className="block h-full w-full" />
+            </div>
+          </div>
         </div>
       </div>
     </div>,
