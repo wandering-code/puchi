@@ -81,6 +81,7 @@ export default function BookDetail({ entry, carpetas, generos, onCerrar, onActua
               url={libro.cover_url}
               title={libro.title}
               priority
+              relieve
               className="shadow-[0_6px_14px_rgba(60,40,20,0.18),0_18px_34px_-16px_rgba(60,40,20,0.4)]"
             />
           </div>

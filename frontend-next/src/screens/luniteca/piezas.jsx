@@ -6,7 +6,11 @@ import { STATUS_COLOR, STATUS_LABEL, progressPct, totalPages } from './shelf'
 // Proporción de libro fija (2/3) para que la cuadrícula sea una rejilla de
 // verdad y no una escalera: las portadas que devuelve Open Library vienen con
 // alturas dispares, y recortando con object-cover se alinean todas.
-export function Cover({ url, title, className = '', priority = false }) {
+// `relieve`: le da a la portada el acabado de un libro —el lomo insinuado en el
+// canto izquierdo y un brillo de barniz en diagonal—. Se usa donde la portada
+// se ve grande, o sea en la ficha: en una miniatura de 40px esos matices no se
+// aprecian y solo ensucian.
+export function Cover({ url, title, className = '', priority = false, relieve = false }) {
   const [roto, setRoto] = useState(false)
   const [cargada, setCargada] = useState(false)
   const [urlPrevia, setUrlPrevia] = useState(url)
@@ -45,6 +49,19 @@ export function Cover({ url, title, className = '', priority = false }) {
             className="absolute inset-0 h-full w-full object-cover"
           />
         </>
+      )}
+      {relieve && hayImagen && (
+        <span
+          className="pointer-events-none absolute inset-0"
+          style={{
+            background: [
+              // el lomo: sombra en el canto y un filo de luz justo después
+              'linear-gradient(to right, rgba(0,0,0,.42) 0, rgba(0,0,0,.14) 5px, rgba(255,255,255,.10) 8px, transparent 16px)',
+              // el barniz de la cubierta, cruzando
+              'linear-gradient(115deg, rgba(255,255,255,.16) 0%, transparent 32%, transparent 62%, rgba(255,255,255,.07) 100%)',
+            ].join(','),
+          }}
+        />
       )}
     </div>
   )
