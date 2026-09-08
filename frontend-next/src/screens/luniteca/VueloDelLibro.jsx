@@ -32,12 +32,12 @@ import { createPortal } from 'react-dom'
 //  - y el elemento que lleva la perspectiva no puede llevar además el
 //    transform animado, o Safari aplana el 3D.
 
-const DURACION = 980
+const DURACION = 1350
 const CURVA = 'cubic-bezier(.32,.72,.24,1)'
 const CURVA_GIRO = 'cubic-bezier(.5,.02,.3,1)'
 // Qué parte del vuelo se lleva el giro. Es lo que hay que mirar, así que se
 // lleva la mayor parte.
-const GIRO = [0.14, 0.8]
+const GIRO = [0.12, 0.86]
 const PERSPECTIVA = 380
 
 export default function VueloDelLibro({ lomo, portada, destino, alTerminar }) {
@@ -71,12 +71,15 @@ export default function VueloDelLibro({ lomo, portada, destino, alTerminar }) {
 
   useLayoutEffect(() => {
     if (!caja || !viaje.current || !libro.current) return
-    // Se despega deprisa, se abre delante del usuario casi parado, y solo al
-    // final se acerca a su sitio.
+    // El libro se planta en el centro CUANTO ANTES y allí se abre: el paso de
+    // lado se hace al principio, mientras todavía es pequeño y no se está
+    // mirando. Antes el 70% del desplazamiento caía en el último 20% del
+    // vuelo, y el libro parecía irse hacia un lado justo al final.
     const vuelo = viaje.current.animate([
       { transform: 'translate(0px, 0px) scale(1)' },
-      { transform: `translate(${x * 0.12}px, ${y * 0.06 - 18}px) scale(${1 + (escala - 1) * 0.26})`, offset: 0.16 },
-      { transform: `translate(${x * 0.3}px, ${y * 0.24}px) scale(${1 + (escala - 1) * 0.45})`, offset: 0.8 },
+      { transform: `translate(${x * 0.55}px, ${y * 0.12 - 22}px) scale(${1 + (escala - 1) * 0.3})`, offset: 0.2 },
+      { transform: `translate(${x * 0.94}px, ${y * 0.3}px) scale(${1 + (escala - 1) * 0.5})`, offset: 0.5 },
+      { transform: `translate(${x}px, ${y * 0.55}px) scale(${1 + (escala - 1) * 0.66})`, offset: 0.86 },
       { transform: `translate(${x}px, ${y}px) scale(${escala})` },
     ], { duration: DURACION, easing: CURVA, fill: 'forwards' })
 
@@ -84,10 +87,15 @@ export default function VueloDelLibro({ lomo, portada, destino, alTerminar }) {
     // viene de canto a ponerse de frente, sin que ninguna cara se mueva por su
     // cuenta. De paso se inclina un poco arriba (rotateX), que es como se mira
     // un libro que sacas de la balda.
+    // El giro se demora donde tiene gracia: entre 45 y 60 grados es donde se
+    // ven a la vez el lomo y la tapa, así que ahí casi se para. Pasando de
+    // largo, ese momento —que es el que dice que aquello es un libro— no da
+    // tiempo ni a verse.
     const giro = libro.current.animate([
       { transform: 'rotateX(0deg) rotateY(0deg) translateZ(0px)' },
-      { transform: 'rotateX(-6deg) rotateY(-4deg) translateZ(60px)', offset: GIRO[0] },
-      { transform: 'rotateX(-8deg) rotateY(-52deg) translateZ(90px)', offset: (GIRO[0] + GIRO[1]) / 2 },
+      { transform: 'rotateX(-5deg) rotateY(-6deg) translateZ(55px)', offset: GIRO[0] },
+      { transform: 'rotateX(-9deg) rotateY(-46deg) translateZ(95px)', offset: 0.4 },
+      { transform: 'rotateX(-9deg) rotateY(-58deg) translateZ(95px)', offset: 0.62 },
       { transform: 'rotateX(0deg) rotateY(-90deg) translateZ(30px)', offset: GIRO[1] },
       { transform: 'rotateX(0deg) rotateY(-90deg) translateZ(0px)' },
     ], { duration: DURACION, easing: CURVA_GIRO, fill: 'forwards' })
