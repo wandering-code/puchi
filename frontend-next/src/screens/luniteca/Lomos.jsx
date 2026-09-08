@@ -1,7 +1,7 @@
 import { memo, useEffect, useState } from 'react'
 import { totalPages } from './shelf'
 import { colorDePortada } from './colorPortada'
-import { alCargarFuentes, anchoPorPunto } from './medirTexto'
+import { alCargarFuentes, anchoDeRenglonPorPunto, anchoPorPunto } from './medirTexto'
 
 // Vista de estantería: los libros de canto, como en una balda de verdad.
 //
@@ -68,9 +68,19 @@ const TIPOGRAFIAS = [
 // cuatro tomos del mismo escritor son de la misma colección y llevan el mismo
 // diseño de lomo. Eligiéndola por título salían cuatro lomos distintos del
 // mismo autor, que es lo que no pasa nunca en una estantería.
+// La clave del autor para elegir su tipografía: el apellido, en minúsculas y
+// sin acentos. Así "James Islington" e "Islington" —el mismo escritor escrito
+// de dos formas, que pasa según de dónde venga la ficha— caen en la misma
+// colección en vez de salir con dos diseños distintos en la misma balda.
+function claveAutor(autor) {
+  if (!autor) return ''
+  const partes = autor.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').split(/\s+/)
+  return partes[partes.length - 1]
+}
+
 function tipografiaDe(entry) {
   const genero = (entry.book.genre || '').toLowerCase()
-  const h = huella(entry.book.author || entry.book.title || '')
+  const h = huella(claveAutor(entry.book.author) || entry.book.title || '')
   if (/ensayo|historia|filosof|poes|clásic|clasic/.test(genero)) return TIPOGRAFIAS[h % 2 === 0 ? 0 : 3]
   if (/cómic|comic|gráfic|grafic|manga|infantil/.test(genero)) return TIPOGRAFIAS[1]
   return TIPOGRAFIAS[h % TIPOGRAFIAS.length]
@@ -128,9 +138,13 @@ function abreviaturasDe(nombre) {
 // Márquez" → "García Márquez" → "Márquez") y solo desaparece si ni el
 // apellido entra.
 const MAX_LINEAS = 3
-// Lo que ocupa de ANCHO un renglón, por cada punto de letra (interlineado
-// incluido).
-const ANCHO_RENGLON = 1.25
+// El interlineado del texto del lomo: es el `leading-tight` de Tailwind, y
+// tiene que coincidir con lo que usa la cuenta al ver cuántos renglones caben.
+const INTERLINEADO = 1.25
+
+// El aire a los lados del texto dentro del lomo. Sin él los renglones quedan
+// pegados al canto y, con la curvatura y la sombra del lomo, parecen cortados.
+const MARGEN_LATERAL = 3
 // El aire entre el final del título y el nombre del autor, a lo largo del
 // lomo. Lo reserva el reparto y lo pinta el layout: tienen que ser el mismo
 // número o el autor sale pegado al título (se leía "SALVAJESR. Bolaño").
@@ -146,7 +160,9 @@ function repartirTexto({ titulo: tituloEntero, autor, largoUtil, anchoLomo, tipo
   const dosPuntos = tituloEntero.indexOf(':')
   const titulo = dosPuntos > 0 ? tituloEntero.slice(0, dosPuntos).trim() : tituloEntero
   const subtitulo = dosPuntos > 0 ? tituloEntero.slice(dosPuntos + 1).trim() : ''
-  const anchoLibre = anchoLomo - 4
+  const anchoLibre = anchoLomo - MARGEN_LATERAL * 2
+  // Lo que ocupa de ancho un renglón de esta tipografía, medido de verdad.
+  const ANCHO_RENGLON = anchoDeRenglonPorPunto(tipografia)
   // El umbral de ancho es solo para que el autor no ahogue un lomo finísimo.
   const versiones = anchoLomo >= 26 ? abreviaturasDe(autor) : []
   // El autor nunca es más grande que el título: va en segundo plano, como en
@@ -158,30 +174,61 @@ function repartirTexto({ titulo: tituloEntero, autor, largoUtil, anchoLomo, tipo
   // propiedades: medirlo como el título lo daba por más largo de lo que es y
   // se quedaba fuera algún nombre que sí cabía.
   const tipoAutor = { ...tipografia, peso: 400, espaciado: '0', mayusculas: false }
+  const anchoVersion = new Map(versiones.map(v => [v, largoDe(v, tipoAutor, 1)]))
 
-  // La palabra más larga del título, por punto de tamaño. El navegador parte
-  // por palabras, nunca dentro de una: un título de una sola palabra
-  // ("Beloved", "Fundación") NO cabe en dos renglones por mucho que la cuenta
-  // diga que sí — se salía del lomo y quedaba cortado.
-  const palabraMasLarga = titulo
-    .split(/\s+/)
-    .reduce((mayor, palabra) => Math.max(mayor, largoDe(palabra, tipografia, 1)), 0)
+  // Cuántos renglones necesita el título a este tamaño, repartido POR PALABRAS
+  // igual que lo hace el navegador: se van metiendo palabras en el renglón
+  // mientras quepan y, cuando una no cabe, empieza otro.
+  //
+  // Antes esto se estimaba dividiendo el largo total entre el disponible, con
+  // un descuento del 8% por lo que se pierde al final de cada renglón. Se
+  // quedaba corto en los títulos de palabras largas: "El nombre del viento"
+  // salía a cuatro renglones donde la cuenta decía tres, y el bloque de texto
+  // acababa siendo más ancho que el propio lomo (medido: 50px de texto en un
+  // lomo de 45).
+  const palabras = titulo.split(/\s+/).filter(Boolean)
+  const anchoEspacio = largoDe(' ', tipografia, 1)
+  // Los anchos se miden UNA vez por libro, a un punto de tamaño, y luego solo
+  // se multiplican: el reparto prueba muchas combinaciones de tamaño, nombre y
+  // renglones, y medir dentro de ese bucle costaba 160 ms de más con 300
+  // libros (medido con la CPU a 1/4).
+  const anchosPalabras = palabras.map(palabra => largoDe(palabra, tipografia, 1))
+
+  const renglonesNecesarios = (t, disponible) => {
+    let lineas = 1
+    let actual = 0
+    let sueltas = 0        // palabras en el renglón que se está llenando
+    let ultima = ''
+    for (let i = 0; i < palabras.length; i++) {
+      const w = anchosPalabras[i] * t
+      if (w > disponible) return null          // no cabe ni sola: este tamaño no vale
+      ultima = palabras[i]
+      if (!actual) { actual = w; sueltas = 1; continue }
+      const conEspacio = actual + anchoEspacio * t + w
+      if (conEspacio <= disponible) { actual = conEspacio; sueltas++ }
+      else { lineas++; actual = w; sueltas = 1 }
+    }
+    // Viuda: el último renglón se queda con una palabra corta y sola. En
+    // composición no se deja nunca, y en un lomo canta más todavía
+    // ("APOCALIPSIS" y debajo una "Z" suelta).
+    return { lineas, viuda: lineas > 1 && sueltas === 1 && ultima.length <= 2 }
+  }
 
   // ¿Cabe el título a este tamaño en el largo que le dejan? Devuelve en
   // cuántos renglones, o null si no hay manera.
   const renglonesDelTitulo = (t, largoAutor) => {
     const disponible = largoUtil - largoAutor
     if (disponible <= 0) return null
-    const largo = largoDe(titulo, tipografia, t)
-    if (largo <= disponible) return t * ANCHO_RENGLON <= anchoLibre ? 1 : null
-    // Hay que partirlo: al hacerlo por palabras se pierde un poco al final de
-    // cada renglón, y ninguna palabra puede pasarse de largo.
-    const porRenglon = disponible * 0.92
-    if (palabraMasLarga * t > porRenglon) return null
-    const lineas = Math.ceil(largo / porRenglon)
-    if (lineas > MAX_LINEAS) return null
-    if (lineas * t * ANCHO_RENGLON > anchoLibre) return null
-    return lineas
+    const plan = renglonesNecesarios(t, disponible)
+    if (!plan || plan.lineas > MAX_LINEAS) return null
+    const { lineas } = plan
+    // El ancho del bloque: los renglones se colocan cada uno a una distancia
+    // de interlineado, pero el dibujo de las letras del último sobresale de su
+    // caja de línea (ascendentes, tildes, descendentes). Contarlo todo a
+    // interlineado dejaba el texto asomando un píxel por el canto.
+    const anchoBloque = (lineas - 1) * INTERLINEADO * t + ANCHO_RENGLON * t
+    if (anchoBloque > anchoLibre) return null
+    return plan
   }
 
   // El subtítulo es lo último en entrar y lo primero en caerse: solo se pinta
@@ -205,25 +252,41 @@ function repartirTexto({ titulo: tituloEntero, autor, largoUtil, anchoLomo, tipo
   // dos puntos a la letra y dejarlo de una tirada. Por eso, al encontrar uno
   // que vale, se siguen probando tamaños dos puntos más pequeños por si alguno
   // cabe en menos renglones.
-  const MARGEN_RENGLON = 2
+  const MARGEN_RENGLON = 3
+  // Cada mejora tiene su precio en tamaño de letra, porque lo que manda sigue
+  // siendo que el título se lea:
+  //   - quitar una palabra suelta al final ("APOCALIPSIS" y debajo una "Z")
+  //     compensa hasta tres puntos;
+  //   - juntar el título en menos renglones, solo uno.
+  // Sin precio, un título de 9px en dos renglones acababa a 6px en uno solo.
+  const mejorQue = (cand, act) => {
+    const perdida = act.tamanoTitulo - cand.tamanoTitulo
+    if (act.viuda && !cand.viuda && perdida <= MARGEN_RENGLON) return true
+    if (cand.lineas < act.lineas && !cand.viuda && perdida <= 1) return true
+    return false
+  }
   let mejor = null
+  let techo = null      // el primer tamaño que valió: el límite es SUYO, no el
+                        // del mejor de turno, o cada candidato nuevo bajaría el
+                        // listón y el título acabaría en letra de hormiga.
   for (let t = tamanoIdeal; t >= TAMANO_MINIMO; t--) {
-    if (mejor && (mejor.lineas === 1 || t < mejor.tamanoTitulo - MARGEN_RENGLON)) break
+    if (mejor && ((mejor.lineas === 1 && !mejor.viuda) || t < techo - MARGEN_RENGLON)) break
     for (let a = topeAutor(t); a >= TAMANO_MINIMO_AUTOR; a--) {
       let encontrado = null
       for (const version of versiones) {
-        const largoAutor = largoDe(version, tipoAutor, a) + SEPARACION
-        const lineas = renglonesDelTitulo(t, largoAutor)
-        if (lineas) {
+        const largoAutor = anchoVersion.get(version) * a + SEPARACION
+        const plan = renglonesDelTitulo(t, largoAutor)
+        if (plan) {
           encontrado = {
-            tamanoTitulo: t, tamanoAutor: a, lineas, autor: version, titulo,
+            tamanoTitulo: t, tamanoAutor: a, lineas: plan.lineas, viuda: plan.viuda, autor: version, titulo,
             largoOcupado: largoDe(titulo, tipografia, t) + largoAutor,
           }
           break
         }
       }
       if (encontrado) {
-        if (!mejor || encontrado.lineas < mejor.lineas) mejor = encontrado
+        if (techo === null) techo = encontrado.tamanoTitulo
+        if (!mejor || mejorQue(encontrado, mejor)) mejor = encontrado
         break
       }
     }
@@ -233,10 +296,10 @@ function repartirTexto({ titulo: tituloEntero, autor, largoUtil, anchoLomo, tipo
   // Segunda vuelta: no hay sitio para el autor por ningún lado, manda el
   // título entero.
   for (let t = tamanoIdeal; t >= TAMANO_MINIMO; t--) {
-    const lineas = renglonesDelTitulo(t, 0)
-    if (lineas) {
+    const plan = renglonesDelTitulo(t, 0)
+    if (plan) {
       return conSubtitulo(
-        { tamanoTitulo: t, tamanoAutor: 0, lineas, autor: null, titulo },
+        { tamanoTitulo: t, tamanoAutor: 0, lineas: plan.lineas, autor: null, titulo },
         largoDe(titulo, tipografia, t),
       )
     }
@@ -472,7 +535,7 @@ const Lomo = memo(function Lomo({ entry, onAbrir }) {
         />
 
         <span
-          className="absolute inset-0 flex items-center px-[2px] text-center"
+          className="absolute inset-0 flex items-center text-center"
           // De arriba abajo, que es como se leen los lomos aquí: se inclina la
           // cabeza a la derecha y se lee. Al revés (de abajo arriba) es la
           // convención anglosajona y en una balda española se ve del revés.
@@ -486,6 +549,8 @@ const Lomo = memo(function Lomo({ entry, onAbrir }) {
             // título se sale por donde la cuenta creía que había sitio.
             paddingTop: margen,
             paddingBottom: margen,
+            paddingLeft: MARGEN_LATERAL,
+            paddingRight: MARGEN_LATERAL,
           }}
         >
           {/* Una sola línea a lo largo del lomo, recortada con puntos suspensivos

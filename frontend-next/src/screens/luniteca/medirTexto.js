@@ -77,3 +77,27 @@ export function anchoPorPunto(texto, tipografia) {
   CACHE.set(clave, ancho)
   return ancho
 }
+
+// Lo que ocupa de ANCHO un renglón de esta tipografía, por punto de tamaño.
+//
+// En escritura vertical los renglones se apilan a lo ancho del lomo, así que
+// esto decide cuántos caben. Es lo que ocupa el DIBUJO de las letras (de la
+// tilde más alta al descendente más bajo), que es menos que el interlineado:
+// medido, 1,14 en Libre Baskerville y 1,18 en Archivo Narrow, contra el 1,25
+// del interlineado. La cuenta usa el interlineado para separar renglones y
+// esto para el último, que es hasta donde llega la tinta.
+const MUESTRA = 'ÁQÑgjyp'
+
+export function anchoDeRenglonPorPunto(tipografia) {
+  const clave = `renglon|${tipografia.familia}|${tipografia.peso}`
+  const guardado = CACHE.get(clave)
+  if (guardado !== undefined) return guardado
+  if (!ctx || !disponible(tipografia)) return 1.25   // sin fuente, lo prudente
+  ctx.font = `${tipografia.peso} ${BASE}px ${tipografia.familia}`
+  const m = ctx.measureText(MUESTRA)
+  const alto = (m.actualBoundingBoxAscent + m.actualBoundingBoxDescent) / BASE
+  // Un suelo defensivo por si una fuente contesta medidas absurdas.
+  const valor = Math.max(0.9, alto)
+  CACHE.set(clave, valor)
+  return valor
+}

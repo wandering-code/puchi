@@ -154,9 +154,21 @@ Es la parte con más reglas, y todas salieron de mirar capturas:
 - **Entre dos repartos parecidos gana el de menos renglones** (hasta 2px de
   diferencia): "Apocalipsis" con una "Z" suelta debajo se lee peor que el título
   entero dos puntos más pequeño.
-- **Ninguna palabra puede pasarse de largo**: el navegador parte por palabras, nunca
-  dentro de una, así que un título de una sola palabra ("Beloved") no cabe en dos
-  renglones por mucho que la cuenta lo divida.
+- **Los renglones se reparten palabra a palabra, igual que lo hace el navegador**
+  (meter palabras mientras quepan y saltar de renglón cuando una no entra). Dividir el
+  largo total entre el disponible se quedaba corto: "El nombre del viento" salía a
+  cuatro renglones donde la cuenta decía tres, y el bloque acababa siendo más ancho que
+  el propio lomo (medido: 50px de texto en un lomo de 45). De paso, un título de una
+  sola palabra ("Beloved") ya no se manda a dos renglones, que es imposible.
+- **El ancho del bloque de renglones también se mide**: los renglones van separados por
+  el interlineado (1,25) y el último ocupa lo que ocupa el dibujo de sus letras (1,14
+  en Libre Baskerville, 1,18 en Archivo Narrow). Con 3px de margen a cada lado, que sin
+  ellos el texto queda pegado al canto y, con la curvatura y la sombra del lomo, parece
+  cortado.
+- **Nada de palabras viudas**: si el último renglón se queda con una palabra de dos
+  letras ("APOCALIPSIS" y debajo una "Z" suelta) se prefiere bajar hasta tres puntos de
+  letra para juntarlo. Cada mejora tiene su precio en tamaño —juntar renglones solo
+  vale un punto— porque lo que manda sigue siendo que el título se lea.
 - **El aire de arriba y abajo va con el alto del libro** (9%), no en píxeles fijos:
   con 8px sueltos el título quedaba pegado al canto en los lomos altos.
 
@@ -180,6 +192,10 @@ concreta (`fonts.check`/`load`) y, mientras no está, se usa la estimación sin
 guardarla en la caché. El repintado viaja **como prop hasta cada lomo**: están
 memoizados y sin eso se quedaban con el reparto hecho a ojo.
 
+Los anchos se miden **una vez por libro** y luego solo se multiplican: el reparto
+prueba muchas combinaciones de tamaño, nombre y renglones, y medir dentro de ese bucle
+costaba 160 ms de más con 300 libros (CPU a 1/4).
+
 Medido con 20 libros de anchos y títulos variados (`/tmp/luni-test/lomos-aire.mjs`):
 20 de 20 enseñan autor, ningún texto cortado, ningún libro solapado, el texto nunca a
 menos de 12px del canto, y los tochos llevan el título a 10–14px en vez de a 6.
@@ -187,7 +203,8 @@ menos de 12px del canto, y los tochos llevan el título a 10–14px en vez de a 
 Otros detalles de encuadernación: **cabezada** (el hilo trenzado que asoma arriba y
 abajo) en los de tapa dura, y **la tipografía se elige por autor, no por libro**, para
 que los tomos del mismo escritor se vean de la misma colección, como en una balda de
-verdad.
+verdad (la clave es el apellido en minúsculas y sin acentos, para que "James Islington"
+e "Islington" no salgan con dos diseños distintos).
 
 Descartado por el camino: la franja de canto de páginas en el borde derecho del lomo.
 Quedaba rara — en una balda con los libros metidos ves el lomo y nada más.
