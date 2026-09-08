@@ -33,7 +33,7 @@ export default function BookDetail({ entry, carpetas, generos, onCerrar, onActua
       // Abierta desde la estantería, la ficha no sube: el libro vuela hasta
       // ella y la ficha se descubre cuando aterriza (ver VueloDelLibro).
       aparicion={vuelo ? 'fundido' : 'subir'}
-      visible={!vuelo || vuelo.aterrizado}
+      visible
       cabecera={
         /* El botón de volver flota sobre la portada en vez de ocupar una barra
            propia: así la portada empieza arriba del todo y la ficha se lee como
@@ -76,7 +76,14 @@ export default function BookDetail({ entry, carpetas, generos, onCerrar, onActua
         <div className="flex flex-col items-center text-center">
           {/* La marca es para la animación de abrir desde la estantería: ahí
               es donde tiene que aterrizar el libro que sale volando. */}
-          <div className="w-[168px] shrink-0" data-portada-ficha>
+          {/* Con el libro en vuelo, su hueco espera vacío: la portada de la
+              ficha aparece justo cuando el libro aterriza encima, y así no se
+              ven las dos a la vez. */}
+          <div
+            className="w-[168px] shrink-0 transition-opacity duration-200"
+            data-portada-ficha
+            style={{ opacity: vuelo && !vuelo.aterrizado ? 0 : 1 }}
+          >
             <Cover
               url={libro.cover_url}
               title={libro.title}
