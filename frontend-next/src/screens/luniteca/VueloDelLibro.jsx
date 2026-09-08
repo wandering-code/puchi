@@ -43,12 +43,26 @@ const PERSPECTIVA = 380
 export default function VueloDelLibro({ lomo, portada, destino, alTerminar }) {
   const [caja, setCaja] = useState(null)
   const viaje = useRef(null)
+  const enderezar = useRef(null)
   const libro = useRef(null)
 
   useLayoutEffect(() => {
     if (!lomo || !destino) return
+    // Uno de cada siete libros está torcido en la balda. Para que el vuelo
+    // arranque justo donde está ese libro hay que medirlo DERECHO —si no, el
+    // rectángulo que devuelve el navegador es el que envuelve al torcido, que
+    // es más ancho y está desplazado— y luego enderezarlo por el camino. Se
+    // quita el giro un instante, se mide y se devuelve: pasa dentro del mismo
+    // ciclo de layout, así que no se ve.
+    const giroPrevio = lomo.style.transform
+    const torcido = Number(/rotate\((-?[\d.]+)deg\)/.exec(giroPrevio)?.[1] || 0)
+    lomo.style.transform = 'none'
     const r = lomo.getBoundingClientRect()
+    lomo.style.transform = giroPrevio
     const clon = lomo.cloneNode(true)
+    // El clon va derecho: el giro de la balda lo pone (y lo quita) la capa que
+    // endereza, con el mismo punto de apoyo que usa la estantería.
+    clon.style.transform = 'none'
     // El lomo de la balda se marca como invisible en cuanto empieza el vuelo,
     // para que no se vea por duplicado, y el clon se hace DESPUÉS: hay que
     // quitarle esa marca o el clon nace invisible. Era el motivo de que en el
@@ -56,7 +70,7 @@ export default function VueloDelLibro({ lomo, portada, destino, alTerminar }) {
     // plana que crece.
     clon.classList.remove('invisible')
     clon.style.visibility = 'visible'
-    setCaja({ left: r.left, right: r.right, top: r.top, ancho: r.width, alto: r.height, clon })
+    setCaja({ left: r.left, right: r.right, top: r.top, ancho: r.width, alto: r.height, torcido, clon })
   }, [lomo, destino])
 
   // La geometría del libro, que tiene su intríngulis y se ha llegado a ella
@@ -85,14 +99,14 @@ export default function VueloDelLibro({ lomo, portada, destino, alTerminar }) {
 
   useLayoutEffect(() => {
     if (!caja || !viaje.current || !libro.current) return
-    // El libro se planta en el centro CUANTO ANTES y allí se abre: el paso de
-    // lado se hace al principio, mientras todavía es pequeño y no se está
-    // mirando. Antes el 70% del desplazamiento caía en el último 20% del
-    // vuelo, y el libro parecía irse hacia un lado justo al final.
+    // Sale de la balda y solo entonces vuela: el primer tramo lo pasa en su
+    // sitio, despegándose. Sin él, el libro aparecía ya en el aire, porque en
+    // el primer 20% del vuelo se hacía más de medio camino de lado.
     const vuelo = viaje.current.animate([
       { transform: 'translate(0px, 0px) scale(1)' },
-      { transform: `translate(${x * 0.55}px, ${y * 0.12 - 22}px) scale(${1 + (escala - 1) * 0.3})`, offset: 0.2 },
-      { transform: `translate(${x * 0.94}px, ${y * 0.3}px) scale(${1 + (escala - 1) * 0.5})`, offset: 0.5 },
+      { transform: `translate(0px, -7px) scale(1.02)`, offset: 0.1 },
+      { transform: `translate(${x * 0.55}px, ${y * 0.12 - 22}px) scale(${1 + (escala - 1) * 0.3})`, offset: 0.3 },
+      { transform: `translate(${x * 0.94}px, ${y * 0.3}px) scale(${1 + (escala - 1) * 0.5})`, offset: 0.55 },
       { transform: `translate(${x}px, ${y * 0.55}px) scale(${1 + (escala - 1) * 0.66})`, offset: 0.86 },
       { transform: `translate(${x}px, ${y}px) scale(${escala})` },
     ], { duration: DURACION, easing: CURVA, fill: 'forwards' })
@@ -105,6 +119,15 @@ export default function VueloDelLibro({ lomo, portada, destino, alTerminar }) {
     // ven a la vez el lomo y la tapa, así que ahí casi se para. Pasando de
     // largo, ese momento —que es el que dice que aquello es un libro— no da
     // tiempo ni a verse.
+    // El libro se endereza mientras se despega, con el mismo punto de apoyo
+    // que usa la balda para torcerlo (su esquina de abajo).
+    const derecho = enderezar.current.animate([
+      { transform: `rotate(${caja.torcido}deg)` },
+      { transform: `rotate(${caja.torcido * 0.35}deg)`, offset: 0.12 },
+      { transform: 'rotate(0deg)', offset: 0.3 },
+      { transform: 'rotate(0deg)' },
+    ], { duration: DURACION, easing: CURVA, fill: 'forwards' })
+
     const giro = libro.current.animate([
       { transform: 'rotateX(0deg) rotateY(0deg) translateZ(0px)' },
       { transform: 'rotateX(-5deg) rotateY(-6deg) translateZ(55px)', offset: GIRO[0] },
@@ -115,7 +138,7 @@ export default function VueloDelLibro({ lomo, portada, destino, alTerminar }) {
     ], { duration: DURACION, easing: CURVA_GIRO, fill: 'forwards' })
 
     vuelo.onfinish = () => alTerminar?.()
-    return () => { vuelo.cancel(); giro.cancel() }
+    return () => { vuelo.cancel(); derecho.cancel(); giro.cancel() }
   }, [caja, x, y, escala])
 
   if (!caja || !destino) return null
@@ -135,6 +158,13 @@ export default function VueloDelLibro({ lomo, portada, destino, alTerminar }) {
         className="absolute"
         style={{ left: izquierda, top: caja.top, width: anchoCaja, height: caja.alto, transformOrigin: '0 0' }}
       >
+        <div
+          ref={enderezar}
+          className="h-full w-full"
+          // El giro de la balda, con su mismo punto de apoyo: la esquina de
+          // abajo a la izquierda, que es donde se apoya un libro torcido.
+          style={{ transformOrigin: '0% 100%', transform: `rotate(${caja.torcido}deg)` }}
+        >
         <div className="h-full w-full" style={{ perspective: PERSPECTIVA, perspectiveOrigin: '50% 42%' }}>
           <div
             ref={libro}
@@ -166,6 +196,7 @@ export default function VueloDelLibro({ lomo, portada, destino, alTerminar }) {
               <span ref={nodo => { if (nodo && !nodo.firstChild) nodo.appendChild(caja.clon) }} className="block h-full w-full" />
             </div>
           </div>
+        </div>
         </div>
       </div>
     </div>,
