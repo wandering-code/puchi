@@ -59,18 +59,28 @@ export default function VueloDelLibro({ lomo, portada, destino, alTerminar }) {
     setCaja({ left: r.left, right: r.right, top: r.top, ancho: r.width, alto: r.height, clon })
   }, [lomo, destino])
 
-  // La tapa tiene la misma proporción que la portada de la ficha (2/3), así que
-  // el vuelo es un escalado uniforme y no deforma nada. La caja del vuelo mide
-  // lo que la tapa y se apoya en la bisagra: el lomo va pegado a su derecha,
-  // con el grosor que tenía en la balda.
+  // La geometría del libro, que tiene su intríngulis y se ha llegado a ella
+  // por eliminación:
+  //
+  //   - El lomo ocupa el frente, con el grosor que tenía en la balda.
+  //   - La tapa cuelga del canto DERECHO del lomo y se pliega hacia el FONDO,
+  //     que es como está un libro de pie en una estantería.
+  //   - Al girar el cuerpo, la tapa viene a ponerse de cara por la derecha de
+  //     la bisagra y el lomo se va al fondo, quedando a su izquierda.
+  //
+  // Plegando la tapa hacia el observador (el intento anterior) el ángulo entre
+  // lomo y tapa se abre hacia ti: se ve el libro por dentro. Y con la bisagra
+  // en el canto izquierdo, el libro se abre al revés y el lomo acaba a la
+  // derecha de la portada.
   const anchoTapa = caja ? caja.alto * (2 / 3) : 0
   const escala = caja ? destino.height / caja.alto : 1
-  // La bisagra es el canto IZQUIERDO del lomo, que es donde va unida la tapa
-  // en un libro nuestro: abierto, el lomo queda a la izquierda de la portada.
-  // Con la bisagra en el canto derecho —que fue el primer montaje— el libro se
-  // abría al revés, con el lomo a la derecha.
+  const grosorLomo = caja ? caja.ancho : 0
+  // La caja del vuelo empieza donde empieza el lomo y da cabida a los dos.
   const izquierda = caja ? caja.left : 0
-  const x = caja ? destino.left - izquierda : 0
+  const anchoCaja = grosorLomo + anchoTapa
+  // La tapa acaba a la derecha de la bisagra, así que lo que tiene que
+  // aterrizar en la portada de la ficha es ese trozo, no la caja entera.
+  const x = caja ? destino.left - izquierda - escala * grosorLomo : 0
   const y = caja ? destino.top - caja.top : 0
 
   useLayoutEffect(() => {
@@ -97,11 +107,11 @@ export default function VueloDelLibro({ lomo, portada, destino, alTerminar }) {
     // tiempo ni a verse.
     const giro = libro.current.animate([
       { transform: 'rotateX(0deg) rotateY(0deg) translateZ(0px)' },
-      { transform: 'rotateX(-5deg) rotateY(6deg) translateZ(55px)', offset: GIRO[0] },
-      { transform: 'rotateX(-9deg) rotateY(46deg) translateZ(95px)', offset: 0.4 },
-      { transform: 'rotateX(-9deg) rotateY(58deg) translateZ(95px)', offset: 0.62 },
-      { transform: 'rotateX(0deg) rotateY(90deg) translateZ(30px)', offset: GIRO[1] },
-      { transform: 'rotateX(0deg) rotateY(90deg) translateZ(0px)' },
+      { transform: 'rotateX(-5deg) rotateY(-6deg) translateZ(55px)', offset: GIRO[0] },
+      { transform: 'rotateX(-9deg) rotateY(-46deg) translateZ(95px)', offset: 0.4 },
+      { transform: 'rotateX(-9deg) rotateY(-58deg) translateZ(95px)', offset: 0.62 },
+      { transform: 'rotateX(0deg) rotateY(-90deg) translateZ(30px)', offset: GIRO[1] },
+      { transform: 'rotateX(0deg) rotateY(-90deg) translateZ(0px)' },
     ], { duration: DURACION, easing: CURVA_GIRO, fill: 'forwards' })
 
     vuelo.onfinish = () => alTerminar?.()
@@ -110,13 +120,10 @@ export default function VueloDelLibro({ lomo, portada, destino, alTerminar }) {
 
   if (!caja || !destino) return null
 
-  // El grosor del libro: lo que mide su lomo.
-  //
   // Se probó a añadir el corte de las páginas como tercera cara, al otro
   // extremo de la tapa. Se descarta: con la perspectiva tan corta se separa
   // visualmente de la tapa y se lee como un trozo pegado al lado, no como el
   // canto del libro. El volumen ya lo da el cuerpo girando.
-  const grosor = caja.ancho
 
   return createPortal(
     // Tres capas y cada una con un solo trabajo: la fija, la que viaja y la que
@@ -126,35 +133,35 @@ export default function VueloDelLibro({ lomo, portada, destino, alTerminar }) {
       <div
         ref={viaje}
         className="absolute"
-        style={{ left: izquierda, top: caja.top, width: anchoTapa, height: caja.alto, transformOrigin: '0 0' }}
+        style={{ left: izquierda, top: caja.top, width: anchoCaja, height: caja.alto, transformOrigin: '0 0' }}
       >
         <div className="h-full w-full" style={{ perspective: PERSPECTIVA, perspectiveOrigin: '50% 42%' }}>
           <div
             ref={libro}
             className="relative h-full w-full"
-            style={{ transformStyle: 'preserve-3d', transformOrigin: '0% 50%' }}
+            // La bisagra: el canto derecho del lomo.
+            style={{ transformStyle: 'preserve-3d', transformOrigin: `${grosorLomo}px 50%` }}
           >
             {/* La tapa, en el plano del objeto: parte de la bisagra hacia atrás */}
             <div
-              className="absolute inset-0 overflow-hidden rounded-l-[2px] rounded-r-md bg-surface-2 shadow-[0_10px_30px_-8px_rgba(60,40,20,.5)]"
-              // Plegada hacia el observador y no hacia el fondo. Es lo que
-              // hace que, al girar, sea EL LOMO el que se va hacia atrás y la
-              // tapa la que viene: al revés el lomo salía hacia el usuario y el
-              // libro parecía hueco, con la portada colgada del canto de atrás.
-              style={{ transformOrigin: '0% 50%', transform: 'rotateY(-90deg)', backfaceVisibility: 'hidden' }}
+              className="absolute top-0 overflow-hidden rounded-l-[2px] rounded-r-md bg-surface-2 shadow-[0_10px_30px_-8px_rgba(60,40,20,.5)]"
+              style={{
+                left: grosorLomo, width: anchoTapa, height: '100%',
+                transformOrigin: '0% 50%', transform: 'rotateY(90deg)', backfaceVisibility: 'hidden',
+              }}
             >
               {portada
                 ? <img src={portada} alt="" className="h-full w-full object-cover" />
                 : <span className="block h-full w-full bg-surface-2" />}
               {/* El canto de la tapa por la bisagra, en sombra */}
-              <span className="pointer-events-none absolute inset-y-0 left-0 w-[4px] bg-gradient-to-r from-black/35 to-transparent" />
+              <span className="pointer-events-none absolute inset-y-0 left-0 w-[5px] bg-gradient-to-r from-black/40 to-transparent" />
             </div>
 
             {/* El lomo, clonado del de la balda: es la cara que mira al frente
                 cuando el libro está en la estantería. */}
             <div
               className="absolute top-0 overflow-hidden"
-              style={{ left: 0, width: grosor, height: '100%', borderRadius: 4, backfaceVisibility: 'hidden' }}
+              style={{ left: 0, width: grosorLomo, height: '100%', borderRadius: 4, backfaceVisibility: 'hidden' }}
             >
               <span ref={nodo => { if (nodo && !nodo.firstChild) nodo.appendChild(caja.clon) }} className="block h-full w-full" />
             </div>
