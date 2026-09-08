@@ -301,6 +301,12 @@ function snapshot() {
   const vv = window.visualViewport
   const safe = safeInsets()
   return {
+    // Lo primero, y a propósito: con el service worker por medio, un
+    // dispositivo puede quedarse en una versión vieja sin que se note, y
+    // entonces lo que se prueba en local y lo que se ve en el móvil no son el
+    // mismo código. Aquí se ve el commit exacto que está corriendo.
+    versión:    __VERSION__,
+    compilado:  __FECHA_BUILD__,
     instalada:  isStandalone() ? 'sí' : 'no (pestaña)',
     plataforma: isIOS() ? 'iOS' : navigator.platform || '—',
     'safe top':    safe.top,

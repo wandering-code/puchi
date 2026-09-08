@@ -3,7 +3,22 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 import fs from 'fs'
+import { execSync } from 'child_process'
 import { resolve } from 'path'
+
+// Sello de versión, visible en Ajustes. Sirve para saber de un vistazo QUÉ
+// código está viendo un dispositivo: con el service worker de la PWA por medio,
+// un móvil puede quedarse en una versión vieja sin que se note, y entonces las
+// pruebas de local y lo que se ve en el móvil no hablan de lo mismo.
+function selloDeVersion() {
+  try {
+    const hash = execSync('git rev-parse --short HEAD').toString().trim()
+    const sucio = execSync('git status --porcelain').toString().trim() ? '+' : ''
+    return `${hash}${sucio}`
+  } catch {
+    return 'sin-git'
+  }
+}
 
 // Los certificados mkcert viven en el frontend actual (frontend/certs/, en
 // .gitignore) y se reutilizan aquí: sin HTTPS, el móvil no puede instalar la
@@ -21,6 +36,10 @@ const PROXY = {
 }
 
 export default defineConfig({
+  define: {
+    __VERSION__: JSON.stringify(selloDeVersion()),
+    __FECHA_BUILD__: JSON.stringify(new Date().toISOString().slice(0, 16).replace('T', ' ')),
+  },
   // Se sirve bajo puchi.wanderingcode.dev/next/ durante toda la convivencia
   // con la Puchi actual. Sin este base los dos builds pedirían /assets/… y
   // chocarían en nginx, que sirve los dos dist/ desde el mismo host.
