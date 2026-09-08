@@ -302,8 +302,11 @@ que desplazaba con `scrollTo()` dio por bueno un scroll que en el móvil no func
 
 ## Despliegue (mini PC)
 
-Mismo puerto nginx (3003) y mismo Cloudflare Tunnel que la Puchi actual — esta versión
-no gasta ningún puerto nuevo del registro de `dev-standards`.
+**Desplegada y conviviendo con la Puchi actual** desde el 8/9/2026:
+`puchi.wanderingcode.dev/next`. Mismo puerto nginx (3003) y mismo Cloudflare Tunnel que
+la Puchi actual —esta versión no gasta ningún puerto nuevo del registro de
+`dev-standards`—, mismo backend y misma base de datos. La de siempre sigue en la raíz y
+no se ha tocado nada suyo: son dos frontales sobre el mismo servidor.
 
 ```bash
 ssh minipc
@@ -311,7 +314,9 @@ cd /home/wander/apps/puchi && git pull
 cd frontend-next && npm install && npm run build
 ```
 
-En `/etc/nginx/sites-enabled/puchi`, **antes** del `location /` que sirve la Puchi actual:
+En `/etc/nginx/sites-available/puchi`, dentro del mismo `server` que ya sirve la Puchi
+actual (el orden no importa: `location /next/` es más específica que `location /`, y
+nginx elige por prefijo más largo):
 
 ```nginx
 location /next/ {
@@ -333,8 +338,18 @@ location = /next/manifest.webmanifest {
 ```
 
 `sudo nginx -t && sudo systemctl reload nginx`. No hay que tocar cloudflared: el
-subdominio y el túnel ya existen. Checklist de comprobación tras desplegar, en
-[issue #17](https://github.com/wandering-code/puchi/issues/17).
+subdominio y el túnel ya existen.
+
+Para volver atrás, la configuración anterior queda guardada al lado
+(`/etc/nginx/sites-available/puchi.bak-<fecha>`): basta con restaurarla y recargar. La
+Puchi actual no depende de nada de esto.
+
+Tras desplegar conviene comprobar las dos, que es lo que se hizo la primera vez:
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' https://puchi.wanderingcode.dev/        # la de siempre
+curl -s -o /dev/null -w '%{http_code}\n' https://puchi.wanderingcode.dev/next/   # la nueva
+```
 
 ## Cuando esta versión sustituya a la actual
 
