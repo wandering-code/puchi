@@ -110,8 +110,12 @@ por ISBN: Open Library y Google Books sirven la portada (la cara frontal), y el 
 solo aparece en las contadísimas ediciones con la sobrecubierta entera escaneada. Así
 que cada lomo se construye con los datos del libro:
 
-- **Grosor** por páginas (22–46px), **alto** variable y **tapa dura** (lomo redondeado
-  con nervios) a partir de 500 páginas. Uno de cada siete va **torcido**, y el ancho
+- **Grosor** por páginas (26–56px), **alto** variable (134–180px, aparte del grosor:
+  dos libros igual de gordos pueden tener formatos distintos) y **tapa dura** (lomo
+  redondeado con nervios) a partir de 500 páginas. La escala se subió entera porque con
+  22–46px el título salía pegado a los cantos y había que achicar mucho la letra; el
+  orden lo siguen mandando las páginas, un libro de 700 nunca es más fino que uno de
+  300. Uno de cada siete va **torcido**, y el ancho
   extra que ocupa al inclinarse se le reserva al lado que toca: son libros físicos y no
   pueden atravesar al vecino.
 - **Color** sacado de la **franja izquierda de la portada** (`colorPortada.js`), que es
@@ -160,6 +164,10 @@ Es la parte con más reglas, y todas salieron de mirar capturas:
   cuatro renglones donde la cuenta decía tres, y el bloque acababa siendo más ancho que
   el propio lomo (medido: 50px de texto en un lomo de 45). De paso, un título de una
   sola palabra ("Beloved") ya no se manda a dos renglones, que es imposible.
+- **El bloque de renglones se centra ópticamente.** Los renglones se apilan desde el
+  canto derecho y cada uno reserva un interlineado entero aunque sus letras ocupen algo
+  menos; ese sobrante se quedaba todo del lado izquierdo (medido: 4,5px de aire a un
+  lado y 3,3 al otro).
 - **El ancho del bloque de renglones también se mide**: los renglones van separados por
   el interlineado (1,25) y el último ocupa lo que ocupa el dibujo de sus letras (1,14
   en Libre Baskerville, 1,18 en Archivo Narrow). Con 3px de margen a cada lado, que sin

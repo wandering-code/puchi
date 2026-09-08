@@ -19,11 +19,18 @@ import { alCargarFuentes, anchoDeRenglonPorPunto, anchoPorPunto } from './medirT
 // Es una vista aparte a propósito: si no acaba de funcionar, se quita este
 // archivo y su entrada en el selector, y las otras dos siguen igual.
 
-const ALTO_FILA = 176        // alto de cada balda, en px
-const ALTO_MAX = 168         // el libro más alto
-const ALTO_MIN = 132         // el más bajo
-const ANCHO_MIN = 22         // un libro finito
-const ANCHO_MAX = 46         // un tocho
+// Las medidas de la balda. Los lomos son más anchos y más altos de lo que
+// eran: con 22-46px el título salía pegado a los cantos por los lados (medido:
+// 2,3px de aire en "Project Hail Mary" o "El problema final") y había que
+// achicar mucho la letra. El grosor lo siguen mandando las páginas —un libro
+// de 700 páginas nunca es más fino que uno de 300—, lo que cambia es la escala
+// entera; el alto va aparte, que dos libros del mismo grosor pueden tener
+// formatos distintos.
+const ALTO_FILA = 190        // alto de cada balda, en px
+const ALTO_MAX = 180         // el libro más alto
+const ALTO_MIN = 134         // el más bajo
+const ANCHO_MIN = 26         // un libro finito
+const ANCHO_MAX = 56         // un tocho
 
 // Número estable a partir de un texto: el mismo libro sale siempre igual, y
 // dos libros distintos casi nunca coinciden.
@@ -144,7 +151,7 @@ const INTERLINEADO = 1.25
 
 // El aire a los lados del texto dentro del lomo. Sin él los renglones quedan
 // pegados al canto y, con la curvatura y la sombra del lomo, parecen cortados.
-const MARGEN_LATERAL = 3
+const MARGEN_LATERAL = 4
 // El aire entre el final del título y el nombre del autor, a lo largo del
 // lomo. Lo reserva el reparto y lo pinta el layout: tienen que ser el mismo
 // número o el autor sale pegado al título (se leía "SALVAJESR. Bolaño").
@@ -213,6 +220,14 @@ function repartirTexto({ titulo: tituloEntero, autor, largoUtil, anchoLomo, tipo
     // ("APOCALIPSIS" y debajo una "Z" suelta).
     return { lineas, viuda: lineas > 1 && sueltas === 1 && ultima.length <= 2 }
   }
+
+  // Los renglones se apilan desde el canto de la derecha (es escritura
+  // vertical), y cada uno reserva un interlineado entero aunque las letras
+  // ocupen algo menos. Ese sobrante se queda todo del lado izquierdo y el
+  // texto acaba descentrado hacia la derecha —medido: 4,5px de aire a un lado
+  // y 3,3 al otro—. Se reparte a partes iguales moviendo el bloque medio
+  // sobrante.
+  const ajusteOptico = t => -((INTERLINEADO - ANCHO_RENGLON) * t) / 2
 
   // ¿Cabe el título a este tamaño en el largo que le dejan? Devuelve en
   // cuántos renglones, o null si no hay manera.
@@ -291,7 +306,7 @@ function repartirTexto({ titulo: tituloEntero, autor, largoUtil, anchoLomo, tipo
       }
     }
   }
-  if (mejor) return conSubtitulo(mejor, mejor.largoOcupado)
+  if (mejor) return conSubtitulo({ ...mejor, ajuste: ajusteOptico(mejor.tamanoTitulo) }, mejor.largoOcupado)
 
   // Segunda vuelta: no hay sitio para el autor por ningún lado, manda el
   // título entero.
@@ -299,7 +314,7 @@ function repartirTexto({ titulo: tituloEntero, autor, largoUtil, anchoLomo, tipo
     const plan = renglonesDelTitulo(t, 0)
     if (plan) {
       return conSubtitulo(
-        { tamanoTitulo: t, tamanoAutor: 0, lineas: plan.lineas, autor: null, titulo },
+        { tamanoTitulo: t, tamanoAutor: 0, lineas: plan.lineas, autor: null, titulo, ajuste: ajusteOptico(t) },
         largoDe(titulo, tipografia, t),
       )
     }
@@ -336,7 +351,7 @@ function medidas(entry) {
   // El título ocupa el lomo a lo largo, así que su tamaño va con el grosor:
   // en un lomo de 22px una letra de 13 no cabe, y en uno de 46 una de 9 se
   // pierde.
-  const tamano = Math.round(9 + (ancho - ANCHO_MIN) / (ANCHO_MAX - ANCHO_MIN) * 5)
+  const tamano = Math.round(10 + (ancho - ANCHO_MIN) / (ANCHO_MAX - ANCHO_MIN) * 6)
   return {
     ancho: Math.round(ancho), alto: Math.round(alto), color: colorDeLomo(h),
     tamano, tipografia: tipografiaDe(entry), torcido, tapaDura,
@@ -570,6 +585,7 @@ const Lomo = memo(function Lomo({ entry, onAbrir }) {
               textTransform: tipografia.mayusculas ? 'uppercase' : 'none',
               fontSize: texto.tamanoTitulo,
               textAlign: 'center',
+              transform: texto.ajuste ? `translateX(${texto.ajuste}px)` : undefined,
             }}
           >
             {texto.titulo}
