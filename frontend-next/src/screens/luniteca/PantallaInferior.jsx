@@ -57,7 +57,7 @@ export default function PantallaInferior({ onCerrar, cabecera, children, aparici
         // El fundido es largo y empieza algo después de arrancar el vuelo: la
         // ficha va apareciendo mientras el libro sube, en vez de salir de golpe
         // cuando aterriza.
-        transition={subiendo ? { type: 'spring', stiffness: 420, damping: 40 } : { duration: 0.55, delay: visible ? 0.22 : 0 }}
+        transition={subiendo ? { type: 'spring', stiffness: 420, damping: 40 } : { duration: 0.34, delay: visible ? 0.14 : 0 }}
       >
         {/* El asa ya no necesita apartarse de la zona segura: el panel entero
             empieza por debajo de ella. */}

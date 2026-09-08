@@ -32,7 +32,10 @@ import { createPortal } from 'react-dom'
 //  - y el elemento que lleva la perspectiva no puede llevar además el
 //    transform animado, o Safari aplana el 3D.
 
-const DURACION = 1350
+// Lo que dura el vuelo entero. Los pasos van en tanto por uno, así que
+// cambiando este número se acelera o se frena todo a la vez sin descuadrar el
+// giro ni el trayecto.
+const DURACION = 880
 const CURVA = 'cubic-bezier(.32,.72,.24,1)'
 const CURVA_GIRO = 'cubic-bezier(.5,.02,.3,1)'
 // Qué parte del vuelo se lleva el giro. Es lo que hay que mirar, así que se
