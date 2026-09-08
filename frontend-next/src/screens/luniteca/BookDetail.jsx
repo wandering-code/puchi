@@ -33,7 +33,7 @@ export default function BookDetail({ entry, carpetas, generos, onCerrar, onActua
       // Abierta desde la estantería, la ficha no sube: el libro vuela hasta
       // ella y la ficha se descubre cuando aterriza (ver VueloDelLibro).
       aparicion={vuelo ? 'fundido' : 'subir'}
-      visible
+      visible={!vuelo || vuelo.sentido !== 'vuelta'}
       cabecera={
         /* El botón de volver flota sobre la portada en vez de ocupar una barra
            propia: así la portada empieza arriba del todo y la ficha se lee como

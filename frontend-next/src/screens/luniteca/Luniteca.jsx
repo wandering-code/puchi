@@ -146,7 +146,9 @@ export default function Luniteca() {
   const [vuelo, setVuelo] = useState(null)
   const abrirLibro = useCallback((entrada, nodo) => {
     const menosMovimiento = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
-    if (nodo && !menosMovimiento) setVuelo({ id: entrada.id, nodo, destino: null, aterrizado: false })
+    if (nodo && !menosMovimiento) {
+      setVuelo({ id: entrada.id, nodo, portada: entrada.book?.cover_url, destino: null, aterrizado: false })
+    }
     ficha.abrir(entrada)
   }, [])
 
@@ -158,7 +160,12 @@ export default function Luniteca() {
     if (marca) setVuelo(v => (v && !v.destino ? { ...v, destino: marca.getBoundingClientRect() } : v))
   })
 
-  const cerrarFicha = useCallback(() => { setVuelo(null); ficha.cerrar() }, [ficha.cerrar])
+  // Al cerrar, el libro desanda el camino: sale de la ficha, se cierra girando
+  // y vuelve a su hueco de la balda. La ficha se desvanece mientras.
+  const cerrarFicha = useCallback(() => {
+    setVuelo(v => (v && v.aterrizado ? { ...v, sentido: 'vuelta', aterrizado: false } : null))
+    ficha.cerrar()
+  }, [ficha.cerrar])
 
   const libroAnadido = useCallback((entrada) => {
     setShelf(prev => (prev || []).some(x => x.id === entrada.id) ? prev : [...(prev || []), entrada])
@@ -341,10 +348,16 @@ export default function Luniteca() {
 
       {vuelo && !vuelo.aterrizado && (
         <VueloDelLibro
+          key={vuelo.sentido || 'ida'}
           lomo={vuelo.nodo}
-          portada={abierto?.book?.cover_url}
+          portada={vuelo.portada}
           destino={vuelo.destino}
-          alTerminar={() => setVuelo(v => (v ? { ...v, aterrizado: true } : v))}
+          sentido={vuelo.sentido || 'ida'}
+          alTerminar={() => setVuelo(v => {
+            if (!v) return null
+            // De vuelta no queda nada que enseñar: el lomo ya está en su sitio.
+            return v.sentido === 'vuelta' ? null : { ...v, aterrizado: true }
+          })}
         />
       )}
     </div>

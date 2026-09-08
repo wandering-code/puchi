@@ -44,7 +44,10 @@ const CURVA_GIRO = 'cubic-bezier(.5,.02,.3,1)'
 const GIRO = [0.12, 0.86]
 const PERSPECTIVA = 380
 
-export default function VueloDelLibro({ lomo, portada, destino, alTerminar }) {
+// `sentido`: 'ida' saca el libro de la balda y lo abre en la ficha; 'vuelta'
+// hace el camino contrario, con las mismas animaciones puestas del revés.
+export default function VueloDelLibro({ lomo, portada, destino, alTerminar, sentido = 'ida' }) {
+  const volviendo = sentido === 'vuelta'
   const [caja, setCaja] = useState(null)
   const viaje = useRef(null)
   const enderezar = useRef(null)
@@ -174,16 +177,8 @@ export default function VueloDelLibro({ lomo, portada, destino, alTerminar }) {
         offset: t,
         transform: `translate(${cx - izquierda - s * centros[i]}px, ${cy - caja.top - s * (caja.alto / 2)}px) scale(${s})`,
       }
-    }), { duration: DURACION, easing: CURVA_GIRO, fill: 'forwards' })
+    }), { duration: DURACION, easing: CURVA_GIRO, fill: 'forwards', direction: volviendo ? 'reverse' : 'normal' })
 
-    // El objeto entero gira sobre la bisagra: el lomo se va de perfil y la tapa
-    // viene de canto a ponerse de frente, sin que ninguna cara se mueva por su
-    // cuenta. De paso se inclina un poco arriba (rotateX), que es como se mira
-    // un libro que sacas de la balda.
-    // El giro se demora donde tiene gracia: entre 45 y 60 grados es donde se
-    // ven a la vez el lomo y la tapa, así que ahí casi se para. Pasando de
-    // largo, ese momento —que es el que dice que aquello es un libro— no da
-    // tiempo ni a verse.
     // El libro se endereza mientras se despega, con el mismo punto de apoyo
     // que usa la balda para torcerlo (su esquina de abajo).
     const derecho = enderezar.current.animate([
@@ -191,21 +186,28 @@ export default function VueloDelLibro({ lomo, portada, destino, alTerminar }) {
       { transform: `rotate(${caja.torcido * 0.35}deg)`, offset: 0.12 },
       { transform: 'rotate(0deg)', offset: 0.3 },
       { transform: 'rotate(0deg)' },
-    ], { duration: DURACION, easing: CURVA, fill: 'forwards' })
+    ], { duration: DURACION, easing: CURVA, fill: 'forwards', direction: volviendo ? 'reverse' : 'normal' })
 
-    const giro = libro.current.animate([
-      // Sin translateZ: acercar el libro al observador y devolverlo lo
-      // desplazaba de lado en la proyección —la perspectiva empuja hacia fuera
-      // lo que se acerca—, y eso era el vaivén que se veía en el trayecto. La
-      // sensación de que se acerca ya la da el tamaño, que crece durante todo
-      // el vuelo.
-      { transform: 'rotateX(0deg) rotateY(0deg)' },
-      { transform: 'rotateX(-5deg) rotateY(-6deg)', offset: GIRO[0] },
-      { transform: 'rotateX(-9deg) rotateY(-46deg)', offset: 0.4 },
-      { transform: 'rotateX(-9deg) rotateY(-58deg)', offset: 0.62 },
-      { transform: 'rotateX(0deg) rotateY(-90deg)', offset: GIRO[1] },
-      { transform: 'rotateX(0deg) rotateY(-90deg)' },
-    ], { duration: DURACION, easing: CURVA_GIRO, fill: 'forwards' })
+    // El cuerpo entero gira sobre la bisagra: el lomo se va de perfil y la tapa
+    // viene de canto a ponerse de frente, sin que ninguna cara se mueva por su
+    // cuenta. Se inclina además un poco (rotateX), que es como se mira un libro
+    // recién sacado de la balda.
+    //
+    // Va con la MISMA tabla de pasos que el trayecto, y por eso están
+    // sincronizados: la compensación del centro se calculó para estos ángulos
+    // en estos tiempos.
+    //
+    // Sin translateZ: acercar el libro al observador y devolverlo lo desplaza
+    // de lado en la proyección —la perspectiva empuja hacia fuera lo que se
+    // acerca—, y eso era parte del vaivén. La sensación de que viene hacia ti
+    // ya la da el tamaño.
+    const giro = libro.current.animate(
+      pasos.map(({ t, grados }) => ({
+        offset: t,
+        transform: `rotateX(${grados > 3 && grados < 90 ? -9 : 0}deg) rotateY(-${grados}deg)`,
+      })),
+      { duration: DURACION, easing: CURVA_GIRO, fill: 'forwards', direction: volviendo ? 'reverse' : 'normal' },
+    )
 
     vuelo.onfinish = () => alTerminar?.()
     return () => { vuelo.cancel(); derecho.cancel(); giro.cancel() }
