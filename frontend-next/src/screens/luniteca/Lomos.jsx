@@ -64,8 +64,13 @@ const TIPOGRAFIAS = [
   { familia: "'Libre Baskerville', Georgia, serif", peso: 400, espaciado: '0.04em', mayusculas: true, ancho: 0.62 },
 ]
 
-function tipografiaDe(entry, h) {
+// La tipografía se elige por AUTOR, no por libro: en una balda de verdad los
+// cuatro tomos del mismo escritor son de la misma colección y llevan el mismo
+// diseño de lomo. Eligiéndola por título salían cuatro lomos distintos del
+// mismo autor, que es lo que no pasa nunca en una estantería.
+function tipografiaDe(entry) {
   const genero = (entry.book.genre || '').toLowerCase()
+  const h = huella(entry.book.author || entry.book.title || '')
   if (/ensayo|historia|filosof|poes|clásic|clasic/.test(genero)) return TIPOGRAFIAS[h % 2 === 0 ? 0 : 3]
   if (/cómic|comic|gráfic|grafic|manga|infantil/.test(genero)) return TIPOGRAFIAS[1]
   return TIPOGRAFIAS[h % TIPOGRAFIAS.length]
@@ -226,7 +231,7 @@ function medidas(entry) {
   const tamano = Math.round(9 + (ancho - ANCHO_MIN) / (ANCHO_MAX - ANCHO_MIN) * 5)
   return {
     ancho: Math.round(ancho), alto: Math.round(alto), color: colorDeLomo(h),
-    tamano, tipografia: tipografiaDe(entry, h), torcido, tapaDura,
+    tamano, tipografia: tipografiaDe(entry), torcido, tapaDura,
   }
 }
 
@@ -268,12 +273,17 @@ const Lomo = memo(function Lomo({ entry, onAbrir }) {
   const libro = entry.book
   // El color de la portada llega después (hay que cargarla y leerla), así que
   // el lomo nace con su color de reserva y cambia al de verdad en cuanto está.
-  const [colorReal, setColorReal] = useState(null)
+  const [paleta, setPaleta] = useState(null)
   useEffect(() => {
     let vigente = true
-    colorDePortada(libro.cover_url).then(c => { if (vigente && c) setColorReal(c) })
+    colorDePortada(libro.cover_url).then(p => { if (vigente && p) setPaleta(p) })
     return () => { vigente = false }
   }, [libro.cover_url])
+
+  // Un lomo de fondo claro pide tinta oscura, como cualquier libro con la
+  // cubierta clara. Solo se sabe cuando la portada se ha podido leer; con el
+  // color de reserva (siempre oscuro) el texto va en blanco.
+  const claro = paleta ? paleta.luz >= 58 : false
 
   // El aire de arriba y abajo. Va con el alto del libro, no fijo: 8px sueltos
   // son un 6% de un lomo bajo pero solo un 4,7% de uno alto, y en los altos el
@@ -321,7 +331,7 @@ const Lomo = memo(function Lomo({ entry, onAbrir }) {
         style={{
           width: ancho,
           height: alto,
-          backgroundColor: colorReal || color,
+          backgroundColor: paleta?.color || color,
           // Tapa dura: lomo redondeado. Rústica: plano.
           borderRadius: tapaDura ? '4px / 6px' : '2px',
           // Se apoya en su esquina de abajo, que es donde tocaría la balda.
@@ -340,11 +350,12 @@ const Lomo = memo(function Lomo({ entry, onAbrir }) {
           }),
         }}
       >
-        {/* Velo: garantiza que el título blanco se lea sobre una franja clara,
-            que las hay (portadas de fondo blanco). Sin él habría que adivinar
-            la luminancia de una imagen que el navegador no deja inspeccionar
-            si viene de otro origen. */}
-        {libro.cover_url && <span className="pointer-events-none absolute inset-0 bg-ink/25" />}
+        {/* Velo: separa el texto del fondo. En un lomo oscuro oscurece un poco
+            más; en uno claro aclara, porque ahí el título va en tinta oscura,
+            como en un libro de verdad con la cubierta clara. */}
+        {libro.cover_url && (
+          <span className={`pointer-events-none absolute inset-0 ${claro ? 'bg-white/35' : 'bg-ink/25'}`} />
+        )}
 
         {/* Volumen: un lomo no es plano. Sombra en los dos cantos y una franja
             de luz descentrada hacia la izquierda, que es como le da la luz a un
@@ -360,6 +371,24 @@ const Lomo = memo(function Lomo({ entry, onAbrir }) {
             key={i}
             className="pointer-events-none absolute inset-x-0 h-px"
             style={{ top: y, background: i % 2 ? 'rgba(255,255,255,.14)' : 'rgba(255,255,255,.3)' }}
+          />
+        ))}
+
+        {/* Cabezada: el hilo de tela que asoma por arriba y por abajo del lomo
+            en un libro cosido. Solo en tapa dura, que es donde la lleva. */}
+        {tapaDura && [true, false].map(arriba => (
+          <span
+            key={String(arriba)}
+            className="pointer-events-none absolute inset-x-[1px] h-[2px]"
+            style={{
+              [arriba ? 'top' : 'bottom']: 1,
+              borderRadius: 1,
+              // Rayas finas y de poco contraste: la cabezada es un hilo
+              // trenzado, no una cremallera (con 2px y mucho contraste
+              // parecía justo eso).
+              background: 'repeating-linear-gradient(to right, rgba(238,226,205,.55) 0 1px, rgba(155,115,90,.45) 1px 2px)',
+              opacity: 0.38,
+            }}
           />
         ))}
 
@@ -409,7 +438,7 @@ const Lomo = memo(function Lomo({ entry, onAbrir }) {
               suspensivos no dice qué libro es. En escritura vertical,
               text-align es lo que centra a lo largo. */}
           <span
-            className={`min-h-0 flex-1 overflow-hidden leading-tight text-white drop-shadow-[0_1px_2px_rgba(0,0,0,.55)] ${texto.lineas === 1 ? 'whitespace-nowrap' : ''}`}
+            className={`min-h-0 flex-1 overflow-hidden leading-tight ${claro ? 'text-[#241f19] drop-shadow-[0_1px_1px_rgba(255,255,255,.5)]' : 'text-white drop-shadow-[0_1px_2px_rgba(0,0,0,.55)]'} ${texto.lineas === 1 ? 'whitespace-nowrap' : ''}`}
             style={{
               fontFamily: tipografia.familia,
               fontWeight: tipografia.peso,
@@ -423,7 +452,7 @@ const Lomo = memo(function Lomo({ entry, onAbrir }) {
           </span>
           {texto.autor && (
             <span
-              className="shrink-0 whitespace-nowrap leading-tight text-white/75 drop-shadow-[0_1px_2px_rgba(0,0,0,.5)]"
+              className={`shrink-0 whitespace-nowrap leading-tight ${claro ? 'text-[#241f19]/75 drop-shadow-[0_1px_1px_rgba(255,255,255,.5)]' : 'text-white/75 drop-shadow-[0_1px_2px_rgba(0,0,0,.5)]'}`}
               style={{ fontFamily: tipografia.familia, fontSize: texto.tamanoAutor }}
             >
               {texto.autor}

@@ -6,6 +6,9 @@
 // a su color. Un promedio de toda la portada saldría lavado (casi siempre
 // tirando a gris) porque mezcla ilustración, cielo, tipografía y márgenes.
 //
+// Devuelve { color, luz } o null. `luz` es la luminosidad real de la franja
+// (0-100), para decidir el color del texto que va encima.
+//
 // Solo funciona con portadas del MISMO ORIGEN: las que el servidor ya ha
 // cacheado en /uploads. Con una de covers.openlibrary.org el navegador
 // prohíbe leer los píxeles del canvas y salta la excepción — ahí se devuelve
@@ -14,7 +17,7 @@
 // guardarlo con el libro; esto de aquí no haría falta.
 
 const CACHE_MEMORIA = new Map()
-const CLAVE = 'luni_colores_lomo'
+const CLAVE = 'luni_colores_lomo2'
 
 function cacheDisco() {
   try { return JSON.parse(localStorage.getItem(CLAVE) || '{}') } catch { return {} }
@@ -83,17 +86,29 @@ export function colorDePortada(url) {
         // franja.
         let r = 0, g = 0, b = 0, peso = 0
         for (let i = 0; i < data.length; i += 4) {
+          // Los píxeles transparentes no cuentan. Sin esto, una portada con
+          // alfa (un PNG recortado, un SVG) arrastraba la media al negro: el
+          // tono salía bien pero la luminosidad se iba a 3 sobre 100, y con
+          // ella la decisión de si el lomo es claro u oscuro.
+          const alfa = data[i + 3] / 255
+          if (alfa < 0.06) continue
           const max = Math.max(data[i], data[i + 1], data[i + 2])
           const min = Math.min(data[i], data[i + 1], data[i + 2])
-          const p = 0.25 + (max - min) / 255      // gris pesa poco, color pesa mucho
+          const p = (0.25 + (max - min) / 255) * alfa   // gris pesa poco, color pesa mucho
           r += data[i] * p; g += data[i + 1] * p; b += data[i + 2] * p; peso += p
         }
+        // Portada entera transparente: no hay color que sacar.
+        if (!peso) return terminar(null)
         const { h, s, l } = aHsl(r / peso, g / peso, b / peso)
         // Se lleva al rango de un lomo: ni un amarillo fluorescente ni un
         // blanco, que en una balda entera quedarían fatal y no dejarían leer
         // el título encima.
         const color = `hsl(${Math.round(h)} ${Math.round(Math.min(Math.max(s, 18), 55))}% ${Math.round(Math.min(Math.max(l, 24), 46))}%)`
-        terminar(color)
+        // La luz ORIGINAL de la franja, sin acotar: es la del fondo que se ve
+        // de verdad (la portada estirada), y de ella depende si el título se
+        // lee mejor en blanco o en negro. Hay portadas claras — la de "El
+        // problema final" es gris azulado — donde el texto blanco se pierde.
+        terminar({ color, luz: Math.round(l) })
       } catch {
         // getImageData con una imagen de otro origen: no se puede leer.
         terminar(null)
