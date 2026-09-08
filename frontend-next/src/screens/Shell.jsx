@@ -236,10 +236,18 @@ function Placeholder({ title, nota }) {
 function Ajustes() {
   const { player, logout } = useAuth()
   const [info, setInfo] = useState(() => snapshot())
+  // En dev el sello compilado se queda congelado al arrancar Vite, así que se
+  // pregunta al servidor, que lo calcula al momento (ver vite.config.js).
+  const [sello, setSello] = useState(null)
 
   useEffect(() => {
     const id = setInterval(() => setInfo(snapshot()), 500)
     return () => clearInterval(id)
+  }, [])
+
+  useEffect(() => {
+    if (!import.meta.env.DEV) return
+    fetch('/next/__version').then(r => r.json()).then(setSello).catch(() => {})
   }, [])
 
   return (
@@ -252,7 +260,7 @@ function Ajustes() {
       <div className="mt-6 overflow-hidden rounded-xl2 border border-line bg-surface">
         <p className="border-b border-line px-4 py-2 text-xs uppercase tracking-wider text-ink-mute">Diagnóstico</p>
         <dl className="divide-y divide-[color:var(--color-line)] text-sm">
-          {Object.entries(info).map(([k, v]) => (
+          {Object.entries(sello ? { ...info, versión: sello.version, compilado: sello.compilado } : info).map(([k, v]) => (
             <div key={k} className="flex justify-between gap-4 px-4 py-2.5">
               <dt className="text-ink-mute">{k}</dt>
               <dd className="text-right font-mono text-[13px] text-ink">{String(v)}</dd>

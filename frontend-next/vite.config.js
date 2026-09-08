@@ -35,6 +35,22 @@ const PROXY = {
   '/uploads': { target: 'http://localhost:8001', changeOrigin: true },
 }
 
+// En `dev`, el sello de arriba se calcula UNA vez, al arrancar Vite, y se queda
+// congelado: se sigue commiteando y Ajustes sigue enseñando el commit de
+// entonces, que es peor que no enseñar nada — parece que el navegador tiene
+// código viejo cuando el viejo es el sello. Este endpoint lo devuelve al
+// momento, y el diagnóstico lo pide cuando corre en dev.
+const selloEnCaliente = {
+  name: 'sello-en-caliente',
+  configureServer(server) {
+    server.middlewares.use('/next/__version', (_req, res) => {
+      res.setHeader('content-type', 'application/json')
+      res.setHeader('cache-control', 'no-store')
+      res.end(JSON.stringify({ version: selloDeVersion(), compilado: 'en vivo' }))
+    })
+  },
+}
+
 export default defineConfig({
   define: {
     __VERSION__: JSON.stringify(selloDeVersion()),
@@ -50,6 +66,7 @@ export default defineConfig({
     alias: { '@': resolve(__dirname, './src') },
   },
   plugins: [
+    selloEnCaliente,
     react(),
     tailwindcss(),
     VitePWA({
