@@ -140,6 +140,19 @@ function repartirTexto({ titulo, autor, largoUtil, anchoLomo, tipografia, tamano
   // un lomo impreso. Sin este tope, en un título largo (que baja mucho de
   // tamaño para caber) el autor acababa siendo el texto grande del lomo.
   const topeAutor = t => Math.min(Math.max(TAMANO_MINIMO_AUTOR, tamanoIdeal - 4), t)
+  // El nombre del autor se pinta en la misma familia que el título pero sin
+  // negrita, sin espaciado y sin mayúsculas, así que se mide con esas mismas
+  // propiedades: medirlo como el título lo daba por más largo de lo que es y
+  // se quedaba fuera algún nombre que sí cabía.
+  const tipoAutor = { ...tipografia, peso: 400, espaciado: '0', mayusculas: false }
+
+  // La palabra más larga del título, por punto de tamaño. El navegador parte
+  // por palabras, nunca dentro de una: un título de una sola palabra
+  // ("Beloved", "Fundación") NO cabe en dos renglones por mucho que la cuenta
+  // diga que sí — se salía del lomo y quedaba cortado.
+  const palabraMasLarga = titulo
+    .split(/\s+/)
+    .reduce((mayor, palabra) => Math.max(mayor, largoDe(palabra, tipografia, 1)), 0)
 
   // ¿Cabe el título a este tamaño en el largo que le dejan? Devuelve en
   // cuántos renglones, o null si no hay manera.
@@ -147,9 +160,12 @@ function repartirTexto({ titulo, autor, largoUtil, anchoLomo, tipografia, tamano
     const disponible = largoUtil - largoAutor
     if (disponible <= 0) return null
     const largo = largoDe(titulo, tipografia, t)
-    // Al partir por palabras se pierde un poco al final de cada renglón.
-    const porRenglon = largo > disponible ? disponible * 0.92 : disponible
-    const lineas = Math.max(1, Math.ceil(largo / porRenglon))
+    if (largo <= disponible) return t * ANCHO_RENGLON <= anchoLibre ? 1 : null
+    // Hay que partirlo: al hacerlo por palabras se pierde un poco al final de
+    // cada renglón, y ninguna palabra puede pasarse de largo.
+    const porRenglon = disponible * 0.92
+    if (palabraMasLarga * t > porRenglon) return null
+    const lineas = Math.ceil(largo / porRenglon)
     if (lineas > MAX_LINEAS) return null
     if (lineas * t * ANCHO_RENGLON > anchoLibre) return null
     return lineas
@@ -163,7 +179,7 @@ function repartirTexto({ titulo, autor, largoUtil, anchoLomo, tipografia, tamano
   for (let t = tamanoIdeal; t >= TAMANO_MINIMO; t--) {
     for (let a = topeAutor(t); a >= TAMANO_MINIMO_AUTOR; a--) {
       for (const version of versiones) {
-        const lineas = renglonesDelTitulo(t, largoDe(version, tipografia, a) + SEPARACION)
+        const lineas = renglonesDelTitulo(t, largoDe(version, tipoAutor, a) + SEPARACION)
         if (lineas) return { tamanoTitulo: t, tamanoAutor: a, lineas, autor: version }
       }
     }
@@ -217,7 +233,11 @@ function medidas(entry) {
 export default function Lomos({ entries, onAbrir }) {
   // Las medidas del texto dependen de la fuente, y las fuentes propias llegan
   // un momento después. Al llegar, se repinta con las medidas buenas.
-  const [, repintar] = useState(0)
+  //
+  // El número viaja como prop hasta cada lomo A PROPÓSITO: los lomos están
+  // memoizados, así que sin una prop que cambie se quedaban con el reparto
+  // hecho a ojo con la fuente de reserva (y con el título cortado).
+  const [revision, repintar] = useState(0)
   useEffect(() => alCargarFuentes(() => repintar(n => n + 1)), [])
 
   return (
@@ -230,7 +250,7 @@ export default function Lomos({ entries, onAbrir }) {
         backgroundImage: `repeating-linear-gradient(to bottom, transparent 0 ${ALTO_FILA - 5}px, var(--color-line) ${ALTO_FILA - 5}px ${ALTO_FILA - 2}px, transparent ${ALTO_FILA - 2}px ${ALTO_FILA}px)`,
       }}
     >
-      {entries.map(e => <Lomo key={e.id} entry={e} onAbrir={onAbrir} />)}
+      {entries.map(e => <Lomo key={e.id} entry={e} onAbrir={onAbrir} revision={revision} />)}
     </div>
   )
 }
@@ -255,8 +275,13 @@ const Lomo = memo(function Lomo({ entry, onAbrir }) {
     return () => { vigente = false }
   }, [libro.cover_url])
 
-  // El largo aprovechable del lomo, quitando el aire de arriba y abajo.
-  const largoUtil = alto - 16
+  // El aire de arriba y abajo. Va con el alto del libro, no fijo: 8px sueltos
+  // son un 6% de un lomo bajo pero solo un 4,7% de uno alto, y en los altos el
+  // título quedaba pegado al canto de arriba (visto en "La voluntad de
+  // muchos"). Un lomo impreso deja bastante más margen que eso.
+  const margen = Math.max(10, Math.round(alto * 0.09))
+  // El largo aprovechable del lomo, quitando ese aire.
+  const largoUtil = alto - margen * 2
   const texto = repartirTexto({
     titulo: libro.title,
     autor: libro.author,
@@ -359,13 +384,21 @@ const Lomo = memo(function Lomo({ entry, onAbrir }) {
         />
 
         <span
-          className="absolute inset-0 flex items-center px-[2px] py-2 text-center"
+          className="absolute inset-0 flex items-center px-[2px] text-center"
           // De arriba abajo, que es como se leen los lomos aquí: se inclina la
           // cabeza a la derecha y se lee. Al revés (de abajo arriba) es la
           // convención anglosajona y en una balda española se ve del revés.
           // En escritura vertical el eje principal del flex es el vertical, así
           // que el título crece a lo largo del lomo y el autor se queda al pie.
-          style={{ writingMode: 'vertical-rl', textOrientation: 'mixed', gap: texto.autor ? SEPARACION_AUTOR : 0 }}
+          style={{
+            writingMode: 'vertical-rl',
+            textOrientation: 'mixed',
+            gap: texto.autor ? SEPARACION_AUTOR : 0,
+            // El mismo margen que reserva el reparto: si no coinciden, el
+            // título se sale por donde la cuenta creía que había sitio.
+            paddingTop: margen,
+            paddingBottom: margen,
+          }}
         >
           {/* Una sola línea a lo largo del lomo, recortada con puntos suspensivos
               si no cabe. Antes el título se partía en dos columnas cuando era

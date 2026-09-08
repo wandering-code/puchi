@@ -4,43 +4,55 @@
 // media" y el largo salía de multiplicarlo por el número de letras. Esa cuenta
 // falla por los dos lados — una "i" y una "W" no miden lo mismo, y el
 // espaciado entre letras tampoco entraba —, y se notaba: títulos cortados por
-// quedarse corta la estimación ("El camino de los reyes") y títulos escritos
-// en letra de hormiga en lomos anchos por pasarse.
+// quedarse corta la estimación y títulos escritos en letra de hormiga en lomos
+// anchos por pasarse.
 //
 // Medir con canvas cuesta microsegundos y da el ancho exacto que va a ocupar
-// el navegador al pintarlo. Se mide a 100px y se guarda el ancho POR PUNTO de
-// tamaño: el ancho de un texto es proporcional al cuerpo de la letra, así que
-// con una medición valen todos los tamaños que se prueben después.
+// el navegador al pintarlo (comprobado: canvas + el espaciado sumado a mano
+// da el mismo píxel que measure del DOM). Se mide a 100px y se guarda el ancho
+// POR PUNTO de tamaño: el ancho de un texto es proporcional al cuerpo de la
+// letra, así que con una medición valen todos los tamaños que se prueben
+// después.
 
 const lienzo = typeof document !== 'undefined' ? document.createElement('canvas') : null
 const ctx = lienzo ? lienzo.getContext('2d') : null
 const CACHE = new Map()
-
 const BASE = 100
 
-// Las fuentes propias (Public Sans, Libre Baskerville, Archivo Narrow) tardan
-// un momento en estar disponibles. Si se mide antes, el navegador contesta con
-// las medidas de la fuente de reserva y salen mal. Mientras no estén, se
-// devuelve la estimación de siempre y se vuelve a medir cuando cargan.
-let fuentesListas = false
+// OJO con las fuentes: `document.fonts.ready` NO vale aquí. Solo espera a las
+// fuentes que ya se estaban usando cuando se le preguntó, y las de los lomos
+// (Libre Baskerville, Archivo Narrow) empiezan a cargarse justo cuando se
+// pinta el primer lomo. Midiendo con `ready` salía la fuente de reserva
+// (Georgia, bastante más estrecha) y por eso se cortaban títulos: la cuenta
+// creía que "BELOVED" medía 53px y en pantalla medía 75.
+//
+// Así que se pregunta por CADA fuente concreta: si no está lista, se pide y se
+// devuelve la estimación de siempre sin guardarla en la caché; cuando llega,
+// se avisa y la vista se repinta ya con la medida buena.
+const pedidas = new Set()
 const avisos = new Set()
-if (typeof document !== 'undefined' && document.fonts) {
-  document.fonts.ready.then(() => {
-    fuentesListas = true
-    CACHE.clear()
-    avisos.forEach(fn => fn())
-  })
+
+// Solo el primer nombre de la lista: `fonts.check` con una familia genérica de
+// reserva ("serif") contesta que sí aunque la de verdad no esté.
+function familiaPrincipal(familia) {
+  return familia.split(',')[0].trim().replace(/^['"]|['"]$/g, '')
+}
+
+function disponible(tipografia) {
+  if (typeof document === 'undefined' || !document.fonts) return false
+  const spec = `${tipografia.peso} ${BASE}px "${familiaPrincipal(tipografia.familia)}"`
+  if (document.fonts.check(spec)) return true
+  if (!pedidas.has(spec)) {
+    pedidas.add(spec)
+    document.fonts.load(spec).then(() => avisos.forEach(fn => fn())).catch(() => {})
+  }
+  return false
 }
 
 // Para que la vista se redibuje con las medidas buenas en cuanto haya fuentes.
 export function alCargarFuentes(fn) {
-  if (fuentesListas) return () => {}
   avisos.add(fn)
   return () => avisos.delete(fn)
-}
-
-export function fuentesDisponibles() {
-  return fuentesListas
 }
 
 // Ancho de un texto por cada punto de tamaño de letra.
@@ -50,19 +62,18 @@ export function anchoPorPunto(texto, tipografia) {
   const guardado = CACHE.get(clave)
   if (guardado !== undefined) return guardado
 
-  let ancho
-  if (!ctx || !fuentesListas) {
-    // Reserva mientras no hay fuentes: la estimación de antes.
-    ancho = texto.length * tipografia.ancho * (tipografia.mayusculas ? 1.14 : 1)
-  } else {
-    ctx.font = `${tipografia.peso} ${BASE}px ${tipografia.familia}`
-    // letterSpacing en canvas no lo soportan todos los navegadores; si no
-    // está, se suma a mano, que para un espaciado en "em" es exacto.
-    const espaciado = parseFloat(tipografia.espaciado) || 0
-    if ('letterSpacing' in ctx) ctx.letterSpacing = '0px'
-    const t = tipografia.mayusculas ? texto.toUpperCase() : texto
-    ancho = (ctx.measureText(t).width + espaciado * BASE * t.length) / BASE
+  // Reserva mientras la fuente no esté: la estimación de antes. No se guarda,
+  // para volver a medirla de verdad en cuanto cargue.
+  if (!ctx || !disponible(tipografia)) {
+    return texto.length * tipografia.ancho * (tipografia.mayusculas ? 1.14 : 1)
   }
+
+  ctx.font = `${tipografia.peso} ${BASE}px ${tipografia.familia}`
+  const t = tipografia.mayusculas ? texto.toUpperCase() : texto
+  // El espaciado entre letras no lo aplica measureText en todos los
+  // navegadores; sumarlo a mano es exacto, porque va en "em".
+  const espaciado = parseFloat(tipografia.espaciado) || 0
+  const ancho = (ctx.measureText(t).width + espaciado * BASE * t.length) / BASE
   CACHE.set(clave, ancho)
   return ancho
 }
