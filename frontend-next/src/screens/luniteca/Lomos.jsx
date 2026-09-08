@@ -1,7 +1,7 @@
 import { memo, useEffect, useState } from 'react'
 import { totalPages } from './shelf'
 import { colorDePortada } from './colorPortada'
-import { alCargarFuentes, anchoDeRenglonPorPunto, anchoPorPunto } from './medirTexto'
+import { alCargarFuentes, anchoPorPunto, medidasDeRenglon } from './medirTexto'
 
 // Vista de estantería: los libros de canto, como en una balda de verdad.
 //
@@ -145,10 +145,6 @@ function abreviaturasDe(nombre) {
 // Márquez" → "García Márquez" → "Márquez") y solo desaparece si ni el
 // apellido entra.
 const MAX_LINEAS = 3
-// El interlineado del texto del lomo: es el `leading-tight` de Tailwind, y
-// tiene que coincidir con lo que usa la cuenta al ver cuántos renglones caben.
-const INTERLINEADO = 1.25
-
 // El aire a los lados del texto dentro del lomo. Sin él los renglones quedan
 // pegados al canto y, con la curvatura y la sombra del lomo, parecen cortados.
 const MARGEN_LATERAL = 4
@@ -168,8 +164,11 @@ function repartirTexto({ titulo: tituloEntero, autor, largoUtil, anchoLomo, tipo
   const titulo = dosPuntos > 0 ? tituloEntero.slice(0, dosPuntos).trim() : tituloEntero
   const subtitulo = dosPuntos > 0 ? tituloEntero.slice(dosPuntos + 1).trim() : ''
   const anchoLibre = anchoLomo - MARGEN_LATERAL * 2
-  // Lo que ocupa de ancho un renglón de esta tipografía, medido de verdad.
-  const ANCHO_RENGLON = anchoDeRenglonPorPunto(tipografia)
+  // Lo que ocupa de ancho el bloque de renglones de esta tipografía, medido de
+  // verdad en el DOM: un renglón suelto (`base`) y lo que suma cada uno de más
+  // (`paso`).
+  const renglon = medidasDeRenglon(tipografia)
+  const anchoDelBloque = (lineas, t) => (renglon.base + (lineas - 1) * renglon.paso) * t
   // El umbral de ancho es solo para que el autor no ahogue un lomo finísimo.
   const versiones = anchoLomo >= 26 ? abreviaturasDe(autor) : []
   // El autor nunca es más grande que el título: va en segundo plano, como en
@@ -222,12 +221,12 @@ function repartirTexto({ titulo: tituloEntero, autor, largoUtil, anchoLomo, tipo
   }
 
   // Los renglones se apilan desde el canto de la derecha (es escritura
-  // vertical), y cada uno reserva un interlineado entero aunque las letras
-  // ocupen algo menos. Ese sobrante se queda todo del lado izquierdo y el
-  // texto acaba descentrado hacia la derecha —medido: 4,5px de aire a un lado
-  // y 3,3 al otro—. Se reparte a partes iguales moviendo el bloque medio
-  // sobrante.
-  const ajusteOptico = t => -((INTERLINEADO - ANCHO_RENGLON) * t) / 2
+  // vertical) y el hueco que sobra se queda todo del lado izquierdo, así que
+  // el texto acaba descentrado —medido: 4,5px de aire a un lado y 3,3 al
+  // otro—. Se reparte a partes iguales moviendo el bloque medio sobrante.
+  // La caja del texto reserva un interlineado por renglón; el dibujo del
+  // primero puede ocupar menos y ese hueco se queda entero de un lado.
+  const ajusteOptico = t => -(Math.max(0, renglon.paso - renglon.base) * t) / 2
 
   // ¿Cabe el título a este tamaño en el largo que le dejan? Devuelve en
   // cuántos renglones, o null si no hay manera.
@@ -241,8 +240,7 @@ function repartirTexto({ titulo: tituloEntero, autor, largoUtil, anchoLomo, tipo
     // de interlineado, pero el dibujo de las letras del último sobresale de su
     // caja de línea (ascendentes, tildes, descendentes). Contarlo todo a
     // interlineado dejaba el texto asomando un píxel por el canto.
-    const anchoBloque = (lineas - 1) * INTERLINEADO * t + ANCHO_RENGLON * t
-    if (anchoBloque > anchoLibre) return null
+    if (anchoDelBloque(lineas, t) > anchoLibre) return null
     return plan
   }
 

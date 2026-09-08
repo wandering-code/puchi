@@ -168,11 +168,14 @@ Es la parte con más reglas, y todas salieron de mirar capturas:
   canto derecho y cada uno reserva un interlineado entero aunque sus letras ocupen algo
   menos; ese sobrante se quedaba todo del lado izquierdo (medido: 4,5px de aire a un
   lado y 3,3 al otro).
-- **El ancho del bloque de renglones también se mide**: los renglones van separados por
-  el interlineado (1,25) y el último ocupa lo que ocupa el dibujo de sus letras (1,14
-  en Libre Baskerville, 1,18 en Archivo Narrow). Con 3px de margen a cada lado, que sin
-  ellos el texto queda pegado al canto y, con la curvatura y la sombra del lomo, parece
-  cortado.
+- **El ancho del bloque de renglones se mide en el DOM**, no se deduce: `medidasDeRenglon`
+  monta un span de prueba con esa tipografía y mide un renglón y dos, y de ahí salen lo
+  que ocupa uno suelto y lo que suma cada uno de más. Deducirlo de las cotas del canvas
+  (el dibujo de las letras) se queda corto, porque un renglón ocupa además el
+  interlineado y lo que ascendentes y descendentes sobresalen de su caja: la cuenta daba
+  28px a un bloque de dos renglones de Archivo Narrow a 12px que en pantalla medía 31, y
+  el título acababa a 1,7px del canto. Con 4px de margen a cada lado, que sin ellos el
+  texto queda pegado al canto y, con la curvatura y la sombra del lomo, parece cortado.
 - **Nada de palabras viudas**: si el último renglón se queda con una palabra de dos
   letras ("APOCALIPSIS" y debajo una "Z" suelta) se prefiere bajar hasta tres puntos de
   letra para juntarlo. Cada mejora tiene su precio en tamaño —juntar renglones solo

@@ -78,26 +78,47 @@ export function anchoPorPunto(texto, tipografia) {
   return ancho
 }
 
-// Lo que ocupa de ANCHO un renglón de esta tipografía, por punto de tamaño.
+// Lo que ocupa de ANCHO un bloque de renglones de esta tipografía, por punto
+// de tamaño: `base` es lo que mide un renglón suelto y `paso` lo que suma cada
+// renglón de más. Un bloque de N renglones ocupa (base + (N-1) * paso) * tamaño.
 //
-// En escritura vertical los renglones se apilan a lo ancho del lomo, así que
-// esto decide cuántos caben. Es lo que ocupa el DIBUJO de las letras (de la
-// tilde más alta al descendente más bajo), que es menos que el interlineado:
-// medido, 1,14 en Libre Baskerville y 1,18 en Archivo Narrow, contra el 1,25
-// del interlineado. La cuenta usa el interlineado para separar renglones y
-// esto para el último, que es hasta donde llega la tinta.
-const MUESTRA = 'ÁQÑgjyp'
+// Se mide en el DOM, no con las cotas del canvas. El canvas da el dibujo de las
+// letras, pero un renglón ocupa más que eso: el interlineado, y lo que los
+// ascendentes y descendentes sobresalen de su caja de línea. Con las cotas del
+// canvas la cuenta creía que un bloque de dos renglones de Archivo Narrow a
+// 12px medía 28px cuando en pantalla medía 31, y el título acababa a 1,7px del
+// canto del lomo.
+//
+// Cuesta dos medidas por tipografía (cuatro en toda la app) y se guardan.
+const MUESTRA = 'ÁQÑÍGJYPgjyp'
 
-export function anchoDeRenglonPorPunto(tipografia) {
-  const clave = `renglon|${tipografia.familia}|${tipografia.peso}`
+export function medidasDeRenglon(tipografia) {
+  const clave = `renglon|${tipografia.familia}|${tipografia.peso}|${tipografia.mayusculas}`
   const guardado = CACHE.get(clave)
   if (guardado !== undefined) return guardado
-  if (!ctx || !disponible(tipografia)) return 1.25   // sin fuente, lo prudente
-  ctx.font = `${tipografia.peso} ${BASE}px ${tipografia.familia}`
-  const m = ctx.measureText(MUESTRA)
-  const alto = (m.actualBoundingBoxAscent + m.actualBoundingBoxDescent) / BASE
-  // Un suelo defensivo por si una fuente contesta medidas absurdas.
-  const valor = Math.max(0.9, alto)
+  // Sin fuente propia todavía: lo prudente, y se vuelve a medir al cargar.
+  if (typeof document === 'undefined' || !disponible(tipografia)) return { base: 1.35, paso: 1.25 }
+
+  const medir = (lineas) => {
+    const s = document.createElement('span')
+    s.textContent = Array(lineas).fill(MUESTRA).join(' ')
+    s.style.cssText = [
+      'position:fixed', 'top:-9999px', 'left:0', 'writing-mode:vertical-rl',
+      `font-family:${tipografia.familia}`, `font-weight:${tipografia.peso}`,
+      `letter-spacing:${tipografia.espaciado}`, `text-transform:${tipografia.mayusculas ? 'uppercase' : 'none'}`,
+      `font-size:${BASE}px`, 'line-height:1.25',
+      // El largo justo para que entre una muestra por renglón.
+      `height:${BASE * MUESTRA.length}px`,
+    ].join(';')
+    document.body.appendChild(s)
+    const ancho = s.getBoundingClientRect().width / BASE
+    s.remove()
+    return ancho
+  }
+
+  const una = medir(1)
+  const dos = medir(2)
+  const valor = { base: una, paso: Math.max(0.5, dos - una) }
   CACHE.set(clave, valor)
   return valor
 }
