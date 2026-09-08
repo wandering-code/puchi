@@ -79,8 +79,12 @@ export default function BookDetail({ entry, carpetas, generos, onCerrar, onActua
           {/* Con el libro en vuelo, su hueco espera vacío: la portada de la
               ficha aparece justo cuando el libro aterriza encima, y así no se
               ven las dos a la vez. */}
+          {/* Sin fundido a propósito: el libro aterriza justo encima y con el
+              mismo tamaño, así que el relevo es invisible si se hace de golpe.
+              Con una transición quedaba un parpadeo con el hueco vacío, entre
+              que el libro se retira y la portada acaba de aparecer. */}
           <div
-            className="w-[168px] shrink-0 transition-opacity duration-200"
+            className="w-[168px] shrink-0"
             data-portada-ficha
             style={{ opacity: vuelo && !vuelo.aterrizado ? 0 : 1 }}
           >

@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { RELIEVE_LIBRO } from './piezas'
 
 // El libro sale de la balda, gira y se pone de cara: es la animación de abrir
 // un libro desde la vista de estantería.
@@ -255,11 +256,11 @@ export default function VueloDelLibro({ lomo, portada, destino, alTerminar }) {
               {portada
                 ? <img src={portada} alt="" className="h-full w-full object-cover" />
                 : <span className="block h-full w-full bg-surface-2" />}
-              {/* Nada de sombra en la bisagra: el lomo ya llega ahí con su
-                  canto oscurecido (lo trae de la balda), y las dos sombras
-                  juntas formaban una banda que se leía como un hueco entre el
-                  lomo y la portada. Un filo finísimo basta para marcar el
-                  pliegue. */}
+              {/* El mismo acabado que tendrá al aterrizar en la ficha —el lomo
+                  insinuado y el barniz—, para que no se note el relevo. Ese
+                  degradado ya oscurece el canto de la bisagra, así que aquí
+                  basta un filo para marcar el pliegue. */}
+              <span className="pointer-events-none absolute inset-0" style={{ background: RELIEVE_LIBRO }} />
               <span className="pointer-events-none absolute inset-y-0 left-0 w-px bg-black/25" />
             </div>
 
