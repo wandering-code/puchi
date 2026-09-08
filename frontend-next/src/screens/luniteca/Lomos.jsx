@@ -393,7 +393,7 @@ function medidas(entry) {
   }
 }
 
-export default function Lomos({ entries, onAbrir }) {
+export default function Lomos({ entries, onAbrir, volandoId = null }) {
   // Las medidas del texto dependen de la fuente, y las fuentes propias llegan
   // un momento después. Al llegar, se repinta con las medidas buenas.
   //
@@ -413,7 +413,9 @@ export default function Lomos({ entries, onAbrir }) {
         backgroundImage: `repeating-linear-gradient(to bottom, transparent 0 ${ALTO_FILA - 5}px, var(--color-line) ${ALTO_FILA - 5}px ${ALTO_FILA - 2}px, transparent ${ALTO_FILA - 2}px ${ALTO_FILA}px)`,
       }}
     >
-      {entries.map(e => <Lomo key={e.id} entry={e} onAbrir={onAbrir} revision={revision} />)}
+      {entries.map(e => (
+        <Lomo key={e.id} entry={e} onAbrir={onAbrir} revision={revision} volando={e.id === volandoId} />
+      ))}
     </div>
   )
 }
@@ -426,7 +428,7 @@ export default function Lomos({ entries, onAbrir }) {
 // portadas de Open Library: solo hay que pintarlas, no inspeccionarlas.
 const FRANJA = 0.04
 
-const Lomo = memo(function Lomo({ entry, onAbrir }) {
+const Lomo = memo(function Lomo({ entry, onAbrir, volando = false }) {
   const { ancho, alto, color, tamano, tipografia, torcido, tapaDura } = medidas(entry)
   const libro = entry.book
   // El color de la portada llega después (hay que cargarla y leerla), así que
@@ -482,10 +484,12 @@ const Lomo = memo(function Lomo({ entry, onAbrir }) {
       }}
     >
       <button
-        onClick={() => onAbrir(entry)}
+        // Se pasa el nodo: la animación de abrir clona este mismo lomo para
+        // que el que sale volando sea idéntico al que estaba en la balda.
+        onClick={ev => onAbrir(entry, ev.currentTarget)}
         aria-label={libro.title}
         title={`${libro.title}${libro.author ? ` — ${libro.author}` : ''}`}
-        className="relative overflow-hidden transition-[background-color,transform] duration-300 active:translate-y-[-4px]"
+        className={`relative overflow-hidden transition-[background-color,transform] duration-300 active:translate-y-[-4px] ${volando ? 'invisible' : ''}`}
         style={{
           width: ancho,
           height: alto,

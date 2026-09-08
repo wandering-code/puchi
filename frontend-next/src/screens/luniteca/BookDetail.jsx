@@ -12,7 +12,7 @@ import PantallaInferior from './PantallaInferior'
 // que se pueden cambiar como pastillas que abren su propio editor — en vez de
 // una lista de bloques con encabezados, que era lo de antes y se parecía más a
 // la Luniteca vieja. Lo que se toca es el dato en sí.
-export default function BookDetail({ entry, carpetas, generos, onCerrar, onActualizar, onGuardarLibro, onSubirPortada, onEliminar }) {
+export default function BookDetail({ entry, carpetas, generos, onCerrar, onActualizar, onGuardarLibro, onSubirPortada, onEliminar, vuelo = null }) {
   const libro = entry.book
   const paginas = totalPages(entry)
 
@@ -30,6 +30,10 @@ export default function BookDetail({ entry, carpetas, generos, onCerrar, onActua
   return (
     <PantallaInferior
       onCerrar={onCerrar}
+      // Abierta desde la estantería, la ficha no sube: el libro vuela hasta
+      // ella y la ficha se descubre cuando aterriza (ver VueloDelLibro).
+      aparicion={vuelo ? 'fundido' : 'subir'}
+      visible={!vuelo || vuelo.aterrizado}
       cabecera={
         /* El botón de volver flota sobre la portada en vez de ocupar una barra
            propia: así la portada empieza arriba del todo y la ficha se lee como
@@ -70,7 +74,9 @@ export default function BookDetail({ entry, carpetas, generos, onCerrar, onActua
       ) : (
       <div className="mx-auto w-full max-w-md px-6 pb-kb">
         <div className="flex flex-col items-center text-center">
-          <div className="w-[168px] shrink-0">
+          {/* La marca es para la animación de abrir desde la estantería: ahí
+              es donde tiene que aterrizar el libro que sale volando. */}
+          <div className="w-[168px] shrink-0" data-portada-ficha>
             <Cover
               url={libro.cover_url}
               title={libro.title}

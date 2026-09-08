@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useState } from 'react'
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { useAuth } from '../../platform/auth'
 import { api } from '../../platform/api'
@@ -12,6 +12,7 @@ import {
 import HojaFiltros from './HojaFiltros'
 import AnadirLibro from './AnadirLibro'
 import Lomos from './Lomos'
+import VueloDelLibro from './VueloDelLibro'
 import { CajaSeccion, TituloSeccion, huecoEntreSecciones, leerSeparacion } from './separacion'
 import { useHoja } from './HojaInferior'
 import { useCapa } from '../../platform/capas'
@@ -138,9 +139,26 @@ export default function Luniteca() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shelf])
 
-  const abrirLibro = useCallback((entrada) => ficha.abrir(entrada), [])
+  // Abrir un libro desde la estantería tiene su propia animación: el lomo sale
+  // de la balda, gira y se pone de cara, y la ficha se descubre justo debajo de
+  // esa portada (ver VueloDelLibro). Desde las otras dos vistas, y para quien
+  // pide menos animación, la ficha sube como siempre.
+  const [vuelo, setVuelo] = useState(null)
+  const abrirLibro = useCallback((entrada, nodo) => {
+    const menosMovimiento = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    if (nodo && !menosMovimiento) setVuelo({ id: entrada.id, nodo, destino: null, aterrizado: false })
+    ficha.abrir(entrada)
+  }, [])
 
-  const cerrarFicha = ficha.cerrar
+  // La ficha se monta invisible pero ya en su sitio, así que aquí se puede
+  // medir dónde cae su portada: ese es el destino del vuelo.
+  useLayoutEffect(() => {
+    if (!vuelo || vuelo.destino) return
+    const marca = document.querySelector('[data-portada-ficha]')
+    if (marca) setVuelo(v => (v && !v.destino ? { ...v, destino: marca.getBoundingClientRect() } : v))
+  })
+
+  const cerrarFicha = useCallback(() => { setVuelo(null); ficha.cerrar() }, [ficha.cerrar])
 
   const libroAnadido = useCallback((entrada) => {
     setShelf(prev => (prev || []).some(x => x.id === entrada.id) ? prev : [...(prev || []), entrada])
@@ -261,7 +279,7 @@ export default function Luniteca() {
                     />
                     <Plegable abierta={!anosPlegados.has(year)}>
                       <div className="pt-2">
-                        <Coleccion entries={items} vista={vista} onAbrir={abrirLibro} />
+                        <Coleccion entries={items} vista={vista} onAbrir={abrirLibro} volandoId={vuelo?.id} />
                       </div>
                     </Plegable>
                   </div>
@@ -316,9 +334,19 @@ export default function Luniteca() {
             onEliminar={() => eliminarEntrada(abierto.id)}
             onCerrar={cerrarFicha}
             onActualizar={patch => actualizarEntrada(abierto.id, patch)}
+            vuelo={vuelo}
           />
         )}
       </AnimatePresence>
+
+      {vuelo && !vuelo.aterrizado && (
+        <VueloDelLibro
+          lomo={vuelo.nodo}
+          portada={abierto?.book?.cover_url}
+          destino={vuelo.destino}
+          alTerminar={() => setVuelo(v => (v ? { ...v, aterrizado: true } : v))}
+        />
+      )}
     </div>
   )
 }
@@ -534,10 +562,10 @@ const SeccionPlegable = memo(function SeccionPlegable({ variante, label, entries
   )
 })
 
-const Coleccion = memo(function Coleccion({ entries, vista, onAbrir }) {
+const Coleccion = memo(function Coleccion({ entries, vista, onAbrir, volandoId = null }) {
   // Vista de estantería: los libros de canto. Es una vista aparte y aislada —
   // si no acaba de convencer se quita ella sola, sin tocar las otras dos.
-  if (vista === 'lomos') return <Lomos entries={entries} onAbrir={onAbrir} />
+  if (vista === 'lomos') return <Lomos entries={entries} onAbrir={onAbrir} volandoId={volandoId} />
 
   if (vista === 'list') {
     return (

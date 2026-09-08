@@ -20,7 +20,15 @@ import { useArrastreParaCerrar } from '../../ui/arrastre'
 // estado.
 const HUECO = 'max(2rem, env(safe-area-inset-top))'
 
-export default function PantallaInferior({ onCerrar, cabecera, children }) {
+export default function PantallaInferior({ onCerrar, cabecera, children, aparicion = 'subir', visible = true }) {
+  // `aparicion`: 'subir' es la de siempre. 'fundido' es para cuando el libro ya
+  // ha volado hasta aquí desde la estantería: la pantalla no puede subir
+  // también, porque entonces la portada se movería mientras el libro aterriza
+  // sobre ella.
+  const subiendo = aparicion === 'subir'
+  // Con 'fundido' la pantalla ya está en su sitio desde el primer fotograma
+  // aunque no se vea: así se puede medir dónde cae su portada mientras el libro
+  // todavía está volando hacia ella.
   // El gesto de cerrar va solo en el asa. Si estuviera en todo el panel, Motion
   // le pondría touch-action al elemento que contiene el scroll y el contenido
   // no se podría desplazar con el dedo (ver ui/arrastre.js).
@@ -43,10 +51,10 @@ export default function PantallaInferior({ onCerrar, cabecera, children }) {
         data-panel="pantalla"
         className="fixed inset-x-0 bottom-0 z-50 flex flex-col rounded-t-[28px] border-t border-line bg-bg shadow-[0_-12px_40px_-12px_rgba(60,40,20,.35)]"
         style={{ y: arrastre.y, top: HUECO }}
-        initial={{ y: '100%' }}
-        animate={{ y: 0 }}
-        exit={{ y: '100%' }}
-        transition={{ type: 'spring', stiffness: 420, damping: 40 }}
+        initial={subiendo ? { y: '100%' } : { opacity: 0 }}
+        animate={subiendo ? { y: 0 } : { opacity: visible ? 1 : 0 }}
+        exit={subiendo ? { y: '100%' } : { opacity: 0 }}
+        transition={subiendo ? { type: 'spring', stiffness: 420, damping: 40 } : { duration: 0.22 }}
       >
         {/* El asa ya no necesita apartarse de la zona segura: el panel entero
             empieza por debajo de ella. */}
