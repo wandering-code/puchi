@@ -55,10 +55,21 @@ export default function VueloDelLibro({ lomo, portada, destino, alTerminar }) {
     // quita el giro un instante, se mide y se devuelve: pasa dentro del mismo
     // ciclo de layout, así que no se ve.
     const giroPrevio = lomo.style.transform
+    const transicionPrevia = lomo.style.transition
     const torcido = Number(/rotate\((-?[\d.]+)deg\)/.exec(giroPrevio)?.[1] || 0)
+    // La transición hay que apagarla ANTES de quitar el giro: el lomo de la
+    // balda anima su transform (300ms), así que al quitárselo no se endereza al
+    // instante y lo que se medía era el libro todavía torcido. De ahí salía una
+    // caja más ancha que el lomo —hasta 10px en uno de 29— y ese sobrante se
+    // veía como un hueco entre el lomo y la tapa.
+    lomo.style.transition = 'none'
     lomo.style.transform = 'none'
+    // El tamaño, mejor de offsetWidth/Height: no lo tocan las transformaciones.
+    const ancho = lomo.offsetWidth
+    const alto = lomo.offsetHeight
     const r = lomo.getBoundingClientRect()
     lomo.style.transform = giroPrevio
+    lomo.style.transition = transicionPrevia
     const clon = lomo.cloneNode(true)
     // El clon va derecho: el giro de la balda lo pone (y lo quita) la capa que
     // endereza, con el mismo punto de apoyo que usa la estantería.
@@ -80,7 +91,7 @@ export default function VueloDelLibro({ lomo, portada, destino, alTerminar }) {
     // plana que crece.
     clon.classList.remove('invisible')
     clon.style.visibility = 'visible'
-    setCaja({ left: r.left, right: r.right, top: r.top, ancho: r.width, alto: r.height, torcido, clon })
+    setCaja({ left: r.left, right: r.left + ancho, top: r.top, ancho, alto, torcido, clon })
   }, [lomo, destino])
 
   // La geometría del libro, que tiene su intríngulis y se ha llegado a ella
