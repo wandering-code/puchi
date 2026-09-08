@@ -65,7 +65,11 @@ export default function VueloDelLibro({ lomo, portada, destino, alTerminar }) {
   // con el grosor que tenía en la balda.
   const anchoTapa = caja ? caja.alto * (2 / 3) : 0
   const escala = caja ? destino.height / caja.alto : 1
-  const izquierda = caja ? caja.right - anchoTapa : 0
+  // La bisagra es el canto IZQUIERDO del lomo, que es donde va unida la tapa
+  // en un libro nuestro: abierto, el lomo queda a la izquierda de la portada.
+  // Con la bisagra en el canto derecho —que fue el primer montaje— el libro se
+  // abría al revés, con el lomo a la derecha.
+  const izquierda = caja ? caja.left : 0
   const x = caja ? destino.left - izquierda : 0
   const y = caja ? destino.top - caja.top : 0
 
@@ -128,25 +132,25 @@ export default function VueloDelLibro({ lomo, portada, destino, alTerminar }) {
           <div
             ref={libro}
             className="relative h-full w-full"
-            style={{ transformStyle: 'preserve-3d', transformOrigin: '100% 50%' }}
+            style={{ transformStyle: 'preserve-3d', transformOrigin: '0% 50%' }}
           >
             {/* La tapa, en el plano del objeto: parte de la bisagra hacia atrás */}
             <div
               className="absolute inset-0 overflow-hidden rounded-l-[2px] rounded-r-md bg-surface-2 shadow-[0_10px_30px_-8px_rgba(60,40,20,.5)]"
-              style={{ transformOrigin: '100% 50%', transform: 'rotateY(90deg)', backfaceVisibility: 'hidden' }}
+              style={{ transformOrigin: '0% 50%', transform: 'rotateY(90deg)', backfaceVisibility: 'hidden' }}
             >
               {portada
                 ? <img src={portada} alt="" className="h-full w-full object-cover" />
                 : <span className="block h-full w-full bg-surface-2" />}
               {/* El canto de la tapa por la bisagra, en sombra */}
-              <span className="pointer-events-none absolute inset-y-0 right-0 w-[4px] bg-gradient-to-l from-black/35 to-transparent" />
+              <span className="pointer-events-none absolute inset-y-0 left-0 w-[4px] bg-gradient-to-r from-black/35 to-transparent" />
             </div>
 
             {/* El lomo, clonado del de la balda: es la cara que mira al frente
                 cuando el libro está en la estantería. */}
             <div
               className="absolute top-0 overflow-hidden"
-              style={{ right: 0, width: grosor, height: '100%', borderRadius: 4, backfaceVisibility: 'hidden' }}
+              style={{ left: 0, width: grosor, height: '100%', borderRadius: 4, backfaceVisibility: 'hidden' }}
             >
               <span ref={nodo => { if (nodo && !nodo.firstChild) nodo.appendChild(caja.clon) }} className="block h-full w-full" />
             </div>
