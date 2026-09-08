@@ -120,17 +120,57 @@ export default function VueloDelLibro({ lomo, portada, destino, alTerminar }) {
 
   useLayoutEffect(() => {
     if (!caja || !viaje.current || !libro.current) return
-    // Sale de la balda y solo entonces vuela: el primer tramo lo pasa en su
-    // sitio, despegándose. Sin él, el libro aparecía ya en el aire, porque en
-    // el primer 20% del vuelo se hacía más de medio camino de lado.
-    const vuelo = viaje.current.animate([
-      { transform: 'translate(0px, 0px) scale(1)' },
-      { transform: `translate(0px, -7px) scale(1.02)`, offset: 0.1 },
-      { transform: `translate(${x * 0.55}px, ${y * 0.12 - 22}px) scale(${1 + (escala - 1) * 0.3})`, offset: 0.3 },
-      { transform: `translate(${x * 0.94}px, ${y * 0.3}px) scale(${1 + (escala - 1) * 0.5})`, offset: 0.55 },
-      { transform: `translate(${x}px, ${y * 0.55}px) scale(${1 + (escala - 1) * 0.66})`, offset: 0.86 },
-      { transform: `translate(${x}px, ${y}px) scale(${escala})` },
-    ], { duration: DURACION, easing: CURVA, fill: 'forwards' })
+    // El libro se mueve por su CENTRO VISIBLE, no por su esquina. Al abrirse
+    // sobre la bisagra el bulto crece hacia la derecha, así que llevando la
+    // esquina en línea recta lo que se ve es un vaivén: primero se va de lado y
+    // luego vuelve. Sabiendo cuánto ocupa a cada ángulo se compensa, y el
+    // trayecto queda limpio.
+    //
+    // Dónde cae el centro de lo que se ve, a cada ángulo del giro. No se deduce
+    // con senos y cosenos: la perspectiva no reparte de forma lineal —lo que se
+    // acerca se agranda— y con la cuenta teórica el libro seguía haciendo un
+    // vaivén. Se mide poniendo el libro en cada ángulo un instante, antes de
+    // empezar, dentro del mismo ciclo de layout.
+    const medirCentro = (grados) => {
+      libro.current.style.transform = `rotateY(-${grados}deg)`
+      const caras = [...libro.current.children].map(c => c.getBoundingClientRect())
+      const base = viaje.current.getBoundingClientRect()
+      const izq = Math.min(...caras.map(c => c.left))
+      const der = Math.max(...caras.map(c => c.right))
+      return (izq + der) / 2 - base.left
+    }
+    // Los puntos del trayecto van con los mismos tiempos que el giro, y para
+    // cada uno se sabe el ángulo: así la compensación es exacta en cada paso.
+    const centroSalida = { x: caja.left + grosorLomo / 2, y: caja.top + caja.alto / 2 }
+    const centroLlegada = { x: destino.left + destino.width / 2, y: destino.top + destino.height / 2 }
+    // Los pasos del vuelo. Giro y trayecto comparten esta tabla, los mismos
+    // tiempos y la misma curva: si cada uno va por su lado, entre un paso y el
+    // siguiente el ángulo real no es el que se supuso al compensar el centro, y
+    // el libro vuelve a bailar de lado. Por eso hay bastantes puntos.
+    const pasos = [
+      { t: 0,    grados: 0,  crece: 0,    avance: 0,    alto: 0 },
+      { t: 0.08, grados: 3,  crece: 0.04, avance: 0.02, alto: -10 },
+      { t: 0.12, grados: 6,  crece: 0.08, avance: 0.05, alto: -14 },
+      { t: 0.25, grados: 24, crece: 0.22, avance: 0.17, alto: -13 },
+      { t: 0.4,  grados: 46, crece: 0.4,  avance: 0.34, alto: -10 },
+      { t: 0.52, grados: 53, crece: 0.5,  avance: 0.46, alto: -7 },
+      { t: 0.62, grados: 58, crece: 0.6,  avance: 0.57, alto: -4 },
+      { t: 0.72, grados: 74, crece: 0.73, avance: 0.71, alto: -2 },
+      { t: 0.8,  grados: 90, crece: 0.86, avance: 0.85, alto: 0 },
+      { t: 0.9,  grados: 90, crece: 0.94, avance: 0.94, alto: 0 },
+      { t: 1,    grados: 90, crece: 1,    avance: 1,    alto: 0 },
+    ]
+    const centros = pasos.map(paso => medirCentro(paso.grados))
+    libro.current.style.transform = ''
+    const vuelo = viaje.current.animate(pasos.map(({ t, crece, avance, alto }, i) => {
+      const s = 1 + (escala - 1) * crece
+      const cx = centroSalida.x + (centroLlegada.x - centroSalida.x) * avance
+      const cy = centroSalida.y + (centroLlegada.y - centroSalida.y) * avance + alto
+      return {
+        offset: t,
+        transform: `translate(${cx - izquierda - s * centros[i]}px, ${cy - caja.top - s * (caja.alto / 2)}px) scale(${s})`,
+      }
+    }), { duration: DURACION, easing: CURVA_GIRO, fill: 'forwards' })
 
     // El objeto entero gira sobre la bisagra: el lomo se va de perfil y la tapa
     // viene de canto a ponerse de frente, sin que ninguna cara se mueva por su
@@ -150,12 +190,17 @@ export default function VueloDelLibro({ lomo, portada, destino, alTerminar }) {
     ], { duration: DURACION, easing: CURVA, fill: 'forwards' })
 
     const giro = libro.current.animate([
-      { transform: 'rotateX(0deg) rotateY(0deg) translateZ(0px)' },
-      { transform: 'rotateX(-5deg) rotateY(-6deg) translateZ(55px)', offset: GIRO[0] },
-      { transform: 'rotateX(-9deg) rotateY(-46deg) translateZ(95px)', offset: 0.4 },
-      { transform: 'rotateX(-9deg) rotateY(-58deg) translateZ(95px)', offset: 0.62 },
-      { transform: 'rotateX(0deg) rotateY(-90deg) translateZ(30px)', offset: GIRO[1] },
-      { transform: 'rotateX(0deg) rotateY(-90deg) translateZ(0px)' },
+      // Sin translateZ: acercar el libro al observador y devolverlo lo
+      // desplazaba de lado en la proyección —la perspectiva empuja hacia fuera
+      // lo que se acerca—, y eso era el vaivén que se veía en el trayecto. La
+      // sensación de que se acerca ya la da el tamaño, que crece durante todo
+      // el vuelo.
+      { transform: 'rotateX(0deg) rotateY(0deg)' },
+      { transform: 'rotateX(-5deg) rotateY(-6deg)', offset: GIRO[0] },
+      { transform: 'rotateX(-9deg) rotateY(-46deg)', offset: 0.4 },
+      { transform: 'rotateX(-9deg) rotateY(-58deg)', offset: 0.62 },
+      { transform: 'rotateX(0deg) rotateY(-90deg)', offset: GIRO[1] },
+      { transform: 'rotateX(0deg) rotateY(-90deg)' },
     ], { duration: DURACION, easing: CURVA_GIRO, fill: 'forwards' })
 
     vuelo.onfinish = () => alTerminar?.()
