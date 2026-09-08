@@ -97,11 +97,11 @@ export default function VueloDelLibro({ lomo, portada, destino, alTerminar }) {
     // tiempo ni a verse.
     const giro = libro.current.animate([
       { transform: 'rotateX(0deg) rotateY(0deg) translateZ(0px)' },
-      { transform: 'rotateX(-5deg) rotateY(-6deg) translateZ(55px)', offset: GIRO[0] },
-      { transform: 'rotateX(-9deg) rotateY(-46deg) translateZ(95px)', offset: 0.4 },
-      { transform: 'rotateX(-9deg) rotateY(-58deg) translateZ(95px)', offset: 0.62 },
-      { transform: 'rotateX(0deg) rotateY(-90deg) translateZ(30px)', offset: GIRO[1] },
-      { transform: 'rotateX(0deg) rotateY(-90deg) translateZ(0px)' },
+      { transform: 'rotateX(-5deg) rotateY(6deg) translateZ(55px)', offset: GIRO[0] },
+      { transform: 'rotateX(-9deg) rotateY(46deg) translateZ(95px)', offset: 0.4 },
+      { transform: 'rotateX(-9deg) rotateY(58deg) translateZ(95px)', offset: 0.62 },
+      { transform: 'rotateX(0deg) rotateY(90deg) translateZ(30px)', offset: GIRO[1] },
+      { transform: 'rotateX(0deg) rotateY(90deg) translateZ(0px)' },
     ], { duration: DURACION, easing: CURVA_GIRO, fill: 'forwards' })
 
     vuelo.onfinish = () => alTerminar?.()
@@ -137,7 +137,11 @@ export default function VueloDelLibro({ lomo, portada, destino, alTerminar }) {
             {/* La tapa, en el plano del objeto: parte de la bisagra hacia atrás */}
             <div
               className="absolute inset-0 overflow-hidden rounded-l-[2px] rounded-r-md bg-surface-2 shadow-[0_10px_30px_-8px_rgba(60,40,20,.5)]"
-              style={{ transformOrigin: '0% 50%', transform: 'rotateY(90deg)', backfaceVisibility: 'hidden' }}
+              // Plegada hacia el observador y no hacia el fondo. Es lo que
+              // hace que, al girar, sea EL LOMO el que se va hacia atrás y la
+              // tapa la que viene: al revés el lomo salía hacia el usuario y el
+              // libro parecía hueco, con la portada colgada del canto de atrás.
+              style={{ transformOrigin: '0% 50%', transform: 'rotateY(-90deg)', backfaceVisibility: 'hidden' }}
             >
               {portada
                 ? <img src={portada} alt="" className="h-full w-full object-cover" />
