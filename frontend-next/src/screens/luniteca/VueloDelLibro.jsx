@@ -28,15 +28,22 @@ import { createPortal } from 'react-dom'
 // este portal Motion resolvía la animación de golpe, dejando el elemento en su
 // sitio final sin llegar a disparar ni el evento de arranque.
 
-const DURACION = 700
+const DURACION = 980
 const CURVA = 'cubic-bezier(.32,.72,.24,1)'
 // Cuándo se cierra el lomo y cuándo se abre la portada, en tanto por uno de la
 // animación. Se solapan un pelín para que no haya un fotograma vacío.
-const GIRO = [0.2, 0.68]
+// El giro se lleva la mayor parte del vuelo: es lo que hay que mirar. Con
+// menos, se percibe como un cambio de imagen en vez de como un libro que se
+// abre.
+const GIRO = [0.14, 0.8]
+// El giro tiene su propia curva, más suave que la del viaje: arranca despacio,
+// coge velocidad en medio y se posa. Con la del viaje, que frena al final,
+// el volteo se comía su tiempo al principio.
+const CURVA_GIRO = 'cubic-bezier(.5,.02,.3,1)'
 // Corta: un lomo mide 30-56px, y con una perspectiva larga el escorzo no se
 // aprecia. Va en el espacio del propio elemento, así que la escala del vuelo
 // la acompaña.
-const PERSPECTIVA = 420
+const PERSPECTIVA = 340
 
 export default function VueloDelLibro({ lomo, portada, destino, alTerminar }) {
   const [caja, setCaja] = useState(null)
@@ -68,18 +75,21 @@ export default function VueloDelLibro({ lomo, portada, destino, alTerminar }) {
     // acerca a su sitio.
     const viaje = exterior.current.animate([
       { transform: 'translate(0px, 0px) scale(1)' },
-      { transform: `translate(${x * 0.18}px, ${y * 0.1 - 16}px) scale(${1 + (escala - 1) * 0.3})`, offset: 0.3 },
-      { transform: `translate(${x * 0.62}px, ${y * 0.58}px) scale(${1 + (escala - 1) * 0.72})`, offset: 0.7 },
+      // Se despega deprisa y luego casi se para: mientras gira apenas viaja,
+      // para que el ojo pueda seguir la tapa. El último tramo es el acercarse.
+      { transform: `translate(${x * 0.12}px, ${y * 0.06 - 18}px) scale(${1 + (escala - 1) * 0.26})`, offset: 0.16 },
+      { transform: `translate(${x * 0.3}px, ${y * 0.24}px) scale(${1 + (escala - 1) * 0.45})`, offset: 0.8 },
       { transform: `translate(${x}px, ${y}px) scale(${escala})` },
     ], opciones)
 
     // El lomo gira de 0 a -90° y se apaga: al final está de canto y ya no se ve.
+    const opcionesGiro = { ...opciones, easing: CURVA_GIRO }
     const cerrar = caraLomo.current.animate([
       { transform: `perspective(${PERSPECTIVA}px) rotateY(0deg)`, filter: 'brightness(1)' },
       { transform: `perspective(${PERSPECTIVA}px) rotateY(0deg)`, filter: 'brightness(1)', offset: GIRO[0] },
       { transform: `perspective(${PERSPECTIVA}px) rotateY(-90deg)`, filter: 'brightness(.5)', offset: GIRO[1] },
       { transform: `perspective(${PERSPECTIVA}px) rotateY(-90deg)`, filter: 'brightness(.5)' },
-    ], opciones)
+    ], opcionesGiro)
 
     // La portada va 90° por delante: empieza de canto y acaba de frente.
     const abrir = caraPortada.current.animate([
@@ -87,7 +97,7 @@ export default function VueloDelLibro({ lomo, portada, destino, alTerminar }) {
       { transform: `perspective(${PERSPECTIVA}px) rotateY(90deg)`, offset: GIRO[0] },
       { transform: `perspective(${PERSPECTIVA}px) rotateY(0deg)`, offset: GIRO[1] },
       { transform: `perspective(${PERSPECTIVA}px) rotateY(0deg)` },
-    ], opciones)
+    ], opcionesGiro)
 
     // La luz que barre la tapa mientras gira: una cara que se abre hacia ti
     // recibe la luz de lado, y sin eso el giro se ve de cartón.
@@ -97,7 +107,7 @@ export default function VueloDelLibro({ lomo, portada, destino, alTerminar }) {
       { opacity: 0.35, offset: (GIRO[0] + GIRO[1]) / 2 },
       { opacity: 0, offset: GIRO[1] },
       { opacity: 0 },
-    ], opciones)
+    ], opcionesGiro)
 
     viaje.onfinish = () => alTerminar?.()
     return () => [viaje, cerrar, abrir, luz].forEach(a => a.cancel())
