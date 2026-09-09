@@ -1,5 +1,5 @@
 import { memo, useEffect, useState } from 'react'
-import { totalPages } from './shelf'
+import { claveDeAutor, totalPages } from './shelf'
 import { colorDePortada } from './colorPortada'
 import { alCargarFuentes, anchoDeRenglonPorPunto, anchoPorPunto, fuenteLista } from './medirTexto'
 
@@ -163,14 +163,15 @@ const FANTASIA = {
 // sin acentos. Así "James Islington" e "Islington" —el mismo escritor escrito
 // de dos formas, que pasa según de dónde venga la ficha— caen en la misma
 // colección en vez de salir con dos diseños distintos en la misma balda.
-function claveAutor(autor) {
-  if (!autor) return ''
-  const partes = autor.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').split(/\s+/)
-  return partes[partes.length - 1]
-}
+// La misma cuenta que usa shelf.js para agrupar por autor: si se separan, un
+// autor podría acabar con dos letras distintas.
+const claveAutor = claveDeAutor
 
-function tipografiaDe(entry) {
-  const genero = (entry.book.genre || '').toLowerCase()
+// `generoDelAutor` es el que predomina entre los libros de ese autor. Manda
+// sobre el del libro suelto: el catálogo los trae desiguales (mismo autor,
+// unos como Fantasía y otros como Ficción) y eso rompía la colección.
+function tipografiaDe(entry, generoDelAutor) {
+  const genero = (generoDelAutor || entry.book.genre || '').toLowerCase()
   const h = huella(claveAutor(entry.book.author) || entry.book.title || '')
   if (/ensayo|historia|filosof|poes|clásic|clasic/.test(genero)) return TIPOGRAFIAS[h % 2 === 0 ? 0 : 3]
   if (/cómic|comic|gráfic|grafic|manga|infantil/.test(genero)) return TIPOGRAFIAS[1]
@@ -430,7 +431,7 @@ function repartirTexto({ titulo: tituloEntero, autor, largoUtil, anchoLomo, tipo
 
 function paginasDe(entry) { return totalPages(entry) }
 
-function medidas(entry) {
+function medidas(entry, generoDelAutor) {
   const h = huella(`${entry.book.title}·${entry.book.author || ''}`)
   const paginas = totalPages(entry)
   // El grosor sale de las páginas cuando se saben; si no, del hash, para que
@@ -460,11 +461,11 @@ function medidas(entry) {
   const tamano = Math.round(10 + (ancho - ANCHO_MIN) / (ANCHO_MAX - ANCHO_MIN) * 6)
   return {
     ancho: Math.round(ancho), alto: Math.round(alto), color: colorDeLomo(h),
-    tamano, tipografia: tipografiaDe(entry), torcido, tapaDura,
+    tamano, tipografia: tipografiaDe(entry, generoDelAutor), torcido, tapaDura,
   }
 }
 
-export default function Lomos({ entries, onAbrir, fueraId = null }) {
+export default function Lomos({ entries, onAbrir, fueraId = null, generosDeAutor = null }) {
   // Las medidas del texto dependen de la fuente, y las fuentes propias llegan
   // un momento después. Al llegar, se repinta con las medidas buenas.
   //
@@ -492,7 +493,15 @@ export default function Lomos({ entries, onAbrir, fueraId = null }) {
       }}
     >
       {entries.map(e => (
-        <Lomo key={e.id} entry={e} onAbrir={onAbrir} revision={revision} volando={e.id === fueraId} sinPrisa={seAcabaLaEspera} />
+        <Lomo
+          key={e.id}
+          entry={e}
+          onAbrir={onAbrir}
+          revision={revision}
+          volando={e.id === fueraId}
+          sinPrisa={seAcabaLaEspera}
+          generoDelAutor={generosDeAutor?.get(claveAutor(e.book.author)) || null}
+        />
       ))}
     </div>
   )
@@ -506,8 +515,8 @@ export default function Lomos({ entries, onAbrir, fueraId = null }) {
 // portadas de Open Library: solo hay que pintarlas, no inspeccionarlas.
 const FRANJA = 0.04
 
-const Lomo = memo(function Lomo({ entry, onAbrir, volando = false, sinPrisa = false }) {
-  const { ancho, alto, color, tamano, tipografia, torcido, tapaDura } = medidas(entry)
+const Lomo = memo(function Lomo({ entry, onAbrir, volando = false, sinPrisa = false, generoDelAutor = null }) {
+  const { ancho, alto, color, tamano, tipografia, torcido, tapaDura } = medidas(entry, generoDelAutor)
   const conLetra = sinPrisa || fuenteLista(tipografia)
   const libro = entry.book
   // El color de la portada llega después (hay que cargarla y leerla), así que

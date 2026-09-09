@@ -5,7 +5,7 @@ import { useAuth } from '../../platform/auth'
 import { api } from '../../platform/api'
 import { useLiveUpdates } from '../../platform/live'
 import { usarPreferencia } from '../../platform/preferencias'
-import { EMPTY_FILTERS, agruparEstanteria, opcionesDeFiltro, readingDatesLabel } from './shelf'
+import { EMPTY_FILTERS, agruparEstanteria, generosDeAutores, opcionesDeFiltro, readingDatesLabel } from './shelf'
 import { Cover, NotaBadge, PagesLabel, ProgressBar, StarRating } from './piezas'
 import BookDetail from './BookDetail'
 import {
@@ -179,6 +179,9 @@ export default function Luniteca() {
     [shelf, filters, query, sort],
   )
   const opciones = useMemo(() => opcionesDeFiltro(shelf), [shelf])
+  // Sobre la estantería ENTERA, no sobre lo que se ve: si se calculara por
+  // sección, un autor con libros leídos y pendientes saldría con dos letras.
+  const generosDeAutor = useMemo(() => generosDeAutores(shelf), [shelf])
 
   function cambiarVista(modo) {
     setVista(modo)
@@ -288,7 +291,7 @@ export default function Luniteca() {
                     />
                     <Plegable abierta={!anosPlegados.has(year)}>
                       <div className="pt-2">
-                        <Coleccion entries={items} vista={vista} onAbrir={abrirLibro} fueraId={fueraId} />
+                        <Coleccion entries={items} vista={vista} onAbrir={abrirLibro} fueraId={fueraId} generosDeAutor={generosDeAutor} />
                       </div>
                     </Plegable>
                   </div>
@@ -305,6 +308,7 @@ export default function Luniteca() {
           onAlternar={alternarWant}
           onAbrir={abrirLibro}
           fueraId={fueraId}
+          generosDeAutor={generosDeAutor}
         />
 
         <SeccionPlegable
@@ -314,6 +318,7 @@ export default function Luniteca() {
           onAlternar={alternarDropped}
           onAbrir={abrirLibro}
           fueraId={fueraId}
+          generosDeAutor={generosDeAutor}
         />
       </div>
 
@@ -552,24 +557,24 @@ function BotonPlegarAnos({ todosPlegados, onAlternar }) {
   )
 }
 
-const SeccionPlegable = memo(function SeccionPlegable({ variante, label, entries, vista, plegada, onAlternar, onAbrir, fueraId = null }) {
+const SeccionPlegable = memo(function SeccionPlegable({ variante, label, entries, vista, plegada, onAlternar, onAbrir, fueraId = null, generosDeAutor = null }) {
   if (entries.length === 0) return null
   return (
     <CajaSeccion variante={variante}>
       <TituloSeccion variante={variante} label={label} cuenta={entries.length} plegada={plegada} onAlternar={onAlternar} />
       <Plegable abierta={!plegada}>
         <div className="pt-3">
-          <Coleccion entries={entries} vista={vista} onAbrir={onAbrir} fueraId={fueraId} />
+          <Coleccion entries={entries} vista={vista} onAbrir={onAbrir} fueraId={fueraId} generosDeAutor={generosDeAutor} />
         </div>
       </Plegable>
     </CajaSeccion>
   )
 })
 
-export const Coleccion = memo(function Coleccion({ entries, vista, onAbrir, fueraId = null }) {
+export const Coleccion = memo(function Coleccion({ entries, vista, onAbrir, fueraId = null, generosDeAutor = null }) {
   // Vista de estantería: los libros de canto. Es una vista aparte y aislada —
   // si no acaba de convencer se quita ella sola, sin tocar las otras dos.
-  if (vista === 'lomos') return <Lomos entries={entries} onAbrir={onAbrir} fueraId={fueraId} />
+  if (vista === 'lomos') return <Lomos entries={entries} onAbrir={onAbrir} fueraId={fueraId} generosDeAutor={generosDeAutor} />
 
   if (vista === 'list') {
     return (

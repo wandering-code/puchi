@@ -2,14 +2,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api } from '../../platform/api'
 import { useAuth } from '../../platform/auth'
-import { EMPTY_FILTERS, agruparEstanteria } from '../luniteca/shelf'
+import { EMPTY_FILTERS, agruparEstanteria, copiarAMiEstanteria, generosDeAutores } from '../luniteca/shelf'
 import { Coleccion } from '../luniteca/Luniteca'
 import BookDetail from '../luniteca/BookDetail'
 import { useCapa } from '../../platform/capas'
 import { usarVuelo } from '../luniteca/usarVuelo'
 import { usarPreferencia } from '../../platform/preferencias'
 import { CajaSeccion, TituloSeccion, huecoEntreSecciones, usarSeparacion } from '../luniteca/separacion'
-import { copiarAMiEstanteria } from '../luniteca/shelf'
 import { IconArrowLeft, IconGrid, IconList, IconLomos } from '../../ui/icons'
 
 // La estantería de otra persona, con sus números. Se llega desde Actividad, y
@@ -32,7 +31,7 @@ const VISTAS = [
 
 // Las secciones van sin plegar y sin filtros: en la estantería de otro se
 // entra a mirar, no a organizar.
-function Seccion({ variante, label, entries, vista, onAbrir, fueraId }) {
+function Seccion({ variante, label, entries, vista, onAbrir, fueraId, generosDeAutor }) {
   if (!entries?.length) return null
   // El mismo encabezado que en la tuya, con la variante que tengas elegida en
   // Ajustes: mirar la estantería de otro tiene que sentirse como mirar la
@@ -42,7 +41,7 @@ function Seccion({ variante, label, entries, vista, onAbrir, fueraId }) {
       {/* Aquí no hay barra de herramientas encima, así que el título que se
           queda arriba se pega al borde, no a 56px como en la propia. */}
       <TituloSeccion variante={variante} label={label} cuenta={entries.length} desde="top-0" />
-      <Coleccion entries={entries} vista={vista} onAbrir={onAbrir} fueraId={fueraId} />
+      <Coleccion entries={entries} vista={vista} onAbrir={onAbrir} fueraId={fueraId} generosDeAutor={generosDeAutor} />
     </CajaSeccion>
   )
 }
@@ -61,6 +60,9 @@ export default function Perfil() {
   // también en la tuya, por lo mismo.
   const [vista, setVista] = usarPreferencia('vista', 'grid')
   const [variante] = usarSeparacion()
+  // Igual que en la propia: el género que manda es el del autor, mirando toda
+  // su estantería, para que sus libros compartan letra.
+  const generosDeAutor = useMemo(() => generosDeAutores(shelf || []), [shelf])
   const ficha = useCapa(null)
   const abierto = ficha.abierta
   // Igual que en la Luniteca: la ficha se queda montada con el último libro.
@@ -198,7 +200,7 @@ export default function Perfil() {
 
       {grupos?.visible?.length > 0 && (
         <div className={huecoEntreSecciones(variante)}>
-          <Seccion variante={variante} label="Leyendo" entries={grupos.reading} vista={vista} onAbrir={abrirLibro} fueraId={fueraId} />
+          <Seccion variante={variante} label="Leyendo" entries={grupos.reading} vista={vista} onAbrir={abrirLibro} fueraId={fueraId} generosDeAutor={generosDeAutor} />
           {grupos.readYearGroups.map(({ year, items }) => (
             <Seccion
               key={year}
@@ -208,10 +210,11 @@ export default function Perfil() {
               vista={vista}
               onAbrir={abrirLibro}
               fueraId={fueraId}
+              generosDeAutor={generosDeAutor}
             />
           ))}
-          <Seccion variante={variante} label="Por leer" entries={grupos.want} vista={vista} onAbrir={abrirLibro} fueraId={fueraId} />
-          <Seccion variante={variante} label="Dropeados" entries={grupos.dropped} vista={vista} onAbrir={abrirLibro} fueraId={fueraId} />
+          <Seccion variante={variante} label="Por leer" entries={grupos.want} vista={vista} onAbrir={abrirLibro} fueraId={fueraId} generosDeAutor={generosDeAutor} />
+          <Seccion variante={variante} label="Dropeados" entries={grupos.dropped} vista={vista} onAbrir={abrirLibro} fueraId={fueraId} generosDeAutor={generosDeAutor} />
         </div>
       )}
 

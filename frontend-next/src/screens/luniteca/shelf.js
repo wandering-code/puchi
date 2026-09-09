@@ -222,3 +222,40 @@ export function copiarAMiEstanteria(libro) {
     },
   })
 }
+
+// El género que mejor describe a un autor, mirando TODOS sus libros.
+//
+// La tipografía del lomo se elige por autor para que sus libros parezcan una
+// colección, pero el género tenía la última palabra, y el género lo trae el
+// catálogo libro a libro: "Antes de que los cuelguen" venía como Fantasía y
+// "La mejor venganza", del mismo Abercrombie, como Ficción, así que salían con
+// letras distintas en la misma balda. Ahora el género se decide una vez por
+// autor —el que más se repite entre sus libros— y todos van iguales. De paso,
+// un libro suyo al que le falte el género hereda el de los demás.
+export function generosDeAutores(entries) {
+  const cuentas = new Map()
+  for (const e of entries || []) {
+    const autor = claveDeAutor(e.book?.author)
+    const genero = (e.book?.genre || '').trim()
+    if (!autor || !genero) continue
+    const suyos = cuentas.get(autor) || new Map()
+    suyos.set(genero, (suyos.get(genero) || 0) + 1)
+    cuentas.set(autor, suyos)
+  }
+  const mandan = new Map()
+  for (const [autor, suyos] of cuentas) {
+    // El más repetido; a igualdad, el primero por orden alfabético, que si no
+    // el resultado dependería del orden en que llegaran los libros.
+    const mejor = [...suyos.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]
+    mandan.set(autor, mejor[0])
+  }
+  return mandan
+}
+
+// El apellido, en minúsculas y sin tildes: es la clave con la que se agrupan
+// los libros de un mismo autor (misma cuenta que usa el lomo para elegir letra).
+export function claveDeAutor(autor) {
+  if (!autor) return ''
+  const partes = autor.trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').split(/\s+/)
+  return partes[partes.length - 1]
+}
