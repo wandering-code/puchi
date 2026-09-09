@@ -16,6 +16,7 @@ import AnadirLibro from './AnadirLibro'
 import Lomos from './Lomos'
 import { usarVuelo } from './usarVuelo'
 import { CajaSeccion, TituloSeccion, huecoEntreSecciones, usarSeparacion } from './separacion'
+import { LLEGADA } from '../../ui/curvas'
 import { useHoja } from './HojaInferior'
 import { useCapa } from '../../platform/capas'
 
@@ -419,14 +420,15 @@ function Herramientas({
               key="campo"
               layout
               className="flex min-w-0 flex-1 items-center gap-2 rounded-xl2 border border-line bg-surface px-3"
-              // Crece desde la izquierda (originX 0), que es donde está la
-              // lupa: así parece que el campo sale de ella y no que aparece
-              // una caja nueva centrada.
-              initial={{ opacity: 0, scaleX: 0.6 }}
-              animate={{ opacity: 1, scaleX: 1 }}
-              exit={{ opacity: 0, scaleX: 0.6 }}
-              style={{ originX: 0 }}
-              transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
+              // UN solo movimiento: entra deslizándose desde la lupa, que es
+              // de donde sale. Antes hacía dos cosas a la vez —la caja crecía
+              // por layout y además se estiraba con un scaleX de 0.6 a 1— y se
+              // veía en dos tiempos; el estirado, encima, deformaba el texto
+              // de dentro, que salía aplastado y luego se estiraba.
+              initial={{ opacity: 0, x: -14 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -10 }}
+              transition={LLEGADA}
             >
               <input
                 autoFocus
@@ -456,10 +458,10 @@ function Herramientas({
               key="acciones"
               layout
               className="flex flex-1 items-center gap-1"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+              initial={{ opacity: 0, x: -8 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -8 }}
+              transition={LLEGADA}
             >
               {/* Un solo botón para filtrar y ordenar: los dos viven en la
                   misma hoja, así que dos botones que abren lo mismo solo

@@ -49,6 +49,12 @@ export default function PantallaInferior({ abierta = true, onCerrar, cabecera, c
   // Y al abrirse llega siempre por arriba: como ya no se desmonta al cerrarla,
   // sin esto la siguiente (o la misma otra vez) aparecía por donde se hubiera
   // quedado.
+  // ¿Nace ya abierta? La ficha vive premontada y cerrada, así que no debe
+  // animar nada al montarse (initial={false}); pero "añadir libro" se monta
+  // en el momento de abrirse, y con initial={false} aparecía plantada en su
+  // sitio, sin subir. Cada una necesita un arranque distinto.
+  const nacioAbierta = useRef(abierta)
+
   const [moviendose, setMoviendose] = useState(false)
   const estrenada = useRef(false)
   const colchon = useRef(null)
@@ -87,7 +93,7 @@ export default function PantallaInferior({ abierta = true, onCerrar, cabecera, c
           pero no compite con lo que hay delante. */}
       <motion.div
         className="fixed inset-0 z-50 bg-ink/25 backdrop-blur-[6px]"
-        initial={false}
+        initial={nacioAbierta.current ? { opacity: 0 } : false}
         animate={{ opacity: abierta ? 1 : 0 }}
         transition={{ duration: 0.25 }}
         style={{ pointerEvents: abierta ? 'auto' : 'none' }}
@@ -100,7 +106,7 @@ export default function PantallaInferior({ abierta = true, onCerrar, cabecera, c
         className="fixed inset-x-0 bottom-0 z-50 flex flex-col rounded-t-[28px] border-t border-line bg-bg shadow-[0_-12px_40px_-12px_rgba(60,40,20,.35)]"
         style={{ y: arrastre.y, top: HUECO, pointerEvents: abierta ? 'auto' : 'none', willChange: 'transform' }}
         inert={!abierta}
-        initial={false}
+        initial={nacioAbierta.current ? (subiendo ? { y: '100%' } : { opacity: 0 }) : false}
         // Las dos propiedades se animan SIEMPRE, cada una con su regla. Antes
         // se animaba solo una según el modo, y como el modo cambia al cerrarse
         // (el vuelo acaba y se vuelve a 'subir'), la ficha se aparcaba abajo
