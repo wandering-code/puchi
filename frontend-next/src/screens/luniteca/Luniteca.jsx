@@ -183,6 +183,7 @@ export default function Luniteca() {
   // sección, un autor con libros leídos y pendientes saldría con dos letras.
   const generosDeAutor = useMemo(() => generosDeAutores(shelf), [shelf])
 
+
   function cambiarVista(modo) {
     // En transición, y no a secas: dibujar la estantería de lomos con muchos
     // libros bloquea el hilo, y la pastilla del selector se quedaba sin

@@ -247,6 +247,17 @@ export const SEPARACION_AUTOR = 6
 const REPARTOS = new Map()
 alCargarFuentes(() => REPARTOS.clear())
 
+// Los argumentos con los que se reparte el texto de un libro. Están aquí y no
+// sueltos en el componente porque los usa también el precalentado: si los dos
+// sitios no calculan EXACTAMENTE lo mismo, la clave del guardado no coincide y
+// el trabajo adelantado no sirve de nada.
+export function argumentosDeTexto(entry, generoDelAutor) {
+  const { ancho, alto, tamano, tipografia } = medidas(entry, generoDelAutor)
+  // El aire de arriba y abajo, proporcional al alto del lomo.
+  const margen = Math.max(10, Math.round(alto * 0.09))
+  return { titulo: entry.book.title, autor: entry.book.author, largoUtil: alto - margen * 2, anchoLomo: ancho, tipografia, tamanoIdeal: tamano, margen }
+}
+
 function repartirTextoGuardado(args) {
   const { titulo, autor, largoUtil, anchoLomo, tipografia, tamanoIdeal } = args
   const clave = `${titulo}|${autor}|${largoUtil}|${anchoLomo}|${tamanoIdeal}|${tipografia.familia}|${tipografia.peso}|${tipografia.espaciado}|${tipografia.mayusculas}`
@@ -576,17 +587,8 @@ const Lomo = memo(function Lomo({ entry, onAbrir, volando = false, sinPrisa = fa
   // son un 6% de un lomo bajo pero solo un 4,7% de uno alto, y en los altos el
   // título quedaba pegado al canto de arriba (visto en "La voluntad de
   // muchos"). Un lomo impreso deja bastante más margen que eso.
-  const margen = Math.max(10, Math.round(alto * 0.09))
-  // El largo aprovechable del lomo, quitando ese aire.
-  const largoUtil = alto - margen * 2
-  const texto = repartirTextoGuardado({
-    titulo: libro.title,
-    autor: libro.author,
-    largoUtil,
-    anchoLomo: ancho,
-    tipografia,
-    tamanoIdeal: tamano,
-  })
+  const { margen, ...argumentos } = argumentosDeTexto(entry, generoDelAutor)
+  const texto = repartirTextoGuardado(argumentos)
 
   // Nervios: las bandas en relieve del lomo de una tapa dura. Solo en los
   // libros gruesos, que son los que se encuadernan así.
@@ -620,6 +622,12 @@ const Lomo = memo(function Lomo({ entry, onAbrir, volando = false, sinPrisa = fa
         style={{
           width: ancho,
           height: alto,
+          // El navegador se salta el pintado de los lomos que no se ven, pero
+          // el lomo SIGUE en el DOM: al desplazarse no hay que montar nada, así
+          // que el scroll no da tirones. El tamaño va declarado para que no
+          // haga falta mirar dentro para saber cuánto ocupa.
+          contentVisibility: 'auto',
+          containIntrinsicSize: `${ancho}px ${alto}px`,
           backgroundColor: paleta?.color || color,
           // Tapa dura: lomo redondeado. Rústica: plano.
           borderRadius: tapaDura ? '4px / 6px' : '2px',

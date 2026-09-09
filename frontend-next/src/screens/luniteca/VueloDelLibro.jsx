@@ -91,6 +91,9 @@ export default function VueloDelLibro({ lomo, portada, destino, alTerminar, sent
     // y se ve como una rendija entre las dos caras. La sombra del vuelo la pone
     // la tapa.
     clon.style.boxShadow = 'none'
+    // El lomo de la balda se salta su propio pintado cuando no se ve
+    // (content-visibility); el que vuela tiene que verse siempre.
+    clon.style.contentVisibility = 'visible'
     // El lomo de la balda se marca como invisible en cuanto empieza el vuelo,
     // para que no se vea por duplicado, y el clon se hace DESPUÉS: hay que
     // quitarle esa marca o el clon nace invisible. Era el motivo de que en el
