@@ -82,23 +82,26 @@ export default function Actividad() {
   const enFicha = abierto || ultimaFicha.current
   const [abriendo, setAbriendo] = useState(null)
 
-  // Su registro de ese libro: lo que esa persona tiene puesto (su puntuación,
-  // sus fechas), no el libro en abstracto. Si resulta que ya no lo tiene, se
-  // cae a su perfil, que es de donde salía la información.
-  async function abrirSuLibro(item) {
+  // El registro de ese libro: lo que esa persona tiene puesto (su puntuación,
+  // sus fechas), no el libro en abstracto. Vale igual para el tuyo: tocar una
+  // entrada lleva al libro y a nada más, sea de quien sea. Si el registro ya
+  // no existe, se cae a la estantería, que es de donde salía la información.
+  async function abrirElLibro(item, tuyo) {
     if (!item.book?.id || !item.player?.id) return
+    const aDondeSiFalla = tuyo ? `/luniteca?libro=${item.book.id}` : `/quien/${item.player.id}?libro=${item.book.id}`
     setAbriendo(item.id)
     try {
       const lecturas = await api(`/books/${item.book.id}/lecturas`)
-      const suya = lecturas.find(l => l.player?.id === item.player.id || l.player_id === item.player.id)
-      if (suya) ficha.abrir({ entrada: suya, quien: item.player })
-      else navegar(`/quien/${item.player.id}?libro=${item.book.id}`)
+      const suya = lecturas.find(l => (l.player?.id ?? l.player_id) === item.player.id)
+      if (suya) ficha.abrir({ entrada: suya, quien: tuyo ? null : item.player, tuyo })
+      else navegar(aDondeSiFalla)
     } catch {
-      navegar(`/quien/${item.player.id}?libro=${item.book.id}`)
+      navegar(aDondeSiFalla)
     } finally {
       setAbriendo(null)
     }
   }
+
 
   const cargar = useCallback(async (desde = 0, filtrarPor = filtro) => {
     const params = new URLSearchParams({ limit: String(POR_PAGINA), offset: String(desde) })
@@ -107,6 +110,28 @@ export default function Actividad() {
     setHayMas(datos.has_more)
     setItems(previos => (desde === 0 ? datos.items : [...(previos || []), ...datos.items]))
   }, [filtro])
+
+  // Cambiar algo de tu propio registro sin salir de aquí. Mismo patrón que en
+  // la estantería: se aplica al momento y se revierte si el servidor dice que
+  // no, que para un cambio de estado o media estrella no se espera.
+  const actualizarMiEntrada = useCallback(async (id, patch) => {
+    let anterior = null
+    ficha.reemplazar(prev => {
+      if (prev?.entrada?.id !== id) return prev
+      anterior = prev.entrada
+      return { ...prev, entrada: { ...prev.entrada, ...patch } }
+    })
+    try {
+      const fresca = await api(`/shelf/personal/${id}`, { method: 'PATCH', body: patch })
+      ficha.reemplazar(prev => (prev?.entrada?.id === id ? { ...prev, entrada: fresca } : prev))
+      // La actividad puede haber cambiado con esto (terminar un libro deja
+      // rastro), así que se recarga por detrás.
+      cargar(0).catch(() => {})
+    } catch {
+      if (anterior) ficha.reemplazar(prev => (prev?.entrada?.id === id ? { ...prev, entrada: anterior } : prev))
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cargar])
 
   useEffect(() => {
     let vigente = true
@@ -187,9 +212,7 @@ export default function Actividad() {
                 initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.18 }}
-                onClick={() => (tuyo
-                  ? navegar(`/luniteca?libro=${item.book?.id}`)
-                  : abrirSuLibro(item))}
+                onClick={() => abrirElLibro(item, tuyo)}
                 className={`flex w-full gap-3 rounded-xl2 border p-3 text-left transition-[transform,opacity] active:scale-[0.99] ${abriendo === item.id ? 'opacity-60' : ''} ${tuyo ? 'border-accent/30 bg-accent/5' : 'border-line bg-surface'}`}
               >
                 {/* La entrada entera lleva al libro, se toque donde se toque.
@@ -223,10 +246,11 @@ export default function Actividad() {
           abierta={!!abierto}
           carpetas={[]}
           generos={[]}
-          soloLectura
+          soloLectura={!enFicha.tuyo}
           deQuien={enFicha.quien}
+          onActualizar={enFicha.tuyo ? (patch => actualizarMiEntrada(enFicha.entrada.id, patch)) : undefined}
           onCerrar={ficha.cerrar}
-          onGuardarEnMiEstanteria={async () => {
+          onGuardarEnMiEstanteria={enFicha.tuyo ? undefined : async () => {
             await copiarAMiEstanteria(enFicha.entrada.book)
             // Se cierra SIN tocar el historial y luego se navega: un cierre
             // normal pide un history.back() que llegaría después del pushState

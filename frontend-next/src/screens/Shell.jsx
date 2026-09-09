@@ -53,6 +53,7 @@ export default function Shell() {
     <AnimatePresence mode="wait" initial={false}>
       <motion.div
         key={location.pathname}
+        data-scroll="pantalla"
         className="absolute inset-0 overflow-y-auto overscroll-contain px-5 pb-kb"
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}

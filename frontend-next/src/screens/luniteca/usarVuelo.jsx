@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useState } from 'react'
 import VueloDelLibro from './VueloDelLibro'
 
 // Abrir un libro desde la vista de estantería tiene su propia animación: el
@@ -42,6 +42,20 @@ export function usarVuelo(ficha) {
     const destino = new DOMRect(caja.x, caja.y - falta, caja.width, caja.height)
     setVuelo(v => (v && !v.destino ? { ...v, destino } : v))
   })
+
+  // Mientras el libro está en el aire, la pantalla de debajo no se mueve. El
+  // vuelo sale de un lomo concreto y vuelve a él, así que si se desplaza la
+  // estantería a media animación el libro aterriza donde ya no hay nada. Se
+  // corta el gesto (touch-action), no el overflow: cambiar el overflow de un
+  // contenedor con scroll puede saltar su posición, y eso se vería peor.
+  useEffect(() => {
+    if (!vuelo) return
+    const zona = document.querySelector('[data-scroll="pantalla"]')
+    if (!zona) return
+    const previo = zona.style.touchAction
+    zona.style.touchAction = 'none'
+    return () => { zona.style.touchAction = previo }
+  }, [!!vuelo])
 
   const cerrarFicha = useCallback(() => {
     setVuelo(v => (v && v.aterrizado ? { ...v, sentido: 'vuelta', aterrizado: false } : null))

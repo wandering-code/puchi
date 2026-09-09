@@ -60,7 +60,11 @@ export default function BookDetail({
           >
             <IconArrowLeft className="h-5 w-5" />
           </motion.button>
-          {!editando && !soloLectura && (
+          {/* El lápiz solo si hay con qué guardar: desde la actividad se abre
+              tu propio registro para tocar estado, fechas o nota, pero los
+              datos del LIBRO (que son de todo el club) se editan desde la
+              estantería, que es donde está esa maquinaria. */}
+          {!editando && !soloLectura && onGuardarLibro && (
             <motion.button
               onClick={() => setEditando(true)}
               aria-label="Editar los datos del libro"
