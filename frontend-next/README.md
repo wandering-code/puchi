@@ -272,6 +272,54 @@ Con Playwright, CPU a 1/4 y una estantería de 300 libros:
 y comparar "la primera vez" contra "las siguientes" lleva a culpar a quien no es (aquí
 pasó: parecía el grano del fondo y era el montaje).
 
+### Nada se monta dentro del gesto
+
+Todo lo que se abre encima —el menú lateral, las hojas, la ficha de un libro— vive
+montado, apartado de la pantalla, inerte y sin recibir toques, y al abrirse solo se
+mueve. Antes se montaba y desmontaba con `AnimatePresence`, y construirlo caía dentro
+del propio toque.
+
+Lo que costaba, medido en WebKit sobre la build de producción (mediana de la tarea que
+ocupa el toque, ocho aperturas):
+
+| | antes | ahora |
+|---|---|---|
+| abrir el menú lateral | 21 ms | 5 ms |
+| abrir la hoja de filtros | 20 ms | 6 ms |
+| abrir la ficha de un libro | 21 ms | 8 ms |
+
+En frames: el menú y las hojas pasaron de perder uno o dos por apertura a no perder
+ninguno. La ficha aún pierde uno de ~30 ms que no es suyo —abrir el mismo libro cuesta
+igual que abrir otro, y quitarle el velo, el difuminado, la sombra o el tamaño no
+cambia nada—: es el precio de animar un panel así en WebKit.
+
+Tres cosas que costaron tiempo y conviene no repetir:
+
+- **Chromium no sirve para juzgar esto.** Con la CPU sin frenar, Chromium abría la
+  ficha sin perder un solo frame mientras WebKit perdía dos en cada apertura. Wander
+  usa Safari: lo que no se ve en WebKit no está medido.
+- **No era el contenido.** Quitarle a la ficha la mitad de lo que lleva dentro ahorraba
+  2 ms de 22. El gasto está en levantar el armazón, no en llenarlo. Por eso las hojas
+  mantienen montado el armazón pero esperan al primer uso para montar lo de dentro: una
+  ficha lleva cuatro colgando (estado, fechas, carpeta, lecturas) que casi nunca se abren.
+- **Los frames largos sueltos engañan.** Medir "el peor frame de una apertura" tiene
+  tanto ruido (28-67 ms para el mismo código) que hace parecer buenas variantes que no
+  cambian nada. Sirve la mediana de muchas repeticiones, o mejor, el tiempo que ocupa la
+  tarea del toque: se mide poniendo un listener en captura y un `setTimeout(0)` dentro,
+  y es estable a ±2 ms.
+
+Y una consecuencia para los tests: con las capas montadas siempre, `isVisible()` ya no
+significa "abierta" —el panel está en el DOM, solo que fuera de pantalla—. Se comprueba
+con `[role="dialog"]:not([inert])` o mirando dónde cae su caja.
+
+### Estado de este componente al re-renderizar
+
+Que una capa esté abierta es estado de React, y de quien lo tenga cuelga lo que se
+vuelve a renderizar. El `Shell` guardaba el estado del menú y renderizaba también las
+rutas: cada pulsación del menú volvía a renderizar la Luniteca entera, ~85 ms con 120
+libros. Las rutas están ahora en un `useMemo` con la ubicación como única dependencia,
+así que el elemento es el mismo objeto entre renders y React se salta ese subárbol.
+
 ## Desarrollo
 
 ```bash
