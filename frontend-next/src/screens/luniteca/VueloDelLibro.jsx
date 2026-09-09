@@ -167,7 +167,17 @@ export default function VueloDelLibro({ lomo, portada, destino, alTerminar, sent
       { t: 0.9,  grados: 90, crece: 0.94, avance: 0.94, alto: 0 },
       { t: 1,    grados: 90, crece: 1,    avance: 1,    alto: 0 },
     ]
+    // Los centros se miden con el libro DERECHO, aunque salga de la balda
+    // torcido. El contenedor que endereza arrastra su giro al rectángulo que
+    // devuelve el navegador —que es el que envuelve a lo torcido: más ancho y
+    // desplazado—, y con esa medida el libro aterrizaba desviado en proporción
+    // al ángulo: 8,6px en uno de 4°. Caían justo en el canto izquierdo, que es
+    // donde va pintado el lomo insinuado, así que al acoplarse en la ficha ese
+    // canto se recolocaba y parecía un cambio de luz.
+    const giroDeLaBalda = enderezar.current.style.transform
+    enderezar.current.style.transform = 'none'
     const centros = pasos.map(paso => medirCentro(paso.grados))
+    enderezar.current.style.transform = giroDeLaBalda
     libro.current.style.transform = ''
     const vuelo = viaje.current.animate(pasos.map(({ t, crece, avance, alto }, i) => {
       const s = 1 + (escala - 1) * crece
