@@ -32,7 +32,7 @@ const VISTAS = [
 
 // Las secciones van sin plegar y sin filtros: en la estantería de otro se
 // entra a mirar, no a organizar.
-function Seccion({ variante, label, entries, vista, onAbrir, volandoId }) {
+function Seccion({ variante, label, entries, vista, onAbrir, fueraId }) {
   if (!entries?.length) return null
   // El mismo encabezado que en la tuya, con la variante que tengas elegida en
   // Ajustes: mirar la estantería de otro tiene que sentirse como mirar la
@@ -42,7 +42,7 @@ function Seccion({ variante, label, entries, vista, onAbrir, volandoId }) {
       {/* Aquí no hay barra de herramientas encima, así que el título que se
           queda arriba se pega al borde, no a 56px como en la propia. */}
       <TituloSeccion variante={variante} label={label} cuenta={entries.length} desde="top-0" />
-      <Coleccion entries={entries} vista={vista} onAbrir={onAbrir} volandoId={volandoId} />
+      <Coleccion entries={entries} vista={vista} onAbrir={onAbrir} fueraId={fueraId} />
     </CajaSeccion>
   )
 }
@@ -69,7 +69,7 @@ export default function Perfil() {
   const enFicha = abierto || ultimaFicha.current
   // El libro sale de la balda también aquí: con la vista de lomos puesta, que
   // en la estantería de otro se abrieran de golpe cantaba.
-  const { vuelo, abrirLibro, abrirSinVuelo, cerrarFicha, enVuelo, volandoId } = usarVuelo(ficha)
+  const { vuelo, abrirLibro, abrirSinVuelo, cerrarFicha, enVuelo, fueraId } = usarVuelo(ficha)
 
   const idQuien = Number(id)
   const soyYo = player?.id === idQuien
@@ -198,7 +198,7 @@ export default function Perfil() {
 
       {grupos?.visible?.length > 0 && (
         <div className={huecoEntreSecciones(variante)}>
-          <Seccion variante={variante} label="Leyendo" entries={grupos.reading} vista={vista} onAbrir={abrirLibro} volandoId={volandoId} />
+          <Seccion variante={variante} label="Leyendo" entries={grupos.reading} vista={vista} onAbrir={abrirLibro} fueraId={fueraId} />
           {grupos.readYearGroups.map(({ year, items }) => (
             <Seccion
               key={year}
@@ -207,11 +207,11 @@ export default function Perfil() {
               entries={items}
               vista={vista}
               onAbrir={abrirLibro}
-              volandoId={volandoId}
+              fueraId={fueraId}
             />
           ))}
-          <Seccion variante={variante} label="Por leer" entries={grupos.want} vista={vista} onAbrir={abrirLibro} volandoId={volandoId} />
-          <Seccion variante={variante} label="Dropeados" entries={grupos.dropped} vista={vista} onAbrir={abrirLibro} volandoId={volandoId} />
+          <Seccion variante={variante} label="Por leer" entries={grupos.want} vista={vista} onAbrir={abrirLibro} fueraId={fueraId} />
+          <Seccion variante={variante} label="Dropeados" entries={grupos.dropped} vista={vista} onAbrir={abrirLibro} fueraId={fueraId} />
         </div>
       )}
 

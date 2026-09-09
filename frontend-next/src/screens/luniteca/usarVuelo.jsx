@@ -78,5 +78,10 @@ export function usarVuelo(ficha) {
     )
     : null
 
-  return { vuelo, abrirLibro, abrirSinVuelo, cerrarFicha, enVuelo, volandoId: vuelo?.id }
+  // El libro que ahora mismo NO está en la balda: el que vuela y, mientras la
+  // ficha siga abierta, el que se abrió. Se ha sacado de la estantería, no se
+  // ha hecho una copia, y el hueco tiene que notarse.
+  const fueraId = vuelo?.id ?? ficha.abierta?.id ?? null
+
+  return { vuelo, abrirLibro, abrirSinVuelo, cerrarFicha, enVuelo, fueraId }
 }

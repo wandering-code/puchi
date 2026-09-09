@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState } from 'react'
-import { usarPantallaOcupada, usarPantallaQuieta } from '../../ui/quieto'
+import { usarNodoQuieto, usarPantallaOcupada, usarPantallaQuieta } from '../../ui/quieto'
 import { createPortal } from 'react-dom'
 import { motion } from 'motion/react'
 import { useArrastreParaCerrar } from '../../ui/arrastre'
@@ -78,6 +78,7 @@ export default function PantallaInferior({ abierta = true, onCerrar, cabecera, c
   // sin ir más lejos—, que acaba después que ella.
   const ocupada = usarPantallaOcupada()
   const quieta = moviendose || ocupada
+  usarNodoQuieto(cuerpo, quieta)
 
   return createPortal(
     <>
@@ -130,13 +131,7 @@ export default function PantallaInferior({ abierta = true, onCerrar, cabecera, c
           <span className="h-1 w-10 rounded-full bg-line" />
         </div>
 
-        <div
-          ref={cuerpo}
-          // Se corta el gesto, no el overflow: cambiarlo en un contenedor con
-          // scroll puede saltar su posición (mismo motivo que en el vuelo).
-          style={quieta ? { touchAction: 'none' } : undefined}
-          className="flex-1 overflow-y-auto overscroll-contain"
-        >
+        <div ref={cuerpo} className="flex-1 overflow-y-auto overscroll-contain">
           {cabecera}
           {children}
         </div>

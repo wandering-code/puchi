@@ -393,7 +393,7 @@ function medidas(entry) {
   }
 }
 
-export default function Lomos({ entries, onAbrir, volandoId = null }) {
+export default function Lomos({ entries, onAbrir, fueraId = null }) {
   // Las medidas del texto dependen de la fuente, y las fuentes propias llegan
   // un momento después. Al llegar, se repinta con las medidas buenas.
   //
@@ -414,7 +414,7 @@ export default function Lomos({ entries, onAbrir, volandoId = null }) {
       }}
     >
       {entries.map(e => (
-        <Lomo key={e.id} entry={e} onAbrir={onAbrir} revision={revision} volando={e.id === volandoId} />
+        <Lomo key={e.id} entry={e} onAbrir={onAbrir} revision={revision} volando={e.id === fueraId} />
       ))}
     </div>
   )

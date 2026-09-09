@@ -151,7 +151,7 @@ export default function Luniteca() {
   // La animación de abrir un libro desde la vista de lomos vive en su propio
   // hook, porque la comparten esta estantería y la de cualquiera (ver
   // luniteca/usarVuelo).
-  const { vuelo, abrirLibro, abrirSinVuelo, cerrarFicha, enVuelo, volandoId } = usarVuelo(ficha)
+  const { vuelo, abrirLibro, abrirSinVuelo, cerrarFicha, enVuelo, fueraId } = usarVuelo(ficha)
 
   // ?libro=ID abre esa ficha al entrar: es como la actividad te trae a "tu
   // registro" de un libro.
@@ -288,7 +288,7 @@ export default function Luniteca() {
                     />
                     <Plegable abierta={!anosPlegados.has(year)}>
                       <div className="pt-2">
-                        <Coleccion entries={items} vista={vista} onAbrir={abrirLibro} volandoId={volandoId} />
+                        <Coleccion entries={items} vista={vista} onAbrir={abrirLibro} fueraId={fueraId} />
                       </div>
                     </Plegable>
                   </div>
@@ -566,15 +566,15 @@ const SeccionPlegable = memo(function SeccionPlegable({ variante, label, entries
   )
 })
 
-export const Coleccion = memo(function Coleccion({ entries, vista, onAbrir, volandoId = null }) {
+export const Coleccion = memo(function Coleccion({ entries, vista, onAbrir, fueraId = null }) {
   // Vista de estantería: los libros de canto. Es una vista aparte y aislada —
   // si no acaba de convencer se quita ella sola, sin tocar las otras dos.
-  if (vista === 'lomos') return <Lomos entries={entries} onAbrir={onAbrir} volandoId={volandoId} />
+  if (vista === 'lomos') return <Lomos entries={entries} onAbrir={onAbrir} fueraId={fueraId} />
 
   if (vista === 'list') {
     return (
       <div className="divide-y divide-[color:var(--color-line)]">
-        {entries.map(e => <FilaLibro key={e.id} entry={e} onAbrir={onAbrir} />)}
+        {entries.map(e => <FilaLibro key={e.id} entry={e} onAbrir={onAbrir} fuera={e.id === fueraId} />)}
       </div>
     )
   }
@@ -592,7 +592,7 @@ export const Coleccion = memo(function Coleccion({ entries, vista, onAbrir, vola
   // ancho llega justo al siguiente salto de columna.
   return (
     <div className="grid grid-cols-[repeat(auto-fill,minmax(68px,1fr))] gap-3">
-      {entries.map(e => <PortadaLibro key={e.id} entry={e} onAbrir={onAbrir} />)}
+      {entries.map(e => <PortadaLibro key={e.id} entry={e} onAbrir={onAbrir} fuera={e.id === fueraId} />)}
     </div>
   )
 })
@@ -601,7 +601,11 @@ export const Coleccion = memo(function Coleccion({ entries, vista, onAbrir, vola
 // whileTap: con 300 libros en pantalla, 300 componentes de motion cuestan
 // medido 100 ms de bloqueo por cada tecla escrita en el buscador y ~280 ms del
 // cambio de vista.
-const PortadaLibro = memo(function PortadaLibro({ entry, onAbrir }) {
+// `fuera`: este libro está ahora mismo abierto (o volando hacia la ficha), así
+// que su sitio se queda vacío. Se deja el hueco, no se quita de la lista: lo
+// que se ha sacado de la balda es ESTE libro, y al cerrarlo vuelve al mismo
+// sitio. Si desapareciera del todo, los demás se moverían para taparlo.
+const PortadaLibro = memo(function PortadaLibro({ entry, onAbrir, fuera = false }) {
   return (
     /* Sin título debajo: la portada ya dice qué libro es, y quien quiera
        comprobarlo entra en la ficha. De paso, todas las celdas miden
@@ -611,7 +615,7 @@ const PortadaLibro = memo(function PortadaLibro({ entry, onAbrir }) {
     <button
       onClick={() => onAbrir(entry)}
       aria-label={entry.book.title}
-      className="transition-transform duration-150 active:scale-[0.96]"
+      className={`transition-transform duration-150 active:scale-[0.96] ${fuera ? 'invisible' : ''}`}
     >
       <div className="relative">
         <Cover url={entry.book.cover_url} title={entry.book.title} className="shadow-sm" />
@@ -621,7 +625,7 @@ const PortadaLibro = memo(function PortadaLibro({ entry, onAbrir }) {
   )
 })
 
-const FilaLibro = memo(function FilaLibro({ entry, onAbrir }) {
+const FilaLibro = memo(function FilaLibro({ entry, onAbrir, fuera = false }) {
   // Las fechas de lectura, cuando las hay: en la lista hay sitio para ellas y
   // es lo que se viene a mirar cuando se pasa a esta vista. Van en su propia
   // línea y no pegadas al autor, para que un autor largo no se las coma al
@@ -632,7 +636,7 @@ const FilaLibro = memo(function FilaLibro({ entry, onAbrir }) {
   return (
     <button
       onClick={() => onAbrir(entry)}
-      className="flex w-full items-center gap-3 py-2.5 text-left transition-transform duration-150 active:scale-[0.99]"
+      className={`flex w-full items-center gap-3 py-2.5 text-left transition-transform duration-150 active:scale-[0.99] ${fuera ? 'invisible' : ''}`}
     >
       <div className="w-10 shrink-0">
         <Cover url={entry.book.cover_url} />
