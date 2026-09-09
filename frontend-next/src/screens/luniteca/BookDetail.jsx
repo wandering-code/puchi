@@ -199,7 +199,7 @@ export default function BookDetail({
             </Apartado>
           )}
 
-          <OtrasLecturas libroId={libro.id} />
+          <OtrasLecturas libroId={libro.id} exceptoId={deQuien?.id} />
         </div>
         </div>
       )}
@@ -209,7 +209,7 @@ export default function BookDetail({
 
 // Quién más tiene este libro y qué le pareció. Es el puente entre tu
 // estantería y la de los demás: desde aquí se llega a su registro.
-function OtrasLecturas({ libroId }) {
+function OtrasLecturas({ libroId, exceptoId }) {
   const { player } = useAuth()
   const navegar = useNavigate()
   const [otras, setOtras] = useState(null)
@@ -217,10 +217,15 @@ function OtrasLecturas({ libroId }) {
   useEffect(() => {
     let vigente = true
     api(`/books/${libroId}/lecturas`)
-      .then(todas => { if (vigente) setOtras(todas.filter(l => l.player?.id !== player?.id)) })
+      .then(todas => {
+        // Sin la persona no hay nada que enseñar, y tampoco se repite a quien
+        // ya es dueño de la ficha que se está mirando.
+        const utiles = todas.filter(l => l.player && l.player.id !== player?.id && l.player.id !== exceptoId)
+        if (vigente) setOtras(utiles)
+      })
       .catch(() => { if (vigente) setOtras([]) })
     return () => { vigente = false }
-  }, [libroId, player?.id])
+  }, [libroId, player?.id, exceptoId])
 
   if (!otras?.length) return null
 

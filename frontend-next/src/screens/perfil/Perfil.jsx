@@ -7,6 +7,7 @@ import { EMPTY_FILTERS, agruparEstanteria } from '../luniteca/shelf'
 import { Coleccion } from '../luniteca/Luniteca'
 import BookDetail from '../luniteca/BookDetail'
 import { useCapa } from '../../platform/capas'
+import { usarVuelo } from '../luniteca/usarVuelo'
 import { usarPreferencia } from '../../platform/preferencias'
 import { IconArrowLeft, IconGrid, IconList, IconLomos } from '../../ui/icons'
 
@@ -30,7 +31,7 @@ const VISTAS = [
 
 // Las secciones van sin plegar y sin filtros: en la estantería de otro se
 // entra a mirar, no a organizar.
-function Seccion({ label, entries, vista, onAbrir }) {
+function Seccion({ label, entries, vista, onAbrir, volandoId }) {
   if (!entries?.length) return null
   return (
     <section>
@@ -39,7 +40,7 @@ function Seccion({ label, entries, vista, onAbrir }) {
         <span className="text-xs text-ink-mute">{entries.length}</span>
         <span className="h-px flex-1 bg-line" />
       </div>
-      <Coleccion entries={entries} vista={vista} onAbrir={onAbrir} />
+      <Coleccion entries={entries} vista={vista} onAbrir={onAbrir} volandoId={volandoId} />
     </section>
   )
 }
@@ -59,6 +60,9 @@ export default function Perfil() {
   const [vista, setVista] = usarPreferencia('vista', 'grid')
   const ficha = useCapa(null)
   const abierto = ficha.abierta
+  // El libro sale de la balda también aquí: con la vista de lomos puesta, que
+  // en la estantería de otro se abrieran de golpe cantaba.
+  const { vuelo, abrirLibro, abrirSinVuelo, cerrarFicha, enVuelo, volandoId } = usarVuelo(ficha)
 
   const idQuien = Number(id)
   const soyYo = player?.id === idQuien
@@ -105,7 +109,7 @@ export default function Perfil() {
     api(`/books/${libroPedido}/lecturas`)
       .then(lecturas => {
         const suya = lecturas.find(l => l.player_id === idQuien)
-        if (suya) ficha.abrir(suya)
+        if (suya) abrirSinVuelo(suya)
       })
       .catch(() => {})
     setParams(p => { const q = new URLSearchParams(p); q.delete('libro'); return q }, { replace: true })
@@ -117,7 +121,7 @@ export default function Perfil() {
     [shelf],
   )
 
-  const cerrar = useCallback(() => ficha.cerrar(), [ficha.cerrar])
+
 
   if (error) {
     return <div className="py-8"><p className="rounded-xl2 border border-line bg-surface px-4 py-3 text-sm text-danger">{error}</p></div>
@@ -187,18 +191,19 @@ export default function Perfil() {
 
       {grupos?.visible?.length > 0 && (
         <div className="space-y-7">
-          <Seccion label="Leyendo" entries={grupos.reading} vista={vista} onAbrir={ficha.abrir} />
+          <Seccion label="Leyendo" entries={grupos.reading} vista={vista} onAbrir={abrirLibro} volandoId={volandoId} />
           {grupos.readYearGroups.map(({ year, items }) => (
             <Seccion
               key={year}
               label={year === 'sin-fecha' ? 'Leídos, sin fecha' : `Leídos en ${year}`}
               entries={items}
               vista={vista}
-              onAbrir={ficha.abrir}
+              onAbrir={abrirLibro}
+              volandoId={volandoId}
             />
           ))}
-          <Seccion label="Por leer" entries={grupos.want} vista={vista} onAbrir={ficha.abrir} />
-          <Seccion label="Dropeados" entries={grupos.dropped} vista={vista} onAbrir={ficha.abrir} />
+          <Seccion label="Por leer" entries={grupos.want} vista={vista} onAbrir={abrirLibro} volandoId={volandoId} />
+          <Seccion label="Dropeados" entries={grupos.dropped} vista={vista} onAbrir={abrirLibro} volandoId={volandoId} />
         </div>
       )}
 
@@ -208,17 +213,20 @@ export default function Perfil() {
             entry={abierto}
             carpetas={[]}
             generos={[]}
-            onCerrar={cerrar}
+            onCerrar={cerrarFicha}
+            vuelo={vuelo}
             soloLectura
             deQuien={quien}
             onGuardarEnMiEstanteria={async () => {
               await api('/shelf/personal', { method: 'POST', body: { book_id: abierto.book.id, status: 'to_read' } })
-              cerrar()
+              cerrarFicha()
               navegar('/luniteca')
             }}
           />
         )}
       </AnimatePresence>
+
+      {enVuelo}
     </div>
   )
 }

@@ -14,7 +14,7 @@ import {
 import HojaFiltros from './HojaFiltros'
 import AnadirLibro from './AnadirLibro'
 import Lomos from './Lomos'
-import VueloDelLibro from './VueloDelLibro'
+import { usarVuelo } from './usarVuelo'
 import { CajaSeccion, TituloSeccion, huecoEntreSecciones, usarSeparacion } from './separacion'
 import { useHoja } from './HojaInferior'
 import { useCapa } from '../../platform/capas'
@@ -143,37 +143,14 @@ export default function Luniteca() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shelf])
 
-  // Abrir un libro desde la estantería tiene su propia animación: el lomo sale
-  // de la balda, gira y se pone de cara, y la ficha se descubre justo debajo de
-  // esa portada (ver VueloDelLibro). Desde las otras dos vistas, y para quien
-  // pide menos animación, la ficha sube como siempre.
-  const [vuelo, setVuelo] = useState(null)
+  // La animación de abrir un libro desde la vista de lomos vive en su propio
+  // hook, porque la comparten esta estantería y la de cualquiera (ver
+  // luniteca/usarVuelo).
+  const { vuelo, abrirLibro, abrirSinVuelo, cerrarFicha, enVuelo, volandoId } = usarVuelo(ficha)
+
   // ?libro=ID abre esa ficha al entrar: es como la actividad te trae a "tu
-  // registro" de un libro. Se quita de la URL en cuanto se usa, para que al
-  // cerrar la ficha no se vuelva a abrir sola.
+  // registro" de un libro.
   const [params, setParams] = useSearchParams()
-  const abrirLibro = useCallback((entrada, nodo) => {
-    const menosMovimiento = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
-    if (nodo && !menosMovimiento) {
-      setVuelo({ id: entrada.id, nodo, portada: entrada.book?.cover_url, destino: null, aterrizado: false })
-    }
-    ficha.abrir(entrada)
-  }, [])
-
-  // La ficha se monta invisible pero ya en su sitio, así que aquí se puede
-  // medir dónde cae su portada: ese es el destino del vuelo.
-  useLayoutEffect(() => {
-    if (!vuelo || vuelo.destino) return
-    const marca = document.querySelector('[data-portada-ficha]')
-    if (marca) setVuelo(v => (v && !v.destino ? { ...v, destino: marca.getBoundingClientRect() } : v))
-  })
-
-  // Al cerrar, el libro desanda el camino: sale de la ficha, se cierra girando
-  // y vuelve a su hueco de la balda. La ficha se desvanece mientras.
-  const cerrarFicha = useCallback(() => {
-    setVuelo(v => (v && v.aterrizado ? { ...v, sentido: 'vuelta', aterrizado: false } : null))
-    ficha.cerrar()
-  }, [ficha.cerrar])
 
   const libroAnadido = useCallback((entrada) => {
     setShelf(prev => (prev || []).some(x => x.id === entrada.id) ? prev : [...(prev || []), entrada])
@@ -187,7 +164,7 @@ export default function Luniteca() {
     if (!libroPedido || !shelf || yaAbierto.current) return
     yaAbierto.current = true
     const entrada = shelf.find(e => String(e.book?.id) === libroPedido)
-    if (entrada) ficha.abrir(entrada)
+    if (entrada) abrirSinVuelo(entrada)
     setParams(p => { const q = new URLSearchParams(p); q.delete('libro'); return q }, { replace: true })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [libroPedido, shelf])
@@ -306,7 +283,7 @@ export default function Luniteca() {
                     />
                     <Plegable abierta={!anosPlegados.has(year)}>
                       <div className="pt-2">
-                        <Coleccion entries={items} vista={vista} onAbrir={abrirLibro} volandoId={vuelo?.id} />
+                        <Coleccion entries={items} vista={vista} onAbrir={abrirLibro} volandoId={volandoId} />
                       </div>
                     </Plegable>
                   </div>
@@ -366,20 +343,7 @@ export default function Luniteca() {
         )}
       </AnimatePresence>
 
-      {vuelo && !vuelo.aterrizado && (
-        <VueloDelLibro
-          key={vuelo.sentido || 'ida'}
-          lomo={vuelo.nodo}
-          portada={vuelo.portada}
-          destino={vuelo.destino}
-          sentido={vuelo.sentido || 'ida'}
-          alTerminar={() => setVuelo(v => {
-            if (!v) return null
-            // De vuelta no queda nada que enseñar: el lomo ya está en su sitio.
-            return v.sentido === 'vuelta' ? null : { ...v, aterrizado: true }
-          })}
-        />
-      )}
+      {enVuelo}
     </div>
   )
 }
