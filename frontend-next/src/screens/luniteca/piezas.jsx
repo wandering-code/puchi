@@ -190,7 +190,11 @@ export function EditableRating({ rating, onChange, size = 26 }) {
       // touch-action fijo, no solo mientras se edita: si el scroll de la
       // página gana la carrera antes de que se cumpla la espera, el gesto se
       // pierde a medias.
-      className="inline-flex touch-none select-none items-center"
+      // pan-y y no none: se puntúa arrastrando de lado, así que el dedo que
+      // sube o baja tiene que poder desplazar la ficha. Con touch-none, tocar
+      // justo encima de las estrellas dejaba la ficha clavada, y no había forma
+      // de adivinar por qué.
+      className="inline-flex touch-pan-y select-none items-center"
       role="slider"
       aria-label="Puntuación"
       aria-valuemin={0}

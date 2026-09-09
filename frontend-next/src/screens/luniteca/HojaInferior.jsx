@@ -35,6 +35,13 @@ export default function HojaInferior({ abierta, titulo, onCerrar, children, pie 
     if (!abierta) return
     if (cuerpo.current) cuerpo.current.scrollTop = 0
     setColocandose(true)
+    // Red de seguridad, y no un adorno: si el panel ya está donde tiene que
+    // estar, Motion no anima nada y no avisa de que haya terminado, así que
+    // sin esto el gesto se quedaba cortado PARA SIEMPRE. Pasaba justo en la
+    // primera ficha que se abría en cada sesión, que es la que se monta ya
+    // colocada; las siguientes sí animan y se desbloqueaban solas.
+    const suelta = setTimeout(() => setColocandose(false), 600)
+    return () => clearTimeout(suelta)
   }, [abierta])
 
   // El gesto de volver y Escape los gestiona useCapa (platform/capas.js).

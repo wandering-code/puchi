@@ -406,7 +406,11 @@ function EditorProgreso({ entry, onActualizar }) {
       animate={{ scale: editando ? ZOOM_PROGRESO : 1 }}
       transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
       title="Mantén pulsado para ajustar el progreso"
-      className="mx-auto w-full max-w-[300px] touch-none select-none rounded-xl2 border border-line px-3 py-2.5"
+      // Mismo motivo que en la puntuación: la página se ajusta de lado y el
+      // desplazamiento vertical sigue siendo del scroll. Esta barra ocupa 300px
+      // de ancho y una buena franja de alto, así que era la más fácil de tocar
+      // sin querer.
+      className="mx-auto w-full max-w-[300px] touch-pan-y select-none rounded-xl2 border border-line px-3 py-2.5"
     >
       <div className={`mb-1.5 flex justify-between text-xs ${editando ? 'font-bold text-accent' : 'text-ink-dim'}`}>
         <span>Pág. {pagina} de {total}</span>

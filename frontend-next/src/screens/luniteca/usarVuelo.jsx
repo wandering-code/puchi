@@ -54,7 +54,11 @@ export function usarVuelo(ficha) {
     if (!zona) return
     const previo = zona.style.touchAction
     zona.style.touchAction = 'none'
-    return () => { zona.style.touchAction = previo }
+    // Con tope, por si el vuelo no llegara a terminar nunca: dejar la pantalla
+    // sin poder desplazarse es mucho peor que un vuelo raro, y ya pasó con la
+    // ficha (ver PantallaInferior).
+    const suelta = setTimeout(() => { zona.style.touchAction = previo }, 2000)
+    return () => { clearTimeout(suelta); zona.style.touchAction = previo }
   }, [!!vuelo])
 
   const cerrarFicha = useCallback(() => {
