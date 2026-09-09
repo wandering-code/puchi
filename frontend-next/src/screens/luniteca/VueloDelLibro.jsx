@@ -224,7 +224,7 @@ export default function VueloDelLibro({ lomo, portada, destino, alTerminar, sent
     // Tres capas y cada una con un solo trabajo: la fija, la que viaja y la que
     // da la perspectiva. Safari aplana el 3D si la perspectiva y el transform
     // animado caen en el mismo elemento.
-    <div className="pointer-events-none fixed inset-0 z-[70]">
+    <div data-vuelo className="pointer-events-none fixed inset-0 z-[70]">
       <div
         ref={viaje}
         className="absolute"

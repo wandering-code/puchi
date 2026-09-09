@@ -25,12 +25,22 @@ export function usarVuelo(ficha) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ficha.abrir])
 
-  // La ficha se monta invisible pero ya en su sitio, así que aquí se puede
-  // medir dónde cae su portada: ese es el destino del vuelo.
+  // Dónde cae la portada dentro de la ficha: ese es el destino del vuelo.
+  //
+  // La ficha ya no se monta al abrirla —vive montada y aparcada abajo, para no
+  // construirla dentro del toque—, así que al medir puede estar todavía fuera
+  // de la pantalla. Hay que descontarle lo que le falte por colocarse: sin eso
+  // el libro volaba hacia donde está aparcada, es decir, hacia abajo.
   useLayoutEffect(() => {
     if (!vuelo || vuelo.destino) return
     const marca = document.querySelector('[data-portada-ficha]')
-    if (marca) setVuelo(v => (v && !v.destino ? { ...v, destino: marca.getBoundingClientRect() } : v))
+    if (!marca) return
+    const caja = marca.getBoundingClientRect()
+    const panel = document.querySelector('[data-panel="pantalla"]')
+    const enReposo = panel ? parseFloat(getComputedStyle(panel).top) || 0 : 0
+    const falta = panel ? panel.getBoundingClientRect().top - enReposo : 0
+    const destino = new DOMRect(caja.x, caja.y - falta, caja.width, caja.height)
+    setVuelo(v => (v && !v.destino ? { ...v, destino } : v))
   })
 
   const cerrarFicha = useCallback(() => {

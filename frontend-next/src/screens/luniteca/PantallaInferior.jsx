@@ -58,11 +58,29 @@ export default function PantallaInferior({ abierta = true, onCerrar, cabecera, c
         style={{ y: arrastre.y, top: HUECO, pointerEvents: abierta ? 'auto' : 'none', willChange: 'transform' }}
         inert={!abierta}
         initial={false}
-        animate={subiendo ? { y: abierta ? 0 : '100%' } : { opacity: aVista ? 1 : 0 }}
-        // El fundido es largo y empieza algo después de arrancar el vuelo: la
-        // ficha va apareciendo mientras el libro sube, en vez de salir de golpe
-        // cuando aterriza.
-        transition={subiendo ? { type: 'spring', stiffness: 420, damping: 40 } : { duration: 0.34, delay: aVista ? 0.14 : 0 }}
+        // Las dos propiedades se animan SIEMPRE, cada una con su regla. Antes
+        // se animaba solo una según el modo, y como el modo cambia al cerrarse
+        // (el vuelo acaba y se vuelve a 'subir'), la ficha se aparcaba abajo
+        // recuperando la opacidad, y la siguiente que llegaba con vuelo se veía
+        // un fotograma abajo del todo antes de plantarse en su sitio.
+        animate={{ y: abierta ? 0 : '100%', opacity: aVista ? 1 : 0 }}
+        transition={{
+          // Subiendo, el panel llega con su muelle. Con el libro volando no se
+          // mueve: se planta donde toca de un fotograma para otro, todavía
+          // transparente, y lo que se ve es el fundido. Al cerrarse así, se
+          // espera a que el fundido acabe antes de aparcarlo abajo.
+          y: subiendo
+            ? { type: 'spring', stiffness: 420, damping: 40 }
+            : { duration: 0, delay: abierta ? 0 : 0.34 },
+          opacity: subiendo
+            // Subiendo se ve entero todo el rato: aparece al abrir y se apaga
+            // cuando ya ha salido de la pantalla.
+            ? { duration: 0, delay: abierta ? 0 : 0.32 }
+            // El fundido es largo y empieza algo después de arrancar el vuelo:
+            // la ficha va apareciendo mientras el libro sube, en vez de salir
+            // de golpe cuando aterriza.
+            : { duration: 0.34, delay: aVista ? 0.14 : 0 },
+        }}
       >
         {/* El asa ya no necesita apartarse de la zona segura: el panel entero
             empieza por debajo de ella. */}
