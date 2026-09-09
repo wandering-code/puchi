@@ -51,6 +51,67 @@ function aHsl(r, g, b) {
   return { h: h * 360, s: s * 100, l: l * 100 }
 }
 
+// El color en el que está escrito el TÍTULO en la portada, para escribirlo
+// igual en el lomo. Sin leer una sola letra y sin OCR:
+//
+//   1. Se cuantizan los colores en una rejilla gruesa. El grupo más numeroso
+//      es el fondo.
+//   2. De cada grupo se mira cuánto BORDE tiene por superficie. Aquí está la
+//      gracia: una letra es un trazo fino, casi todo borde; un sol, una faja o
+//      un cielo son manchas, casi todo interior. Sin esta cuenta, en una
+//      portada ilustrada salía elegido el sol en vez del título.
+//   3. Gana el que más resalte del fondo teniendo forma de letra.
+//
+// Aun así no sabe qué es una letra: si una portada lleva una filigrana fina y
+// el título en un color plano, se equivocará. Es una aproximación, no una
+// lectura.
+function colorDelTitulo(ctx, ancho, alto) {
+  const { data } = ctx.getImageData(0, 0, ancho, alto)
+  const clave = i => (data[i] >> 5) * 10000 + (data[i + 1] >> 5) * 100 + (data[i + 2] >> 5)
+  const grupos = new Map()
+  for (let y = 0; y < alto; y++) {
+    for (let x = 0; x < ancho; x++) {
+      const i = (y * ancho + x) * 4
+      if (data[i + 3] < 16) continue
+      const k = clave(i)
+      const g = grupos.get(k) || { n: 0, borde: 0, r: 0, g: 0, b: 0 }
+      g.n++; g.r += data[i]; g.g += data[i + 1]; g.b += data[i + 2]
+      // ¿toca algo que no sea de su color? Entonces es borde.
+      const vecinos = [[x - 1, y], [x + 1, y], [x, y - 1], [x, y + 1]]
+      for (const [vx, vy] of vecinos) {
+        if (vx < 0 || vy < 0 || vx >= ancho || vy >= alto) continue
+        if (clave((vy * ancho + vx) * 4) !== k) { g.borde++; break }
+      }
+      grupos.set(k, g)
+    }
+  }
+  const lista = [...grupos.values()]
+    .map(g => ({ n: g.n, filo: g.borde / g.n, r: g.r / g.n, g: g.g / g.n, b: g.b / g.n }))
+  if (lista.length < 2) return null
+  lista.sort((a, b) => b.n - a.n)
+  const total = lista.reduce((suma, g) => suma + g.n, 0)
+  const fondo = lista[0]
+  const luz = c => (0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b) / 255
+
+  let mejor = null
+  for (const g of lista.slice(1)) {
+    const parte = g.n / total
+    // Ni cuatro píxeles sueltos ni media portada.
+    if (parte < 0.004 || parte > 0.30) continue
+    const contraste = Math.abs(luz(g) - luz(fondo))
+    if (contraste < 0.20) continue
+    // Un texto ronda el 0,5 de borde por píxel; una mancha, menos de 0,2.
+    if (g.filo < 0.42) continue
+    const nota = contraste * g.filo
+    if (!mejor || nota > mejor.nota) mejor = { ...g, nota, parte }
+  }
+  if (!mejor) return null
+  return {
+    r: Math.round(mejor.r), g: Math.round(mejor.g), b: Math.round(mejor.b),
+    parte: +mejor.parte.toFixed(3), filo: +mejor.filo.toFixed(2),
+  }
+}
+
 export function colorDePortada(url) {
   if (!url) return Promise.resolve(null)
   if (CACHE_MEMORIA.has(url)) return Promise.resolve(CACHE_MEMORIA.get(url))
@@ -81,6 +142,18 @@ export function colorDePortada(url) {
         ctx.drawImage(img, 0, 0, Math.max(1, Math.round(img.width * 0.14)), img.height, 0, 0, 4, 16)
         const { data } = ctx.getImageData(0, 0, 4, 16)
 
+        // La portada entera, aparte y en pequeño, para buscar el color del
+        // título.
+        const lienzoTitulo = document.createElement('canvas')
+        // 96x144 y no menos: a la mitad los renglones se emborronan, el texto
+        // deja de tener borde propio y la cuenta del filo no distingue nada.
+        lienzoTitulo.width = 96
+        lienzoTitulo.height = 144
+        const ctxTitulo = lienzoTitulo.getContext('2d', { willReadFrequently: true })
+        ctxTitulo.imageSmoothingEnabled = false
+        ctxTitulo.drawImage(img, 0, 0, 96, 144)
+        const tinta = colorDelTitulo(ctxTitulo, 96, 144)
+
         // Se promedia dando más peso a los píxeles con color: si no, cuatro
         // píxeles de margen blanco se llevan por delante el color real de la
         // franja.
@@ -108,7 +181,7 @@ export function colorDePortada(url) {
         // de verdad (la portada estirada), y de ella depende si el título se
         // lee mejor en blanco o en negro. Hay portadas claras — la de "El
         // problema final" es gris azulado — donde el texto blanco se pierde.
-        terminar({ color, luz: Math.round(l) })
+        terminar({ color, luz: Math.round(l), tinta })
       } catch {
         // getImageData con una imagen de otro origen: no se puede leer.
         terminar(null)

@@ -64,6 +64,77 @@ function colorDeLomo(h) {
 // `ancho` es lo que ocupa de largo una letra media, en proporción al tamaño
 // de la fuente: sirve para calcular cuánto va a medir un título antes de
 // pintarlo. Una condensada ocupa mucho menos que una romana.
+// Cuánto se distinguen dos colores (contraste WCAG, de 1 a 21).
+function contraste(a, b) {
+  const canal = v => { const x = v / 255; return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4 }
+  const luz = c => 0.2126 * canal(c[0]) + 0.7152 * canal(c[1]) + 0.0722 * canal(c[2])
+  const la = luz(a), lb = luz(b)
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05)
+}
+
+// El color del texto del lomo cuando se saca de la portada.
+//
+// No se usa tal cual: se le respeta el TONO y se le cambia lo clara que es
+// hasta que se lea sobre el lomo. Un lomo siempre acaba siendo oscuro (el
+// color de la portada se acota para que la balda no parezca un semáforo), así
+// que el rojo de una portada crema, puesto tal cual, quedaba ilegible y se
+// descartaba entero. Aclarándolo se conserva lo que importa —que ese libro es
+// el rojo— y se puede leer, que es justo lo que hace un lomo de verdad.
+function aHslDesde(r, g, b) {
+  const rr = r / 255, gg = g / 255, bb = b / 255
+  const max = Math.max(rr, gg, bb), min = Math.min(rr, gg, bb)
+  const l = (max + min) / 2
+  let h = 0, s = 0
+  if (max !== min) {
+    const d = max - min
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min)
+    if (max === rr) h = ((gg - bb) / d + (gg < bb ? 6 : 0)) / 6
+    else if (max === gg) h = ((bb - rr) / d + 2) / 6
+    else h = ((rr - gg) / d + 4) / 6
+  }
+  return { h: h * 360, s: s * 100, l: l * 100 }
+}
+
+function aRgbDesde(h, s, l) {
+  const c = (1 - Math.abs(2 * (l / 100) - 1)) * (s / 100)
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1))
+  const m = l / 100 - c / 2
+  const tramo = [[c, x, 0], [x, c, 0], [0, c, x], [0, x, c], [x, 0, c], [c, 0, x]][Math.floor(h / 60) % 6]
+  return tramo.map(v => Math.round((v + m) * 255))
+}
+
+function colorLegible(paleta) {
+  const t = paleta?.tinta
+  if (!t) return null
+  const lomo = paleta.color.match(/hsl\((\d+) (\d+)% (\d+)%\)/)
+  if (!lomo) return null
+  const fondo = aRgbDesde(Number(lomo[1]), Number(lomo[2]), Number(lomo[3]))
+
+  const { h, s, l } = aHslDesde(t.r, t.g, t.b)
+  // Un color sin color no aporta nada: el blanco y el negro de siempre ya
+  // llevan su sombra pensada para leerse sobre cualquier lomo.
+  if (s < 12) return null
+
+  // 4.5 es el listón de WCAG para texto normal; el título del lomo va en
+  // negrita y con sombra, así que con 3.4 se lee de sobra.
+  const META = 3.4
+  const vale = ll => contraste(aRgbDesde(h, s, ll), fondo) >= META
+  if (vale(l)) return `rgb(${t.r} ${t.g} ${t.b})`
+  // Se busca la claridad más parecida a la original que sí se lea, mirando
+  // hacia arriba y hacia abajo a la vez: así un rojo oscuro sobre lomo oscuro
+  // acaba en rojo claro, y no en blanco.
+  for (let paso = 2; paso <= 100; paso += 2) {
+    for (const ll of [l + paso, l - paso]) {
+      if (ll < 12 || ll > 94) continue
+      if (vale(ll)) {
+        const [r, g, b] = aRgbDesde(h, Math.min(s + 8, 92), ll)
+        return `rgb(${r} ${g} ${b})`
+      }
+    }
+  }
+  return null
+}
+
 const TIPOGRAFIAS = [
   { familia: "'Libre Baskerville', Georgia, serif", peso: 700, espaciado: '0.01em', mayusculas: false, ancho: 0.56 },
   { familia: "'Archivo Narrow', 'Public Sans', sans-serif", peso: 700, espaciado: '0.06em', mayusculas: true, ancho: 0.50 },
@@ -452,6 +523,11 @@ const Lomo = memo(function Lomo({ entry, onAbrir, volando = false, sinPrisa = fa
   // cubierta clara. Solo se sabe cuando la portada se ha podido leer; con el
   // color de reserva (siempre oscuro) el texto va en blanco.
   const claro = paleta ? paleta.luz >= 58 : false
+  // El título, escrito con la tinta de su propia portada — si se lee. Se
+  // compara con el color del lomo (que también sale de la portada) y solo se
+  // usa cuando hay contraste de sobra; si no, se queda el blanco o el negro de
+  // siempre, que es lo que garantiza que el lomo se pueda leer en la balda.
+  const tintaPropia = colorLegible(paleta)
 
   // El aire de arriba y abajo. Va con el alto del libro, no fijo: 8px sueltos
   // son un 6% de un lomo bajo pero solo un 4,7% de uno alto, y en los altos el
@@ -647,6 +723,9 @@ const Lomo = memo(function Lomo({ entry, onAbrir, volando = false, sinPrisa = fa
             data-largo={Math.round(texto.largoTitulo)}
             className={`shrink-0 ${claro ? 'text-[#241f19] drop-shadow-[0_1px_1px_rgba(255,255,255,.5)]' : 'text-white drop-shadow-[0_1px_2px_rgba(0,0,0,.55)]'}`}
             style={{
+              // El color de la portada, si lo hay y se lee; si no, manda la
+              // clase (el blanco o el negro de siempre).
+              ...(tintaPropia ? { color: tintaPropia } : null),
               fontFamily: tipografia.familia,
               fontWeight: tipografia.peso,
               letterSpacing: tipografia.espaciado,
