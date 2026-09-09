@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { motion } from 'motion/react'
 import { IconX } from '../../ui/icons'
@@ -26,6 +26,17 @@ export default function HojaInferior({ abierta, titulo, onCerrar, children, pie 
   const usada = useRef(false)
   if (abierta) usada.current = true
 
+  // Igual que la pantalla completa: al abrirse vuelve arriba y no se deja
+  // desplazar hasta que ha terminado de subir. Como tampoco se desmonta, si no
+  // se reposiciona reaparece por donde se quedó la vez anterior.
+  const cuerpo = useRef(null)
+  const [colocandose, setColocandose] = useState(false)
+  useLayoutEffect(() => {
+    if (!abierta) return
+    if (cuerpo.current) cuerpo.current.scrollTop = 0
+    setColocandose(true)
+  }, [abierta])
+
   // El gesto de volver y Escape los gestiona useCapa (platform/capas.js).
   return createPortal(
     <>
@@ -51,6 +62,7 @@ export default function HojaInferior({ abierta, titulo, onCerrar, children, pie 
             initial={false}
             animate={{ y: abierta ? 0 : '100%' }}
             transition={{ type: 'spring', stiffness: 420, damping: 40 }}
+            onAnimationComplete={() => setColocandose(false)}
           >
             {/* El asa: indica que se puede arrastrar y es, además, el único
                 sitio desde el que se arrastra. El gesto NO puede vivir en el
@@ -75,7 +87,11 @@ export default function HojaInferior({ abierta, titulo, onCerrar, children, pie 
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto overscroll-contain px-5 pb-4">
+            <div
+              ref={cuerpo}
+              style={colocandose ? { touchAction: 'none' } : undefined}
+              className="flex-1 overflow-y-auto overscroll-contain px-5 pb-4"
+            >
               {usada.current && children}
             </div>
 

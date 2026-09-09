@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { motion } from 'motion/react'
 import { useArrastreParaCerrar } from '../../ui/arrastre'
@@ -37,6 +38,16 @@ export default function PantallaInferior({ abierta = true, onCerrar, cabecera, c
   // le pondría touch-action al elemento que contiene el scroll y el contenido
   // no se podría desplazar con el dedo (ver ui/arrastre.js).
   const arrastre = useArrastreParaCerrar(onCerrar, { umbral: 110 })
+  const cuerpo = useRef(null)
+  // Mientras la ficha se está colocando no se puede desplazar. Además llega
+  // siempre por arriba: como ya no se desmonta al cerrarla, sin esto la
+  // siguiente (o la misma otra vez) aparecía por donde se hubiera quedado.
+  const [colocandose, setColocandose] = useState(false)
+  useLayoutEffect(() => {
+    if (!abierta) return
+    if (cuerpo.current) cuerpo.current.scrollTop = 0
+    setColocandose(true)
+  }, [abierta])
 
   return createPortal(
     <>
@@ -64,6 +75,7 @@ export default function PantallaInferior({ abierta = true, onCerrar, cabecera, c
         // recuperando la opacidad, y la siguiente que llegaba con vuelo se veía
         // un fotograma abajo del todo antes de plantarse en su sitio.
         animate={{ y: abierta ? 0 : '100%', opacity: aVista ? 1 : 0 }}
+        onAnimationComplete={() => setColocandose(false)}
         transition={{
           // Subiendo, el panel llega con su muelle. Con el libro volando no se
           // mueve: se planta donde toca de un fotograma para otro, todavía
@@ -88,7 +100,13 @@ export default function PantallaInferior({ abierta = true, onCerrar, cabecera, c
           <span className="h-1 w-10 rounded-full bg-line" />
         </div>
 
-        <div className="flex-1 overflow-y-auto overscroll-contain">
+        <div
+          ref={cuerpo}
+          // Se corta el gesto, no el overflow: cambiarlo en un contenedor con
+          // scroll puede saltar su posición (mismo motivo que en el vuelo).
+          style={colocandose ? { touchAction: 'none' } : undefined}
+          className="flex-1 overflow-y-auto overscroll-contain"
+        >
           {cabecera}
           {children}
         </div>

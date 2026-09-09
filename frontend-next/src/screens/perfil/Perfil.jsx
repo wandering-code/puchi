@@ -225,13 +225,9 @@ export default function Perfil() {
             vuelo={vuelo}
             soloLectura
             deQuien={quien}
-            onGuardarEnMiEstanteria={async () => {
-              await copiarAMiEstanteria(enFicha.book)
-              // Sin history.back(): el router hace su pushState en este mismo
-              // clic y el back llegaría después, deshaciendo la navegación.
-              ficha.reemplazar(null)
-              navegar('/luniteca')
-            }}
+            // Sin sacarte de su estantería: el botón dice ahí mismo si se ha
+            // añadido o si ya lo tenías (ver BotonGuardarlo en BookDetail).
+            onGuardarEnMiEstanteria={() => copiarAMiEstanteria(enFicha.book)}
         />
       )}
 

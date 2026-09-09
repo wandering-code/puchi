@@ -6,7 +6,7 @@ import { useAuth } from '../../platform/auth'
 import { readingDatesLabel, statusPatch, totalPages } from './shelf'
 import { Chip, Cover, EditableRating, MANTENER_MS, ProgressBar, StarRating, StatusChip } from './piezas'
 import { EditorCarpeta, EditorEstado, EditorFechas, EditorLecturas, Sinopsis } from './editores'
-import { IconArrowLeft, IconPencil } from '../../ui/icons'
+import { IconArrowLeft, IconCheck, IconPencil } from '../../ui/icons'
 import BookEditForm from './BookEditForm'
 import PantallaInferior from './PantallaInferior'
 
@@ -183,13 +183,11 @@ export default function BookDetail({
           )}
 
           {/* Lo que se puede hacer con el libro de otro: quedárselo. */}
+          {/* La key ata el botón al libro: la ficha ya no se desmonta al
+              cerrarla, así que sin ella seguía diciendo "añadido" al abrir el
+              siguiente libro, que no lo estaba. */}
           {soloLectura && onGuardarEnMiEstanteria && (
-            <button
-              onClick={onGuardarEnMiEstanteria}
-              className="mt-7 flex h-12 w-full items-center justify-center rounded-xl2 bg-accent text-[15px] font-semibold text-on-accent transition-transform active:scale-[0.99]"
-            >
-              Añadir a mi estantería
-            </button>
+            <BotonGuardarlo key={libro.id} onGuardar={onGuardarEnMiEstanteria} />
           )}
         </div>
 
@@ -214,6 +212,52 @@ export default function BookDetail({
 
 // Quién más tiene este libro y qué le pareció. Es el puente entre tu
 // estantería y la de los demás: desde aquí se llega a su registro.
+// El botón de llevarte a tu estantería un libro que estás viendo en la de otra
+// persona. Cuenta lo que ha pasado ahí mismo y no te manda a ningún sitio:
+// estabas mirando algo y guardarlo no es motivo para sacarte de donde estabas.
+//
+// El caso de "ya lo tenías" no se adivina antes de pulsar, se aprende del
+// servidor: saberlo de antemano obligaría a cargar tu estantería entera cada
+// vez que te asomas a una ficha ajena, y el backend ya responde 409 con ese
+// mismo significado.
+function BotonGuardarlo({ onGuardar }) {
+  const [estado, setEstado] = useState('nada')   // nada | guardando | hecho | ya | error
+
+  const texto = {
+    nada: 'Añadir a mi estantería',
+    guardando: 'Añadiendo…',
+    hecho: 'Añadido a tu estantería',
+    ya: 'Ya estaba en tu estantería',
+    error: 'No se ha podido añadir. Reintentar',
+  }[estado]
+  const puesto = estado === 'hecho' || estado === 'ya'
+
+  return (
+    <button
+      disabled={estado === 'guardando' || puesto}
+      onClick={async () => {
+        setEstado('guardando')
+        try {
+          await onGuardar()
+          setEstado('hecho')
+        } catch (e) {
+          setEstado(e?.status === 409 ? 'ya' : 'error')
+        }
+      }}
+      className={`mt-7 flex h-12 w-full items-center justify-center gap-2 rounded-xl2 text-[15px] font-semibold transition-[transform,background-color,color] active:scale-[0.99] ${
+        puesto
+          ? 'border border-line bg-surface text-ink-dim'
+          : estado === 'error'
+            ? 'bg-surface-2 text-ink'
+            : 'bg-accent text-on-accent'
+      }`}
+    >
+      {puesto && <IconCheck className="h-[18px] w-[18px] text-accent" />}
+      {texto}
+    </button>
+  )
+}
+
 function OtrasLecturas({ libroId, exceptoId }) {
   const { player } = useAuth()
   const navegar = useNavigate()

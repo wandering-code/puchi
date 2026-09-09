@@ -250,15 +250,9 @@ export default function Actividad() {
           deQuien={enFicha.quien}
           onActualizar={enFicha.tuyo ? (patch => actualizarMiEntrada(enFicha.entrada.id, patch)) : undefined}
           onCerrar={ficha.cerrar}
-          onGuardarEnMiEstanteria={enFicha.tuyo ? undefined : async () => {
-            await copiarAMiEstanteria(enFicha.entrada.book)
-            // Se cierra SIN tocar el historial y luego se navega: un cierre
-            // normal pide un history.back() que llegaría después del pushState
-            // del router y desharía la navegación (el mismo caso del menú
-            // lateral, ver Shell.jsx).
-            ficha.reemplazar(null)
-            navegar('/luniteca')
-          }}
+          // Sin llevarte a ningún sitio: el botón cuenta ahí mismo cómo ha
+          // ido (ver BotonGuardarlo), y tú sigues donde estabas.
+          onGuardarEnMiEstanteria={enFicha.tuyo ? undefined : () => copiarAMiEstanteria(enFicha.entrada.book)}
         />
       )}
 
