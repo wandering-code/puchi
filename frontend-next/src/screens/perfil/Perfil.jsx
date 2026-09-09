@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { AnimatePresence } from 'motion/react'
 import { api } from '../../platform/api'
@@ -7,7 +7,7 @@ import { EMPTY_FILTERS, agruparEstanteria } from '../luniteca/shelf'
 import { Coleccion } from '../luniteca/Luniteca'
 import BookDetail from '../luniteca/BookDetail'
 import { useCapa } from '../../platform/capas'
-import { IconGrid, IconList, IconLomos } from '../../ui/icons'
+import { IconArrowLeft, IconGrid, IconList, IconLomos } from '../../ui/icons'
 
 // La estantería de otra persona, con sus números. Se llega desde Actividad, y
 // es una pantalla propia (no un modal ni una hoja) para que el gesto de volver
@@ -78,13 +78,21 @@ export default function Perfil() {
   }, [idQuien])
 
   // ?libro=ID abre su registro de ese libro en cuanto está la estantería.
+  //
+  // Solo una vez, y por eso el ref: abrir la ficha mete una entrada en el
+  // historial, así que al cerrarla se vuelve a la URL que traía el parámetro y
+  // la ficha se reabría sola —no había manera de volver a su estantería—.
+  // Quitar el parámetro no basta: eso reemplaza la entrada de ahora, no la de
+  // antes, que es a la que se vuelve.
   const libroPedido = params.get('libro')
+  const yaAbierto = useRef(false)
   useEffect(() => {
-    if (!libroPedido || !shelf) return
+    if (!libroPedido || !shelf || yaAbierto.current) return
+    yaAbierto.current = true
     const entrada = shelf.find(e => String(e.book?.id) === libroPedido)
-    if (entrada && !abierto) ficha.abrir(entrada)
-    // Se quita de la URL para que al cerrar la ficha no se vuelva a abrir sola.
+    if (entrada) ficha.abrir(entrada)
     setParams(p => { const q = new URLSearchParams(p); q.delete('libro'); return q }, { replace: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [libroPedido, shelf])
 
   const grupos = useMemo(
@@ -100,6 +108,17 @@ export default function Perfil() {
 
   return (
     <div className="py-6">
+      {/* Volver a donde se venía (normalmente Actividad). Instalada como app no
+          hay barra del navegador que deshaga nada, así que la pantalla tiene
+          que traer su propia salida. */}
+      <button
+        onClick={() => navegar(-1)}
+        aria-label="Volver"
+        className="mb-3 -ml-2 flex h-10 w-10 items-center justify-center rounded-xl2 text-ink-dim transition-colors active:bg-surface-2"
+      >
+        <IconArrowLeft className="h-5 w-5" />
+      </button>
+
       <header className="mb-5 flex items-center gap-3.5">
         <span
           className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full border border-line text-2xl"

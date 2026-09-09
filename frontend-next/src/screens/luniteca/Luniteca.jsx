@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react'
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { AnimatePresence, motion } from 'motion/react'
 import { useAuth } from '../../platform/auth'
@@ -176,11 +176,15 @@ export default function Luniteca() {
     setShelf(prev => (prev || []).some(x => x.id === entrada.id) ? prev : [...(prev || []), entrada])
   }, [])
 
+  // Solo una vez: abrir la ficha mete una entrada en el historial, así que al
+  // cerrarla se vuelve a la URL que traía el parámetro y se reabría sola.
   const libroPedido = params.get('libro')
+  const yaAbierto = useRef(false)
   useEffect(() => {
-    if (!libroPedido || !shelf) return
+    if (!libroPedido || !shelf || yaAbierto.current) return
+    yaAbierto.current = true
     const entrada = shelf.find(e => String(e.book?.id) === libroPedido)
-    if (entrada && !ficha.abierta) ficha.abrir(entrada)
+    if (entrada) ficha.abrir(entrada)
     setParams(p => { const q = new URLSearchParams(p); q.delete('libro'); return q }, { replace: true })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [libroPedido, shelf])
