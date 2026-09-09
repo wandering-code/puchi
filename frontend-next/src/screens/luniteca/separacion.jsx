@@ -64,7 +64,11 @@ export function CajaSeccion({ variante, children }) {
 }
 
 // El título de una sección (o de un año dentro de "Leídos", más pequeño).
-export function TituloSeccion({ variante, label, cuenta, plegada, onAlternar, anidado = false, accion = null }) {
+// `desde`: a qué altura se queda pegado el título. En la estantería propia hay
+// una barra de herramientas fija de 56px y se pega justo debajo; en la de otra
+// persona no la hay, así que se pega arriba del todo. Las clases van completas
+// y no compuestas porque Tailwind solo se queda con las que ve escritas.
+export function TituloSeccion({ variante, label, cuenta, plegada, onAlternar, anidado = false, accion = null, desde = 'top-14' }) {
   const contenido = <Contenido variante={variante} label={label} cuenta={cuenta} plegada={plegada} hayChevron={!!onAlternar} anidado={anidado} />
 
   // Los títulos que se quedan pegados bajo la barra de herramientas (56px)
@@ -83,13 +87,13 @@ export function TituloSeccion({ variante, label, cuenta, plegada, onAlternar, an
   const clasePegada = anidado
     ? ''
     : variante === 'pegada'
-      ? 'sticky top-14 z-[5] -mx-5 w-[calc(100%+2.5rem)] border-b border-line bg-bg px-5 py-2.5'
+      ? `sticky ${desde} z-[5] -mx-5 w-[calc(100%+2.5rem)] border-b border-line bg-bg px-5 py-2.5`
       : variante === 'mixto'
         // El ancho va explícito: con -mx-4 y w-full el elemento se queda corto
         // por la derecha (w-full mide el padre, sin contar los márgenes
         // negativos) y por ahí asomaban los libros y el título del año que
         // pasaban por detrás.
-        ? 'sticky top-14 z-[5] -mx-4 -mt-4 w-[calc(100%+2rem)] rounded-t-[inherit] border-b border-line bg-surface px-4 pb-2.5 pt-4'
+        ? `sticky ${desde} z-[5] -mx-4 -mt-4 w-[calc(100%+2rem)] rounded-t-[inherit] border-b border-line bg-surface px-4 pb-2.5 pt-4`
         : ''
 
   // El ancho lo pone clasePegada cuando existe (necesita contar sus márgenes

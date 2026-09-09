@@ -8,6 +8,8 @@ import BookDetail from '../luniteca/BookDetail'
 import { useCapa } from '../../platform/capas'
 import { usarVuelo } from '../luniteca/usarVuelo'
 import { usarPreferencia } from '../../platform/preferencias'
+import { CajaSeccion, TituloSeccion, huecoEntreSecciones, usarSeparacion } from '../luniteca/separacion'
+import { copiarAMiEstanteria } from '../luniteca/shelf'
 import { IconArrowLeft, IconGrid, IconList, IconLomos } from '../../ui/icons'
 
 // La estantería de otra persona, con sus números. Se llega desde Actividad, y
@@ -30,17 +32,18 @@ const VISTAS = [
 
 // Las secciones van sin plegar y sin filtros: en la estantería de otro se
 // entra a mirar, no a organizar.
-function Seccion({ label, entries, vista, onAbrir, volandoId }) {
+function Seccion({ variante, label, entries, vista, onAbrir, volandoId }) {
   if (!entries?.length) return null
+  // El mismo encabezado que en la tuya, con la variante que tengas elegida en
+  // Ajustes: mirar la estantería de otro tiene que sentirse como mirar la
+  // propia, no como otra aplicación.
   return (
-    <section>
-      <div className="mb-3 flex items-center gap-2">
-        <span className="font-display text-lg font-bold tracking-[-0.01em]">{label}</span>
-        <span className="text-xs text-ink-mute">{entries.length}</span>
-        <span className="h-px flex-1 bg-line" />
-      </div>
+    <CajaSeccion variante={variante}>
+      {/* Aquí no hay barra de herramientas encima, así que el título que se
+          queda arriba se pega al borde, no a 56px como en la propia. */}
+      <TituloSeccion variante={variante} label={label} cuenta={entries.length} desde="top-0" />
       <Coleccion entries={entries} vista={vista} onAbrir={onAbrir} volandoId={volandoId} />
-    </section>
+    </CajaSeccion>
   )
 }
 
@@ -57,6 +60,7 @@ export default function Perfil() {
   // estantería, no algo de cada estantería. Y cambiarla aquí te la cambia
   // también en la tuya, por lo mismo.
   const [vista, setVista] = usarPreferencia('vista', 'grid')
+  const [variante] = usarSeparacion()
   const ficha = useCapa(null)
   const abierto = ficha.abierta
   // Igual que en la Luniteca: la ficha se queda montada con el último libro.
@@ -193,11 +197,12 @@ export default function Perfil() {
       )}
 
       {grupos?.visible?.length > 0 && (
-        <div className="space-y-7">
-          <Seccion label="Leyendo" entries={grupos.reading} vista={vista} onAbrir={abrirLibro} volandoId={volandoId} />
+        <div className={huecoEntreSecciones(variante)}>
+          <Seccion variante={variante} label="Leyendo" entries={grupos.reading} vista={vista} onAbrir={abrirLibro} volandoId={volandoId} />
           {grupos.readYearGroups.map(({ year, items }) => (
             <Seccion
               key={year}
+              variante={variante}
               label={year === 'sin-fecha' ? 'Leídos, sin fecha' : `Leídos en ${year}`}
               entries={items}
               vista={vista}
@@ -205,8 +210,8 @@ export default function Perfil() {
               volandoId={volandoId}
             />
           ))}
-          <Seccion label="Por leer" entries={grupos.want} vista={vista} onAbrir={abrirLibro} volandoId={volandoId} />
-          <Seccion label="Dropeados" entries={grupos.dropped} vista={vista} onAbrir={abrirLibro} volandoId={volandoId} />
+          <Seccion variante={variante} label="Por leer" entries={grupos.want} vista={vista} onAbrir={abrirLibro} volandoId={volandoId} />
+          <Seccion variante={variante} label="Dropeados" entries={grupos.dropped} vista={vista} onAbrir={abrirLibro} volandoId={volandoId} />
         </div>
       )}
 
@@ -221,8 +226,10 @@ export default function Perfil() {
             soloLectura
             deQuien={quien}
             onGuardarEnMiEstanteria={async () => {
-              await api('/shelf/personal', { method: 'POST', body: { book_id: enFicha.book.id, status: 'to_read' } })
-              cerrarFicha()
+              await copiarAMiEstanteria(enFicha.book)
+              // Sin history.back(): el router hace su pushState en este mismo
+              // clic y el back llegaría después, deshaciendo la navegación.
+              ficha.reemplazar(null)
               navegar('/luniteca')
             }}
         />

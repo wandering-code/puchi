@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../../platform/api'
@@ -6,6 +6,8 @@ import { useAuth } from '../../platform/auth'
 import { useLiveUpdates } from '../../platform/live'
 import { Cover, StarRating } from '../luniteca/piezas'
 import HojaInferior, { useHoja } from '../luniteca/HojaInferior'
+import BookDetail from '../luniteca/BookDetail'
+import { copiarAMiEstanteria } from '../luniteca/shelf'
 import { IconBooks, IconFilter } from '../../ui/icons'
 
 // Lo que va pasando en las estanterías de todos: quién añade, empieza o
@@ -70,6 +72,33 @@ export default function Actividad() {
   const menu = useHoja(null)
   const setMenu = menu.abrir
   const quienEnMenu = menu.abierta
+  // La ficha del libro de otra persona, abierta desde aquí mismo.
+  const ficha = useHoja(null)
+  const abierto = ficha.abierta
+  // Igual que en la estantería: la ficha se queda montada con lo último que se
+  // abrió, para no volver a construirla en la siguiente (ver PantallaInferior).
+  const ultimaFicha = useRef(null)
+  if (abierto) ultimaFicha.current = abierto
+  const enFicha = abierto || ultimaFicha.current
+  const [abriendo, setAbriendo] = useState(null)
+
+  // Su registro de ese libro: lo que esa persona tiene puesto (su puntuación,
+  // sus fechas), no el libro en abstracto. Si resulta que ya no lo tiene, se
+  // cae a su perfil, que es de donde salía la información.
+  async function abrirSuLibro(item) {
+    if (!item.book?.id || !item.player?.id) return
+    setAbriendo(item.id)
+    try {
+      const lecturas = await api(`/books/${item.book.id}/lecturas`)
+      const suya = lecturas.find(l => l.player?.id === item.player.id || l.player_id === item.player.id)
+      if (suya) ficha.abrir({ entrada: suya, quien: item.player })
+      else navegar(`/quien/${item.player.id}?libro=${item.book.id}`)
+    } catch {
+      navegar(`/quien/${item.player.id}?libro=${item.book.id}`)
+    } finally {
+      setAbriendo(null)
+    }
+  }
 
   const cargar = useCallback(async (desde = 0, filtrarPor = filtro) => {
     const params = new URLSearchParams({ limit: String(POR_PAGINA), offset: String(desde) })
@@ -158,12 +187,16 @@ export default function Actividad() {
                 initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.18 }}
-                onClick={() => navegar(tuyo ? `/luniteca?libro=${item.book?.id}` : `/quien/${item.player?.id}?libro=${item.book?.id}`)}
-                className={`flex w-full gap-3 rounded-xl2 border p-3 text-left transition-transform active:scale-[0.99] ${tuyo ? 'border-accent/30 bg-accent/5' : 'border-line bg-surface'}`}
+                onClick={() => (tuyo
+                  ? navegar(`/luniteca?libro=${item.book?.id}`)
+                  : abrirSuLibro(item))}
+                className={`flex w-full gap-3 rounded-xl2 border p-3 text-left transition-[transform,opacity] active:scale-[0.99] ${abriendo === item.id ? 'opacity-60' : ''} ${tuyo ? 'border-accent/30 bg-accent/5' : 'border-line bg-surface'}`}
               >
-                {/* La entrada entera lleva al libro, se toque donde se toque:
-                    al tuyo si es tuya y si no al de esa persona. Para su
-                    estantería está su cara, arriba. */}
+                {/* La entrada entera lleva al libro, se toque donde se toque.
+                    Si es tuya, a tu registro en tu estantería; si es de otra
+                    persona, a SU registro y nada más: se abre aquí encima sin
+                    llevarte a su estantería, que es un sitio al que se va
+                    queriendo (por su cara, arriba), no de rebote. */}
                 <div className="w-9 shrink-0">
                   <Cover url={item.book?.cover_url} title={item.book?.title} />
                 </div>
@@ -183,6 +216,27 @@ export default function Actividad() {
           })}
         </div>
       </AnimatePresence>
+
+      {enFicha && (
+        <BookDetail
+          entry={enFicha.entrada}
+          abierta={!!abierto}
+          carpetas={[]}
+          generos={[]}
+          soloLectura
+          deQuien={enFicha.quien}
+          onCerrar={ficha.cerrar}
+          onGuardarEnMiEstanteria={async () => {
+            await copiarAMiEstanteria(enFicha.entrada.book)
+            // Se cierra SIN tocar el historial y luego se navega: un cierre
+            // normal pide un history.back() que llegaría después del pushState
+            // del router y desharía la navegación (el mismo caso del menú
+            // lateral, ver Shell.jsx).
+            ficha.reemplazar(null)
+            navegar('/luniteca')
+          }}
+        />
+      )}
 
       <HojaInferior
         abierta={!!quienEnMenu}

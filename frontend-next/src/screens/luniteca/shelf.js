@@ -4,6 +4,8 @@
 // las dos Lunitecas, que escriben en la MISMA base de datos. Lo que sí cambia
 // en esta versión es la presentación, no esto.
 
+import { api } from '../../platform/api'
+
 export const STATUS_LABEL = {
   reading:      'Leyendo',
   rereading:    'Releyendo',
@@ -194,4 +196,29 @@ export function opcionesDeFiltro(shelf) {
     carpetas: unicos(e => e.folder),
     autores: unicos(e => e.book.author),
   }
+}
+
+// Copiar a mi estantería un libro que estoy viendo en la de otra persona (o en
+// la actividad). Va aquí y no suelto en cada pantalla porque el alta tiene su
+// forma: el backend exige `title` aunque se le pase `book_id` —comparte el
+// endpoint con el alta a mano, donde el libro todavía no existe—, y el estado
+// de "pendiente" se llama `want_to_read`, no `to_read`. Con las dos cosas mal,
+// que era como estaba, la petición se iba en un 422 y el botón no hacía nada.
+export function copiarAMiEstanteria(libro) {
+  return api('/shelf/personal', {
+    method: 'POST',
+    body: {
+      book_id: libro.id,
+      title: libro.title,
+      author: libro.author,
+      cover_url: libro.cover_url,
+      num_pages: libro.num_pages,
+      genre: libro.genre,
+      year: libro.year,
+      synopsis: libro.synopsis,
+      status: 'want_to_read',
+      // Para distinguir en los datos lo copiado de lo buscado por su cuenta.
+      origin: 'copied',
+    },
+  })
 }
