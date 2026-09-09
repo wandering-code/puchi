@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { AnimatePresence } from 'motion/react'
 import { api } from '../../platform/api'
 import { useAuth } from '../../platform/auth'
 import { EMPTY_FILTERS, agruparEstanteria } from '../luniteca/shelf'
@@ -60,6 +59,10 @@ export default function Perfil() {
   const [vista, setVista] = usarPreferencia('vista', 'grid')
   const ficha = useCapa(null)
   const abierto = ficha.abierta
+  // Igual que en la Luniteca: la ficha se queda montada con el último libro.
+  const ultimaFicha = useRef(null)
+  if (abierto) ultimaFicha.current = abierto
+  const enFicha = abierto || ultimaFicha.current
   // El libro sale de la balda también aquí: con la vista de lomos puesta, que
   // en la estantería de otro se abrieran de golpe cantaba.
   const { vuelo, abrirLibro, abrirSinVuelo, cerrarFicha, enVuelo, volandoId } = usarVuelo(ficha)
@@ -207,10 +210,10 @@ export default function Perfil() {
         </div>
       )}
 
-      <AnimatePresence>
-        {abierto && (
-          <BookDetail
-            entry={abierto}
+      {enFicha && (
+        <BookDetail
+            entry={enFicha}
+            abierta={!!abierto}
             carpetas={[]}
             generos={[]}
             onCerrar={cerrarFicha}
@@ -218,13 +221,12 @@ export default function Perfil() {
             soloLectura
             deQuien={quien}
             onGuardarEnMiEstanteria={async () => {
-              await api('/shelf/personal', { method: 'POST', body: { book_id: abierto.book.id, status: 'to_read' } })
+              await api('/shelf/personal', { method: 'POST', body: { book_id: enFicha.book.id, status: 'to_read' } })
               cerrarFicha()
               navegar('/luniteca')
             }}
-          />
-        )}
-      </AnimatePresence>
+        />
+      )}
 
       {enVuelo}
     </div>

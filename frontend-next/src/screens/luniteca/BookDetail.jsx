@@ -20,7 +20,7 @@ import PantallaInferior from './PantallaInferior'
 // de las entradas ajenas), así que aquí no hay nada que esconder: se cambian
 // los editores por su valor a secas y se ofrece guardarse el libro.
 export default function BookDetail({
-  entry, carpetas, generos, onCerrar, onActualizar, onGuardarLibro, onSubirPortada, onEliminar,
+  entry, abierta = true, carpetas, generos, onCerrar, onActualizar, onGuardarLibro, onSubirPortada, onEliminar,
   vuelo = null, soloLectura = false, deQuien = null, onGuardarEnMiEstanteria,
 }) {
   const libro = entry.book
@@ -39,6 +39,7 @@ export default function BookDetail({
 
   return (
     <PantallaInferior
+      abierta={abierta}
       onCerrar={onCerrar}
       // Abierta desde la estantería, la ficha no sube: el libro vuela hasta
       // ella y la ficha se descubre cuando aterriza (ver VueloDelLibro).

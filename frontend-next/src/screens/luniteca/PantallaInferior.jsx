@@ -20,12 +20,16 @@ import { useArrastreParaCerrar } from '../../ui/arrastre'
 // estado.
 const HUECO = 'max(2rem, env(safe-area-inset-top))'
 
-export default function PantallaInferior({ onCerrar, cabecera, children, aparicion = 'subir', visible = true }) {
+export default function PantallaInferior({ abierta = true, onCerrar, cabecera, children, aparicion = 'subir', visible = true }) {
   // `aparicion`: 'subir' es la de siempre. 'fundido' es para cuando el libro ya
   // ha volado hasta aquí desde la estantería: la pantalla no puede subir
   // también, porque entonces la portada se movería mientras el libro aterriza
   // sobre ella.
   const subiendo = aparicion === 'subir'
+  // Igual que HojaInferior y que el menú lateral: el armazón se queda montado
+  // y solo se mueve. Quien la usa la mantiene montada con la última ficha que
+  // se abrió, así que al abrir la siguiente no hay que levantar nada.
+  const aVista = abierta && visible
   // Con 'fundido' la pantalla ya está en su sitio desde el primer fotograma
   // aunque no se vea: así se puede medir dónde cae su portada mientras el libro
   // todavía está volando hacia ella.
@@ -40,24 +44,25 @@ export default function PantallaInferior({ onCerrar, cabecera, children, aparici
           pero no compite con lo que hay delante. */}
       <motion.div
         className="fixed inset-0 z-50 bg-ink/25 backdrop-blur-[6px]"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
+        initial={false}
+        animate={{ opacity: abierta ? 1 : 0 }}
         transition={{ duration: 0.25 }}
+        style={{ pointerEvents: abierta ? 'auto' : 'none' }}
         onClick={() => onCerrar()}
+        aria-hidden
       />
 
       <motion.div
         data-panel="pantalla"
         className="fixed inset-x-0 bottom-0 z-50 flex flex-col rounded-t-[28px] border-t border-line bg-bg shadow-[0_-12px_40px_-12px_rgba(60,40,20,.35)]"
-        style={{ y: arrastre.y, top: HUECO }}
-        initial={subiendo ? { y: '100%' } : { opacity: 0 }}
-        animate={subiendo ? { y: 0 } : { opacity: visible ? 1 : 0 }}
-        exit={subiendo ? { y: '100%' } : { opacity: 0 }}
+        style={{ y: arrastre.y, top: HUECO, pointerEvents: abierta ? 'auto' : 'none', willChange: 'transform' }}
+        inert={!abierta}
+        initial={false}
+        animate={subiendo ? { y: abierta ? 0 : '100%' } : { opacity: aVista ? 1 : 0 }}
         // El fundido es largo y empieza algo después de arrancar el vuelo: la
         // ficha va apareciendo mientras el libro sube, en vez de salir de golpe
         // cuando aterriza.
-        transition={subiendo ? { type: 'spring', stiffness: 420, damping: 40 } : { duration: 0.34, delay: visible ? 0.14 : 0 }}
+        transition={subiendo ? { type: 'spring', stiffness: 420, damping: 40 } : { duration: 0.34, delay: aVista ? 0.14 : 0 }}
       >
         {/* El asa ya no necesita apartarse de la zona segura: el panel entero
             empieza por debajo de ella. */}

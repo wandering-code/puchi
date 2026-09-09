@@ -25,6 +25,11 @@ export default function Luniteca() {
   const [shelf, setShelf] = useState(null)      // null = cargando
   const ficha = useCapa(null)            // la entrada abierta, o null
   const abierto = ficha.abierta
+  // La última ficha que se ha abierto: sigue puesta mientras se cierra y
+  // después, para no volver a construirla en la siguiente apertura.
+  const ultimaFicha = useRef(null)
+  if (abierto) ultimaFicha.current = abierto
+  const enFicha = abierto || ultimaFicha.current
   const [error, setError] = useState(null)
 
   // La vista es de la cuenta, no del navegador: si eliges lomos, los ves aquí
@@ -327,21 +332,23 @@ export default function Luniteca() {
         visibles={grupos.visible.length}
       />
 
-      <AnimatePresence>
-        {abierto && (
-          <BookDetail
-            entry={abierto}
-            carpetas={opciones.carpetas}
-            generos={opciones.generos}
-            onGuardarLibro={(borrador) => guardarLibro(abierto, borrador)}
-            onSubirPortada={(fichero) => subirPortada(abierto.book.id, fichero)}
-            onEliminar={() => eliminarEntrada(abierto.id)}
-            onCerrar={cerrarFicha}
-            onActualizar={patch => actualizarEntrada(abierto.id, patch)}
-            vuelo={vuelo}
-          />
-        )}
-      </AnimatePresence>
+      {/* La ficha no se desmonta al cerrarla, se queda con el último libro y
+          se aparta: volver a abrir otra ya no tiene que levantar el armazón,
+          que es lo que costaba un frame en cada toque (ver PantallaInferior). */}
+      {enFicha && (
+        <BookDetail
+          entry={enFicha}
+          abierta={!!abierto}
+          carpetas={opciones.carpetas}
+          generos={opciones.generos}
+          onGuardarLibro={(borrador) => guardarLibro(enFicha, borrador)}
+          onSubirPortada={(fichero) => subirPortada(enFicha.book.id, fichero)}
+          onEliminar={() => eliminarEntrada(enFicha.id)}
+          onCerrar={cerrarFicha}
+          onActualizar={patch => actualizarEntrada(enFicha.id, patch)}
+          vuelo={vuelo}
+        />
+      )}
 
       {enVuelo}
     </div>
