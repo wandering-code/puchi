@@ -45,11 +45,18 @@ export function useLockBackgroundScroll() {
   }, [])
 }
 
-let lastKb = null
+// Escribir una variable CSS en la raíz invalida el estilo de TODA la página,
+// así que solo se escribe la que de verdad cambia. Sin esta guarda, cada
+// evento del teclado reescribía las tres.
+const ultimos = {}
+function poner(nombre, valor) {
+  if (ultimos[nombre] === valor) return
+  ultimos[nombre] = valor
+  document.documentElement.style.setProperty(nombre, valor)
+}
+
 function setKb(px) {
-  if (px === lastKb) return
-  lastKb = px
-  document.documentElement.style.setProperty('--kb', `${px}px`)
+  poner('--kb', `${px}px`)
 }
 
 // Cuánto tapa el teclado, contado desde el borde inferior de #root. El umbral
@@ -76,10 +83,20 @@ export function usePublishViewportVars() {
     // el containing block de sus descendientes position:fixed. Es 0 fijo —
     // aquí ya no se compensa nada, solo se conserva esa propiedad.
     root.style.transform = 'translateY(0px)'
+    // Al subir el teclado, visualViewport dispara resize y scroll a la vez, y
+    // encima el ResizeObserver de abajo avisa por su cuenta: hasta tres
+    // publicaciones en el mismo fotograma, cada una invalidando el estilo de
+    // la página entera. Se agrupan en una por fotograma.
+    let pedido = false
     function publish() {
-      document.documentElement.style.setProperty('--vvh', `${vv.height}px`)
-      document.documentElement.style.setProperty('--vvtop', `${vv.offsetTop}px`)
-      setKb(measureKb())
+      if (pedido) return
+      pedido = true
+      requestAnimationFrame(() => {
+        pedido = false
+        poner('--vvh', `${vv.height}px`)
+        poner('--vvtop', `${vv.offsetTop}px`)
+        setKb(measureKb())
+      })
     }
     publish()
     vv.addEventListener('resize', publish)
@@ -98,7 +115,11 @@ export function usePublishViewportVars() {
       document.documentElement.style.removeProperty('--vvh')
       document.documentElement.style.removeProperty('--vvtop')
       document.documentElement.style.removeProperty('--kb')
-      lastKb = null
+      // Se olvida lo último escrito, que si no la guarda de "solo si cambia"
+      // creería que sigue puesto lo que se acaba de quitar.
+      delete ultimos['--vvh']
+      delete ultimos['--vvtop']
+      delete ultimos['--kb']
     }
   }, [])
 }

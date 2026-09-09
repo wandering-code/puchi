@@ -428,7 +428,13 @@ function Herramientas({
               initial={{ opacity: 0, x: -14 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -10 }}
-              transition={LLEGADA}
+              // Más corta que el resto de capas a propósito: el campo se
+              // enfoca solo, y en el móvil eso levanta el teclado, que sube
+              // animado y hace que el navegador recalcule medidas mientras
+              // tanto. Si la entrada del campo dura lo mismo que esa subida,
+              // las dos se pisan y se ve a trompicones. Acabando antes, no se
+              // solapan.
+              transition={{ duration: 0.16, ease: [0.32, 0.72, 0, 1] }}
             >
               <input
                 autoFocus
@@ -461,7 +467,7 @@ function Herramientas({
               initial={{ opacity: 0, x: -8 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -8 }}
-              transition={LLEGADA}
+              transition={{ duration: 0.16, ease: [0.32, 0.72, 0, 1] }}
             >
               {/* Un solo botón para filtrar y ordenar: los dos viven en la
                   misma hoja, así que dos botones que abren lo mismo solo
