@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import { usarNodoQuieto, usarPantallaOcupada, usarPantallaQuieta } from '../../ui/quieto'
+import { LLEGADA, SALIDA } from '../../ui/curvas'
 import { createPortal } from 'react-dom'
 import { motion } from 'motion/react'
 import { useArrastreParaCerrar } from '../../ui/arrastre'
@@ -113,7 +114,7 @@ export default function PantallaInferior({ abierta = true, onCerrar, cabecera, c
           // transparente, y lo que se ve es el fundido. Al cerrarse así, se
           // espera a que el fundido acabe antes de aparcarlo abajo.
           y: subiendo
-            ? { type: 'spring', stiffness: 420, damping: 40 }
+            ? (abierta ? LLEGADA : SALIDA)
             : { duration: 0, delay: abierta ? 0 : 0.34 },
           opacity: subiendo
             // Subiendo se ve entero todo el rato: aparece al abrir y se apaga

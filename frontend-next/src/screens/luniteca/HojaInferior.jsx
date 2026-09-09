@@ -4,6 +4,7 @@ import { motion } from 'motion/react'
 import { IconX } from '../../ui/icons'
 import { useCapa } from '../../platform/capas'
 import { useArrastreParaCerrar } from '../../ui/arrastre'
+import { LLEGADA, SALIDA } from '../../ui/curvas'
 
 // La hoja que sube desde abajo, una sola para toda la app: filtros, estado,
 // fechas, carpeta… Todo lo que hay que elegir se pide igual, en el mismo sitio
@@ -68,7 +69,7 @@ export default function HojaInferior({ abierta, titulo, onCerrar, children, pie 
             style={{ y: arrastre.y, pointerEvents: abierta ? 'auto' : 'none', willChange: 'transform' }}
             initial={false}
             animate={{ y: abierta ? 0 : '100%' }}
-            transition={{ type: 'spring', stiffness: 420, damping: 40 }}
+            transition={abierta ? LLEGADA : SALIDA}
             onAnimationComplete={() => setColocandose(false)}
           >
             {/* El asa: indica que se puede arrastrar y es, además, el único

@@ -5,6 +5,7 @@ import { useAuth } from '../platform/auth'
 import { useVersion } from '../platform/version'
 import { isIOS, isStandalone, safeInsets } from '../platform/pwa'
 import { useCapa } from '../platform/capas'
+import { LLEGADA, SALIDA } from '../ui/curvas'
 import Luniteca from './luniteca/Luniteca'
 import Actividad from './actividad/Actividad'
 import Perfil from './perfil/Perfil'
@@ -177,7 +178,7 @@ function MenuLateral({ abierto, onCerrar, onNavegar }) {
         className="fixed inset-y-0 left-0 z-50 flex w-[78%] max-w-[320px] flex-col border-r border-line bg-surface pt-safe pb-safe pl-safe"
         initial={false}
         animate={{ x: abierto ? 0 : '-100%' }}
-        transition={{ type: 'spring', stiffness: 460, damping: 42 }}
+        transition={abierto ? LLEGADA : SALIDA}
         // will-change fijo, no solo durante la animación: con el panel siempre
         // montado es una capa propia y pequeña, y en la traza bajó el pintado
         // de 92ms a 13ms por tanda de aperturas.
