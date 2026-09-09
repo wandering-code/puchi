@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState } from 'react'
-import { usarPantallaQuieta } from '../../ui/quieto'
+import { usarPantallaOcupada, usarPantallaQuieta } from '../../ui/quieto'
 import { createPortal } from 'react-dom'
 import { motion } from 'motion/react'
 import { useArrastreParaCerrar } from '../../ui/arrastre'
@@ -50,20 +50,34 @@ export default function PantallaInferior({ abierta = true, onCerrar, cabecera, c
   // quedado.
   const [moviendose, setMoviendose] = useState(false)
   const estrenada = useRef(false)
+  const colchon = useRef(null)
+  // Al acabar la animación se espera un pelín antes de devolver el gesto. Sin
+  // esto iba muy justo —medido: la ficha se quedaba quieta a 448ms y el gesto
+  // volvía a 481ms—, y basta con que el muelle asiente un poco más lento para
+  // que se pueda desplazar la ficha mientras todavía se está colocando.
+  const soltarConCalma = () => {
+    clearTimeout(colchon.current)
+    colchon.current = setTimeout(() => setMoviendose(false), 140)
+  }
   useLayoutEffect(() => {
     // El primer render no es un movimiento: la ficha nace donde le toca.
     if (!estrenada.current) { estrenada.current = true; if (!abierta) return }
     if (abierta && cuerpo.current) cuerpo.current.scrollTop = 0
+    clearTimeout(colchon.current)
     setMoviendose(true)
     // Red de seguridad, y no un adorno: si el panel ya está donde tiene que
     // estar, Motion no anima nada y no avisa de que haya terminado, así que
     // sin esto el gesto se quedaba cortado PARA SIEMPRE. Pasaba justo en la
     // primera ficha que se abría en cada sesión, que es la que se monta ya
     // colocada; las siguientes sí animan y se soltaban solas.
-    const suelta = setTimeout(() => setMoviendose(false), 700)
-    return () => clearTimeout(suelta)
+    const suelta = setTimeout(() => setMoviendose(false), 900)
+    return () => { clearTimeout(suelta); clearTimeout(colchon.current) }
   }, [abierta])
   usarPantallaQuieta(moviendose)
+  // Y tampoco se desplaza mientras haya algo más en marcha —el libro volando,
+  // sin ir más lejos—, que acaba después que ella.
+  const ocupada = usarPantallaOcupada()
+  const quieta = moviendose || ocupada
 
   return createPortal(
     <>
@@ -91,7 +105,7 @@ export default function PantallaInferior({ abierta = true, onCerrar, cabecera, c
         // recuperando la opacidad, y la siguiente que llegaba con vuelo se veía
         // un fotograma abajo del todo antes de plantarse en su sitio.
         animate={{ y: abierta ? 0 : '100%', opacity: aVista ? 1 : 0 }}
-        onAnimationComplete={() => setMoviendose(false)}
+        onAnimationComplete={soltarConCalma}
         transition={{
           // Subiendo, el panel llega con su muelle. Con el libro volando no se
           // mueve: se planta donde toca de un fotograma para otro, todavía
@@ -120,7 +134,7 @@ export default function PantallaInferior({ abierta = true, onCerrar, cabecera, c
           ref={cuerpo}
           // Se corta el gesto, no el overflow: cambiarlo en un contenedor con
           // scroll puede saltar su posición (mismo motivo que en el vuelo).
-          style={moviendose ? { touchAction: 'none' } : undefined}
+          style={quieta ? { touchAction: 'none' } : undefined}
           className="flex-1 overflow-y-auto overscroll-contain"
         >
           {cabecera}
