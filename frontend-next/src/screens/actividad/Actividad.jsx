@@ -5,6 +5,8 @@ import { api } from '../../platform/api'
 import { useAuth } from '../../platform/auth'
 import { useLiveUpdates } from '../../platform/live'
 import { Cover, StarRating } from '../luniteca/piezas'
+import HojaInferior, { useHoja } from '../luniteca/HojaInferior'
+import { IconBooks, IconFilter } from '../../ui/icons'
 
 // Lo que va pasando en las estanterías de todos: quién añade, empieza o
 // termina un libro.
@@ -62,6 +64,12 @@ export default function Actividad() {
   const [error, setError] = useState(null)
   const [jugadores, setJugadores] = useState([])
   const [filtro, setFiltro] = useState(null)     // jugador por el que se filtra
+  // Tocar la cara de alguien no hace una sola cosa: pregunta. Filtrar y entrar
+  // en su estantería son igual de esperables desde ahí, y adivinar cuál quiere
+  // el dedo acaba en la equivocada.
+  const menu = useHoja(null)
+  const setMenu = menu.abrir
+  const quienEnMenu = menu.abierta
 
   const cargar = useCallback(async (desde = 0, filtrarPor = filtro) => {
     const params = new URLSearchParams({ limit: String(POR_PAGINA), offset: String(desde) })
@@ -93,9 +101,7 @@ export default function Actividad() {
     <div className="py-6">
       <header className="mb-4">
         <h2 className="font-display text-[1.75rem] font-bold tracking-[-0.02em]">Actividad</h2>
-        <p className="mt-2 text-sm text-ink-dim">
-          {filtro ? `Solo lo de ${filtro.name}` : 'Lo que vais leyendo'}
-        </p>
+        {filtro && <p className="mt-2 text-sm text-ink-dim">Solo lo de {filtro.name}</p>}
       </header>
 
       {/* Los demás, para filtrar por uno. Tú no estás: para lo tuyo ya está
@@ -107,7 +113,7 @@ export default function Actividad() {
             return (
               <button
                 key={j.id}
-                onClick={() => setFiltro(activo ? null : { id: j.id, name: j.name })}
+                onClick={() => setMenu(j)}
                 className="flex w-14 shrink-0 flex-col items-center gap-1.5"
               >
                 <span
@@ -146,48 +152,69 @@ export default function Actividad() {
           {items?.map(item => {
             const tuyo = item.player?.id === player?.id
             return (
-              <motion.article
+              <motion.button
                 key={item.id}
                 layout="position"
                 initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.18 }}
-                className={`flex gap-3 rounded-xl2 border p-3 ${tuyo ? 'border-accent/30 bg-accent/5' : 'border-line bg-surface'}`}
+                onClick={() => navegar(tuyo ? `/luniteca?libro=${item.book?.id}` : `/quien/${item.player?.id}?libro=${item.book?.id}`)}
+                className={`flex w-full gap-3 rounded-xl2 border p-3 text-left transition-transform active:scale-[0.99] ${tuyo ? 'border-accent/30 bg-accent/5' : 'border-line bg-surface'}`}
               >
-                {/* Tocar la entrada lleva al registro de ese libro: al tuyo si
-                    la entrada es tuya, y si no al de esa persona, donde además
-                    puedes quedarte el libro. El nombre lleva a su estantería
-                    entera. */}
-                <button
-                  onClick={() => navegar(tuyo ? `/luniteca?libro=${item.book?.id}` : `/quien/${item.player?.id}?libro=${item.book?.id}`)}
-                  aria-label={`Ver ${item.book?.title} en la estantería de ${tuyo ? 'tu' : item.player?.name}`}
-                  className="w-9 shrink-0 transition-transform active:scale-[0.96]"
-                >
+                {/* La entrada entera lleva al libro, se toque donde se toque:
+                    al tuyo si es tuya y si no al de esa persona. Para su
+                    estantería está su cara, arriba. */}
+                <div className="w-9 shrink-0">
                   <Cover url={item.book?.cover_url} title={item.book?.title} />
-                </button>
+                </div>
                 <div className="min-w-0 flex-1">
                   <p className="flex items-center gap-1.5 text-xs font-semibold" style={{ color: item.player?.color || 'var(--color-ink-dim)' }}>
-                    <button onClick={() => navegar(`/quien/${item.player?.id}`)} className="font-semibold">
-                      {item.player?.name || '?'}
-                    </button>
+                    {item.player?.name || '?'}
                     {tuyo && <span className="rounded bg-surface-2 px-1.5 py-px text-[10px] font-normal text-ink-mute">tú</span>}
                   </p>
-                  <button
-                    onClick={() => navegar(tuyo ? `/luniteca?libro=${item.book?.id}` : `/quien/${item.player?.id}?libro=${item.book?.id}`)}
-                    className="mt-0.5 block text-left text-[13px] leading-snug text-ink-dim"
-                  >
-                    {frase(item)}
-                  </button>
+                  <p className="mt-0.5 text-[13px] leading-snug text-ink-dim">{frase(item)}</p>
                   {item.rating > 0 && (item.event_type === 'finished' || item.event_type === 'voted') && (
                     <div className="mt-1"><StarRating rating={item.rating} /></div>
                   )}
                   <p className="mt-1 text-[11px] text-ink-mute">{haceCuanto(item.created_at)}</p>
                 </div>
-              </motion.article>
+              </motion.button>
             )
           })}
         </div>
       </AnimatePresence>
+
+      <HojaInferior
+        abierta={!!quienEnMenu}
+        titulo={quienEnMenu?.name || ''}
+        onCerrar={menu.cerrar}
+      >
+        <div className="flex flex-col divide-y divide-[color:var(--color-line)]">
+          <button
+            onClick={() => {
+              setFiltro(filtro?.id === quienEnMenu.id ? null : { id: quienEnMenu.id, name: quienEnMenu.name })
+              menu.cerrar()
+            }}
+            className="flex items-center gap-3 px-1 py-3.5 text-left"
+          >
+            <IconFilter className="h-5 w-5 shrink-0 text-ink-mute" />
+            <span className="text-[15px]">
+              {filtro?.id === quienEnMenu?.id ? 'Quitar el filtro' : `Ver solo lo de ${quienEnMenu?.name}`}
+            </span>
+          </button>
+          <button
+            // Se cierra SIN tocar el historial: el router hace su pushState en
+            // este mismo clic y el history.back() de un cierre normal llegaría
+            // después, deshaciendo la navegación (el mismo caso que ya tenía el
+            // menú lateral, ver Shell.jsx).
+            onClick={() => { menu.reemplazar(null); navegar(`/quien/${quienEnMenu.id}`) }}
+            className="flex items-center gap-3 px-1 py-3.5 text-left"
+          >
+            <IconBooks className="h-5 w-5 shrink-0 text-ink-mute" />
+            <span className="text-[15px]">Ver su estantería</span>
+          </button>
+        </div>
+      </HojaInferior>
 
       {hayMas && (
         <button

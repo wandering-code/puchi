@@ -77,23 +77,36 @@ export default function Perfil() {
     return () => { vigente = false }
   }, [idQuien])
 
-  // ?libro=ID abre su registro de ese libro en cuanto está la estantería.
+  // ?libro=ID abre su registro de ese libro. Y lo abre CUANTO ANTES, sin
+  // esperar a que llegue su estantería entera: se pide solo esa lectura
+  // (/books/{id}/lecturas, una respuesta pequeña) y la ficha aparece con ella
+  // mientras la estantería se carga por detrás. Viniendo de la actividad, lo
+  // que se ha tocado es un libro concreto: esperar en blanco a que cargue una
+  // estantería de trescientos para luego saltar a la ficha se siente como un
+  // atropello.
   //
-  // Solo una vez, y por eso el ref: abrir la ficha mete una entrada en el
-  // historial, así que al cerrarla se vuelve a la URL que traía el parámetro y
-  // la ficha se reabría sola —no había manera de volver a su estantería—.
-  // Quitar el parámetro no basta: eso reemplaza la entrada de ahora, no la de
-  // antes, que es a la que se vuelve.
+  // Se abre una sola vez, y por eso el ref: abrir la ficha mete una entrada en
+  // el historial, así que al cerrarla se vuelve a la URL que traía el parámetro
+  // y se reabría sola. Quitar el parámetro no basta: eso reemplaza la entrada
+  // de ahora, no aquella a la que se vuelve.
   const libroPedido = params.get('libro')
   const yaAbierto = useRef(false)
   useEffect(() => {
-    if (!libroPedido || !shelf || yaAbierto.current) return
+    if (!libroPedido || yaAbierto.current) return
     yaAbierto.current = true
-    const entrada = shelf.find(e => String(e.book?.id) === libroPedido)
-    if (entrada) ficha.abrir(entrada)
+    // La respuesta no se descarta al desmontar, a diferencia de las demás
+    // cargas: en desarrollo React monta el efecto dos veces y el ref hace que
+    // solo pida una, así que cancelar esa única petición dejaba la ficha sin
+    // abrir. Abrirla después de un desmontaje de mentira es lo correcto aquí.
+    api(`/books/${libroPedido}/lecturas`)
+      .then(lecturas => {
+        const suya = lecturas.find(l => l.player_id === idQuien)
+        if (suya) ficha.abrir(suya)
+      })
+      .catch(() => {})
     setParams(p => { const q = new URLSearchParams(p); q.delete('libro'); return q }, { replace: true })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [libroPedido, shelf])
+  }, [libroPedido, idQuien])
 
   const grupos = useMemo(
     () => (shelf ? agruparEstanteria(shelf, { filters: EMPTY_FILTERS, query: '', sort: { field: '', dir: 'asc' } }) : null),
