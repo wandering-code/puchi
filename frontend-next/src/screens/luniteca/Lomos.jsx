@@ -1,7 +1,7 @@
 import { memo, useEffect, useState } from 'react'
 import { totalPages } from './shelf'
 import { colorDePortada } from './colorPortada'
-import { alCargarFuentes, anchoDeRenglonPorPunto, anchoPorPunto } from './medirTexto'
+import { alCargarFuentes, anchoDeRenglonPorPunto, anchoPorPunto, fuenteLista } from './medirTexto'
 
 // Vista de estantería: los libros de canto, como en una balda de verdad.
 //
@@ -402,6 +402,13 @@ export default function Lomos({ entries, onAbrir, fueraId = null }) {
   // hecho a ojo con la fuente de reserva (y con el título cortado).
   const [revision, repintar] = useState(0)
   useEffect(() => alCargarFuentes(() => repintar(n => n + 1)), [])
+  // Si alguna fuente no llegara, a los 1,2s se enseña el título con lo que
+  // haya: mejor un título medido a ojo que un lomo mudo para siempre.
+  const [seAcabaLaEspera, acabar] = useState(false)
+  useEffect(() => {
+    const reloj = setTimeout(() => acabar(true), 1200)
+    return () => clearTimeout(reloj)
+  }, [])
 
   return (
     <div
@@ -414,7 +421,7 @@ export default function Lomos({ entries, onAbrir, fueraId = null }) {
       }}
     >
       {entries.map(e => (
-        <Lomo key={e.id} entry={e} onAbrir={onAbrir} revision={revision} volando={e.id === fueraId} />
+        <Lomo key={e.id} entry={e} onAbrir={onAbrir} revision={revision} volando={e.id === fueraId} sinPrisa={seAcabaLaEspera} />
       ))}
     </div>
   )
@@ -428,8 +435,9 @@ export default function Lomos({ entries, onAbrir, fueraId = null }) {
 // portadas de Open Library: solo hay que pintarlas, no inspeccionarlas.
 const FRANJA = 0.04
 
-const Lomo = memo(function Lomo({ entry, onAbrir, volando = false }) {
+const Lomo = memo(function Lomo({ entry, onAbrir, volando = false, sinPrisa = false }) {
   const { ancho, alto, color, tamano, tipografia, torcido, tapaDura } = medidas(entry)
+  const conLetra = sinPrisa || fuenteLista(tipografia)
   const libro = entry.book
   // El color de la portada llega después (hay que cargarla y leerla), así que
   // el lomo nace con su color de reserva y cambia al de verdad en cuanto está.
@@ -596,6 +604,13 @@ const Lomo = memo(function Lomo({ entry, onAbrir, volando = false }) {
           // En escritura vertical el eje principal del flex es el vertical, así
           // que el título crece a lo largo del lomo y el autor se queda al pie.
           style={{
+            // El título espera a tener su fuente. Sin esto se pintaba primero
+            // con la medida estimada y saltaba de tamaño al llegar la letra
+            // buena: al entrar en la estantería se veían todos los lomos
+            // recolocarse a la vez. El lomo (color, tamaño, relieve) sí sale al
+            // instante; lo único que llega un pelín después es lo escrito.
+            opacity: conLetra ? 1 : 0,
+            transition: 'opacity 140ms ease-out',
             writingMode: 'vertical-rl',
             textOrientation: 'mixed',
             gap: texto.autor ? SEPARACION_AUTOR : 0,

@@ -251,7 +251,7 @@ export default function Luniteca() {
             <TituloSeccion variante={separacion} label="Leyendo" cuenta={grupos.reading.length} />
             <div className="mt-3 space-y-2">
               {grupos.reading.map(e => (
-                <TarjetaLeyendo key={e.id} entry={e} onAbrir={abrirLibro} />
+                <TarjetaLeyendo key={e.id} entry={e} onAbrir={abrirLibro} fuera={e.id === fueraId} />
               ))}
             </div>
           </CajaSeccion>
@@ -304,7 +304,7 @@ export default function Luniteca() {
           plegada={plegadas.want}
           onAlternar={alternarWant}
           onAbrir={abrirLibro}
-         
+          fueraId={fueraId}
         />
 
         <SeccionPlegable
@@ -313,7 +313,7 @@ export default function Luniteca() {
           plegada={plegadas.dropped}
           onAlternar={alternarDropped}
           onAbrir={abrirLibro}
-         
+          fueraId={fueraId}
         />
       </div>
 
@@ -552,14 +552,14 @@ function BotonPlegarAnos({ todosPlegados, onAlternar }) {
   )
 }
 
-const SeccionPlegable = memo(function SeccionPlegable({ variante, label, entries, vista, plegada, onAlternar, onAbrir }) {
+const SeccionPlegable = memo(function SeccionPlegable({ variante, label, entries, vista, plegada, onAlternar, onAbrir, fueraId = null }) {
   if (entries.length === 0) return null
   return (
     <CajaSeccion variante={variante}>
       <TituloSeccion variante={variante} label={label} cuenta={entries.length} plegada={plegada} onAlternar={onAlternar} />
       <Plegable abierta={!plegada}>
         <div className="pt-3">
-          <Coleccion entries={entries} vista={vista} onAbrir={onAbrir} />
+          <Coleccion entries={entries} vista={vista} onAbrir={onAbrir} fueraId={fueraId} />
         </div>
       </Plegable>
     </CajaSeccion>
@@ -658,12 +658,12 @@ const FilaLibro = memo(function FilaLibro({ entry, onAbrir, fuera = false }) {
 })
 
 // Lo que se está leyendo va aparte y más grande: es lo que se viene a mirar.
-const TarjetaLeyendo = memo(function TarjetaLeyendo({ entry, onAbrir }) {
+const TarjetaLeyendo = memo(function TarjetaLeyendo({ entry, onAbrir, fuera = false }) {
   const fechas = readingDatesLabel(entry)
   return (
     <button
       onClick={() => onAbrir(entry)}
-      className="flex w-full items-stretch gap-3 rounded-xl2 border border-line bg-surface p-3 text-left transition-transform duration-150 active:scale-[0.985]"
+      className={`flex w-full items-stretch gap-3 rounded-xl2 border border-line bg-surface p-3 text-left transition-transform duration-150 active:scale-[0.985] ${fuera ? 'invisible' : ''}`}
     >
       <div className="w-14 shrink-0">
         <Cover url={entry.book.cover_url} priority />

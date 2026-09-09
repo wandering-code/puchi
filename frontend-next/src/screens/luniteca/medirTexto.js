@@ -57,6 +57,15 @@ function disponible(tipografia) {
   return false
 }
 
+// ¿Está ya la fuente de esta tipografía? Además de contestar, la pide si no se
+// había pedido. Lo usan los lomos para no enseñar el título hasta poder
+// medirlo bien: con la estimación se pintaba un título de un tamaño y al
+// llegar la fuente saltaba a otro, y ese baile al entrar en la estantería se
+// veía en todos los lomos a la vez.
+export function fuenteLista(tipografia) {
+  return disponible(tipografia)
+}
+
 // Para que la vista se redibuje con las medidas buenas en cuanto haya fuentes.
 export function alCargarFuentes(fn) {
   avisos.add(fn)
