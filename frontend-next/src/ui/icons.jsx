@@ -17,6 +17,16 @@ export const IconHome = (p) => (
 export const IconBooks = (p) => (
   <svg {...base} {...p}><path d="M5 4h4v16H5zM11 4h3v16h-3z" /><path d="m16.5 5 3.2.8-3 15-3.2-.8z" /></svg>
 )
+// Actividad: dos siluetas, que es de lo que va la sección — lo que van
+// leyendo los demás.
+export const IconActividad = (p) => (
+  <svg {...base} {...p}>
+    <circle cx="9" cy="8" r="3" />
+    <path d="M3.5 19a5.5 5.5 0 0 1 11 0" />
+    <circle cx="17" cy="9.5" r="2.2" />
+    <path d="M16 14.6a4.6 4.6 0 0 1 4.5 4.4" />
+  </svg>
+)
 export const IconSettings = (p) => (
   <svg {...base} {...p}>
     <path d="M4 7h16M4 12h16M4 17h16" />

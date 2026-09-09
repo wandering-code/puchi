@@ -6,12 +6,14 @@ import { useVersion } from '../platform/version'
 import { isIOS, isStandalone, safeInsets } from '../platform/pwa'
 import { useCapa } from '../platform/capas'
 import Luniteca from './luniteca/Luniteca'
+import Actividad from './actividad/Actividad'
 import { SelectorSeparacion, guardarSeparacion, leerSeparacion } from './luniteca/separacion'
-import { IconBooks, IconExit, IconHome, IconMenu, IconPaw, IconSettings } from '../ui/icons'
+import { IconActividad, IconBooks, IconExit, IconHome, IconMenu, IconPaw, IconSettings } from '../ui/icons'
 
 const SECCIONES = [
   { to: '/',           label: 'Inicio',     Icon: IconHome },
   { to: '/luniteca',   label: 'Luniteca',   Icon: IconBooks },
+  { to: '/actividad',  label: 'Actividad',  Icon: IconActividad },
   { to: '/ajustes',    label: 'Ajustes',    Icon: IconSettings },
 ]
 
@@ -59,6 +61,7 @@ export default function Shell() {
             <Routes location={location}>
               <Route path="/"           element={<Placeholder title="Inicio" nota="Aquí irá lo que abra la app: novedades del club, lo que estás leyendo, accesos rápidos." />} />
               <Route path="/luniteca"   element={<Luniteca />} />
+              <Route path="/actividad"  element={<Actividad />} />
               <Route path="/ajustes"    element={<Ajustes />} />
               <Route path="*"           element={<Placeholder title="Nada por aquí" nota="Esa ruta no existe (todavía)." />} />
             </Routes>
