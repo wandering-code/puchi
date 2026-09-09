@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { AnimatePresence, motion } from 'motion/react'
-import { statusPatch, totalPages } from './shelf'
-import { Cover, EditableRating, MANTENER_MS, ProgressBar } from './piezas'
+import { api } from '../../platform/api'
+import { useAuth } from '../../platform/auth'
+import { readingDatesLabel, statusPatch, totalPages } from './shelf'
+import { Chip, Cover, EditableRating, MANTENER_MS, ProgressBar, StarRating, StatusChip } from './piezas'
 import { EditorCarpeta, EditorEstado, EditorFechas, EditorLecturas, Sinopsis } from './editores'
 import { IconArrowLeft, IconPencil } from '../../ui/icons'
 import BookEditForm from './BookEditForm'
@@ -12,7 +15,14 @@ import PantallaInferior from './PantallaInferior'
 // que se pueden cambiar como pastillas que abren su propio editor — en vez de
 // una lista de bloques con encabezados, que era lo de antes y se parecía más a
 // la Luniteca vieja. Lo que se toca es el dato en sí.
-export default function BookDetail({ entry, carpetas, generos, onCerrar, onActualizar, onGuardarLibro, onSubirPortada, onEliminar, vuelo = null }) {
+// `soloLectura` es para la estantería de otra persona: los mismos datos, sin
+// poder tocar nada. Las notas privadas no llegan siquiera (el backend las quita
+// de las entradas ajenas), así que aquí no hay nada que esconder: se cambian
+// los editores por su valor a secas y se ofrece guardarse el libro.
+export default function BookDetail({
+  entry, carpetas, generos, onCerrar, onActualizar, onGuardarLibro, onSubirPortada, onEliminar,
+  vuelo = null, soloLectura = false, deQuien = null, onGuardarEnMiEstanteria,
+}) {
   const libro = entry.book
   const paginas = totalPages(entry)
 
@@ -49,7 +59,7 @@ export default function BookDetail({ entry, carpetas, generos, onCerrar, onActua
           >
             <IconArrowLeft className="h-5 w-5" />
           </motion.button>
-          {!editando && (
+          {!editando && !soloLectura && (
             <motion.button
               onClick={() => setEditando(true)}
               aria-label="Editar los datos del libro"
@@ -102,6 +112,23 @@ export default function BookDetail({ entry, carpetas, generos, onCerrar, onActua
           </h2>
           {libro.author && <p className="mt-1.5 text-[15px] text-ink-dim">{libro.author}</p>}
 
+          {/* De quién es lo que se está mirando. Sin esto, la ficha de otra
+              persona es idéntica a la tuya salvo por lo que no deja tocar, y
+              no se sabe de quién son esas fechas ni esa nota. */}
+          {soloLectura && deQuien && (
+            <p className="mt-2 flex items-center justify-center gap-1.5 text-xs text-ink-mute">
+              <span
+                className="flex h-5 w-5 items-center justify-center overflow-hidden rounded-full text-[11px]"
+                style={{ background: deQuien.color || 'var(--color-surface-2)' }}
+              >
+                {deQuien.avatar_url
+                  ? <img src={deQuien.avatar_url} alt="" className="h-full w-full object-cover" />
+                  : <span>{deQuien.avatar_emoji || '⭐'}</span>}
+              </span>
+              En la estantería de {deQuien.name}
+            </p>
+          )}
+
           {/* La ficha técnica del libro, que no se edita desde aquí: es del
               libro compartido, no de tu copia. */}
           {(libro.genre || libro.year || paginas) && (
@@ -111,25 +138,53 @@ export default function BookDetail({ entry, carpetas, generos, onCerrar, onActua
           )}
 
           {/* Y esto sí es tuyo: cada pastilla enseña su valor y se toca para
-              cambiarlo. */}
+              cambiarlo. En la estantería de otro, las mismas pastillas sin
+              tocar nada. */}
           <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
-            <EditorEstado entry={entry} onActualizar={onActualizar} />
-            <EditorFechas entry={entry} onActualizar={onActualizar} />
-            <EditorCarpeta entry={entry} carpetas={carpetas} onActualizar={onActualizar} />
-            {llevaLecturas && <EditorLecturas entry={entry} onActualizar={onActualizar} />}
+            {soloLectura ? (
+              <>
+                <StatusChip status={entry.status} />
+                {readingDatesLabel(entry) && <Chip>{readingDatesLabel(entry)}</Chip>}
+                {entry.folder && <Chip>{entry.folder}</Chip>}
+                {llevaLecturas && entry.times_read > 1 && <Chip>{entry.times_read} lecturas</Chip>}
+              </>
+            ) : (
+              <>
+                <EditorEstado entry={entry} onActualizar={onActualizar} />
+                <EditorFechas entry={entry} onActualizar={onActualizar} />
+                <EditorCarpeta entry={entry} carpetas={carpetas} onActualizar={onActualizar} />
+                {llevaLecturas && <EditorLecturas entry={entry} onActualizar={onActualizar} />}
+              </>
+            )}
           </div>
 
           {/* Sin número debajo: la nota ya se lee en las propias estrellas. */}
           {puedePuntuar && (
             <div className="mt-5">
-              <EditableRating rating={entry.rating} onChange={r => onActualizar({ rating: r })} size={26} />
+              {soloLectura
+                ? (entry.rating > 0
+                    ? <StarRating rating={entry.rating} size={22} />
+                    : <p className="text-xs text-ink-mute">Sin puntuar</p>)
+                : <EditableRating rating={entry.rating} onChange={r => onActualizar({ rating: r })} size={26} />}
             </div>
           )}
 
           {llevaProgreso && (
             <div className="mt-6 w-full">
-              <EditorProgreso entry={entry} onActualizar={onActualizar} />
+              {soloLectura
+                ? <ProgressBar entry={entry} />
+                : <EditorProgreso entry={entry} onActualizar={onActualizar} />}
             </div>
+          )}
+
+          {/* Lo que se puede hacer con el libro de otro: quedárselo. */}
+          {soloLectura && onGuardarEnMiEstanteria && (
+            <button
+              onClick={onGuardarEnMiEstanteria}
+              className="mt-7 flex h-12 w-full items-center justify-center rounded-xl2 bg-accent text-[15px] font-semibold text-on-accent transition-transform active:scale-[0.99]"
+            >
+              Añadir a mi estantería
+            </button>
           )}
         </div>
 
@@ -138,14 +193,75 @@ export default function BookDetail({ entry, carpetas, generos, onCerrar, onActua
             <Sinopsis texto={libro.synopsis} />
           </Apartado>
 
-          <Apartado titulo="Tus notas">
-            <EditorNotas notes={entry.notes} onGuardar={notes => onActualizar({ notes })} />
-          </Apartado>
+          {!soloLectura && (
+            <Apartado titulo="Tus notas">
+              <EditorNotas notes={entry.notes} onGuardar={notes => onActualizar({ notes })} />
+            </Apartado>
+          )}
+
+          <OtrasLecturas libroId={libro.id} />
         </div>
         </div>
       )}
     </PantallaInferior>
   )
+}
+
+// Quién más tiene este libro y qué le pareció. Es el puente entre tu
+// estantería y la de los demás: desde aquí se llega a su registro.
+function OtrasLecturas({ libroId }) {
+  const { player } = useAuth()
+  const navegar = useNavigate()
+  const [otras, setOtras] = useState(null)
+
+  useEffect(() => {
+    let vigente = true
+    api(`/books/${libroId}/lecturas`)
+      .then(todas => { if (vigente) setOtras(todas.filter(l => l.player?.id !== player?.id)) })
+      .catch(() => { if (vigente) setOtras([]) })
+    return () => { vigente = false }
+  }, [libroId, player?.id])
+
+  if (!otras?.length) return null
+
+  return (
+    <Apartado titulo={otras.length === 1 ? 'Alguien más lo ha leído' : 'Otros que lo han leído'}>
+      <ul className="flex flex-col divide-y divide-[color:var(--color-line)]">
+        {otras.map(l => (
+          <li key={l.id}>
+            <button
+              onClick={() => navegar(`/quien/${l.player.id}?libro=${libroId}`)}
+              className="flex w-full items-center gap-3 py-2.5 text-left"
+            >
+              <span
+                className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full text-sm"
+                style={{ background: l.player.color || 'var(--color-surface-2)' }}
+              >
+                {l.player.avatar_url
+                  ? <img src={l.player.avatar_url} alt="" className="h-full w-full object-cover" />
+                  : <span>{l.player.avatar_emoji || '⭐'}</span>}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm">{l.player.name}</span>
+                <span className="block text-xs text-ink-mute">
+                  {readingDatesLabel(l) || ESTADOS_TEXTO[l.status] || ''}
+                </span>
+              </span>
+              {l.rating > 0 && <StarRating rating={l.rating} />}
+            </button>
+          </li>
+        ))}
+      </ul>
+    </Apartado>
+  )
+}
+
+const ESTADOS_TEXTO = {
+  reading:   'Leyéndolo ahora',
+  rereading: 'Releyéndolo',
+  to_read:   'Lo tiene pendiente',
+  dropped:   'Lo dejó a medias',
+  read:      'Leído',
 }
 
 function Apartado({ titulo, children }) {

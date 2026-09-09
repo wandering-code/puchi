@@ -7,6 +7,7 @@ import { isIOS, isStandalone, safeInsets } from '../platform/pwa'
 import { useCapa } from '../platform/capas'
 import Luniteca from './luniteca/Luniteca'
 import Actividad from './actividad/Actividad'
+import Perfil from './perfil/Perfil'
 import { SelectorSeparacion, guardarSeparacion, leerSeparacion } from './luniteca/separacion'
 import { IconActividad, IconBooks, IconExit, IconHome, IconMenu, IconPaw, IconSettings } from '../ui/icons'
 
@@ -62,6 +63,9 @@ export default function Shell() {
               <Route path="/"           element={<Placeholder title="Inicio" nota="Aquí irá lo que abra la app: novedades del club, lo que estás leyendo, accesos rápidos." />} />
               <Route path="/luniteca"   element={<Luniteca />} />
               <Route path="/actividad"  element={<Actividad />} />
+              {/* La estantería de otra persona. Ruta propia para que el gesto
+                  de volver funcione y el enlace se pueda compartir. */}
+              <Route path="/quien/:id"  element={<Perfil />} />
               <Route path="/ajustes"    element={<Ajustes />} />
               <Route path="*"           element={<Placeholder title="Nada por aquí" nota="Esa ruta no existe (todavía)." />} />
             </Routes>

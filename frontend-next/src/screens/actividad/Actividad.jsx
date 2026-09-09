@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
+import { useNavigate } from 'react-router-dom'
 import { api } from '../../platform/api'
 import { useAuth } from '../../platform/auth'
 import { useLiveUpdates } from '../../platform/live'
@@ -54,6 +55,7 @@ function haceCuanto(iso) {
 
 export default function Actividad() {
   const { player } = useAuth()
+  const navegar = useNavigate()
   const [items, setItems] = useState(null)
   const [hayMas, setHayMas] = useState(false)
   const [cargandoMas, setCargandoMas] = useState(false)
@@ -152,15 +154,30 @@ export default function Actividad() {
                 transition={{ duration: 0.18 }}
                 className={`flex gap-3 rounded-xl2 border p-3 ${tuyo ? 'border-accent/30 bg-accent/5' : 'border-line bg-surface'}`}
               >
-                <div className="w-9 shrink-0">
+                {/* Tocar la entrada lleva al registro de ese libro: al tuyo si
+                    la entrada es tuya, y si no al de esa persona, donde además
+                    puedes quedarte el libro. El nombre lleva a su estantería
+                    entera. */}
+                <button
+                  onClick={() => navegar(tuyo ? `/luniteca?libro=${item.book?.id}` : `/quien/${item.player?.id}?libro=${item.book?.id}`)}
+                  aria-label={`Ver ${item.book?.title} en la estantería de ${tuyo ? 'tu' : item.player?.name}`}
+                  className="w-9 shrink-0 transition-transform active:scale-[0.96]"
+                >
                   <Cover url={item.book?.cover_url} title={item.book?.title} />
-                </div>
+                </button>
                 <div className="min-w-0 flex-1">
                   <p className="flex items-center gap-1.5 text-xs font-semibold" style={{ color: item.player?.color || 'var(--color-ink-dim)' }}>
-                    {item.player?.name || '?'}
+                    <button onClick={() => navegar(`/quien/${item.player?.id}`)} className="font-semibold">
+                      {item.player?.name || '?'}
+                    </button>
                     {tuyo && <span className="rounded bg-surface-2 px-1.5 py-px text-[10px] font-normal text-ink-mute">tú</span>}
                   </p>
-                  <p className="mt-0.5 text-[13px] leading-snug text-ink-dim">{frase(item)}</p>
+                  <button
+                    onClick={() => navegar(tuyo ? `/luniteca?libro=${item.book?.id}` : `/quien/${item.player?.id}?libro=${item.book?.id}`)}
+                    className="mt-0.5 block text-left text-[13px] leading-snug text-ink-dim"
+                  >
+                    {frase(item)}
+                  </button>
                   {item.rating > 0 && (item.event_type === 'finished' || item.event_type === 'voted') && (
                     <div className="mt-1"><StarRating rating={item.rating} /></div>
                   )}

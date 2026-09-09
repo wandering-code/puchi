@@ -1,4 +1,5 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { AnimatePresence, motion } from 'motion/react'
 import { useAuth } from '../../platform/auth'
 import { api } from '../../platform/api'
@@ -144,6 +145,10 @@ export default function Luniteca() {
   // esa portada (ver VueloDelLibro). Desde las otras dos vistas, y para quien
   // pide menos animación, la ficha sube como siempre.
   const [vuelo, setVuelo] = useState(null)
+  // ?libro=ID abre esa ficha al entrar: es como la actividad te trae a "tu
+  // registro" de un libro. Se quita de la URL en cuanto se usa, para que al
+  // cerrar la ficha no se vuelva a abrir sola.
+  const [params, setParams] = useSearchParams()
   const abrirLibro = useCallback((entrada, nodo) => {
     const menosMovimiento = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
     if (nodo && !menosMovimiento) {
@@ -170,6 +175,15 @@ export default function Luniteca() {
   const libroAnadido = useCallback((entrada) => {
     setShelf(prev => (prev || []).some(x => x.id === entrada.id) ? prev : [...(prev || []), entrada])
   }, [])
+
+  const libroPedido = params.get('libro')
+  useEffect(() => {
+    if (!libroPedido || !shelf) return
+    const entrada = shelf.find(e => String(e.book?.id) === libroPedido)
+    if (entrada && !ficha.abierta) ficha.abrir(entrada)
+    setParams(p => { const q = new URLSearchParams(p); q.delete('libro'); return q }, { replace: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [libroPedido, shelf])
 
   const grupos = useMemo(
     () => agruparEstanteria(shelf, { filters, query, sort }),
@@ -575,7 +589,7 @@ const SeccionPlegable = memo(function SeccionPlegable({ variante, label, entries
   )
 })
 
-const Coleccion = memo(function Coleccion({ entries, vista, onAbrir, volandoId = null }) {
+export const Coleccion = memo(function Coleccion({ entries, vista, onAbrir, volandoId = null }) {
   // Vista de estantería: los libros de canto. Es una vista aparte y aislada —
   // si no acaba de convencer se quita ella sola, sin tocar las otras dos.
   if (vista === 'lomos') return <Lomos entries={entries} onAbrir={onAbrir} volandoId={volandoId} />

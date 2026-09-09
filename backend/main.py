@@ -2903,6 +2903,36 @@ def get_activity_feed(
     }
 
 
+@app.get("/books/{book_id}/lecturas")
+def get_book_readers(
+    book_id: int,
+    db: Session = Depends(get_db),
+    current: Player = Depends(get_current_player),
+):
+    """Quién tiene este libro en su estantería y cómo lo lleva.
+
+    Lo pide la Puchi nueva para dos cosas: abrir desde la actividad el registro
+    de otra persona (sus fechas, su nota, su progreso) sin traerse su
+    estantería entera, y enseñar en la ficha de un libro quién más lo ha
+    leído.
+
+    Las notas privadas solo salen en la entrada de quien pregunta, igual que
+    en /shelf/personal (hide_notes).
+    """
+    entries = (
+        db.query(PersonalShelf)
+        .filter(PersonalShelf.book_id == book_id)
+        .all()
+    )
+    return [
+        {
+            **_shelf_entry_out(e, hide_notes=(e.player_id != current.id)),
+            "player": _player_out(e.player),
+        }
+        for e in entries
+    ]
+
+
 # ── Rankings ─────────────────────────────────────────────────────────────────
 
 @app.get("/shelf/rankings")
