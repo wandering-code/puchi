@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from 'motion/react'
 import { useAuth } from '../../platform/auth'
 import { api } from '../../platform/api'
 import { useLiveUpdates } from '../../platform/live'
+import { usarPreferencia } from '../../platform/preferencias'
 import { EMPTY_FILTERS, agruparEstanteria, opcionesDeFiltro, readingDatesLabel } from './shelf'
 import { Cover, NotaBadge, PagesLabel, ProgressBar, StarRating } from './piezas'
 import BookDetail from './BookDetail'
@@ -14,7 +15,7 @@ import HojaFiltros from './HojaFiltros'
 import AnadirLibro from './AnadirLibro'
 import Lomos from './Lomos'
 import VueloDelLibro from './VueloDelLibro'
-import { CajaSeccion, TituloSeccion, huecoEntreSecciones, leerSeparacion } from './separacion'
+import { CajaSeccion, TituloSeccion, huecoEntreSecciones, usarSeparacion } from './separacion'
 import { useHoja } from './HojaInferior'
 import { useCapa } from '../../platform/capas'
 
@@ -26,7 +27,9 @@ export default function Luniteca() {
   const abierto = ficha.abierta
   const [error, setError] = useState(null)
 
-  const [vista, setVista] = useState(() => localStorage.getItem('luni_vista') || 'grid')
+  // La vista es de la cuenta, no del navegador: si eliges lomos, los ves aquí
+  // y en la estantería de cualquiera, entres desde donde entres.
+  const [vista, setVista] = usarPreferencia('vista', 'grid')
   const [query, setQuery] = useState('')
   const [buscando, setBuscando] = useState(false)
   const [sort, setSort] = useState({ field: '', dir: 'asc' })
@@ -36,7 +39,7 @@ export default function Luniteca() {
   const [plegadas, setPlegadas] = useState({ want: false, read: false, dropped: true })
   const [anosPlegados, setAnosPlegados] = useState(() => new Set())
   // Cómo se separan las secciones: se está probando cuál gusta (ver separacion.jsx).
-  const [separacion] = useState(leerSeparacion)
+  const [separacion] = usarSeparacion()
 
   const cargar = useCallback(async () => {
     try {
@@ -196,7 +199,6 @@ export default function Luniteca() {
   const opciones = useMemo(() => opcionesDeFiltro(shelf), [shelf])
 
   function cambiarVista(modo) {
-    localStorage.setItem('luni_vista', modo)
     setVista(modo)
   }
 

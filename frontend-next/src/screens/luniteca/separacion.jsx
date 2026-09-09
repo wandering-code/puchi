@@ -1,10 +1,12 @@
 import { motion } from 'motion/react'
 import { IconChevron } from '../../ui/icons'
+import { usarPreferencia } from '../../platform/preferencias'
 
 // Cuatro formas de separar las secciones de la estantería (estados y años),
-// para probarlas y quedarse con una. Se elige en Ajustes y se guarda en el
-// navegador; cuando esté decidido, se deja la elegida y esto desaparece.
-const CLAVE = 'luni_separacion'
+// para probarlas y quedarse con una. Se elige en Ajustes y se guarda en la
+// CUENTA (ver platform/preferencias), así que acompaña a quien entra esté en
+// el móvil o en el ordenador; cuando esté decidido, se deja la elegida y esto
+// desaparece.
 
 export const SEPARACIONES = [
   {
@@ -34,17 +36,10 @@ export const SEPARACIONES = [
   },
 ]
 
-export function leerSeparacion() {
-  try {
-    const v = localStorage.getItem(CLAVE)
-    return SEPARACIONES.some(x => x.id === v) ? v : 'linea'
-  } catch {
-    return 'linea'
-  }
-}
-
-export function guardarSeparacion(id) {
-  try { localStorage.setItem(CLAVE, id) } catch { /* modo privado */ }
+// Devuelve la elegida y cómo cambiarla, igual que useState.
+export function usarSeparacion() {
+  const [valor, poner] = usarPreferencia('separacion', 'linea')
+  return [SEPARACIONES.some(x => x.id === valor) ? valor : 'linea', poner]
 }
 
 const CON_BLOQUE = ['bloque', 'mixto']

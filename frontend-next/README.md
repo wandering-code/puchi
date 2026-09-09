@@ -72,6 +72,24 @@ la presentación.
   carpeta, veces leído, progreso **y la portada**. Se tocan directamente en la ficha.
   Que la portada sea personal es a propósito: cada jugador ve la que ha elegido.
 
+## Los gustos de cada uno van con la cuenta
+
+Lo que cada persona elige para mirar —la vista de la estantería, cómo se separan
+las secciones— se guarda en su **jugador**, no en el navegador
+(`platform/preferencias.jsx`). En localStorage significaba que la misma persona
+veía una cosa en el móvil y otra en el ordenador, y que al entrar desde otro
+sitio empezaba de cero.
+
+Y valen para todo lo que esa persona mira: si eliges ver la estantería como
+lomos, así verás también las de los demás cuando te asomes. Es tu forma de
+mirar, no una propiedad de cada estantería.
+
+Van bajo su propia clave (`next`) dentro de `Player.customization`, que es un
+objeto compartido con la Puchi actual —ahí guarda el fondo de pantalla, entre
+otras cosas— y cuyo endpoint lo **reemplaza entero**. Por eso, antes de escribir
+se relee lo que hay y se mezcla: si no, guardar una preferencia se llevaría por
+delante lo que la otra app tenga puesto.
+
 ## Convenciones de interfaz
 
 Fijadas probando en el móvil; cambiarlas sin motivo rompe la coherencia:

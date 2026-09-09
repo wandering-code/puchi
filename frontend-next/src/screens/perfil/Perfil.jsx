@@ -7,6 +7,7 @@ import { EMPTY_FILTERS, agruparEstanteria } from '../luniteca/shelf'
 import { Coleccion } from '../luniteca/Luniteca'
 import BookDetail from '../luniteca/BookDetail'
 import { useCapa } from '../../platform/capas'
+import { usarPreferencia } from '../../platform/preferencias'
 import { IconArrowLeft, IconGrid, IconList, IconLomos } from '../../ui/icons'
 
 // La estantería de otra persona, con sus números. Se llega desde Actividad, y
@@ -52,7 +53,10 @@ export default function Perfil() {
   const [shelf, setShelf] = useState(null)
   const [numeros, setNumeros] = useState(null)
   const [error, setError] = useState(null)
-  const [vista, setVista] = useState('grid')
+  // La misma vista que tengas puesta en la tuya: es tu forma de mirar una
+  // estantería, no algo de cada estantería. Y cambiarla aquí te la cambia
+  // también en la tuya, por lo mismo.
+  const [vista, setVista] = usarPreferencia('vista', 'grid')
   const ficha = useCapa(null)
   const abierto = ficha.abierta
 

@@ -4,6 +4,7 @@ import { BrowserRouter } from 'react-router-dom'
 import './index.css'
 import App from './App'
 import { AuthProvider } from './platform/auth'
+import { PreferenciasProvider } from './platform/preferencias'
 
 // basename: la app vive bajo /next/ mientras conviva con la Puchi actual.
 // Sin esto el router creería que la ruta es "/next/algo" y no encontraría
@@ -13,7 +14,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <BrowserRouter basename="/next">
       <AuthProvider>
-        <App />
+        <PreferenciasProvider>
+          <App />
+        </PreferenciasProvider>
       </AuthProvider>
     </BrowserRouter>
   </React.StrictMode>

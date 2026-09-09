@@ -8,7 +8,7 @@ import { useCapa } from '../platform/capas'
 import Luniteca from './luniteca/Luniteca'
 import Actividad from './actividad/Actividad'
 import Perfil from './perfil/Perfil'
-import { SelectorSeparacion, guardarSeparacion, leerSeparacion } from './luniteca/separacion'
+import { SelectorSeparacion, usarSeparacion } from './luniteca/separacion'
 import { IconActividad, IconBooks, IconExit, IconHome, IconMenu, IconPaw, IconSettings } from '../ui/icons'
 
 const SECCIONES = [
@@ -293,7 +293,7 @@ function Ajustes() {
 // Provisional, mientras se decide cómo separar las secciones de la estantería:
 // se prueban las cuatro en el móvil y se deja la que gane.
 function SeparacionDeSecciones() {
-  const [elegida, setElegida] = useState(leerSeparacion)
+  const [elegida, setElegida] = usarSeparacion()
   return (
     <div className="mt-6 overflow-hidden rounded-xl2 border border-line bg-surface">
       <p className="border-b border-line px-4 py-2 text-xs uppercase tracking-wider text-ink-mute">
@@ -301,7 +301,7 @@ function SeparacionDeSecciones() {
       </p>
       <SelectorSeparacion
         elegida={elegida}
-        onElegir={(id) => { guardarSeparacion(id); setElegida(id) }}
+        onElegir={setElegida}
       />
       <p className="border-t border-line px-4 py-2.5 text-xs text-ink-mute">
         Vuelve a Luniteca para verlo. Cuando decidas, quito las otras tres.
