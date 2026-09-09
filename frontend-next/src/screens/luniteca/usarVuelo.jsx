@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useLayoutEffect, useState } from 'react'
+import { useCallback, useLayoutEffect, useState } from 'react'
 import VueloDelLibro from './VueloDelLibro'
+import { usarPantallaQuieta } from '../../ui/quieto'
 
 // Abrir un libro desde la vista de estantería tiene su propia animación: el
 // lomo sale de la balda, gira y se pone de cara, y la ficha se descubre justo
@@ -43,24 +44,6 @@ export function usarVuelo(ficha) {
     setVuelo(v => (v && !v.destino ? { ...v, destino } : v))
   })
 
-  // Mientras el libro está en el aire, la pantalla de debajo no se mueve. El
-  // vuelo sale de un lomo concreto y vuelve a él, así que si se desplaza la
-  // estantería a media animación el libro aterriza donde ya no hay nada. Se
-  // corta el gesto (touch-action), no el overflow: cambiar el overflow de un
-  // contenedor con scroll puede saltar su posición, y eso se vería peor.
-  useEffect(() => {
-    if (!vuelo) return
-    const zona = document.querySelector('[data-scroll="pantalla"]')
-    if (!zona) return
-    const previo = zona.style.touchAction
-    zona.style.touchAction = 'none'
-    // Con tope, por si el vuelo no llegara a terminar nunca: dejar la pantalla
-    // sin poder desplazarse es mucho peor que un vuelo raro, y ya pasó con la
-    // ficha (ver PantallaInferior).
-    const suelta = setTimeout(() => { zona.style.touchAction = previo }, 2000)
-    return () => { clearTimeout(suelta); zona.style.touchAction = previo }
-  }, [!!vuelo])
-
   const cerrarFicha = useCallback(() => {
     setVuelo(v => (v && v.aterrizado ? { ...v, sentido: 'vuelta', aterrizado: false } : null))
     ficha.cerrar()
@@ -70,6 +53,13 @@ export function usarVuelo(ficha) {
   // Para abrir una ficha sin animación (por ejemplo la que llega en la URL,
   // que no tiene ningún lomo del que salir).
   const abrirSinVuelo = useCallback(entrada => { setVuelo(null); ficha.abrir(entrada) }, [ficha.abrir])
+
+  // Mientras el libro está en el aire, la pantalla no se mueve: el vuelo sale
+  // de un lomo concreto y vuelve a él, así que un scroll a media animación lo
+  // deja aterrizando donde ya no hay nada. Lo mismo que hace la ficha al
+  // subir y bajar, y por el mismo camino, que si no se pisan entre ellos.
+  const volando = !!(vuelo && !vuelo.aterrizado)
+  usarPantallaQuieta(volando, 1400)
 
   const enVuelo = vuelo && !vuelo.aterrizado
     ? (
