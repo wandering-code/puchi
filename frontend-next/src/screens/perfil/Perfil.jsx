@@ -1,4 +1,5 @@
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { motion } from 'motion/react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api } from '../../platform/api'
 import { useAuth } from '../../platform/auth'
@@ -182,9 +183,19 @@ export default function Perfil() {
               onClick={() => startTransition(() => setVista(v))}
               aria-label={label}
               aria-pressed={vista === v}
-              className={`flex h-9 w-11 items-center justify-center rounded-full transition-colors ${vista === v ? 'bg-accent/10 text-accent' : 'text-ink-mute'}`}
+              className="relative flex h-9 w-11 items-center justify-center rounded-full"
             >
-              <Icon className="h-5 w-5" />
+              {/* La misma pastilla que se desplaza en la estantería propia.
+                  Aquí no la había —solo cambiaba el color— y por eso el
+                  selector no animaba nada. */}
+              {vista === v && (
+                <motion.span
+                  layoutId="perfil-vista"
+                  className="absolute inset-0 rounded-full bg-accent/10"
+                  transition={{ type: 'spring', stiffness: 420, damping: 34 }}
+                />
+              )}
+              <Icon className={`relative h-5 w-5 ${vista === v ? 'text-accent' : 'text-ink-mute'}`} />
             </button>
           ))}
         </div>

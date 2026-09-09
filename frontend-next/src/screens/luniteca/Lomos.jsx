@@ -239,6 +239,26 @@ const MARGEN_LATERAL = 4
 // número o el autor sale pegado al título (se leía "SALVAJESR. Bolaño").
 export const SEPARACION_AUTOR = 6
 
+// El reparto de un libro no cambia mientras no cambien su lomo ni su letra,
+// así que se guarda. Es lo más caro de pintar una balda —hay que probar
+// tamaños hasta dar con el que cabe, midiendo cada renglón— y sin esto se
+// repetía entero en cada cambio de vista. Se vacía cuando llega una fuente
+// nueva, porque entonces las medidas de antes ya no valen.
+const REPARTOS = new Map()
+alCargarFuentes(() => REPARTOS.clear())
+
+function repartirTextoGuardado(args) {
+  const { titulo, autor, largoUtil, anchoLomo, tipografia, tamanoIdeal } = args
+  const clave = `${titulo}|${autor}|${largoUtil}|${anchoLomo}|${tamanoIdeal}|${tipografia.familia}|${tipografia.peso}|${tipografia.espaciado}|${tipografia.mayusculas}`
+  const guardado = REPARTOS.get(clave)
+  if (guardado) return guardado
+  const hecho = repartirTexto(args)
+  // Tope, que una estantería grande con varias vistas llenaría esto sin fin.
+  if (REPARTOS.size > 1500) REPARTOS.clear()
+  REPARTOS.set(clave, hecho)
+  return hecho
+}
+
 function repartirTexto({ titulo: tituloEntero, autor, largoUtil, anchoLomo, tipografia, tamanoIdeal }) {
   const SEPARACION = SEPARACION_AUTOR
   // El subtítulo va aparte y en segundo plano, como en cualquier lomo
@@ -465,6 +485,13 @@ function medidas(entry, generoDelAutor) {
   }
 }
 
+// Cuántos lomos se pintan de una vez. Con una estantería llena, hacerlo de
+// golpe bloqueaba el hilo más de un segundo y medio (medido con 300 libros y
+// la CPU a 1/6), y por eso el propio botón que cambia de vista se quedaba sin
+// animar. Repartido en tandas, el navegador respira entre una y otra.
+const PRIMERA_TANDA = 40
+const TANDA = 60
+
 export default function Lomos({ entries, onAbrir, fueraId = null, generosDeAutor = null }) {
   // Las medidas del texto dependen de la fuente, y las fuentes propias llegan
   // un momento después. Al llegar, se repinta con las medidas buenas.
@@ -472,6 +499,13 @@ export default function Lomos({ entries, onAbrir, fueraId = null, generosDeAutor
   // El número viaja como prop hasta cada lomo A PROPÓSITO: los lomos están
   // memoizados, así que sin una prop que cambie se quedaban con el reparto
   // hecho a ojo con la fuente de reserva (y con el título cortado).
+  const [pintados, setPintados] = useState(() => Math.min(entries.length, PRIMERA_TANDA))
+  useEffect(() => {
+    if (pintados >= entries.length) return
+    const id = requestAnimationFrame(() => setPintados(n => Math.min(entries.length, n + TANDA)))
+    return () => cancelAnimationFrame(id)
+  }, [pintados, entries.length])
+
   const [revision, repintar] = useState(0)
   useEffect(() => alCargarFuentes(() => repintar(n => n + 1)), [])
   // Si alguna fuente no llegara, a los 1,2s se enseña el título con lo que
@@ -492,7 +526,7 @@ export default function Lomos({ entries, onAbrir, fueraId = null, generosDeAutor
         backgroundImage: `repeating-linear-gradient(to bottom, transparent 0 ${ALTO_FILA - 5}px, var(--color-line) ${ALTO_FILA - 5}px ${ALTO_FILA - 2}px, transparent ${ALTO_FILA - 2}px ${ALTO_FILA}px)`,
       }}
     >
-      {entries.map(e => (
+      {entries.slice(0, pintados).map(e => (
         <Lomo
           key={e.id}
           entry={e}
@@ -545,7 +579,7 @@ const Lomo = memo(function Lomo({ entry, onAbrir, volando = false, sinPrisa = fa
   const margen = Math.max(10, Math.round(alto * 0.09))
   // El largo aprovechable del lomo, quitando ese aire.
   const largoUtil = alto - margen * 2
-  const texto = repartirTexto({
+  const texto = repartirTextoGuardado({
     titulo: libro.title,
     autor: libro.author,
     largoUtil,
