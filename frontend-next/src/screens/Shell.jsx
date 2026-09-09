@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { NavLink, Route, Routes, useLocation } from 'react-router-dom'
 import { AnimatePresence, motion } from 'motion/react'
 import { useAuth } from '../platform/auth'
@@ -40,6 +40,40 @@ export default function Shell() {
 
   const seccion = SECCIONES.find(s => s.to === location.pathname)
 
+  // Las rutas van en un useMemo con la ubicación como única dependencia, y no
+  // sueltas dentro del return, por una razón medible: que el menú esté abierto
+  // es estado de este mismo componente, así que sin esto cada pulsación del
+  // menú volvía a renderizar la Luniteca entera. Con 120 libros eso era una
+  // tarea de ~85ms clavada en el primer frame de la animación, y el panel
+  // entraba a tirones. Memoizado, el elemento es el mismo objeto entre
+  // renders, React se salta ese subárbol y el menú se abre sin tocarlo.
+  const contenido = useMemo(() => (
+    /* Cada ruta es su propia capa a pantalla completa con su scroll: así el
+       scroll de una no arrastra al de la otra durante la transición. */
+    <AnimatePresence mode="wait" initial={false}>
+      <motion.div
+        key={location.pathname}
+        className="absolute inset-0 overflow-y-auto overscroll-contain px-5 pb-kb"
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -6 }}
+        transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+      >
+        <Routes location={location}>
+          <Route path="/"           element={<Placeholder title="Inicio" nota="Aquí irá lo que abra la app: novedades del club, lo que estás leyendo, accesos rápidos." />} />
+          <Route path="/luniteca"   element={<Luniteca />} />
+          <Route path="/actividad"  element={<Actividad />} />
+          {/* La estantería de otra persona. Ruta propia para que el gesto de
+              volver funcione y el enlace se pueda compartir. */}
+          <Route path="/quien/:id"  element={<Perfil />} />
+          <Route path="/ajustes"    element={<Ajustes />} />
+          <Route path="*"           element={<Placeholder title="Nada por aquí" nota="Esa ruta no existe (todavía)." />} />
+        </Routes>
+      </motion.div>
+    </AnimatePresence>
+  ), [location])
+
+
   return (
     <div className="relative flex h-full w-full flex-col">
       {/* Fondo de un solo color, plano. La textura de papel la pone el fondo
@@ -47,31 +81,7 @@ export default function Shell() {
           frames en cada animación que pasara por encima. */}
       <TopBar titulo={seccion?.label} onAbrirMenu={menu.abrir} />
 
-      <main className="relative z-10 flex-1 overflow-hidden">
-        {/* Cada ruta es su propia capa a pantalla completa con su scroll: así
-            el scroll de una no arrastra al de la otra durante la transición. */}
-        <AnimatePresence mode="wait" initial={false}>
-          <motion.div
-            key={location.pathname}
-            className="absolute inset-0 overflow-y-auto overscroll-contain px-5 pb-kb"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -6 }}
-            transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
-          >
-            <Routes location={location}>
-              <Route path="/"           element={<Placeholder title="Inicio" nota="Aquí irá lo que abra la app: novedades del club, lo que estás leyendo, accesos rápidos." />} />
-              <Route path="/luniteca"   element={<Luniteca />} />
-              <Route path="/actividad"  element={<Actividad />} />
-              {/* La estantería de otra persona. Ruta propia para que el gesto
-                  de volver funcione y el enlace se pueda compartir. */}
-              <Route path="/quien/:id"  element={<Perfil />} />
-              <Route path="/ajustes"    element={<Ajustes />} />
-              <Route path="*"           element={<Placeholder title="Nada por aquí" nota="Esa ruta no existe (todavía)." />} />
-            </Routes>
-          </motion.div>
-        </AnimatePresence>
-      </main>
+      <main className="relative z-10 flex-1 overflow-hidden">{contenido}</main>
 
       <MenuLateral abierto={menu.abierta} onCerrar={menu.cerrar} onNavegar={cerrarMenuAlNavegar} />
     </div>
@@ -135,101 +145,114 @@ function TopBar({ titulo, onAbrirMenu }) {
 
 function MenuLateral({ abierto, onCerrar, onNavegar }) {
   const { player } = useAuth()
+  // El panel se queda SIEMPRE montado y solo se mueve. Montarlo y desmontarlo
+  // con AnimatePresence salía medido: la primera apertura de cada sesión
+  // metía un frame de 50-67ms (33ms hasta en WebKit sin frenar la CPU) porque
+  // construir el panel, el gesto de arrastre y la pastilla activa caía dentro
+  // del propio gesto. Las siguientes aperturas iban finas; solo se notaba la
+  // primera, que es justo la que se vive. Montado desde el principio y fuera
+  // de pantalla, no hay nada que construir cuando se pulsa.
+  //
+  // Cerrado no debe existir para nadie más: sin pointer-events no se puede
+  // tocar, e inert lo saca del tabulador y de los lectores de pantalla.
   return (
-    <AnimatePresence>
-      {abierto && (
-        <>
-          {/* El velo se pinta con la tinta de la paleta, no con negro: sobre el
-              crema, un negro puro corta demasiado. */}
-          <motion.div
-            className="fixed inset-0 z-40 bg-ink/25"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            onClick={onCerrar}
-          />
+    <>
+      {/* El velo se pinta con la tinta de la paleta, no con negro: sobre el
+          crema, un negro puro corta demasiado. */}
+      <motion.div
+        className="fixed inset-0 z-40 bg-ink/25"
+        initial={false}
+        animate={{ opacity: abierto ? 1 : 0 }}
+        transition={{ duration: 0.2 }}
+        style={{ pointerEvents: abierto ? 'auto' : 'none' }}
+        onClick={onCerrar}
+        aria-hidden
+      />
 
-          <motion.aside
-            role="dialog"
-            aria-label="Menú"
-            className="fixed inset-y-0 left-0 z-50 flex w-[78%] max-w-[320px] flex-col border-r border-line bg-surface pt-safe pb-safe pl-safe"
-            initial={{ x: '-100%' }}
-            animate={{ x: 0 }}
-            exit={{ x: '-100%' }}
-            transition={{ type: 'spring', stiffness: 460, damping: 42 }}
-            // Arrastrar hacia la izquierda para cerrarlo: es como se cierra un
-            // panel así en cualquier app del móvil, y sin ello hay que apuntar
-            // al velo con el pulgar. Solo hacia la izquierda (right: 0), para
-            // que no se pueda separar del borde.
-            drag="x"
-            dragConstraints={{ left: -360, right: 0 }}
-            dragElastic={0.08}
-            dragMomentum={false}
-            onDragEnd={(_, info) => {
-              // O se ha arrastrado lo bastante, o se ha lanzado con fuerza: lo
-              // segundo es lo que hace que un gesto rápido y corto también
-              // cierre, que es como se maneja esto con el pulgar.
-              if (info.offset.x < -70 || info.velocity.x < -420) onCerrar()
-            }}
+      <motion.aside
+        role="dialog"
+        aria-label="Menú"
+        inert={!abierto}
+        className="fixed inset-y-0 left-0 z-50 flex w-[78%] max-w-[320px] flex-col border-r border-line bg-surface pt-safe pb-safe pl-safe"
+        initial={false}
+        animate={{ x: abierto ? 0 : '-100%' }}
+        transition={{ type: 'spring', stiffness: 460, damping: 42 }}
+        // will-change fijo, no solo durante la animación: con el panel siempre
+        // montado es una capa propia y pequeña, y en la traza bajó el pintado
+        // de 92ms a 13ms por tanda de aperturas.
+        style={{ pointerEvents: abierto ? 'auto' : 'none', willChange: 'transform' }}
+        // Arrastrar hacia la izquierda para cerrarlo: es como se cierra un
+        // panel así en cualquier app del móvil, y sin ello hay que apuntar
+        // al velo con el pulgar. Solo hacia la izquierda (right: 0), para
+        // que no se pueda separar del borde.
+        drag="x"
+        dragConstraints={{ left: -360, right: 0 }}
+        dragElastic={0.08}
+        dragMomentum={false}
+        // Si el arrastre se queda corto, el panel vuelve solo a su sitio.
+        dragSnapToOrigin
+        onDragEnd={(_, info) => {
+          // O se ha arrastrado lo bastante, o se ha lanzado con fuerza: lo
+          // segundo es lo que hace que un gesto rápido y corto también
+          // cierre, que es como se maneja esto con el pulgar.
+          if (info.offset.x < -70 || info.velocity.x < -420) onCerrar()
+        }}
+      >
+      <div className="flex items-center gap-3 px-5 py-5">
+        <IconPaw className="h-7 w-7 text-accent" />
+        <div className="min-w-0">
+          <p className="font-display text-xl font-semibold leading-none tracking-[-0.02em]">Puchi</p>
+          <p className="mt-1 text-[10px] uppercase tracking-[0.18em] text-ink-mute">Versión nueva</p>
+        </div>
+      </div>
+
+      <nav className="flex-1 overflow-y-auto overscroll-contain px-3">
+        {SECCIONES.map(({ to, label, Icon }) => (
+          <NavLink
+            key={to}
+            to={to}
+            end={to === '/'}
+            onClick={onNavegar}
+            className="relative mb-1 flex h-12 items-center gap-3 rounded-xl2 px-3"
           >
-            <div className="flex items-center gap-3 px-5 py-5">
-              <IconPaw className="h-7 w-7 text-accent" />
-              <div className="min-w-0">
-                <p className="font-display text-xl font-semibold leading-none tracking-[-0.02em]">Puchi</p>
-                <p className="mt-1 text-[10px] uppercase tracking-[0.18em] text-ink-mute">Versión nueva</p>
-              </div>
-            </div>
+            {({ isActive }) => (
+              <>
+                {/* layoutId: al cambiar de sección la pastilla se
+                    desplaza de una entrada a otra en vez de aparecer y
+                    desaparecer. */}
+                {isActive && (
+                  <motion.span
+                    layoutId="menu-activo"
+                    className="absolute inset-0 rounded-xl2 bg-accent-soft"
+                    transition={{ type: 'spring', stiffness: 420, damping: 34 }}
+                  />
+                )}
+                <Icon className={`relative h-5 w-5 ${isActive ? 'text-accent' : 'text-ink-mute'}`} />
+                <span className={`relative text-[15px] ${isActive ? 'font-semibold text-accent' : 'text-ink-dim'}`}>
+                  {label}
+                </span>
+              </>
+            )}
+          </NavLink>
+        ))}
+      </nav>
 
-            <nav className="flex-1 overflow-y-auto overscroll-contain px-3">
-              {SECCIONES.map(({ to, label, Icon }) => (
-                <NavLink
-                  key={to}
-                  to={to}
-                  end={to === '/'}
-                  onClick={onNavegar}
-                  className="relative mb-1 flex h-12 items-center gap-3 rounded-xl2 px-3"
-                >
-                  {({ isActive }) => (
-                    <>
-                      {/* layoutId: al cambiar de sección la pastilla se
-                          desplaza de una entrada a otra en vez de aparecer y
-                          desaparecer. */}
-                      {isActive && (
-                        <motion.span
-                          layoutId="menu-activo"
-                          className="absolute inset-0 rounded-xl2 bg-accent-soft"
-                          transition={{ type: 'spring', stiffness: 420, damping: 34 }}
-                        />
-                      )}
-                      <Icon className={`relative h-5 w-5 ${isActive ? 'text-accent' : 'text-ink-mute'}`} />
-                      <span className={`relative text-[15px] ${isActive ? 'font-semibold text-accent' : 'text-ink-dim'}`}>
-                        {label}
-                      </span>
-                    </>
-                  )}
-                </NavLink>
-              ))}
-            </nav>
-
-            <div className="flex items-center gap-3 border-t border-line px-5 py-4">
-              <div
-                className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-line"
-                style={{ background: player?.color || 'var(--color-surface-2)' }}
-              >
-                {player?.avatar_url
-                  ? <img src={player.avatar_url} alt="" className="h-full w-full object-cover" />
-                  : <span>{player?.avatar_emoji || '⭐'}</span>}
-              </div>
-              <div className="min-w-0">
-                <p className="truncate font-display font-semibold leading-tight">{player?.name}</p>
-                <p className="text-xs text-ink-mute leading-tight">Sesión iniciada</p>
-              </div>
-            </div>
-          </motion.aside>
-        </>
-      )}
-    </AnimatePresence>
+      <div className="flex items-center gap-3 border-t border-line px-5 py-4">
+        <div
+          className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-line"
+          style={{ background: player?.color || 'var(--color-surface-2)' }}
+        >
+          {player?.avatar_url
+            ? <img src={player.avatar_url} alt="" className="h-full w-full object-cover" />
+            : <span>{player?.avatar_emoji || '⭐'}</span>}
+        </div>
+        <div className="min-w-0">
+          <p className="truncate font-display font-semibold leading-tight">{player?.name}</p>
+          <p className="text-xs text-ink-mute leading-tight">Sesión iniciada</p>
+        </div>
+      </div>
+      </motion.aside>
+    </>
   )
 }
 
