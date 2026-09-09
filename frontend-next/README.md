@@ -368,7 +368,8 @@ que desplazaba con `scrollTo()` dio por bueno un scroll que en el móvil no func
 
 ## Despliegue (mini PC)
 
-**Desplegada y conviviendo con la Puchi actual** desde el 8/9/2026:
+**Desplegada y conviviendo con la Puchi actual** desde el 8/9/2026 (al día el 9/9/2026,
+con la parte social, los gustos por cuenta y todo lo de rendimiento):
 `puchi.wanderingcode.dev/next`. Mismo puerto nginx (3003) y mismo Cloudflare Tunnel que
 la Puchi actual —esta versión no gasta ningún puerto nuevo del registro de
 `dev-standards`—, mismo backend y misma base de datos. La de siempre sigue en la raíz y
@@ -376,9 +377,25 @@ no se ha tocado nada suyo: son dos frontales sobre el mismo servidor.
 
 ```bash
 ssh minipc
-cd /home/wander/apps/puchi && git pull
+cd /home/wander/apps/puchi
+git checkout -- frontend-next/package-lock.json   # npm lo ensucia en el servidor
+git pull
 cd frontend-next && npm install && npm run build
 ```
+
+Si el despliegue trae también cambios de backend (`/books/{id}/lecturas` los trajo),
+hay que recrear su contenedor, y eso corta unos segundos la Puchi actual, que comparte
+el mismo backend:
+
+```bash
+cd /home/wander/apps/puchi
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml up --build -d backend
+```
+
+`docker-compose` con guion: el plugin `docker compose` no existe en el mini PC. Las
+migraciones corren solas al arrancar, no hay paso manual. Para comprobar que ha ido
+bien: la Puchi de siempre debe seguir dando 200 en `/`, `/next/` también, y el bundle
+que sirve `/next/` debe llevar dentro el hash del commit desplegado.
 
 En `/etc/nginx/sites-available/puchi`, dentro del mismo `server` que ya sirve la Puchi
 actual (el orden no importa: `location /next/` es más específica que `location /`, y
