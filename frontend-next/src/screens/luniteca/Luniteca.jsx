@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { memo, startTransition, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { AnimatePresence, motion } from 'motion/react'
 import { useAuth } from '../../platform/auth'
@@ -184,7 +184,12 @@ export default function Luniteca() {
   const generosDeAutor = useMemo(() => generosDeAutores(shelf), [shelf])
 
   function cambiarVista(modo) {
-    setVista(modo)
+    // En transición, y no a secas: dibujar la estantería de lomos con muchos
+    // libros bloquea el hilo, y la pastilla del selector se quedaba sin
+    // animar —saltaba de un botón al otro— justo al pasar a esa vista, no al
+    // revés. Marcado como no urgente, React pinta antes el gesto y luego la
+    // vista nueva.
+    startTransition(() => setVista(modo))
   }
 
   // Todos estos van con useCallback porque se pasan a componentes memoizados
@@ -663,7 +668,11 @@ const FilaLibro = memo(function FilaLibro({ entry, onAbrir, fuera = false }) {
 })
 
 // Lo que se está leyendo va aparte y más grande: es lo que se viene a mirar.
-const TarjetaLeyendo = memo(function TarjetaLeyendo({ entry, onAbrir, fuera = false }) {
+// Se exporta porque la estantería de otra persona la usa igual: lo que alguien
+// está leyendo se enseña siempre así, con su progreso y sus fechas, mande la
+// vista que mande. Es la única sección que no contesta "qué libros tiene" sino
+// "por dónde va", y ese dato no cabe en un lomo ni bajo una miniatura.
+export const TarjetaLeyendo = memo(function TarjetaLeyendo({ entry, onAbrir, fuera = false }) {
   const fechas = readingDatesLabel(entry)
   return (
     <button

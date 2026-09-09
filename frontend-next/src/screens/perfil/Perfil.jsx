@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api } from '../../platform/api'
 import { useAuth } from '../../platform/auth'
 import { EMPTY_FILTERS, agruparEstanteria, copiarAMiEstanteria, generosDeAutores } from '../luniteca/shelf'
-import { Coleccion } from '../luniteca/Luniteca'
+import { Coleccion, TarjetaLeyendo } from '../luniteca/Luniteca'
 import BookDetail from '../luniteca/BookDetail'
 import { useCapa } from '../../platform/capas'
 import { usarVuelo } from '../luniteca/usarVuelo'
@@ -177,7 +177,9 @@ export default function Perfil() {
           {VISTAS.map(({ id: v, Icon, label }) => (
             <button
               key={v}
-              onClick={() => setVista(v)}
+              // En transición: cambiar a lomos con muchos libros bloquea el
+              // hilo y se come la animación del propio botón (ver Luniteca).
+              onClick={() => startTransition(() => setVista(v))}
               aria-label={label}
               aria-pressed={vista === v}
               className={`flex h-9 w-11 items-center justify-center rounded-full transition-colors ${vista === v ? 'bg-accent/10 text-accent' : 'text-ink-mute'}`}
@@ -200,7 +202,18 @@ export default function Perfil() {
 
       {grupos?.visible?.length > 0 && (
         <div className={huecoEntreSecciones(variante)}>
-          <Seccion variante={variante} label="Leyendo" entries={grupos.reading} vista={vista} onAbrir={abrirLibro} fueraId={fueraId} generosDeAutor={generosDeAutor} />
+          {/* Leyendo no hace caso a la vista, aquí tampoco: se ve con su
+              progreso y sus fechas, igual que en la tuya. */}
+          {grupos.reading.length > 0 && (
+            <CajaSeccion variante={variante}>
+              <TituloSeccion variante={variante} label="Leyendo" cuenta={grupos.reading.length} desde="top-0" />
+              <div className="mt-3 space-y-2">
+                {grupos.reading.map(e => (
+                  <TarjetaLeyendo key={e.id} entry={e} onAbrir={abrirLibro} fuera={e.id === fueraId} />
+                ))}
+              </div>
+            </CajaSeccion>
+          )}
           {grupos.readYearGroups.map(({ year, items }) => (
             <Seccion
               key={year}
