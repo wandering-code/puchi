@@ -477,7 +477,7 @@ function Herramientas({
 
               {/* Añadir libro: la acción que hace que esta versión se pueda
                   usar sin volver a la Puchi actual. */}
-              <BotonHerramienta onClick={onAnadir} etiqueta="Añadir libro">
+              <BotonHerramienta principal onClick={onAnadir} etiqueta="Añadir libro">
                 <IconPlus className="h-[18px] w-[18px]" />
               </BotonHerramienta>
 
@@ -513,14 +513,30 @@ function Herramientas({
   )
 }
 
-function BotonHerramienta({ activo, onClick, etiqueta, children }) {
+// Los tres botones de la barra llevan su propia superficie, teñida del color
+// de la app. Sueltos sobre el fondo se veían planos, y encima descuadraban con
+// el selector de vista de al lado, que sí tiene su píldora: un lado de la
+// barra pesaba y el otro no.
+//
+// `principal` es para añadir un libro: va en color lleno porque es la única de
+// las tres que HACE algo con la estantería. Buscar y filtrar solo cambian cómo
+// se mira lo que ya hay.
+//
+// Y `activo` sube el tono en vez de estrenar color: antes marcaba el activo
+// con este mismo fondo, así que ahora que lo llevan todos hay que subir un
+// escalón para que se siga notando cuál está puesto.
+function BotonHerramienta({ activo, principal, onClick, etiqueta, children }) {
   return (
     <button
       onClick={onClick}
       aria-label={etiqueta}
       aria-pressed={activo}
-      className={`relative flex h-10 w-10 items-center justify-center rounded-xl2 transition-colors ${
-        activo ? 'bg-accent-soft text-accent' : 'text-ink-dim active:bg-surface-2'
+      className={`relative flex h-10 w-10 items-center justify-center rounded-full transition-colors ${
+        principal
+          ? 'bg-accent text-on-accent shadow-[0_1px_3px_rgba(60,40,20,.25)] active:bg-accent/90'
+          : activo
+            ? 'bg-accent/20 text-accent'
+            : 'bg-accent/[0.08] text-accent active:bg-accent/20'
       }`}
     >
       {children}
