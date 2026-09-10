@@ -249,10 +249,15 @@ function MenuLateral({ abierto, onCerrar, onNavegar }) {
             ? <img src={player.avatar_url} alt="" className="h-full w-full object-cover" />
             : <span>{player?.avatar_emoji || '⭐'}</span>}
         </div>
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <p className="truncate font-display font-semibold leading-tight">{player?.name}</p>
           <p className="text-xs text-ink-mute leading-tight">Sesión iniciada</p>
         </div>
+        {/* Aquí y no en Ajustes: es lo único estético que se cambia sobre la
+            marcha —según la hora, o la luz que haya— y desde el menú está a un
+            toque desde cualquier pantalla. El resto de ajustes de aspecto se
+            eligen una vez y se quedan, así que siguen en Ajustes. */}
+        <BotonDeTema />
       </div>
       </motion.aside>
     </>
@@ -287,8 +292,6 @@ function Ajustes() {
       <h2 className="font-display text-[1.75rem] font-bold tracking-[-0.02em]">Ajustes</h2>
       <p className="mt-2 text-sm text-ink-dim">Sesión de {player?.name}.</p>
 
-      <SelectorDeTema />
-
       <SeparacionDeSecciones />
 
       <div className="mt-6 overflow-hidden rounded-xl2 border border-line bg-surface">
@@ -321,50 +324,40 @@ function Ajustes() {
 // Claro u oscuro, para toda Puchi. Va con la cuenta, así que se elige una vez
 // y se ve igual en el móvil y en el ordenador.
 //
+// Un solo botón que alterna, no dos: en el pie del menú no hay sitio para un
+// selector, y con dos temas "cambiar al otro" no tiene ninguna ambigüedad. El
+// icono es el del tema al que se va, que es lo que hace que se entienda sin
+// etiqueta.
+//
 // Dos opciones y no tres: no hay "seguir al sistema". Se puede añadir cuando
 // haga falta —es leer prefers-color-scheme—, pero mientras el tema sea una
 // elección explícita, lo que se ve es lo que se pidió.
-const OPCIONES_DE_TEMA = [
-  { id: 'claro',  nombre: 'Claro',  Icon: IconSol },
-  { id: 'oscuro', nombre: 'Oscuro', Icon: IconLuna },
-]
-
-function SelectorDeTema() {
+function BotonDeTema() {
   const [tema, ponerTema] = usarTema()
+  const oscuro = tema === 'oscuro'
+  const Icon = oscuro ? IconSol : IconLuna
   return (
-    <div className="mt-6 overflow-hidden rounded-xl2 border border-line bg-surface">
-      <p className="border-b border-line px-4 py-2 text-xs uppercase tracking-wider text-ink-mute">
-        Aspecto
-      </p>
-      <div className="flex gap-2 p-3">
-        {OPCIONES_DE_TEMA.map(({ id, nombre, Icon }) => {
-          const activo = tema === id
-          return (
-            <button
-              key={id}
-              onClick={() => ponerTema(id)}
-              aria-pressed={activo}
-              className="relative flex flex-1 items-center justify-center gap-2 rounded-xl2 border border-line py-3"
-            >
-              {/* La misma pastilla que se desplaza en el selector de vista de
-                  Luniteca: el cambio se ve moverse de un lado a otro en vez de
-                  encenderse y apagarse. */}
-              {activo && (
-                <motion.span
-                  layoutId="tema-elegido"
-                  className="absolute inset-0 rounded-xl2 bg-accent-soft"
-                  transition={{ type: 'spring', stiffness: 420, damping: 34 }}
-                />
-              )}
-              <Icon className={`relative h-5 w-5 ${activo ? 'text-accent' : 'text-ink-mute'}`} />
-              <span className={`relative text-sm font-semibold ${activo ? 'text-accent' : 'text-ink-dim'}`}>
-                {nombre}
-              </span>
-            </button>
-          )
-        })}
-      </div>
-    </div>
+    <motion.button
+      whileTap={{ scale: 0.92 }}
+      onClick={() => ponerTema(oscuro ? 'claro' : 'oscuro')}
+      aria-label={oscuro ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+      className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent"
+    >
+      {/* El icono no salta: el que se va gira y se apaga mientras el que llega
+          entra girando. popLayout lo saca del flujo para que los dos ocupen el
+          mismo sitio durante el relevo. */}
+      <AnimatePresence mode="popLayout" initial={false}>
+        <motion.span
+          key={tema}
+          initial={{ opacity: 0, rotate: -60, scale: 0.6 }}
+          animate={{ opacity: 1, rotate: 0, scale: 1 }}
+          exit={{ opacity: 0, rotate: 60, scale: 0.6 }}
+          transition={{ duration: 0.22, ease: [0.32, 0.72, 0, 1] }}
+        >
+          <Icon className="h-[18px] w-[18px]" />
+        </motion.span>
+      </AnimatePresence>
+    </motion.button>
   )
 }
 
