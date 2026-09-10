@@ -742,6 +742,13 @@ const FilaLibro = memo(function FilaLibro({ entry, onAbrir, fuera = false }) {
 // "por dónde va", y ese dato no cabe en un lomo ni bajo una miniatura.
 export const TarjetaLeyendo = memo(function TarjetaLeyendo({ entry, onAbrir, fuera = false }) {
   const fechas = readingDatesLabel(entry)
+  // Páginas o porcentaje, a gusto de quien mira: un toque en la propia
+  // etiqueta cambia de una a otra. Va con la cuenta, como la vista, porque es
+  // la misma clase de gusto ("cómo prefiero mirar esto") y no tiene sentido
+  // que el móvil y el ordenador respondan distinto. Al ser una sola
+  // preferencia, cambian todas las tarjetas a la vez: si tocas una y solo se
+  // enterase esa, la lista quedaría mezclada sin que se entienda por qué.
+  const [porcentaje, setPorcentaje] = usarPreferencia('progresoEnPorcentaje', false)
   return (
     <button
       onClick={() => onAbrir(entry)}
@@ -759,7 +766,33 @@ export const TarjetaLeyendo = memo(function TarjetaLeyendo({ entry, onAbrir, fue
           <ProgressBar entry={entry} />
           <div className="mt-1.5 flex items-center justify-between gap-2 text-[11px] text-ink-mute">
             <span className="truncate">{fechas}</span>
-            <span className="shrink-0"><PagesLabel entry={entry} /></span>
+            {/* Un <span> y no un <button>: esto vive DENTRO del botón que abre
+                el libro, y un botón dentro de otro no es HTML válido. El
+                stopPropagation es lo que evita que el toque llegue a la
+                tarjeta y abra la ficha. El margen negativo con relleno agranda
+                la zona que responde al dedo sin mover nada de sitio. */}
+            <span
+              className="relative -m-2 shrink-0 cursor-pointer p-2 tabular-nums"
+              onClick={e => { e.stopPropagation(); setPorcentaje(!porcentaje) }}
+              title={porcentaje ? 'Ver las páginas' : 'Ver el porcentaje'}
+            >
+              {/* Las dos formas se cruzan en vez de saltar. popLayout saca de
+                  la fila a la que se va, así que la que llega ya manda en el
+                  ancho desde el primer fotograma y las fechas de al lado no
+                  pegan un tirón mientras dura el cambio. */}
+              <AnimatePresence mode="popLayout" initial={false}>
+                <motion.span
+                  key={porcentaje ? 'porcentaje' : 'paginas'}
+                  className="block"
+                  initial={{ opacity: 0, y: 5 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -5 }}
+                  transition={{ duration: 0.16, ease: [0.32, 0.72, 0, 1] }}
+                >
+                  <PagesLabel entry={entry} modo={porcentaje ? 'porcentaje' : 'paginas'} />
+                </motion.span>
+              </AnimatePresence>
+            </span>
           </div>
         </div>
       </div>

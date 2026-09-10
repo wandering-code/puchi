@@ -267,10 +267,14 @@ export function Chip({ children }) {
   )
 }
 
-// Páginas leídas de total, cuando se sabe el total.
-export function PagesLabel({ entry }) {
+// Por dónde vas, en páginas o en porcentaje. Las dos formas dicen lo mismo y
+// cada una sirve para algo distinto: las páginas para saber cuánto queda de
+// verdad, el porcentaje para comparar libros de tamaños que no se parecen.
+// Quien mira elige tocando la etiqueta (ver TarjetaLeyendo).
+export function PagesLabel({ entry, modo = 'paginas' }) {
   const total = totalPages(entry)
   if (!total) return null
+  if (modo === 'porcentaje') return <>{progressPct(entry)}%</>
   const actual = entry.current_page ?? Math.round((entry.progress || 0) * total)
   return <>{actual} / {total} pág.</>
 }
