@@ -397,7 +397,12 @@ function Aviso({ titulo, texto }) {
 }
 
 // ─── Barra de herramientas ─────────────────────────────────────────────────
-function Herramientas({
+//
+// La usan las DOS estanterías, la tuya y la de cualquiera desde su perfil: son
+// las mismas herramientas y tienen que verse y comportarse igual. Lo único que
+// cambia es que en la de otra persona no hay nada que añadir, así que sin
+// `onAnadir` ese botón no se pinta.
+export function Herramientas({
   vista, onVista, query, onQuery,
   onAbrirHoja, onAnadir, ordenActivo, filtrosActivos,
 }) {
@@ -465,10 +470,13 @@ function Herramientas({
               </BotonHerramienta>
 
               {/* Añadir libro: la acción que hace que esta versión se pueda
-                  usar sin volver a la Puchi actual. */}
-              <BotonHerramienta principal onClick={onAnadir} etiqueta="Añadir libro">
-                <IconPlus className="h-[18px] w-[18px]" />
-              </BotonHerramienta>
+                  usar sin volver a la Puchi actual. En la estantería de otra
+                  persona no hay nada que añadir aquí. */}
+              {onAnadir && (
+                <BotonHerramienta principal onClick={onAnadir} etiqueta="Añadir libro">
+                  <IconPlus className="h-[18px] w-[18px]" />
+                </BotonHerramienta>
+              )}
           </motion.div>
 
           {/* Crece desde la lupa, que es de donde sale, en vez de encenderse

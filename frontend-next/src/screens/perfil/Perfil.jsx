@@ -1,10 +1,9 @@
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { motion } from 'motion/react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api } from '../../platform/api'
 import { useAuth } from '../../platform/auth'
 import { EMPTY_FILTERS, agruparEstanteria, copiarAMiEstanteria, generosDeAutores, opcionesDeFiltro } from '../luniteca/shelf'
-import { BotonPlegarAnos, Coleccion, Plegable, TarjetaLeyendo } from '../luniteca/Luniteca'
+import { BotonPlegarAnos, Coleccion, Herramientas, Plegable, TarjetaLeyendo } from '../luniteca/Luniteca'
 import BookDetail from '../luniteca/BookDetail'
 import HojaFiltros from '../luniteca/HojaFiltros'
 import { useHoja } from '../luniteca/HojaInferior'
@@ -12,7 +11,7 @@ import { useCapa } from '../../platform/capas'
 import { usarVuelo } from '../luniteca/usarVuelo'
 import { usarPreferencia } from '../../platform/preferencias'
 import { CajaSeccion, TituloSeccion, huecoEntreSecciones, usarSeparacion } from '../luniteca/separacion'
-import { IconArrowLeft, IconFilter, IconGrid, IconList, IconLomos } from '../../ui/icons'
+import { IconArrowLeft } from '../../ui/icons'
 
 // La estantería de otra persona, con sus números. Se llega desde Actividad, y
 // es una pantalla propia (no un modal ni una hoja) para que el gesto de volver
@@ -25,29 +24,6 @@ import { IconArrowLeft, IconFilter, IconGrid, IconList, IconLomos } from '../../
 //
 // Con ?libro=ID abre directamente el registro de ese libro: es lo que usa la
 // actividad para llevarte a "lo que Lucía tiene de este libro".
-
-const VISTAS = [
-  { id: 'grid',  Icon: IconGrid,  label: 'Cuadrícula' },
-  { id: 'list',  Icon: IconList,  label: 'Lista' },
-  { id: 'lomos', Icon: IconLomos, label: 'Estantería' },
-]
-
-// Las secciones van sin plegar y sin filtros: en la estantería de otro se
-// entra a mirar, no a organizar.
-function Seccion({ variante, label, entries, vista, onAbrir, fueraId, generosDeAutor }) {
-  if (!entries?.length) return null
-  // El mismo encabezado que en la tuya, con la variante que tengas elegida en
-  // Ajustes: mirar la estantería de otro tiene que sentirse como mirar la
-  // propia, no como otra aplicación.
-  return (
-    <CajaSeccion variante={variante}>
-      {/* Aquí no hay barra de herramientas encima, así que el título que se
-          queda arriba se pega al borde, no a 56px como en la propia. */}
-      <TituloSeccion variante={variante} label={label} cuenta={entries.length} desde="top-0" />
-      <Coleccion entries={entries} vista={vista} onAbrir={onAbrir} fueraId={fueraId} generosDeAutor={generosDeAutor} />
-    </CajaSeccion>
-  )
-}
 
 export default function Perfil() {
   const { id } = useParams()
@@ -68,6 +44,7 @@ export default function Perfil() {
   // tiene por qué seguir puesto cuando vuelvas a la tuya.
   const [sort, setSort] = useState({ field: '', dir: 'asc' })
   const [filters, setFilters] = useState(EMPTY_FILTERS)
+  const [query, setQuery] = useState('')
   const hojaFiltros = useHoja()
   const [plegadas, setPlegadas] = useState({ read: false, want: false, dropped: true })
   const [anosPlegados, setAnosPlegados] = useState(() => new Set())
@@ -143,8 +120,8 @@ export default function Perfil() {
   }, [libroPedido, idQuien])
 
   const grupos = useMemo(
-    () => (shelf ? agruparEstanteria(shelf, { filters, query: '', sort }) : null),
-    [shelf, filters, sort],
+    () => (shelf ? agruparEstanteria(shelf, { filters, query, sort }) : null),
+    [shelf, filters, query, sort],
   )
   // Los géneros, carpetas y autores que se ofrecen son los de SU estantería:
   // filtrar por algo que no tiene no lleva a ninguna parte.
@@ -191,51 +168,18 @@ export default function Perfil() {
         </div>
       </header>
 
-      {/* Las mismas tres vistas que en la tuya, sin filtros ni orden: esto es
-          para asomarse, no para trabajar. */}
-      <div className="mb-4 flex items-center justify-end gap-2">
-        {/* Filtrar y ordenar SU estantería. Lo que se elija aquí vale mientras
-            se está mirando y se deshace al salir: no es tuyo, es de este rato. */}
-        <button
-          onClick={hojaFiltros.abrir}
-          aria-label="Filtrar y ordenar"
-          aria-pressed={filtrosActivos || !!sort.field}
-          className={`relative flex h-10 w-10 items-center justify-center rounded-full transition-colors ${
-            filtrosActivos || sort.field ? 'bg-accent/20 text-accent' : 'bg-accent/[0.08] text-accent active:bg-accent/20'
-          }`}
-        >
-          <IconFilter className="h-[18px] w-[18px]" />
-          {(filtrosActivos || sort.field) && (
-            <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-accent" />
-          )}
-        </button>
-
-        <div className="flex rounded-full border border-line p-1">
-          {VISTAS.map(({ id: v, Icon, label }) => (
-            <button
-              key={v}
-              // En transición: cambiar a lomos con muchos libros bloquea el
-              // hilo y se come la animación del propio botón (ver Luniteca).
-              onClick={() => startTransition(() => setVista(v))}
-              aria-label={label}
-              aria-pressed={vista === v}
-              className="relative flex h-9 w-11 items-center justify-center rounded-full"
-            >
-              {/* La misma pastilla que se desplaza en la estantería propia.
-                  Aquí no la había —solo cambiaba el color— y por eso el
-                  selector no animaba nada. */}
-              {vista === v && (
-                <motion.span
-                  layoutId="perfil-vista"
-                  className="absolute inset-0 rounded-full bg-accent/10"
-                  transition={{ type: 'spring', stiffness: 420, damping: 34 }}
-                />
-              )}
-              <Icon className={`relative h-5 w-5 ${vista === v ? 'text-accent' : 'text-ink-mute'}`} />
-            </button>
-          ))}
-        </div>
-      </div>
+      {/* Las MISMAS herramientas que en tu estantería: buscar, filtrar y las
+          tres vistas, en el mismo sitio y con la misma pinta. Sin el botón de
+          añadir, que aquí no hay nada que añadir. */}
+      <Herramientas
+        vista={vista}
+        onVista={v => startTransition(() => setVista(v))}
+        query={query}
+        onQuery={setQuery}
+        onAbrirHoja={hojaFiltros.abrir}
+        ordenActivo={!!sort.field}
+        filtrosActivos={filtrosActivos}
+      />
 
       {shelf === null && (
         <div className="grid grid-cols-3 gap-3">
@@ -260,7 +204,7 @@ export default function Perfil() {
               plegables, y luego lo pendiente y lo dejado a medias. */}
           {grupos.reading.length > 0 && (
             <CajaSeccion variante={variante}>
-              <TituloSeccion variante={variante} label="Leyendo" cuenta={grupos.reading.length} desde="top-0" />
+              <TituloSeccion variante={variante} label="Leyendo" cuenta={grupos.reading.length} />
               <div className="mt-3 space-y-2">
                 {grupos.reading.map(e => (
                   <TarjetaLeyendo key={e.id} entry={e} onAbrir={abrirLibro} fuera={e.id === fueraId} />
@@ -277,7 +221,6 @@ export default function Perfil() {
                 cuenta={grupos.readYearGroups.reduce((n, g) => n + g.items.length, 0)}
                 plegada={plegadas.read}
                 onAlternar={() => alternar('read')}
-                desde="top-0"
                 // Igual que en la tuya: solo con la sección abierta y con más
                 // de un año, que con uno su propio chevron ya hace lo mismo.
                 accion={!plegadas.read && grupos.years.length > 1 && (
@@ -322,7 +265,6 @@ export default function Perfil() {
                   cuenta={entries.length}
                   plegada={plegadas[clave]}
                   onAlternar={() => alternar(clave)}
-                  desde="top-0"
                 />
                 <Plegable abierta={!plegadas[clave]}>
                   <div className="pt-3">
