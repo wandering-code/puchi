@@ -771,27 +771,33 @@ export const TarjetaLeyendo = memo(function TarjetaLeyendo({ entry, onAbrir, fue
                 stopPropagation es lo que evita que el toque llegue a la
                 tarjeta y abra la ficha. El margen negativo con relleno agranda
                 la zona que responde al dedo sin mover nada de sitio. */}
+            {/* Las dos formas están SIEMPRE puestas, una encima de otra en la
+                misma celda, y lo único que cambia es cuál se ve. Así el hueco
+                mide siempre lo que mide la más ancha ("120 / 300 pág.") y no
+                se mueve nada al cambiar: ni la etiqueta, ni las fechas de al
+                lado. Con AnimatePresence la que se iba salía del flujo y la
+                que llegaba se colocaba en otro sitio, y el cambio se veía como
+                un texto escapándose por la derecha. */}
             <span
-              className="relative -m-2 shrink-0 cursor-pointer p-2 tabular-nums"
+              className="-m-2 grid shrink-0 cursor-pointer justify-items-end p-2 tabular-nums"
               onClick={e => { e.stopPropagation(); setPorcentaje(!porcentaje) }}
               title={porcentaje ? 'Ver las páginas' : 'Ver el porcentaje'}
             >
-              {/* Las dos formas se cruzan en vez de saltar. popLayout saca de
-                  la fila a la que se va, así que la que llega ya manda en el
-                  ancho desde el primer fotograma y las fechas de al lado no
-                  pegan un tirón mientras dura el cambio. */}
-              <AnimatePresence mode="popLayout" initial={false}>
+              {[false, true].map(esPorcentaje => (
                 <motion.span
-                  key={porcentaje ? 'porcentaje' : 'paginas'}
-                  className="block"
-                  initial={{ opacity: 0, y: 5 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -5 }}
-                  transition={{ duration: 0.16, ease: [0.32, 0.72, 0, 1] }}
+                  key={String(esPorcentaje)}
+                  className="[grid-area:1/1] text-right"
+                  initial={false}
+                  animate={{
+                    opacity: porcentaje === esPorcentaje ? 1 : 0,
+                    y: porcentaje === esPorcentaje ? 0 : (esPorcentaje ? 4 : -4),
+                  }}
+                  transition={{ duration: 0.22, ease: [0.32, 0.72, 0, 1] }}
+                  aria-hidden={porcentaje !== esPorcentaje}
                 >
-                  <PagesLabel entry={entry} modo={porcentaje ? 'porcentaje' : 'paginas'} />
+                  <PagesLabel entry={entry} modo={esPorcentaje ? 'porcentaje' : 'paginas'} />
                 </motion.span>
-              </AnimatePresence>
+              ))}
             </span>
           </div>
         </div>
