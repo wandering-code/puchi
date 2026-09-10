@@ -190,3 +190,30 @@ export function colorDePortada(url) {
     img.src = url
   })
 }
+
+// Leer por adelantado el color de un montón de portadas, para que los lomos no
+// se vean "cargar" cuando aparecen.
+//
+// El color de un lomo sale de mirar su portada, y eso pide descargarla y leerla
+// píxel a píxel. Hecho a la carta —cuando el lomo entra en pantalla— se veía
+// llegar: bajabas y los lomos cambiaban de color delante de ti. Adelantándolo
+// en cuanto se sabe qué libros hay, para cuando se abre la estantería ya están
+// casi todos, y a la siguiente visita todos (quedan guardados).
+//
+// De seis en seis: de golpe son trescientas imágenes a la vez, y en un móvil
+// eso compite con lo que de verdad se está mirando.
+export function precargarColores(urls) {
+  const cola = [...new Set((urls || []).filter(Boolean))]
+  let vivo = true
+  let enMarcha = 0
+  function siguiente() {
+    if (!vivo) return
+    while (enMarcha < 6 && cola.length) {
+      const url = cola.shift()
+      enMarcha++
+      colorDePortada(url).finally(() => { enMarcha--; siguiente() })
+    }
+  }
+  siguiente()
+  return () => { vivo = false }
+}

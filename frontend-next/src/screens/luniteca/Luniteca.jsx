@@ -14,6 +14,7 @@ import {
 import HojaFiltros from './HojaFiltros'
 import AnadirLibro from './AnadirLibro'
 import Lomos from './Lomos'
+import { precargarColores } from './colorPortada'
 import { usarVuelo } from './usarVuelo'
 import { CajaSeccion, TituloSeccion, huecoEntreSecciones, usarSeparacion } from './separacion'
 import { LLEGADA } from '../../ui/curvas'
@@ -37,7 +38,6 @@ export default function Luniteca() {
   // y en la estantería de cualquiera, entres desde donde entres.
   const [vista, setVista] = usarPreferencia('vista', 'grid')
   const [query, setQuery] = useState('')
-  const [buscando, setBuscando] = useState(false)
   const [sort, setSort] = useState({ field: '', dir: 'asc' })
   const [filters, setFilters] = useState(EMPTY_FILTERS)
   const hojaFiltros = useHoja()
@@ -184,6 +184,14 @@ export default function Luniteca() {
   // sección, un autor con libros leídos y pendientes saldría con dos letras.
   const generosDeAutor = useMemo(() => generosDeAutores(shelf), [shelf])
 
+  // Los colores de los lomos se van leyendo en cuanto se sabe qué libros hay,
+  // aunque la vista sea otra: si se hace al aparecer cada lomo, se ve llegar
+  // el color mientras bajas.
+  useEffect(() => {
+    if (!shelf?.length) return
+    return precargarColores(shelf.map(e => e.book?.cover_url))
+  }, [shelf])
+
 
   function cambiarVista(modo) {
     // En transición, y no a secas: dibujar la estantería de lomos con muchos
@@ -232,7 +240,6 @@ export default function Luniteca() {
       <Herramientas
         vista={vista} onVista={cambiarVista}
         query={query} onQuery={setQuery}
-        buscando={buscando} onBuscando={setBuscando}
         onAbrirHoja={hojaFiltros.abrir}
         onAnadir={hojaAnadir.abrir}
         ordenActivo={!!sort.field}
@@ -391,9 +398,24 @@ function Aviso({ titulo, texto }) {
 
 // ─── Barra de herramientas ─────────────────────────────────────────────────
 function Herramientas({
-  vista, onVista, query, onQuery, buscando, onBuscando,
+  vista, onVista, query, onQuery,
   onAbrirHoja, onAnadir, ordenActivo, filtrosActivos,
 }) {
+  // Que la búsqueda esté abierta es cosa SOLO de esta barra: si vive arriba,
+  // abrirla vuelve a renderizar la estantería entera y el toque se comía 49ms
+  // con doscientos libros, justo mientras el campo aparece. Lo que sí sube es
+  // el texto, que ese sí filtra.
+  const [buscando, setBuscando] = useState(false)
+  const onBuscando = setBuscando
+
+  // El campo vive montado, así que el foco hay que darlo a mano al abrirse.
+  // Va dentro del mismo gesto que lo abre: en el móvil, un focus() que llega
+  // más tarde puede no levantar el teclado.
+  const campo = useRef(null)
+  useEffect(() => {
+    if (buscando) campo.current?.focus()
+  }, [buscando])
+
   // Se queda pegada arriba al bajar por una estantería larga: con 300 libros,
   // volver arriba solo para filtrar es la diferencia entre usarlo y no usarlo.
   return (
@@ -414,61 +436,20 @@ function Herramientas({
           <IconSearch className="h-[18px] w-[18px]" />
         </BotonHerramienta>
 
-        <AnimatePresence initial={false} mode="popLayout">
-          {buscando ? (
-            <motion.div
-              key="campo"
-              layout
-              className="flex min-w-0 flex-1 items-center gap-2 rounded-xl2 border border-line bg-surface px-3"
-              // UN solo movimiento: entra deslizándose desde la lupa, que es
-              // de donde sale. Antes hacía dos cosas a la vez —la caja crecía
-              // por layout y además se estiraba con un scaleX de 0.6 a 1— y se
-              // veía en dos tiempos; el estirado, encima, deformaba el texto
-              // de dentro, que salía aplastado y luego se estiraba.
-              initial={{ opacity: 0, x: -14 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -10 }}
-              // Más corta que el resto de capas a propósito: el campo se
-              // enfoca solo, y en el móvil eso levanta el teclado, que sube
-              // animado y hace que el navegador recalcule medidas mientras
-              // tanto. Si la entrada del campo dura lo mismo que esa subida,
-              // las dos se pisan y se ve a trompicones. Acabando antes, no se
-              // solapan.
-              transition={{ duration: 0.16, ease: [0.32, 0.72, 0, 1] }}
-            >
-              <input
-                autoFocus
-                value={query}
-                onChange={e => onQuery(e.target.value)}
-                placeholder="Título o autor"
-                className="h-10 w-full min-w-0 bg-transparent text-[15px] outline-none placeholder:text-ink-mute"
-              />
-              <AnimatePresence>
-                {query && (
-                  <motion.button
-                    onClick={() => onQuery('')}
-                    aria-label="Limpiar"
-                    className="shrink-0 p-1 text-ink-mute"
-                    initial={{ opacity: 0, scale: 0.6 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.6 }}
-                    transition={{ duration: 0.15 }}
-                  >
-                    <IconX className="h-4 w-4" />
-                  </motion.button>
-                )}
-              </AnimatePresence>
-            </motion.div>
-          ) : (
-            <motion.div
-              key="acciones"
-              layout
-              className="flex flex-1 items-center gap-1"
-              initial={{ opacity: 0, x: -8 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -8 }}
-              transition={{ duration: 0.16, ease: [0.32, 0.72, 0, 1] }}
-            >
+        {/* El campo y los botones viven los DOS montados, uno encima del otro,
+            y solo se encienden y se apagan. Antes se montaba el campo al pulsar
+            la lupa y se desmontaban los botones, y eso es construir cosas en
+            mitad del gesto: con el teclado subiendo a la vez, se veía a
+            trompicones. Así no hay nada que construir, solo dos opacidades. */}
+        <div className="relative flex min-w-0 flex-1 items-center gap-1">
+          <motion.div
+            className="flex items-center gap-1"
+            initial={false}
+            animate={{ opacity: buscando ? 0 : 1 }}
+            transition={{ duration: 0.14, ease: [0.32, 0.72, 0, 1] }}
+            style={{ pointerEvents: buscando ? 'none' : 'auto' }}
+            inert={buscando}
+          >
               {/* Un solo botón para filtrar y ordenar: los dos viven en la
                   misma hoja, así que dos botones que abren lo mismo solo
                   confunden. */}
@@ -488,34 +469,73 @@ function Herramientas({
               <BotonHerramienta principal onClick={onAnadir} etiqueta="Añadir libro">
                 <IconPlus className="h-[18px] w-[18px]" />
               </BotonHerramienta>
+          </motion.div>
 
-              <div className="flex-1" />
+          <motion.div
+            className="absolute inset-0 flex min-w-0 items-center gap-2 rounded-xl2 border border-line bg-surface px-3"
+            initial={false}
+            animate={{ opacity: buscando ? 1 : 0 }}
+            transition={{ duration: 0.14, ease: [0.32, 0.72, 0, 1] }}
+            style={{ pointerEvents: buscando ? 'auto' : 'none' }}
+            inert={!buscando}
+          >
+            <input
+              ref={campo}
+              value={query}
+              onChange={e => onQuery(e.target.value)}
+              placeholder="Título o autor"
+              className="h-10 w-full min-w-0 bg-transparent text-[15px] outline-none placeholder:text-ink-mute"
+            />
+            <AnimatePresence>
+              {query && (
+                <motion.button
+                  onClick={() => onQuery('')}
+                  aria-label="Limpiar"
+                  className="shrink-0 p-1 text-ink-mute"
+                  initial={{ opacity: 0, scale: 0.6 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.6 }}
+                  transition={{ duration: 0.15 }}
+                >
+                  <IconX className="h-4 w-4" />
+                </motion.button>
+              )}
+            </AnimatePresence>
+          </motion.div>
 
-              {/* Píldora dentro de píldora: las dos redondeadas del todo, que
-                  con radios distintos la selección se salía por las esquinas. */}
-              <div className="flex items-center rounded-full border border-line p-1">
-                {[['grid', IconGrid, 'Cuadrícula'], ['list', IconList, 'Lista'], ['lomos', IconLomos, 'Estantería']].map(([modo, Icono, etiqueta]) => (
-                  <button
-                    key={modo}
-                    onClick={() => onVista(modo)}
-                    aria-label={etiqueta}
-                    aria-pressed={vista === modo}
-                    className="relative flex h-8 w-9 items-center justify-center"
-                  >
-                    {vista === modo && (
-                      <motion.span
-                        layoutId="luni-vista"
-                        className="absolute inset-0 rounded-full bg-accent-soft"
-                        transition={{ type: 'spring', stiffness: 420, damping: 34 }}
-                      />
-                    )}
-                    <Icono className={`relative h-[15px] w-[15px] ${vista === modo ? 'text-accent' : 'text-ink-mute'}`} />
-                  </button>
-                ))}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+          <div className="flex-1" />
+
+          {/* Píldora dentro de píldora: las dos redondeadas del todo, que con
+              radios distintos la selección se salía por las esquinas. Se apaga
+              al buscar, que entonces manda el campo. */}
+          <motion.div
+            className="flex shrink-0 items-center rounded-full border border-line p-1"
+          initial={false}
+          animate={{ opacity: buscando ? 0 : 1 }}
+          transition={{ duration: 0.14, ease: [0.32, 0.72, 0, 1] }}
+          style={{ pointerEvents: buscando ? 'none' : 'auto' }}
+          inert={buscando}
+        >
+          {[['grid', IconGrid, 'Cuadrícula'], ['list', IconList, 'Lista'], ['lomos', IconLomos, 'Estantería']].map(([modo, Icono, etiqueta]) => (
+            <button
+              key={modo}
+              onClick={() => onVista(modo)}
+              aria-label={etiqueta}
+              aria-pressed={vista === modo}
+              className="relative flex h-8 w-9 items-center justify-center"
+            >
+              {vista === modo && (
+                <motion.span
+                  layoutId="luni-vista"
+                  className="absolute inset-0 rounded-full bg-accent-soft"
+                  transition={{ type: 'spring', stiffness: 420, damping: 34 }}
+                />
+              )}
+              <Icono className={`relative h-[15px] w-[15px] ${vista === modo ? 'text-accent' : 'text-ink-mute'}`} />
+            </button>
+          ))}
+          </motion.div>
+        </div>
       </div>
     </div>
   )
