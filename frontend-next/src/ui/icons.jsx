@@ -161,3 +161,13 @@ export const IconCalendario = (p) => (
 export const IconMarcador = (p) => (
   <svg {...base} {...p}><path d="M7 4h10v16l-5-4.2L7 20z" /></svg>
 )
+
+// Una diana: hasta dónde hay que llegar. La usa el club para marcar la página
+// objetivo de la próxima quedada, donde solo caben un icono y un número.
+export const IconObjetivo = (p) => (
+  <svg {...base} {...p}>
+    <circle cx="12" cy="12" r="8" />
+    <circle cx="12" cy="12" r="3.6" />
+    <circle cx="12" cy="12" r="1.1" fill="currentColor" stroke="none" />
+  </svg>
+)

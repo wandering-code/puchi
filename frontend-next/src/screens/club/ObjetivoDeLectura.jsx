@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { api } from '../../platform/api'
 import HojaInferior, { useHoja } from '../luniteca/HojaInferior'
-import { IconPencil } from '../../ui/icons'
+import { IconObjetivo, IconPencil } from '../../ui/icons'
 import { diaDeSesion } from './clubShelf'
 
 // Hasta qué página hay que llevar leído para la próxima quedada.
@@ -23,8 +23,17 @@ import { diaDeSesion } from './clubShelf'
 // (`next_page`, `next_page_session_id`, `last_session_id`), para que la
 // estantería pueda enseñarlo sin pedir las sesiones de cada libro.
 //
-// El mismo componente en los dos sitios, con dos tamaños: si fueran dos, el día
-// que cambie la forma de escribirlo habría que acordarse de cambiarlo dos veces.
+// El mismo componente en los dos sitios, pero con dos formas muy distintas:
+//
+// - En la ficha es una banda con su título ("Para la próxima · lun 21 sept") y
+//   el número grande. Ahí hay sitio y es donde se administra.
+// - En la tarjeta de la estantería es SOLO una diana y el número, metido en la
+//   misma línea que las demás señas del libro. La primera versión era la banda
+//   entera también aquí y, en el móvil de verdad, se comía la tarjeta.
+//
+// Y en la tarjeta, sin objetivo puesto no se enseña nada — ni al admin: una
+// tarjeta de estantería es para reconocer el libro de un vistazo, no un sitio
+// donde rellenar huecos. El admin lo pone desde la ficha o desde la sesión.
 
 export default function ObjetivoDeLectura({ club, libro, esAdmin, onCambiado, variante = 'ficha' }) {
   const hoja = useHoja()
@@ -38,9 +47,9 @@ export default function ObjetivoDeLectura({ club, libro, esAdmin, onCambiado, va
   // dónde apuntarlo — el número pertenece a una quedada.
   const sesionId = club.next_page_session_id || club.last_session_id
 
-  // Sin objetivo puesto y sin poder ponerlo: no hay nada que enseñar, y una
-  // caja vacía diciendo "—" solo ocupa sitio en la tarjeta.
-  if (!pagina && !esAdmin) return null
+  // Sin objetivo no hay nada que enseñar: en la tarjeta nunca, y en la ficha
+  // solo si hay quien pueda ponerlo.
+  if (!pagina && (enTarjeta || !esAdmin)) return null
 
   const editable = esAdmin && !!sesionId
 
@@ -49,64 +58,73 @@ export default function ObjetivoDeLectura({ club, libro, esAdmin, onCambiado, va
     onCambiado()
   }
 
+  // Un <span role="button"> y no un <button>: en la tarjeta esto vive DENTRO
+  // del botón que abre el libro, y un botón dentro de otro no es HTML válido —
+  // el navegador lo deshace por su cuenta. El stopPropagation es lo que evita
+  // que el toque llegue a la tarjeta y abra la ficha en vez de esto. Es el
+  // mismo apaño que ya usa la etiqueta de páginas de "Leyendo" en tu
+  // estantería.
+  const gestos = editable
+    ? {
+        role: 'button',
+        tabIndex: 0,
+        title: 'Cambiar hasta qué página',
+        onClick: ev => { ev.stopPropagation(); hoja.abrir() },
+        onKeyDown: ev => {
+          if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); ev.stopPropagation(); hoja.abrir() }
+        },
+      }
+    : {}
+
   return (
     <>
-      {/* Un <span role="button"> y no un <button>: en la tarjeta esto vive
-          DENTRO del botón que abre el libro, y un botón dentro de otro no es
-          HTML válido — el navegador lo deshace por su cuenta. El
-          stopPropagation es lo que evita que el toque llegue a la tarjeta y
-          abra la ficha en vez de esto. Es el mismo apaño que ya usa la
-          etiqueta de páginas de "Leyendo" en tu estantería. */}
-      <span
-        role={editable ? 'button' : undefined}
-        tabIndex={editable ? 0 : undefined}
-        onClick={editable ? (ev => { ev.stopPropagation(); hoja.abrir() }) : undefined}
-        onKeyDown={editable ? (ev => {
-          if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); ev.stopPropagation(); hoja.abrir() }
-        }) : undefined}
-        title={editable ? 'Cambiar hasta qué página' : undefined}
-        className={`flex items-center gap-2 rounded-xl2 border border-accent-line bg-accent-soft ${
-          enTarjeta ? 'px-2.5 py-1.5' : 'px-3.5 py-3'
-        } ${editable ? 'cursor-pointer' : ''}`}
-      >
-        <span className="min-w-0 flex-1">
-          {/* En la tarjeta el texto va abreviado y con menos separación entre
-              letras: al lado de una portada, en un móvil estrecho, "PARA LA
-              PRÓXIMA · LUN 21 SEPT" se partía en dos renglones y la banda se
-              comía media tarjeta. En la ficha hay ancho de sobra. */}
-          <span className={`block uppercase text-accent/75 ${
-            enTarjeta ? 'text-[9px] tracking-[0.1em]' : 'text-[10px] tracking-[0.14em]'
-          }`}>
-            {cuando
-              ? `${enTarjeta ? 'Próxima' : 'Para la próxima'} · ${cuando}`
-              : 'Para la próxima'}
-          </span>
-          {/* El número no salta al cambiar: el que llega entra por abajo
-              mientras el que estaba sale por arriba, los dos en la misma celda
-              de la rejilla, así que el ancho de la caja no se mueve. */}
-          <span className={`mt-0.5 grid font-semibold text-accent ${enTarjeta ? 'text-[13px]' : 'text-[15px]'}`}>
-            <AnimatePresence mode="popLayout" initial={false}>
-              <motion.span
-                key={pagina || 'sin'}
-                className="[grid-area:1/1]"
-                initial={{ opacity: 0, y: 5 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -5 }}
-                transition={{ duration: 0.2, ease: [0.32, 0.72, 0, 1] }}
-              >
-                {pagina
-                  ? <>Hasta la p{enTarjeta ? 'ág.' : 'ágina'} {pagina}{total ? <span className="font-normal text-accent/65"> de {total}</span> : null}</>
-                  : (
-                    <span className="font-normal text-accent/70">
-                      {sesionId ? 'Sin marcar todavía' : 'Apúntalo al guardar la primera sesión'}
-                    </span>
-                  )}
-              </motion.span>
-            </AnimatePresence>
-          </span>
+      {enTarjeta ? (
+        // La diana y el número, y nada más. Los márgenes negativos con relleno
+        // agrandan la zona que responde al dedo sin mover nada de sitio: el
+        // texto mide 11px y sin esto no se acierta.
+        <span
+          {...gestos}
+          className={`-my-1 inline-flex items-center gap-1 rounded-full px-1 py-1 font-medium text-accent ${editable ? 'cursor-pointer' : ''}`}
+        >
+          <IconObjetivo className="h-3 w-3 shrink-0" />
+          hasta la pág. {pagina}
         </span>
-        {editable && <IconPencil className={`shrink-0 text-accent/70 ${enTarjeta ? 'h-3.5 w-3.5' : 'h-4 w-4'}`} />}
-      </span>
+      ) : (
+        <span
+          {...gestos}
+          className={`flex items-center gap-2 rounded-xl2 border border-accent-line bg-accent-soft px-3.5 py-3 ${editable ? 'cursor-pointer' : ''}`}
+        >
+          <span className="min-w-0 flex-1">
+            <span className="block text-[10px] uppercase tracking-[0.14em] text-accent/75">
+              Para la próxima{cuando ? ` · ${cuando}` : ''}
+            </span>
+            {/* El número no salta al cambiar: el que llega entra por abajo
+                mientras el que estaba sale por arriba, los dos en la misma
+                celda de la rejilla, así que la caja no cambia de alto. */}
+            <span className="mt-0.5 grid text-[15px] font-semibold text-accent">
+              <AnimatePresence mode="popLayout" initial={false}>
+                <motion.span
+                  key={pagina || 'sin'}
+                  className="[grid-area:1/1]"
+                  initial={{ opacity: 0, y: 5 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -5 }}
+                  transition={{ duration: 0.2, ease: [0.32, 0.72, 0, 1] }}
+                >
+                  {pagina
+                    ? <>Hasta la página {pagina}{total ? <span className="font-normal text-accent/65"> de {total}</span> : null}</>
+                    : (
+                      <span className="font-normal text-accent/70">
+                        {sesionId ? 'Sin marcar todavía' : 'Apúntalo al guardar la primera sesión'}
+                      </span>
+                    )}
+                </motion.span>
+              </AnimatePresence>
+            </span>
+          </span>
+          {editable && <IconPencil className="h-4 w-4 shrink-0 text-accent/70" />}
+        </span>
+      )}
 
       {/* Este <span> no pinta nada: está para cortar la propagación de lo que
           se pulse DENTRO de la hoja.
@@ -118,9 +136,13 @@ export default function ObjetivoDeLectura({ club, libro, esAdmin, onCambiado, va
           "Guardar" guardaba el número y además abría la ficha del libro, que
           es justo lo que el stopPropagation de la etiqueta evita al abrirla.
           Visto en una captura: la hoja se cerraba y detrás había aparecido la
-          ficha. */}
+          ficha.
+
+          `contents` para que no genere caja: en la tarjeta esto cuelga de la
+          fila de señas del libro, que es un flex con gap, y un hijo vacío
+          abriría un hueco después del número. */}
       {editable && (
-        <span onClick={ev => ev.stopPropagation()}>
+        <span className="contents" onClick={ev => ev.stopPropagation()}>
         <HojaInferior abierta={hoja.abierta} titulo="Hasta qué página" onCerrar={hoja.cerrar}>
           <FormularioObjetivo
             // La key ata el formulario al número que hay: la hoja vive
@@ -143,7 +165,12 @@ export default function ObjetivoDeLectura({ club, libro, esAdmin, onCambiado, va
 // un número, el total del libro como referencia y saltos para no escribir la
 // cifra entera. Se exporta porque la sesión lo lleva dentro de su formulario
 // (ver Sesiones.jsx) y tiene que pedirse igual en los dos sitios.
-export function CampoPagina({ valor, onCambiar, total, autoFoco = false }) {
+export function CampoPagina({ valor, onCambiar, total, autoFoco = false, variante = 'grande' }) {
+  // 'grande' es la hoja rápida, donde el número es LO ÚNICO que se pide y se
+  // enseña como tal. 'campo' es dentro del formulario de la sesión, donde es un
+  // campo más entre otros seis: allí una caja de 56px con el número a 24px
+  // rompía el ritmo de los demás y, con "de 496 páginas" al lado, se salía.
+  const grande = variante === 'grande'
   const [campo, setCampo] = useState(null)
 
   // El teclado sube solo cuando esto es lo único que se viene a escribir. Un
@@ -171,18 +198,24 @@ export function CampoPagina({ valor, onCambiar, total, autoFoco = false }) {
           enterKeyHint="done"
           placeholder="—"
           aria-label="Página"
-          className="h-14 w-32 rounded-xl2 border border-line bg-bg px-4 text-center font-display text-2xl font-bold tabular-nums text-ink outline-none transition-colors placeholder:font-normal placeholder:text-ink-mute focus:border-accent-line"
+          className={`shrink-0 rounded-xl2 border border-line bg-bg text-center tabular-nums text-ink outline-none transition-colors placeholder:font-normal placeholder:text-ink-mute focus:border-accent-line ${
+            grande
+              ? 'h-14 w-32 px-4 font-display text-2xl font-bold'
+              : 'h-12 w-24 px-3 text-[15px] font-semibold'
+          }`}
         />
-        {total
-          ? <span className="text-sm text-ink-mute">de {total} páginas</span>
-          : <span className="text-sm text-ink-mute">—</span>}
+        {total && (
+          <span className={`min-w-0 text-ink-mute ${grande ? 'text-sm' : 'text-[13px]'}`}>
+            de {total} páginas
+          </span>
+        )}
       </div>
 
       {/* Saltos rápidos sobre lo que ya hay: en la práctica esto se actualiza
           sumando lo que toque leer esta vez, no escribiendo la cifra entera
           desde cero. */}
       {valor !== '' && (
-        <div className="mt-3 flex flex-wrap gap-2">
+        <div className={`flex flex-wrap gap-2 ${grande ? 'mt-3' : 'mt-2'}`}>
           {[25, 50, 100].map(paso => (
             <button
               key={paso}

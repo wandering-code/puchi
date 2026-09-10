@@ -321,31 +321,54 @@ function TarjetaLecturaActual({ entrada, esAdmin, onAbrir, onCambiado, fuera = f
           <p className="mt-1 truncate font-display text-base font-semibold leading-tight">{libro.title}</p>
           <p className="mt-0.5 truncate text-xs text-ink-mute">{libro.author || 'Sin autor'}</p>
         </div>
-        <div className="mt-2">
-          <ObjetivoDeLectura
-            club={club}
-            libro={libro}
-            esAdmin={esAdmin}
-            onCambiado={onCambiado}
-            variante="tarjeta"
-          />
-        </div>
+        {/* Las señas del libro, todas en la misma línea y del mismo tamaño. El
+            objetivo va el primero y en color: es lo único de aquí que cambia
+            cada dos semanas y lo que se viene a mirar. Si no hay ninguno
+            puesto no se enseña nada — ver ObjetivoDeLectura.
+
+            Los puntos de separación se intercalan solos entre lo que haya, en
+            vez de ir escritos a mano delante de cada seña: escritos a mano,
+            cualquier seña que faltara dejaba su punto suelto (o, como pasó con
+            el objetivo, se olvidaba el suyo). */}
         <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-ink-mute">
-          {desde && <span>Desde el {desde}</span>}
-          {sesiones && <><span aria-hidden>·</span><span>{sesiones}</span></>}
-          {club.proposed_by && (
-            <>
-              <span aria-hidden>·</span>
-              <span className="inline-flex items-center gap-1">
-                <Avatar jugador={club.proposed_by} size={14} />
-                <NombreJugador jugador={club.proposed_by} />
-              </span>
-            </>
-          )}
+          {senasDelLibro({ club, libro, esAdmin, onCambiado, desde, sesiones })}
         </div>
       </div>
     </button>
   )
+}
+
+// Lo que se sabe del libro que está leyendo el club, en una fila: hasta qué
+// página hay que leer, desde cuándo lo lleva el club, cuántas sesiones y quién
+// lo propuso. Solo lo que exista, con un punto entre medias.
+function senasDelLibro({ club, libro, esAdmin, onCambiado, desde, sesiones }) {
+  const senas = [
+    <ObjetivoDeLectura
+      key="objetivo"
+      club={club}
+      libro={libro}
+      esAdmin={esAdmin}
+      onCambiado={onCambiado}
+      variante="tarjeta"
+    />,
+    desde && <span key="desde">Desde el {desde}</span>,
+    sesiones && <span key="sesiones">{sesiones}</span>,
+    club.proposed_by && (
+      <span key="quien" className="inline-flex items-center gap-1">
+        <Avatar jugador={club.proposed_by} size={14} />
+        <NombreJugador jugador={club.proposed_by} />
+      </span>
+    ),
+  ].filter(Boolean)
+
+  // El objetivo se quita solo cuando no hay ninguno puesto (devuelve null), y
+  // eso no se puede saber desde aquí: se detecta mirando el dato, que es el
+  // mismo que usa el componente para decidirlo.
+  const visibles = club.next_page ? senas : senas.filter(x => x.key !== 'objetivo')
+
+  return visibles.flatMap((seña, i) => (
+    i === 0 ? [seña] : [<span key={`sep-${i}`} aria-hidden>·</span>, seña]
+  ))
 }
 
 // ─── Estados de la pantalla ────────────────────────────────────────────────

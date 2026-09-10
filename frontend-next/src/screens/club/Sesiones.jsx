@@ -223,11 +223,15 @@ function FormularioSesion({ inicial, totalPaginas, onGuardar, onCancelar }) {
         <CamposFecha value={dia} onChange={setDia} />
       </Campo>
 
+      {/* min-w-0 en las dos columnas: un <input type="time"> trae un ancho
+          propio bastante mayor que su contenido, y un hijo de flex no baja de
+          su ancho intrínseco salvo que se le diga. Sin esto, en el iPhone las
+          dos horas se solapaban y la segunda se salía de la pantalla. */}
       <div className="flex gap-3">
-        <Campo etiqueta="Empieza" className="flex-1">
+        <Campo etiqueta="Empieza" className="min-w-0 flex-1">
           <input type="time" value={inicio} onChange={e => setInicio(e.target.value)} className={ENTRADA} />
         </Campo>
-        <Campo etiqueta="Termina" className="flex-1">
+        <Campo etiqueta="Termina" className="min-w-0 flex-1">
           <input type="time" value={fin} onChange={e => setFin(e.target.value)} className={ENTRADA} />
         </Campo>
       </div>
@@ -255,7 +259,7 @@ function FormularioSesion({ inicial, totalPaginas, onGuardar, onCancelar }) {
           del formulario: hasta dónde hay que leer para la próxima vez. Es lo
           que luego sale en la estantería del club y arriba en la ficha. */}
       <Campo etiqueta="Para la siguiente, hasta la página">
-        <CampoPagina valor={pagina} onCambiar={setPagina} total={totalPaginas} />
+        <CampoPagina valor={pagina} onCambiar={setPagina} total={totalPaginas} variante="campo" />
       </Campo>
 
       <AnimatePresence>
@@ -292,11 +296,14 @@ function FormularioSesion({ inicial, totalPaginas, onGuardar, onCancelar }) {
   )
 }
 
-const ENTRADA = 'h-12 w-full rounded-xl2 border border-line bg-bg px-3.5 text-[15px] text-ink outline-none transition-colors placeholder:text-ink-mute focus:border-accent-line'
+const ENTRADA = 'h-12 w-full min-w-0 rounded-xl2 border border-line bg-bg px-3.5 text-[15px] text-ink outline-none transition-colors placeholder:text-ink-mute focus:border-accent-line'
 
+// Sin `first:mt-0`: cuando dos Campos van uno al lado del otro dentro de un
+// flex, solo el primero es `:first-child` y perdía el margen de arriba — las
+// dos columnas quedaban descuadradas en vertical. Visto en el móvil.
 function Campo({ etiqueta, className = '', children }) {
   return (
-    <label className={`mt-4 block first:mt-0 ${className}`}>
+    <label className={`mt-4 block ${className}`}>
       <span className="mb-1.5 block px-1 text-[13px] text-ink-dim">{etiqueta}</span>
       {children}
     </label>
