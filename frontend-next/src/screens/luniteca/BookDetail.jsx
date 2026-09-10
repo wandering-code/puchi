@@ -163,13 +163,13 @@ export default function BookDetail({
             )}
           </div>
 
-          {/* Sin número debajo: la nota ya se lee en las propias estrellas. */}
-          {puedePuntuar && (
+          {/* Sin número debajo: la nota ya se lee en las propias estrellas. En
+              la estantería de otra persona, un libro sin puntuar no dice nada:
+              antes salía un "Sin puntuar" que solo ocupaba sitio. */}
+          {puedePuntuar && !(soloLectura && !(entry.rating > 0)) && (
             <div className="mt-5">
               {soloLectura
-                ? (entry.rating > 0
-                    ? <StarRating rating={entry.rating} size={22} />
-                    : <p className="text-xs text-ink-mute">Sin puntuar</p>)
+                ? <StarRating rating={entry.rating} size={22} />
                 : <EditableRating rating={entry.rating} onChange={r => onActualizar({ rating: r })} size={26} />}
             </div>
           )}
@@ -177,7 +177,7 @@ export default function BookDetail({
           {llevaProgreso && (
             <div className="mt-6 w-full">
               {soloLectura
-                ? <ProgressBar entry={entry} />
+                ? <VisorProgreso entry={entry} />
                 : <EditorProgreso entry={entry} onActualizar={onActualizar} />}
             </div>
           )}
@@ -337,6 +337,38 @@ function Apartado({ titulo, children }) {
 const PX_POR_PAGINA = 3
 const ZOOM_PROGRESO = 1.3
 
+// Por qué página va, con la misma cara en tu estantería y en la de otra
+// persona: la caja, "Pág. X de Y", el porcentaje y la barra. Lo único que
+// cambia es que la de otro no se puede arrastrar.
+const CAJA_PROGRESO = 'mx-auto w-full max-w-[300px] rounded-xl2 border border-line px-3 py-2.5'
+
+// Un libro marcado como leído no siempre tiene página guardada (puede haberse
+// marcado por otra vía): para la barra, se da por hecho el total.
+function paginaDe(entry, total) {
+  return entry.current_page ?? (entry.status === 'read' ? total : 0)
+}
+
+function TripasProgreso({ entry, pagina, total, resaltado = false }) {
+  return (
+    <>
+      <div className={`mb-1.5 flex justify-between text-xs ${resaltado ? 'font-bold text-accent' : 'text-ink-dim'}`}>
+        <span>Pág. {pagina} de {total}</span>
+        <span>{Math.round((pagina / total) * 100)}%</span>
+      </div>
+      <ProgressBar entry={{ ...entry, current_page: pagina }} />
+    </>
+  )
+}
+
+function VisorProgreso({ entry }) {
+  const total = totalPages(entry)
+  return (
+    <div className={CAJA_PROGRESO}>
+      <TripasProgreso entry={entry} pagina={paginaDe(entry, total)} total={total} />
+    </div>
+  )
+}
+
 function EditorProgreso({ entry, onActualizar }) {
   const total = totalPages(entry)
   const [editando, setEditando] = useState(false)
@@ -347,9 +379,7 @@ function EditorProgreso({ entry, onActualizar }) {
   const xInicial = useRef(0)
   const paginaInicial = useRef(0)
 
-  // Un libro marcado como leído no siempre tiene página guardada (puede
-  // haberse marcado por otra vía): para la barra, se da por hecho el total.
-  const paginaBase = entry.current_page ?? (entry.status === 'read' ? total : 0)
+  const paginaBase = paginaDe(entry, total)
   const pagina = editando ? previa : paginaBase
 
   function terminar(guardar) {
@@ -410,13 +440,9 @@ function EditorProgreso({ entry, onActualizar }) {
       // desplazamiento vertical sigue siendo del scroll. Esta barra ocupa 300px
       // de ancho y una buena franja de alto, así que era la más fácil de tocar
       // sin querer.
-      className="mx-auto w-full max-w-[300px] touch-pan-y select-none rounded-xl2 border border-line px-3 py-2.5"
+      className={`${CAJA_PROGRESO} touch-pan-y select-none`}
     >
-      <div className={`mb-1.5 flex justify-between text-xs ${editando ? 'font-bold text-accent' : 'text-ink-dim'}`}>
-        <span>Pág. {pagina} de {total}</span>
-        <span>{Math.round((pagina / total) * 100)}%</span>
-      </div>
-      <ProgressBar entry={{ ...entry, current_page: pagina }} />
+      <TripasProgreso entry={entry} pagina={pagina} total={total} resaltado={editando} />
     </motion.div>
   )
 }
