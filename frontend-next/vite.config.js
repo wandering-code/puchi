@@ -51,6 +51,77 @@ const selloEnCaliente = {
   },
 }
 
+// Un service worker registrado en el origen de dev (de un `vite preview`, de
+// una prueba con el build, de lo que sea) se queda mandando para siempre: la
+// PWA cachea el arranque y sirve una copia congelada, y como intercepta TODA
+// navegación bajo /next/, recargar no arregla nada — ni con ?v=, ni con
+// recarga forzada. Pasó de verdad: un iPhone se quedó 31 commits atrás
+// enseñando el build de la víspera mientras el servidor servía lo de hoy.
+//
+// Esta página vive FUERA de /next/, que es justo lo que la salva: el scope del
+// SW es /next/, así que esto no lo puede interceptar y siempre llega del
+// servidor. Desde aquí se desregistra todo y se borran las cachés.
+const limpiezaDeCachés = {
+  name: 'limpieza-de-caches',
+  configureServer(server) {
+    server.middlewares.use('/limpiar', (_req, res) => {
+      res.setHeader('content-type', 'text/html; charset=utf-8')
+      res.setHeader('cache-control', 'no-store')
+      res.end(`<!doctype html><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Limpiar la caché de Puchi</title>
+<style>
+  body { font: 17px/1.5 -apple-system, system-ui, sans-serif; margin: 0; padding: 2rem 1.5rem;
+         background: #f5f1ea; color: #2b2118; }
+  h1 { font-size: 1.4rem; margin: 0 0 .5rem }
+  pre { background: #fff; border: 1px solid #e3dbd0; border-radius: 12px; padding: 1rem;
+        white-space: pre-wrap; font-size: 14px }
+  button { font: inherit; font-weight: 600; border: 0; border-radius: 999px; padding: .8rem 1.4rem;
+           background: #b5603c; color: #fff; margin-top: 1rem }
+  a { color: #b5603c }
+</style>
+<h1>Limpiar la caché de Puchi</h1>
+<p>El servidor está en <b>${selloDeVersion()}</b>.</p>
+<pre id="estado">Mirando…</pre>
+<button id="limpiar">Borrar y volver a /next/</button>
+<p><a href="/next/">Ir a /next/ sin borrar nada</a></p>
+<script>
+  // Sin saltos de línea escapados dentro de esta plantilla, ni siquiera en un
+  // comentario: los resolvería el literal de JS de fuera, partiendo la línea en
+  // dos y dejando este script roto (pasó dos veces, y la página se quedaba
+  // muda). De ahí el rodeo de fromCharCode.
+  var NL = String.fromCharCode(10)
+  var estado = document.getElementById('estado')
+  async function mirar() {
+    var regs = navigator.serviceWorker ? await navigator.serviceWorker.getRegistrations() : []
+    var cachés = window.caches ? await caches.keys() : []
+    var lineas = ['service workers registrados: ' + regs.length]
+    regs.forEach(function (r) { lineas.push('   ' + r.scope) })
+    lineas.push('cachés: ' + cachés.length)
+    cachés.forEach(function (c) { lineas.push('   ' + c) })
+    lineas.push(regs.length + cachés.length === 0
+      ? 'Limpio: aquí no hay nada que estorbe.'
+      : 'Esto es lo que te está sirviendo una copia vieja.')
+    estado.textContent = lineas.join(NL)
+    return regs.length + cachés.length
+  }
+  mirar()
+  document.getElementById('limpiar').onclick = async function () {
+    estado.textContent = 'Borrando…'
+    var regs = navigator.serviceWorker ? await navigator.serviceWorker.getRegistrations() : []
+    await Promise.all(regs.map(function (r) { return r.unregister() }))
+    if (window.caches) {
+      var ks = await caches.keys()
+      await Promise.all(ks.map(function (k) { return caches.delete(k) }))
+    }
+    await mirar()
+    location.href = '/next/?limpio=' + Date.now()
+  }
+</script>`)
+    })
+  },
+}
+
 export default defineConfig({
   define: {
     __VERSION__: JSON.stringify(selloDeVersion()),
@@ -67,6 +138,7 @@ export default defineConfig({
   },
   plugins: [
     selloEnCaliente,
+    limpiezaDeCachés,
     react(),
     tailwindcss(),
     VitePWA({
