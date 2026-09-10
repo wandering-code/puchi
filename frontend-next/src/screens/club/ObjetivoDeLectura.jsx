@@ -175,51 +175,30 @@ export function CampoPagina({ valor, onCambiar, total, autoFoco = false, variant
     return () => clearTimeout(id)
   }, [campo, autoFoco])
 
-  const sumar = (paso) => {
-    const base = Number(valor || 0) + paso
-    onCambiar(String(Math.max(1, total ? Math.min(total, base) : base)))
-  }
-
+  // Solo el número, escrito a mano. Hubo un intento de atajos (+25, +50,
+  // +100) sobre lo que ya había, pensando que esto se actualizaría sumando lo
+  // que toque leer; en la práctica el número se sabe y se escribe, y los
+  // botones solo ocupaban sitio y daban un paso de más.
   return (
-    <div>
-      <div className="flex items-center gap-3">
-        <input
-          ref={setCampo}
-          value={valor}
-          onChange={ev => onCambiar(ev.target.value.replace(/\D/g, '').slice(0, 5))}
-          inputMode="numeric"
-          enterKeyHint="done"
-          placeholder="—"
-          aria-label="Página"
-          className={`shrink-0 rounded-xl2 border border-line bg-bg text-center tabular-nums text-ink outline-none transition-colors placeholder:font-normal placeholder:text-ink-mute focus:border-accent-line ${
-            grande
-              ? 'h-14 w-32 px-4 font-display text-2xl font-bold'
-              : 'h-12 w-24 px-3 text-[15px] font-semibold'
-          }`}
-        />
-        {total && (
-          <span className={`min-w-0 text-ink-mute ${grande ? 'text-sm' : 'text-[13px]'}`}>
-            de {total} páginas
-          </span>
-        )}
-      </div>
-
-      {/* Saltos rápidos sobre lo que ya hay: en la práctica esto se actualiza
-          sumando lo que toque leer esta vez, no escribiendo la cifra entera
-          desde cero. */}
-      {valor !== '' && (
-        <div className={`flex flex-wrap gap-2 ${grande ? 'mt-3' : 'mt-2'}`}>
-          {[25, 50, 100].map(paso => (
-            <button
-              key={paso}
-              type="button"
-              onClick={() => sumar(paso)}
-              className="rounded-full border border-line px-3 py-1.5 text-xs text-ink-dim transition-colors active:bg-surface-2"
-            >
-              +{paso}
-            </button>
-          ))}
-        </div>
+    <div className="flex items-center gap-3">
+      <input
+        ref={setCampo}
+        value={valor}
+        onChange={ev => onCambiar(ev.target.value.replace(/\D/g, '').slice(0, 5))}
+        inputMode="numeric"
+        enterKeyHint="done"
+        placeholder="—"
+        aria-label="Página"
+        className={`shrink-0 rounded-xl2 border border-line bg-bg text-center tabular-nums text-ink outline-none transition-colors placeholder:font-normal placeholder:text-ink-mute focus:border-accent-line ${
+          grande
+            ? 'h-14 w-32 px-4 font-display text-2xl font-bold'
+            : 'h-12 w-24 px-3 text-[15px] font-semibold'
+        }`}
+      />
+      {total && (
+        <span className={`min-w-0 text-ink-mute ${grande ? 'text-sm' : 'text-[13px]'}`}>
+          de {total} páginas
+        </span>
       )}
     </div>
   )
