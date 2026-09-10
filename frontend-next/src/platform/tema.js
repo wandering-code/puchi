@@ -44,13 +44,21 @@ export function aplicarTema(tema) {
 //
 // Si no está (o si el sistema pide menos movimiento), el tema se aplica y ya.
 // Es una gracia, no la funcionalidad: nunca debe impedir el cambio.
-export function cambiarDeTema(tema, origen) {
+// `alAplicar` va DENTRO de la transición a propósito, y esto es lo que la hace
+// funcionar. Guardar la preferencia provoca un render de React, y su efecto
+// vuelve a aplicar el tema; si eso pasa fuera, ocurre antes de que la
+// transición saque la foto del "antes" —basta con que se cuele en un
+// microtask— y entonces las dos fotos son idénticas: la animación corre
+// entera sin que se vea absolutamente nada. Medido: al entrar en el callback
+// el documento ya decía "oscuro".
+export function cambiarDeTema(tema, origen, alAplicar = () => {}) {
+  const aplicar = () => { aplicarTema(tema); alAplicar() }
   const menosMovimiento = window.matchMedia('(prefers-reduced-motion: reduce)').matches
   if (!document.startViewTransition || menosMovimiento || !origen) {
-    aplicarTema(tema)
+    aplicar()
     return
   }
-  const transicion = document.startViewTransition(() => aplicarTema(tema))
+  const transicion = document.startViewTransition(aplicar)
   transicion.ready.then(() => {
     const { x, y } = origen
     // El radio es hasta la esquina más lejana: si no, el círculo termina

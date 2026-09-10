@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { flushSync } from 'react-dom'
 import { NavLink, Route, Routes, useLocation } from 'react-router-dom'
 import { AnimatePresence, motion } from 'motion/react'
 import { useAuth } from '../platform/auth'
@@ -338,14 +339,20 @@ function BotonDeTema() {
   const oscuro = tema === 'oscuro'
   const Icon = oscuro ? IconSol : IconLuna
   // El tema nuevo entra por un círculo que se abre desde este botón, así que
-  // hace falta saber dónde está. Se aplica aquí mismo, dentro de la
-  // transición, y además se guarda: cuando la cuenta conteste, el efecto de
-  // usarTema volverá a aplicar lo mismo y no hará nada.
+  // hace falta saber dónde está.
+  //
+  // Guardar la preferencia va dentro de la transición, y con flushSync: si se
+  // hace fuera, React aplica el tema antes de que se saque la foto del
+  // "antes" y no se ve nada (ver cambiarDeTema). Y síncrono, para que el
+  // icono ya esté cambiado en la foto del "después" en vez de saltar al final.
   const cambiar = e => {
     const caja = e.currentTarget.getBoundingClientRect()
     const siguiente = oscuro ? 'claro' : 'oscuro'
-    cambiarDeTema(siguiente, { x: caja.left + caja.width / 2, y: caja.top + caja.height / 2 })
-    ponerTema(siguiente)
+    cambiarDeTema(
+      siguiente,
+      { x: caja.left + caja.width / 2, y: caja.top + caja.height / 2 },
+      () => flushSync(() => ponerTema(siguiente)),
+    )
   }
   return (
     <motion.button
