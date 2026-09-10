@@ -14,7 +14,7 @@ import {
 import HojaFiltros from './HojaFiltros'
 import AnadirLibro from './AnadirLibro'
 import Lomos from './Lomos'
-import { precargarColores } from './colorPortada'
+import { colorDePortada, precargarColores } from './colorPortada'
 import { usarVuelo } from './usarVuelo'
 import { CajaSeccion, TituloSeccion, huecoEntreSecciones, usarSeparacion } from './separacion'
 import { LLEGADA } from '../../ui/curvas'
@@ -743,6 +743,28 @@ const FilaLibro = memo(function FilaLibro({ entry, onAbrir, fuera = false }) {
 // "por dónde va", y ese dato no cabe en un lomo ni bajo una miniatura.
 export const TarjetaLeyendo = memo(function TarjetaLeyendo({ entry, onAbrir, fuera = false }) {
   const fechas = readingDatesLabel(entry)
+  // La tarjeta se tiñe del color de su propia portada. Es el mismo color que
+  // usan los lomos, leído de la imagen, así que no hay nada nuevo que
+  // calcular: un libro que estás leyendo se siente como ESE libro y no como
+  // una ficha más. Y es lo único de la estantería que trae color propio, que
+  // es justo lo que la hacía monótona.
+  //
+  // Llega después (hay que descargar la portada y mirarla), así que la tarjeta
+  // nace neutra y se tiñe con una transición en vez de dar un salto de color.
+  // Si la portada es de fuera y el navegador no deja leerla, se queda neutra:
+  // esto es un adorno, no puede romper nada.
+  const [paleta, setPaleta] = useState(null)
+  useEffect(() => {
+    let vigente = true
+    colorDePortada(entry.book.cover_url).then(p => { if (vigente && p) setPaleta(p) })
+    return () => { vigente = false }
+  }, [entry.book.cover_url])
+  const tinte = paleta
+    ? {
+        backgroundColor: `color-mix(in srgb, ${paleta.color} var(--tinte-libro), var(--color-surface))`,
+        borderColor: `color-mix(in srgb, ${paleta.color} var(--tinte-libro-borde), var(--color-line))`,
+      }
+    : undefined
   // Páginas o porcentaje, a gusto de quien mira: un toque en la propia
   // etiqueta cambia de una a otra. Va con la cuenta, como la vista, porque es
   // la misma clase de gusto ("cómo prefiero mirar esto") y no tiene sentido
@@ -753,7 +775,8 @@ export const TarjetaLeyendo = memo(function TarjetaLeyendo({ entry, onAbrir, fue
   return (
     <button
       onClick={() => onAbrir(entry)}
-      className={`flex w-full items-stretch gap-3 rounded-xl2 border border-line bg-surface p-3 text-left transition-transform duration-150 active:scale-[0.985] ${fuera ? 'invisible' : ''}`}
+      style={tinte}
+      className={`flex w-full items-stretch gap-3 rounded-xl2 border border-line bg-surface p-3 text-left transition-[transform,background-color,border-color] duration-300 active:scale-[0.985] ${fuera ? 'invisible' : ''}`}
     >
       <div className="w-14 shrink-0">
         <Cover url={entry.book.cover_url} priority />

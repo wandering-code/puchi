@@ -237,6 +237,12 @@
   /* El filo de una portada. Sobre el crema basta con una línea parda: la
      portada se recorta contra el fondo sin parecer que lleve marco. */
   --filo-portada: rgba(60, 40, 20, 0.18);
+
+  /* Cuánto del color del propio libro se lleva su tarjeta de "Leyendo".
+     Sobre el crema basta con poco: el tono se reconoce enseguida y el texto
+     no pierde contraste. */
+  --tinte-libro: 9%;
+  --tinte-libro-borde: 26%;
 }
 
 :root[data-tema="oscuro"] {
@@ -278,6 +284,11 @@
   /* Y el filo de las portadas es claro, no oscuro: sobre este fondo una línea
      parda no separa nada y las portadas oscuras se funden con él. */
   --filo-portada: rgba(255, 255, 255, 0.12);
+
+  /* Sobre el fondo oscuro hace falta más para que el tono se note: un 9% de
+     un color vivo sobre casi negro no se distingue del gris de al lado. */
+  --tinte-libro: 16%;
+  --tinte-libro-borde: 34%;
 }
 
 /* El cambio de tema (platform/tema.js) se anima a mano con un círculo que se
