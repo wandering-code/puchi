@@ -259,9 +259,17 @@
   animation: none;
   mix-blend-mode: normal;
 }
-/* La nueva encima, que es la que se recorta. */
-::view-transition-old(root) { z-index: 0; }
-::view-transition-new(root) { z-index: 1; }
+/* Cuál de las dos va encima depende de hacia dónde se cambia, y es lo único
+   que hace que apagar se vea como apagar: encendiendo se recorta la NUEVA
+   (la luz crece desde el botón), y apagando la de ANTES (la clara se recoge
+   hacia el botón y deja ver lo oscuro de debajo). Encima va siempre la que se
+   recorta; recortar la de abajo no se vería. El z-index de estos
+   pseudoelementos no se puede tocar desde JS, de ahí el atributo que pone
+   platform/tema.js. */
+:root[data-transicion="encendiendo"]::view-transition-old(root) { z-index: 0; }
+:root[data-transicion="encendiendo"]::view-transition-new(root) { z-index: 1; }
+:root[data-transicion="apagando"]::view-transition-old(root)    { z-index: 1; }
+:root[data-transicion="apagando"]::view-transition-new(root)    { z-index: 0; }
 /* Y el grupo tiene que durar lo mismo que el círculo. El navegador le pone
    250ms por su cuenta, y cuando ESA acaba se lleva por delante las capas de la
    transición: medido, el círculo se cortaba a la mitad y el resto de la
