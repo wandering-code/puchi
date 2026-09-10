@@ -2,7 +2,7 @@ import { useLayoutEffect, useRef, useState } from 'react'
 import { usarNodoQuieto, usarPantallaOcupada, usarPantallaQuieta } from '../../ui/quieto'
 import { LLEGADA, SALIDA } from '../../ui/curvas'
 import { createPortal } from 'react-dom'
-import { motion } from 'motion/react'
+import { motion, useIsPresent } from 'motion/react'
 import { useArrastreParaCerrar } from '../../ui/arrastre'
 
 // Una pantalla completa que sube desde abajo: la ficha de un libro y añadir
@@ -54,6 +54,10 @@ export default function PantallaInferior({ abierta = true, onCerrar, cabecera, c
   // en el momento de abrirse, y con initial={false} aparecía plantada en su
   // sitio, sin subir. Cada una necesita un arranque distinto.
   const nacioAbierta = useRef(abierta)
+  // ¿Sigue montada, o quien la usa la está quitando? La ficha vive premontada
+  // y esto vale siempre true; "añadir libro" sí se monta y se desmonta, y es
+  // lo que avisa de que se está yendo para que baje en vez de desaparecer.
+  const presente = useIsPresent()
 
   const [moviendose, setMoviendose] = useState(false)
   const estrenada = useRef(false)
@@ -80,11 +84,13 @@ export default function PantallaInferior({ abierta = true, onCerrar, cabecera, c
     const suelta = setTimeout(() => setMoviendose(false), 900)
     return () => { clearTimeout(suelta); clearTimeout(colchon.current) }
   }, [abierta])
-  usarPantallaQuieta(moviendose)
+  // Mientras se va tampoco se desplaza nada: es el mismo movimiento que al
+  // cerrarla desde dentro, y allí ya se bloqueaba.
+  usarPantallaQuieta(moviendose || !presente)
   // Y tampoco se desplaza mientras haya algo más en marcha —el libro volando,
   // sin ir más lejos—, que acaba después que ella.
   const ocupada = usarPantallaOcupada()
-  const quieta = moviendose || ocupada
+  const quieta = moviendose || ocupada || !presente
   usarNodoQuieto(cuerpo, quieta)
 
   return createPortal(
@@ -95,6 +101,7 @@ export default function PantallaInferior({ abierta = true, onCerrar, cabecera, c
         className="fixed inset-0 z-50 bg-velo backdrop-blur-[6px]"
         initial={nacioAbierta.current ? { opacity: 0 } : false}
         animate={{ opacity: abierta ? 1 : 0 }}
+        exit={{ opacity: 0 }}
         transition={{ duration: 0.25 }}
         style={{ pointerEvents: abierta ? 'auto' : 'none' }}
         onClick={() => onCerrar()}
@@ -113,6 +120,11 @@ export default function PantallaInferior({ abierta = true, onCerrar, cabecera, c
         // recuperando la opacidad, y la siguiente que llegaba con vuelo se veía
         // un fotograma abajo del todo antes de plantarse en su sitio.
         animate={{ y: abierta ? 0 : '100%', opacity: aVista ? 1 : 0 }}
+        // Al desmontarse hay que decirlo aparte: `animate` no llega a correr
+        // porque para entonces el elemento ya no está. Sin esto, "añadir
+        // libro" no bajaba, desaparecía de golpe (la ficha no lo notaba
+        // porque vive premontada y nunca se desmonta).
+        exit={{ y: '100%', transition: SALIDA }}
         onAnimationComplete={soltarConCalma}
         transition={{
           // Subiendo, el panel llega con su muelle. Con el libro volando no se
