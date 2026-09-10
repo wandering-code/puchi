@@ -6,17 +6,21 @@ import HojaInferior, { useHoja } from '../luniteca/HojaInferior'
 import { IconCalendario, IconPencil, IconPlus, IconTrash } from '../../ui/icons'
 import { IconoPeligro } from '../../ui/BotonPeligro'
 import { fechaLarga } from './clubShelf'
+import { CampoPagina } from './ObjetivoDeLectura'
 
-// Las sesiones de un libro del club: cuándo se quedó, qué parte tocaba y qué
-// se dijo. Las lee todo el club; las escribe solo el admin (lo impone el
-// backend, aquí solo se decide qué botones se enseñan).
+// Las sesiones de un libro del club: cuándo se quedó, qué parte tocaba, qué se
+// dijo y —lo último que se acuerda antes de levantarse— hasta qué página hay
+// que leer PARA LA SIGUIENTE. Ese número se guarda en la sesión en la que se
+// decidió, y es el que sale luego a la vista en la tarjeta del club y arriba en
+// la ficha (ver ObjetivoDeLectura). Las lee todo el club; las escribe solo el
+// admin (lo impone el backend, aquí solo se decide qué botones se enseñan).
 //
 // El formulario va en una hoja inferior y no metido entre las sesiones: son
 // seis campos y uno de ellos es un texto largo, así que en el móvil pide la
 // pantalla entera con el teclado subido, no un hueco que empuja el resto de la
 // ficha hacia abajo mientras escribes.
 
-export default function Sesiones({ entradaId, sesiones, esAdmin, onCambiado }) {
+export default function Sesiones({ entradaId, sesiones, totalPaginas, esAdmin, onCambiado }) {
   const hoja = useHoja()
   const [editando, setEditando] = useState(null)   // la sesión que se está tocando, o null = nueva
 
@@ -105,6 +109,7 @@ export default function Sesiones({ entradaId, sesiones, esAdmin, onCambiado }) {
           // nueva) seguirían puestos los campos de la anterior.
           key={editando?.id || 'nueva'}
           inicial={editando}
+          totalPaginas={totalPaginas}
           onGuardar={guardar}
           onCancelar={hoja.cerrar}
         />
@@ -138,6 +143,13 @@ function TarjetaSesion({ sesion, esAdmin, onEditar, onBorrar }) {
         {sesion.notes && (
           <p className="mt-1 whitespace-pre-line text-xs leading-relaxed text-ink-dim">{sesion.notes}</p>
         )}
+        {/* Lo que se acordó aquí para la vez siguiente. Con su propio realce:
+            de una sesión pasada esto es lo único que sigue haciendo falta. */}
+        {sesion.next_page && (
+          <p className="mt-1.5 inline-flex rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-medium text-accent">
+            Después: hasta la página {sesion.next_page}
+          </p>
+        )}
       </div>
       {esAdmin && (
         <div className="flex shrink-0 gap-1.5">
@@ -162,12 +174,13 @@ function TarjetaSesion({ sesion, esAdmin, onEditar, onBorrar }) {
 // es `type="date"` (por eso las fechas van con los tres <select> de
 // CamposFecha, ver editores.jsx), no el de hora, que levanta su ruedecita y se
 // comporta.
-function FormularioSesion({ inicial, onGuardar, onCancelar }) {
+function FormularioSesion({ inicial, totalPaginas, onGuardar, onCancelar }) {
   const [dia, setDia] = useState(inicial?.date || '')
   const [inicio, setInicio] = useState(inicial?.start_time === SIN_HORA ? '' : (inicial?.start_time || ''))
   const [fin, setFin] = useState(inicial?.end_time || '')
   const [parte, setParte] = useState(inicial?.part_to_discuss || '')
   const [notas, setNotas] = useState(inicial?.notes || '')
+  const [pagina, setPagina] = useState(inicial?.next_page ? String(inicial.next_page) : '')
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState(null)
 
@@ -184,6 +197,10 @@ function FormularioSesion({ inicial, onGuardar, onCancelar }) {
         end_time:        fin || '',
         part_to_discuss: parte.trim() || '',
         notes:           notas.trim() || '',
+        // Siempre presente, también vacío: el backend distingue "no lo toques"
+        // (campo ausente) de "quítalo" (null), y aquí el formulario tiene la
+        // última palabra sobre las dos cosas.
+        next_page:       pagina === '' ? null : Number(pagina),
       }
       // El día solo se manda si ha cambiado. Al editar, mandarlo siempre
       // impide quitar la hora: el backend rehace la fecha completa a partir
@@ -192,6 +209,10 @@ function FormularioSesion({ inicial, onGuardar, onCancelar }) {
       await onGuardar(datos)
     } catch (err) {
       setError(err.message || 'No se ha podido guardar')
+    } finally {
+      // También al terminar bien: la hoja se aparta pero no se desmonta, y el
+      // formulario solo se reconstruye si cambia su key. Sin esto, volver a
+      // editar la misma sesión la encontraba con el botón en "Guardando…".
       setGuardando(false)
     }
   }
@@ -228,6 +249,13 @@ function FormularioSesion({ inicial, onGuardar, onCancelar }) {
           placeholder="Lo que se dijo, lo que quedó pendiente…"
           className="w-full resize-none rounded-xl2 border border-line bg-bg p-3 text-[15px] leading-relaxed outline-none transition-colors placeholder:text-ink-mute focus:border-accent-line"
         />
+      </Campo>
+
+      {/* Lo último que se acuerda antes de levantarse, y por eso va al final
+          del formulario: hasta dónde hay que leer para la próxima vez. Es lo
+          que luego sale en la estantería del club y arriba en la ficha. */}
+      <Campo etiqueta="Para la siguiente, hasta la página">
+        <CampoPagina valor={pagina} onCambiar={setPagina} total={totalPaginas} />
       </Campo>
 
       <AnimatePresence>

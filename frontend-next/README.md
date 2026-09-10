@@ -34,8 +34,9 @@ nginx directamente, igual que el frontend actual.
   búsqueda propios que se deshacen al salir) pero sin poder editar nada suyo.
 - **Club de lectura**: la estantería del club, con su lectura actual, lo propuesto y
   lo leído por año; la ficha de cada libro con quién lo propuso, las puntuaciones de
-  todo el club y sus sesiones. Solo la ven los miembros del club, desde el menú
-  lateral. Ver más abajo.
+  todo el club y sus sesiones. Y **hasta qué página hay que leer para la próxima
+  quedada**, a la vista en la tarjeta del libro que se está leyendo y en su ficha.
+  Solo la ven los miembros del club, desde el menú lateral. Ver más abajo.
 - **Administración**: aprobar, rechazar, desactivar y borrar cuentas, y marcar quién
   entra en el club. Solo la ve el admin, desde el menú lateral.
 - **Claro y oscuro**: el tema se elige en el pie del menú lateral y vale para toda la
@@ -105,6 +106,24 @@ sesiones—, y eso viaja en `.club` dentro de la entrada traducida.
 
 Lo mismo con proponer un libro: `AnadirLibro` recibe `destino="club"` y manda al
 endpoint del club en vez de al de tu estantería. No hay dos altas de libro.
+
+### Hasta qué página, y por qué vive en la sesión
+
+El número que dice hasta dónde hay que llevar leído para la próxima quedada se
+guarda en **la sesión en la que se acordó** (`sessions.next_page`), no en el libro:
+se decide al cerrar una quedada ("lo dejamos aquí; para la próxima, hasta la 250"),
+así que cada sesión deja escrito hasta dónde llegaba la lectura siguiente y el
+historial cuenta por dónde fue cada una.
+
+El que vale **ahora mismo** es el de la última sesión **ya celebrada** que dejara uno
+apuntado. Lo que se escriba en una quedada que todavía no ha llegado es para después
+de esa, no para la que viene. Ese cálculo lo hace el backend y llega ya resuelto en la
+entrada del club (`next_page`, `next_page_session_id`, `last_session_id`), para que la
+estantería pueda enseñarlo de un vistazo sin pedir las sesiones de cada libro.
+
+El admin lo cambia desde el formulario de la sesión o, más rápido, tocando la propia
+banda en la tarjeta o en la ficha — que escribe en esa misma sesión. Sin ninguna
+sesión celebrada no hay dónde apuntarlo, y la banda lo dice en vez de fingir que sí.
 
 ### Quién puede qué
 

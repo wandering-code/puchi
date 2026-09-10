@@ -135,3 +135,19 @@ export function fechaCorta(iso) {
   if (!iso) return null
   return new Date(iso).toLocaleDateString('es', { day: 'numeric', month: 'short', year: 'numeric' })
 }
+
+// El día de la próxima quedada, corto y con el día de la semana ("dom 21 sep"):
+// va pegado a la página objetivo en un hueco estrecho, y saber que es domingo
+// dice más que el año, que casi siempre es el que ya se sabe.
+//
+// Sin año, pero con él si cae en otro: una sesión del 3 de enero vista en
+// diciembre necesita decir de qué enero habla.
+export function diaDeSesion(dia) {
+  if (!dia) return null
+  const fecha = new Date(`${dia}T12:00`)
+  const esteAno = fecha.getFullYear() === new Date().getFullYear()
+  return fecha.toLocaleDateString('es', {
+    weekday: 'short', day: 'numeric', month: 'short',
+    ...(esteAno ? {} : { year: 'numeric' }),
+  }).replace(/,/g, '')
+}

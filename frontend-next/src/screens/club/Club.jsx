@@ -18,6 +18,7 @@ import Avatar, { NombreJugador } from '../../ui/Avatar'
 import { IconMarcador } from '../../ui/icons'
 import { agruparClub, comoEntrada, fechaCorta, textoSesiones } from './clubShelf'
 import ClubBookDetail from './ClubBookDetail'
+import ObjetivoDeLectura from './ObjetivoDeLectura'
 
 // La estantería del club de lectura.
 //
@@ -159,7 +160,14 @@ export default function Club() {
             <TituloSeccion variante={variante} label="Lectura actual" cuenta={grupos.actual.length} estado="reading" />
             <div className="mt-3 space-y-2">
               {grupos.actual.map(e => (
-                <TarjetaLecturaActual key={e.id} entrada={e} onAbrir={abrirLibro} fuera={e.id === fueraId} />
+                <TarjetaLecturaActual
+                  key={e.id}
+                  entrada={e}
+                  esAdmin={admin}
+                  onAbrir={abrirLibro}
+                  onCambiado={cargar}
+                  fuera={e.id === fueraId}
+                />
               ))}
             </div>
           </CajaSeccion>
@@ -262,8 +270,13 @@ export default function Club() {
 // El único libro que el club está leyendo ahora mismo va aparte y más grande:
 // es a lo que se entra a mirar. No lleva barra de progreso —el club no tiene
 // una página por la que va, cada uno va por la suya— sino lo que sí es del
-// club: desde cuándo, quién lo propuso y cuántas sesiones lleva.
-function TarjetaLecturaActual({ entrada, onAbrir, fuera = false }) {
+// club: hasta dónde hay que leer para la próxima quedada, desde cuándo, quién
+// lo propuso y cuántas sesiones lleva.
+//
+// Lo de "hasta dónde" va DENTRO de la tarjeta y no solo en la ficha porque es
+// justo lo que se viene a mirar entre quedada y quedada, y bajar a la ficha
+// para leer un número es un toque de más en la única pregunta que se repite.
+function TarjetaLecturaActual({ entrada, esAdmin, onAbrir, onCambiado, fuera = false }) {
   const club = entrada.club
   const libro = entrada.book
   // Se tiñe del color de su propia portada, igual que las tarjetas de
@@ -307,6 +320,15 @@ function TarjetaLecturaActual({ entrada, onAbrir, fuera = false }) {
           </p>
           <p className="mt-1 truncate font-display text-base font-semibold leading-tight">{libro.title}</p>
           <p className="mt-0.5 truncate text-xs text-ink-mute">{libro.author || 'Sin autor'}</p>
+        </div>
+        <div className="mt-2">
+          <ObjetivoDeLectura
+            club={club}
+            libro={libro}
+            esAdmin={esAdmin}
+            onCambiado={onCambiado}
+            variante="tarjeta"
+          />
         </div>
         <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-ink-mute">
           {desde && <span>Desde el {desde}</span>}

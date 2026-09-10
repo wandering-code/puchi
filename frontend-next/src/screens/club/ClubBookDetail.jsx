@@ -12,6 +12,7 @@ import Avatar, { NombreJugador } from '../../ui/Avatar'
 import BotonPeligro from '../../ui/BotonPeligro'
 import { IconArrowLeft } from '../../ui/icons'
 import { CLUB_STATUS_LABEL, CLUB_STATUS_ORDER, fechaCorta } from './clubShelf'
+import ObjetivoDeLectura from './ObjetivoDeLectura'
 import Puntuaciones from './Puntuaciones'
 import Sesiones from './Sesiones'
 
@@ -128,6 +129,22 @@ export default function ClubBookDetail({
             )}
           </div>
 
+          {/* Hasta dónde hay que leer para la próxima quedada, mientras el
+              club esté con este libro. Va arriba, antes que nada de lo demás:
+              es la única pregunta que se repite entre sesión y sesión. En un
+              libro propuesto todavía no hay nada que leer, y en uno terminado
+              ya no importa. */}
+          {club.status === 'active' && (
+            <div className="mt-5 w-full">
+              <ObjetivoDeLectura
+                club={club}
+                libro={libro}
+                esAdmin={esAdmin}
+                onCambiado={onCambiado}
+              />
+            </div>
+          )}
+
           {/* La media del club, grande, cuando ya está leído: es el resultado
               de la lectura y lo primero que se viene a mirar en un libro
               antiguo. El desglose de quién puso qué va más abajo. */}
@@ -167,6 +184,7 @@ export default function ClubBookDetail({
           <Sesiones
             entradaId={club.id}
             sesiones={sesiones}
+            totalPaginas={paginas}
             esAdmin={esAdmin}
             onCambiado={() => { cargarSesiones(); onCambiado() }}
           />

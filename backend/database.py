@@ -198,6 +198,11 @@ class Session(Base):
     end_time         = Column(String,   nullable=True)    # "HH:MM" hora fin
     part_to_discuss  = Column(Text,     nullable=True)    # parte/capítulos a comentar
     notes            = Column(Text,     nullable=True)
+    # Hasta qué página hay que llevar leído PARA LA SIGUIENTE quedada. Se
+    # acuerda al cerrar esta sesión ("lo dejamos aquí; para la próxima, hasta
+    # la 250"), así que es un dato de la sesión en la que se decidió, no del
+    # libro: cada sesión deja escrito hasta dónde llegaba la lectura siguiente.
+    next_page        = Column(Integer,  nullable=True)
 
     club_entry    = relationship("ClubShelf", foreign_keys=[club_shelf_id])
 
