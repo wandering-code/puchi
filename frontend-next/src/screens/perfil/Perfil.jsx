@@ -198,9 +198,12 @@ export default function Perfil() {
       )}
 
       {grupos?.visible?.length > 0 && (
-        <div className={huecoEntreSecciones(variante)}>
-          {/* Misma forma que tu estantería, sección por sección: lo que estaba
-              leyendo con su progreso, los leídos agrupados por año y
+        <div className={`mt-5 ${huecoEntreSecciones(variante)}`}>
+          {/* El `mt-5` es el mismo respiro bajo la barra de herramientas que en
+              la tuya: sin él la primera sección salía pegada a ella.
+
+              Y de ahí para abajo, misma forma que tu estantería: lo que
+              estaba leyendo con su progreso, los leídos agrupados por año y
               plegables, y luego lo pendiente y lo dejado a medias. */}
           {grupos.reading.length > 0 && (
             <CajaSeccion variante={variante}>
