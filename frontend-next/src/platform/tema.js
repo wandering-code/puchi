@@ -34,3 +34,40 @@ export function aplicarTema(tema) {
   try { localStorage.setItem(CLAVE, elegido) } catch { /* ver arriba */ }
   return elegido
 }
+
+// El cambio de tema, con el círculo que se abre desde donde lo has tocado.
+//
+// Lo hace la View Transitions API, que es la única forma de que se vea el
+// contenido NUEVO apareciendo: el navegador guarda una foto de la pantalla de
+// antes, aplica el cambio, y deja animar una encima de otra. Sin ella habría
+// que tapar con un color plano y el contenido saldría de golpe al destaparlo.
+//
+// Si no está (o si el sistema pide menos movimiento), el tema se aplica y ya.
+// Es una gracia, no la funcionalidad: nunca debe impedir el cambio.
+export function cambiarDeTema(tema, origen) {
+  const menosMovimiento = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  if (!document.startViewTransition || menosMovimiento || !origen) {
+    aplicarTema(tema)
+    return
+  }
+  const transicion = document.startViewTransition(() => aplicarTema(tema))
+  transicion.ready.then(() => {
+    const { x, y } = origen
+    // El radio es hasta la esquina más lejana: si no, el círculo termina
+    // antes de cubrir la pantalla y el último trozo cambia de golpe.
+    const radio = Math.hypot(
+      Math.max(x, window.innerWidth - x),
+      Math.max(y, window.innerHeight - y),
+    )
+    document.documentElement.animate(
+      { clipPath: [`circle(0px at ${x}px ${y}px)`, `circle(${radio}px at ${x}px ${y}px)`] },
+      {
+        duration: 520,
+        easing: 'cubic-bezier(0.32, 0.72, 0, 1)',
+        // Se recorta la foto NUEVA, que va encima: así el tema entrante se
+        // abre paso sobre el anterior en vez de que el anterior se encoja.
+        pseudoElement: '::view-transition-new(root)',
+      },
+    )
+  }).catch(() => { /* si la transición se cancela, el tema ya está puesto */ })
+}

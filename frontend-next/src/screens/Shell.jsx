@@ -11,6 +11,7 @@ import Actividad from './actividad/Actividad'
 import Perfil from './perfil/Perfil'
 import { SelectorSeparacion, usarSeparacion } from './luniteca/separacion'
 import { usarTema } from '../platform/preferencias'
+import { cambiarDeTema } from '../platform/tema'
 import { IconActividad, IconBooks, IconExit, IconHome, IconLuna, IconMenu, IconPaw, IconSettings, IconSol } from '../ui/icons'
 
 const SECCIONES = [
@@ -336,10 +337,20 @@ function BotonDeTema() {
   const [tema, ponerTema] = usarTema()
   const oscuro = tema === 'oscuro'
   const Icon = oscuro ? IconSol : IconLuna
+  // El tema nuevo entra por un círculo que se abre desde este botón, así que
+  // hace falta saber dónde está. Se aplica aquí mismo, dentro de la
+  // transición, y además se guarda: cuando la cuenta conteste, el efecto de
+  // usarTema volverá a aplicar lo mismo y no hará nada.
+  const cambiar = e => {
+    const caja = e.currentTarget.getBoundingClientRect()
+    const siguiente = oscuro ? 'claro' : 'oscuro'
+    cambiarDeTema(siguiente, { x: caja.left + caja.width / 2, y: caja.top + caja.height / 2 })
+    ponerTema(siguiente)
+  }
   return (
     <motion.button
       whileTap={{ scale: 0.92 }}
-      onClick={() => ponerTema(oscuro ? 'claro' : 'oscuro')}
+      onClick={cambiar}
       aria-label={oscuro ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
       className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent"
     >

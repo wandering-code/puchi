@@ -250,6 +250,24 @@
   color-scheme: dark;
 }
 
+/* El cambio de tema (platform/tema.js) se anima a mano con un círculo que se
+   abre desde el botón. Hay que quitar el fundido que el navegador pone por su
+   cuenta: con los dos a la vez, la foto de antes se desvanece mientras el
+   círculo crece y por el hueco se ve el fondo del navegador. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+/* La nueva encima, que es la que se recorta. */
+::view-transition-old(root) { z-index: 0; }
+::view-transition-new(root) { z-index: 1; }
+/* Y el grupo tiene que durar lo mismo que el círculo. El navegador le pone
+   250ms por su cuenta, y cuando ESA acaba se lleva por delante las capas de la
+   transición: medido, el círculo se cortaba a la mitad y el resto de la
+   pantalla cambiaba de golpe. */
+::view-transition-group(root) { animation-duration: 520ms; }
+
 /* ── Sombras ─────────────────────────────────────────────────────────────
    Con nombre, y no un rgba() escrito dentro de cada componente, porque su
    tinta cambia con el tema (--color-sombra). Cada una es la de un sitio
