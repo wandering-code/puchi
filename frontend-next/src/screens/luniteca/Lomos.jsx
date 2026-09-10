@@ -251,8 +251,8 @@ alCargarFuentes(() => REPARTOS.clear())
 // sueltos en el componente porque los usa también el precalentado: si los dos
 // sitios no calculan EXACTAMENTE lo mismo, la clave del guardado no coincide y
 // el trabajo adelantado no sirve de nada.
-export function argumentosDeTexto(entry, generoDelAutor) {
-  const { ancho, alto, tamano, tipografia } = medidas(entry, generoDelAutor)
+export function argumentosDeTexto(entry, generoDelAutor, yaMedido) {
+  const { ancho, alto, tamano, tipografia } = yaMedido || medidas(entry, generoDelAutor)
   // El aire de arriba y abajo, proporcional al alto del lomo.
   const margen = Math.max(10, Math.round(alto * 0.09))
   return { titulo: entry.book.title, autor: entry.book.author, largoUtil: alto - margen * 2, anchoLomo: ancho, tipografia, tamanoIdeal: tamano, margen }
@@ -537,7 +537,7 @@ export default function Lomos({ entries, onAbrir, fueraId = null, generosDeAutor
         backgroundImage: `repeating-linear-gradient(to bottom, transparent 0 ${ALTO_FILA - 5}px, var(--color-line) ${ALTO_FILA - 5}px ${ALTO_FILA - 2}px, transparent ${ALTO_FILA - 2}px ${ALTO_FILA}px)`,
       }}
     >
-      {entries.slice(0, pintados).map(e => (
+      {entries.map((e, i) => (
         <Lomo
           key={e.id}
           entry={e}
@@ -546,6 +546,12 @@ export default function Lomos({ entries, onAbrir, fueraId = null, generosDeAutor
           volando={e.id === fueraId}
           sinPrisa={seAcabaLaEspera}
           generoDelAutor={generosDeAutor?.get(claveAutor(e.book.author)) || null}
+          // Los que todavía no toca se montan VACÍOS: ocupan su sitio exacto
+          // pero no llevan nada dentro. Antes ni siquiera se montaban, y la
+          // balda entraba midiendo una séptima parte de lo que iba a medir
+          // (1.421px de 9.401 con 300 libros) e iba creciendo a saltos: si
+          // bajabas deprisa te topabas con el fondo y el fondo se alejaba.
+          conContenido={i < pintados}
         />
       ))}
     </div>
@@ -560,18 +566,24 @@ export default function Lomos({ entries, onAbrir, fueraId = null, generosDeAutor
 // portadas de Open Library: solo hay que pintarlas, no inspeccionarlas.
 const FRANJA = 0.04
 
-const Lomo = memo(function Lomo({ entry, onAbrir, volando = false, sinPrisa = false, generoDelAutor = null }) {
-  const { ancho, alto, color, tamano, tipografia, torcido, tapaDura } = medidas(entry, generoDelAutor)
+const Lomo = memo(function Lomo({ entry, onAbrir, volando = false, sinPrisa = false, generoDelAutor = null, conContenido = true }) {
+  // Una sola vez: antes se medía aquí y otra vez dentro de argumentosDeTexto,
+  // y con la balda entera montada eso era el doble de trabajo por lomo.
+  const medido = medidas(entry, generoDelAutor)
+  const { ancho, alto, color, tamano, tipografia, torcido, tapaDura } = medido
   const conLetra = sinPrisa || fuenteLista(tipografia)
   const libro = entry.book
   // El color de la portada llega después (hay que cargarla y leerla), así que
   // el lomo nace con su color de reserva y cambia al de verdad en cuanto está.
   const [paleta, setPaleta] = useState(null)
   useEffect(() => {
+    // Solo el que se va a llenar: leer la portada cuesta cargarla y mirarla
+    // píxel a píxel, y con la balda entera montada eran trescientas a la vez.
+    if (!conContenido) return
     let vigente = true
     colorDePortada(libro.cover_url).then(p => { if (vigente && p) setPaleta(p) })
     return () => { vigente = false }
-  }, [libro.cover_url])
+  }, [libro.cover_url, conContenido])
 
   // Un lomo de fondo claro pide tinta oscura, como cualquier libro con la
   // cubierta clara. Solo se sabe cuando la portada se ha podido leer; con el
@@ -587,8 +599,10 @@ const Lomo = memo(function Lomo({ entry, onAbrir, volando = false, sinPrisa = fa
   // son un 6% de un lomo bajo pero solo un 4,7% de uno alto, y en los altos el
   // título quedaba pegado al canto de arriba (visto en "La voluntad de
   // muchos"). Un lomo impreso deja bastante más margen que eso.
-  const { margen, ...argumentos } = argumentosDeTexto(entry, generoDelAutor)
-  const texto = repartirTextoGuardado(argumentos)
+  const { margen, ...argumentos } = argumentosDeTexto(entry, generoDelAutor, medido)
+  // Repartir el título es lo más caro de un lomo, así que el que va vacío ni
+  // lo intenta: se hará cuando le toque llenarse.
+  const texto = conContenido ? repartirTextoGuardado(argumentos) : null
 
   // Nervios: las bandas en relieve del lomo de una tapa dura. Solo en los
   // libros gruesos, que son los que se encuadernan así.
@@ -628,7 +642,11 @@ const Lomo = memo(function Lomo({ entry, onAbrir, volando = false, sinPrisa = fa
           // haga falta mirar dentro para saber cuánto ocupa.
           contentVisibility: 'auto',
           containIntrinsicSize: `${ancho}px ${alto}px`,
-          backgroundColor: paleta?.color || color,
+          // Sin llenar todavía: un hueco del color del papel, no un libro. Con
+          // el color de reserva se veía un lomo morado que un instante después
+          // se volvía azul marino al llegar su portada, y ese cambio de color
+          // cantaba más que el propio hueco.
+          backgroundColor: conContenido ? (paleta?.color || color) : 'color-mix(in srgb, var(--color-line) 55%, transparent)',
           // Tapa dura: lomo redondeado. Rústica: plano.
           borderRadius: tapaDura ? '4px / 6px' : '2px',
           // Se apoya en su esquina de abajo, que es donde tocaría la balda.
@@ -637,8 +655,10 @@ const Lomo = memo(function Lomo({ entry, onAbrir, volando = false, sinPrisa = fa
           // Dos sombras: la que un libro proyecta sobre el de su derecha, y la
           // de contacto con la balda. Es lo que hace que la fila parezca tener
           // fondo en vez de ser un montón de rectángulos pegados.
-          boxShadow: '3px 0 6px -2px rgba(60,40,20,.45), 0 2px 3px -1px rgba(60,40,20,.35)',
-          ...(libro.cover_url && {
+          boxShadow: conContenido
+            ? '3px 0 6px -2px rgba(60,40,20,.45), 0 2px 3px -1px rgba(60,40,20,.35)'
+            : 'none',
+          ...(conContenido && libro.cover_url && {
             backgroundImage: `url(${libro.cover_url})`,
             // 1/0.04 = 2500%: el 4% izquierdo ocupa todo el ancho del lomo.
             backgroundSize: `${100 / FRANJA}% 100%`,
@@ -647,6 +667,9 @@ const Lomo = memo(function Lomo({ entry, onAbrir, volando = false, sinPrisa = fa
           }),
         }}
       >
+        {/* Un lomo sin llenar todavía: se ve su tamaño y su color, que es lo
+            que hace falta para que la balda mida lo que tiene que medir. */}
+        {conContenido && (<>
         {/* Velo: separa el texto del fondo. En un lomo oscuro oscurece un poco
             más; en uno claro aclara, porque ahí el título va en tinta oscura,
             como en un libro de verdad con la cubierta clara. */}
@@ -836,6 +859,7 @@ const Lomo = memo(function Lomo({ entry, onAbrir, volando = false, sinPrisa = fa
             <span className="h-1.5 w-1.5 rounded-full bg-accent ring-1 ring-black/20" />
           </span>
         )}
+        </>)}
       </button>
     </div>
   )
