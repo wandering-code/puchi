@@ -110,7 +110,11 @@ export function CamposFecha({ value, onChange }) {
     onChange(`${siguiente.a}-${String(siguiente.m).padStart(2, '0')}-${String(siguiente.d).padStart(2, '0')}`)
   }
 
-  const estilo = 'h-11 appearance-none rounded-xl2 border border-line bg-bg px-2.5 text-sm text-ink outline-none'
+  // min-w-0 en los tres: un <select> no baja de lo que mide su opción más
+  // larga ("septiembre") salvo que se le diga, y como hijo de una rejilla eso
+  // ensancha la columna y saca la fila entera de la pantalla en un móvil
+  // estrecho. La rejilla reparte porcentajes; los selects tienen que dejarse.
+  const estilo = 'h-11 w-full min-w-0 appearance-none rounded-xl2 border border-line bg-bg px-2.5 text-sm text-ink outline-none'
   // Las opciones, un frame después de que aparezca la hoja: entre los tres
   // desplegables y las dos fechas son más de doscientas, y crearlas a la vez
   // que la hoja le come los primeros fotogramas a la animación.

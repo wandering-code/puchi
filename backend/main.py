@@ -1243,6 +1243,10 @@ def _migrate():
         # club_shelf: estado del libro en el ciclo de vida del club
         "ALTER TABLE club_shelf ADD COLUMN IF NOT EXISTS status VARCHAR NOT NULL DEFAULT 'finished'",
         "ALTER TABLE club_shelf ADD COLUMN IF NOT EXISTS activated_at TIMESTAMP WITH TIME ZONE",
+        # Hasta qué página hay que leer para la próxima quedada: el objetivo
+        # vigente del libro. Nullable y sin default: un libro sin objetivo
+        # puesto no debe empezar diciendo "hasta la página 0".
+        "ALTER TABLE club_shelf ADD COLUMN IF NOT EXISTS next_page INTEGER",
         # Renombrar added_by → proposed_by (ADD + UPDATE + DROP es seguro y repetible)
         "ALTER TABLE club_shelf ADD COLUMN IF NOT EXISTS proposed_by INTEGER REFERENCES players(id)",
         """DO $$ BEGIN
@@ -3057,6 +3061,7 @@ class ClubEntryUpdateRequest(BaseModel):
     read_date:    Optional[str] = None
     club_notes:   Optional[str] = None
     proposed_by:  Optional[int] = None
+    next_page:    Optional[int] = None   # el objetivo vigente
 
 @app.patch("/shelf/club/{entry_id}")
 async def update_club_entry(
@@ -3081,6 +3086,13 @@ async def update_club_entry(
         player = db.query(Player).filter(Player.id == body.proposed_by).first()
         if player:
             entry.proposed_by = body.proposed_by
+    # next_page se mira con model_fields_set y no con "is not None" como el
+    # resto: en los demás campos "vaciar" es mandar cadena vacía, pero en un
+    # número la única forma de decir "quita el objetivo" es mandar null, y eso
+    # es indistinguible de "no lo toques" si solo se compara con None.
+    if "next_page" in body.model_fields_set:
+        # 0 o negativo es lo mismo que no tener objetivo: no existe la página 0.
+        entry.next_page = body.next_page if (body.next_page or 0) > 0 else None
     db.commit()
     db.refresh(entry)
     await _notify_luni("club")
@@ -3279,6 +3291,25 @@ class SessionUpdateRequest(BaseModel):
     notes:           Optional[str] = None
     next_page:       Optional[int] = None
 
+def _apuntar_objetivo(db, s: ClubSession):
+    """Guardar una sesión con "hasta qué página" pone también ese objetivo en el
+    libro, que es el que se enseña por toda la app.
+
+    No son dos verdades distintas: el del libro es el objetivo VIGENTE y el de
+    la sesión es el registro de lo que se acordó aquel día. Se escriben juntos
+    porque cerrar una quedada es justo el momento en que se decide — y así el
+    admin no tiene que acordarse de tocar dos sitios.
+
+    Solo cuando se pone un número, nunca al quitarlo: corregir el histórico de
+    una sesión vieja (o dejarlo en blanco) no debe borrar hasta dónde hay que
+    leer ahora."""
+    if not s.next_page or not s.club_shelf_id:
+        return
+    entrada = db.query(ClubShelf).filter(ClubShelf.id == s.club_shelf_id).first()
+    if entrada:
+        entrada.next_page = s.next_page
+
+
 def _parse_held_at(date: str, start_time: str = None) -> datetime:
     time_part = start_time or "00:00"
     return datetime.fromisoformat(f"{date}T{time_part}")
@@ -3316,6 +3347,7 @@ async def create_session(
         next_page=body.next_page if (body.next_page or 0) > 0 else None,
     )
     db.add(s)
+    _apuntar_objetivo(db, s)
     db.commit()
     db.refresh(s)
     await _notify_luni("sessions", club_shelf_id=s.club_shelf_id)
@@ -3354,6 +3386,7 @@ async def update_session(
     # es indistinguible de "no lo toques" si solo se compara con None.
     if "next_page" in body.model_fields_set:
         s.next_page = body.next_page if (body.next_page or 0) > 0 else None
+        _apuntar_objetivo(db, s)
     db.commit()
     db.refresh(s)
     await _notify_luni("sessions", club_shelf_id=s.club_shelf_id)
@@ -3470,12 +3503,12 @@ def _club_entry_out(e: ClubShelf, current_player_id: int = None) -> dict:
         "activated_at": e.activated_at.isoformat() if e.activated_at else None,
         "read_date":    e.read_date.isoformat()    if e.read_date    else None,
         "club_notes":   e.club_notes,
-        # Hasta dónde hay que leer ahora mismo y en qué sesión se acordó. Va
-        # calculado en la respuesta del libro para que la estantería del club
-        # pueda enseñarlo de un vistazo sin pedir las sesiones de cada libro.
-        **_objetivo_de_lectura(e),
-        # Y cuándo es la próxima quedada, para completar la frase
-        # ("para la próxima, dom 21 sep: hasta la pág. 250").
+        # Hasta dónde hay que leer para la próxima quedada. Es del libro y no
+        # de ninguna sesión: hace falta desde que se estrena el libro, cuando
+        # todavía no hay ninguna quedada a la que engancharlo.
+        "next_page":     e.next_page,
+        # Y cuándo es esa próxima quedada, si ya está puesta, para completar la
+        # frase ("para la próxima, dom 21 sep: hasta la pág. 250").
         "next_session":  _proxima_sesion(e),
         "avg_rating":    avg_votes,
         "vote_count":    len(revealed_votes),
@@ -3483,33 +3516,6 @@ def _club_entry_out(e: ClubShelf, current_player_id: int = None) -> dict:
         "my_log":        _club_log_out(my_log),
         "added_at":      e.added_at.isoformat()     if e.added_at     else None,
     }
-
-def _objetivo_de_lectura(e: ClubShelf) -> dict:
-    """Hasta qué página hay que llevar leído ahora mismo, y de qué sesión sale.
-
-    El número se acuerda al cerrar una sesión ("lo dejamos aquí; para la
-    próxima, hasta la 250"), así que el que vale es el de la ÚLTIMA sesión ya
-    celebrada que dejara uno escrito. Las de días que todavía no han llegado no
-    cuentan: lo que se apunte en ellas es para después de esa quedada, no para
-    la que viene."""
-    hoy = datetime.now(timezone.utc).date()
-    celebradas = sorted(
-        (s for s in e.sessions if s.held_at and s.held_at.date() <= hoy),
-        key=lambda s: s.held_at,
-        reverse=True,
-    )
-    con_objetivo = next((s for s in celebradas if s.next_page), None)
-    return {
-        "next_page":            con_objetivo.next_page if con_objetivo else None,
-        # Dónde vive ese número, para poder ir a cambiarlo.
-        "next_page_session_id": con_objetivo.id if con_objetivo else None,
-        # Y la última quedada que hubo, aunque no dejara nada apuntado: es
-        # donde habría que escribirlo si todavía no hay objetivo. Sin ninguna
-        # sesión celebrada no hay dónde apuntarlo, y eso también hay que poder
-        # decirlo en la pantalla.
-        "last_session_id":      celebradas[0].id if celebradas else None,
-    }
-
 
 def _proxima_sesion(e: ClubShelf) -> dict | None:
     """La sesión de hoy o la siguiente que haya. Las de días pasados no cuentan:

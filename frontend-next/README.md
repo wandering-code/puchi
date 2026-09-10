@@ -107,23 +107,27 @@ sesiones—, y eso viaja en `.club` dentro de la entrada traducida.
 Lo mismo con proponer un libro: `AnadirLibro` recibe `destino="club"` y manda al
 endpoint del club en vez de al de tu estantería. No hay dos altas de libro.
 
-### Hasta qué página, y por qué vive en la sesión
+### Hasta qué página: el objetivo va en el libro, el registro en la sesión
 
-El número que dice hasta dónde hay que llevar leído para la próxima quedada se
-guarda en **la sesión en la que se acordó** (`sessions.next_page`), no en el libro:
-se decide al cerrar una quedada ("lo dejamos aquí; para la próxima, hasta la 250"),
-así que cada sesión deja escrito hasta dónde llegaba la lectura siguiente y el
-historial cuenta por dónde fue cada una.
+Dos campos, y no son dos verdades:
 
-El que vale **ahora mismo** es el de la última sesión **ya celebrada** que dejara uno
-apuntado. Lo que se escriba en una quedada que todavía no ha llegado es para después
-de esa, no para la que viene. Ese cálculo lo hace el backend y llega ya resuelto en la
-entrada del club (`next_page`, `next_page_session_id`, `last_session_id`), para que la
-estantería pueda enseñarlo de un vistazo sin pedir las sesiones de cada libro.
+- **`club_shelf.next_page` es el objetivo vigente**: hasta dónde hay que llevar leído
+  para la próxima quedada. Es lo que se enseña por toda la app. Vive en el libro
+  porque hace falta **desde que se estrena** — "empezamos este, para la primera
+  sesión hasta la 120"—, cuando todavía no existe ninguna sesión a la que colgarlo.
+  Se intentó al revés (colgado de la sesión) y ese fue justo el caso que lo tumbó.
+- **`sessions.next_page` es el registro**: lo que se acordó en aquella quedada. Es el
+  histórico, y es lo que hace que la lista de sesiones cuente por dónde fue cada una.
 
-El admin lo cambia desde el formulario de la sesión o, más rápido, tocando la propia
-banda en la tarjeta o en la ficha — que escribe en esa misma sesión. Sin ninguna
-sesión celebrada no hay dónde apuntarlo, y la banda lo dice en vez de fingir que sí.
+Se mantienen solos: guardar una sesión con página escribe también el objetivo del
+libro (`_apuntar_objetivo`, en el backend), porque cerrar una quedada es justo el
+momento en que se decide. Solo al **poner** un número, nunca al quitarlo: corregir el
+histórico de una sesión vieja no debe borrar hasta dónde hay que leer ahora.
+
+El admin lo cambia desde el formulario de la sesión —en su propio bloque, "Para la
+próxima"— o, más rápido, tocando la banda en la ficha. En la tarjeta de la estantería
+solo se **enseña**, y solo si hay objetivo puesto: una tarjeta es para reconocer el
+libro de un vistazo, no un sitio donde rellenar huecos.
 
 ### Quién puede qué
 

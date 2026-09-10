@@ -13,15 +13,15 @@ import { diaDeSesion } from './clubShelf'
 // ficha. Lo pone el admin (el backend solo se lo deja a él) y lo lee todo el
 // mundo.
 //
-// **El número es de una sesión, no del libro.** Se acuerda al cerrar una
-// quedada ("lo dejamos aquí; para la próxima, hasta la 250"), así que se guarda
-// en la sesión en la que se decidió (`sessions.next_page`) y cada sesión deja
-// escrito hasta dónde llegaba la lectura siguiente. El que vale ahora mismo es
-// el de la última sesión YA CELEBRADA que dejara uno: lo que se apunte en una
-// quedada que todavía no ha llegado es para después de esa, no para la que
-// viene. Ese cálculo lo hace el backend y llega en la entrada del club
-// (`next_page`, `next_page_session_id`, `last_session_id`), para que la
-// estantería pueda enseñarlo sin pedir las sesiones de cada libro.
+// **El número vive en el libro** (`club_shelf.next_page`), no colgado de una
+// sesión. Se intentó lo segundo y no vale: al estrenar un libro todavía no hay
+// ninguna quedada a la que engancharlo, y el objetivo hace falta desde el
+// primer día — "empezamos este, para la primera sesión hasta la 120".
+//
+// Lo que sí guarda cada sesión es SU objetivo (`sessions.next_page`): el
+// registro de lo que se acordó aquel día. No son dos verdades distintas —
+// guardar una sesión con página escribe las dos, porque cerrar una quedada es
+// justo el momento en que se decide (ver `_apuntar_objetivo` en el backend).
 //
 // El mismo componente en los dos sitios, pero con dos formas muy distintas:
 //
@@ -42,19 +42,14 @@ export default function ObjetivoDeLectura({ club, libro, esAdmin, onCambiado, va
   const enTarjeta = variante === 'tarjeta'
   const total = libro?.num_pages || null
 
-  // Dónde se escribe: en la sesión que ya lo guarda o, si todavía no hay
-  // objetivo, en la última que se celebró. Sin ninguna sesión celebrada no hay
-  // dónde apuntarlo — el número pertenece a una quedada.
-  const sesionId = club.next_page_session_id || club.last_session_id
-
   // Sin objetivo no hay nada que enseñar: en la tarjeta nunca, y en la ficha
   // solo si hay quien pueda ponerlo.
   if (!pagina && (enTarjeta || !esAdmin)) return null
 
-  const editable = esAdmin && !!sesionId
+  const editable = esAdmin
 
   async function guardar(valor) {
-    await api(`/sessions/${sesionId}`, { method: 'PATCH', body: { next_page: valor } })
+    await api(`/shelf/club/${club.id}`, { method: 'PATCH', body: { next_page: valor } })
     onCambiado()
   }
 
@@ -114,9 +109,7 @@ export default function ObjetivoDeLectura({ club, libro, esAdmin, onCambiado, va
                   {pagina
                     ? <>Hasta la página {pagina}{total ? <span className="font-normal text-accent/65"> de {total}</span> : null}</>
                     : (
-                      <span className="font-normal text-accent/70">
-                        {sesionId ? 'Sin marcar todavía' : 'Apúntalo al guardar la primera sesión'}
-                      </span>
+                      <span className="font-normal text-accent/70">Sin marcar todavía</span>
                     )}
                 </motion.span>
               </AnimatePresence>
@@ -263,8 +256,7 @@ function FormularioObjetivo({ pagina, total, onGuardar, onCancelar }) {
   return (
     <form onSubmit={guardar} className="pb-2">
       <p className="text-sm leading-relaxed text-ink-dim">
-        Hasta dónde hay que llevar leído el libro para la próxima quedada. Queda apuntado en la
-        última sesión y lo ve todo el club.
+        Hasta dónde hay que llevar leído el libro para la próxima quedada. Lo ve todo el club.
       </p>
 
       <div className="mt-4">

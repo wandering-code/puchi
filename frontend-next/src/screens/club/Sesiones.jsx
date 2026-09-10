@@ -218,49 +218,59 @@ function FormularioSesion({ inicial, totalPaginas, onGuardar, onCancelar }) {
   }
 
   return (
-    <form onSubmit={guardar} className="pb-2">
-      <Campo etiqueta="Día">
-        <CamposFecha value={dia} onChange={setDia} />
-      </Campo>
-
-      {/* min-w-0 en las dos columnas: un <input type="time"> trae un ancho
-          propio bastante mayor que su contenido, y un hijo de flex no baja de
-          su ancho intrínseco salvo que se le diga. Sin esto, en el iPhone las
-          dos horas se solapaban y la segunda se salía de la pantalla. */}
-      <div className="flex gap-3">
-        <Campo etiqueta="Empieza" className="min-w-0 flex-1">
-          <input type="time" value={inicio} onChange={e => setInicio(e.target.value)} className={ENTRADA} />
+    /* `min-w-0` arriba del todo y en cada rejilla de dentro. Un formulario en
+       una hoja que ocupa el ancho de la pantalla no tiene ni un píxel de
+       sobra, y los controles nativos (un <select> con "septiembre", un
+       <input type="time">) traen un ancho propio del que no bajan salvo que se
+       les diga. Bastaba con que uno se pasara para que la hoja entera se
+       pudiera arrastrar de lado. */
+    <form onSubmit={guardar} className="min-w-0 pb-2">
+      {/* Tres bloques, y en este orden, porque es el orden en que se rellena:
+          cuándo se queda, de qué se habla y qué toca leer para la próxima. La
+          primera versión era una lista de seis campos sueltos y no se
+          entendía por qué el de la página estaba al final. */}
+      <Bloque titulo="Cuándo">
+        <Campo etiqueta="Día">
+          <CamposFecha value={dia} onChange={setDia} />
         </Campo>
-        <Campo etiqueta="Termina" className="min-w-0 flex-1">
-          <input type="time" value={fin} onChange={e => setFin(e.target.value)} className={ENTRADA} />
+
+        <div className="mt-4 grid grid-cols-2 gap-3">
+          <CampoHora etiqueta="Empieza" valor={inicio} onCambiar={setInicio} />
+          <CampoHora etiqueta="Termina" valor={fin} onCambiar={setFin} />
+        </div>
+      </Bloque>
+
+      <Bloque titulo="De qué se habla">
+        <Campo etiqueta="Parte a comentar">
+          <input
+            value={parte}
+            onChange={e => setParte(e.target.value)}
+            placeholder="Capítulos 1–5, Parte II…"
+            className={ENTRADA}
+          />
         </Campo>
-      </div>
 
-      <Campo etiqueta="Parte a comentar">
-        <input
-          value={parte}
-          onChange={e => setParte(e.target.value)}
-          placeholder="Capítulos 1–5, Parte II…"
-          className={ENTRADA}
-        />
-      </Campo>
+        <Campo etiqueta="Notas">
+          <textarea
+            value={notas}
+            onChange={e => setNotas(e.target.value)}
+            rows={3}
+            placeholder="Lo que se dijo, lo que quedó pendiente…"
+            className="w-full min-w-0 resize-none rounded-xl2 border border-line bg-bg p-3 text-[15px] leading-relaxed outline-none transition-colors placeholder:text-ink-mute focus:border-accent-line"
+          />
+        </Campo>
+      </Bloque>
 
-      <Campo etiqueta="Notas">
-        <textarea
-          value={notas}
-          onChange={e => setNotas(e.target.value)}
-          rows={3}
-          placeholder="Lo que se dijo, lo que quedó pendiente…"
-          className="w-full resize-none rounded-xl2 border border-line bg-bg p-3 text-[15px] leading-relaxed outline-none transition-colors placeholder:text-ink-mute focus:border-accent-line"
-        />
-      </Campo>
-
-      {/* Lo último que se acuerda antes de levantarse, y por eso va al final
-          del formulario: hasta dónde hay que leer para la próxima vez. Es lo
-          que luego sale en la estantería del club y arriba en la ficha. */}
-      <Campo etiqueta="Para la siguiente, hasta la página">
-        <CampoPagina valor={pagina} onCambiar={setPagina} total={totalPaginas} variante="campo" />
-      </Campo>
+      {/* Su propio bloque y no un campo más al final: no es un dato de esta
+          sesión, es lo que se acuerda AL CERRARLA para la siguiente. Guardarlo
+          aquí actualiza además el objetivo del libro, que es lo que se ve en
+          la estantería del club — y por eso conviene que se lea como algo
+          aparte y no como "otra casilla". */}
+      <Bloque titulo="Para la próxima" nota="Se pone también como objetivo del libro, a la vista de todo el club.">
+        <Campo etiqueta="Hasta la página">
+          <CampoPagina valor={pagina} onCambiar={setPagina} total={totalPaginas} variante="campo" />
+        </Campo>
+      </Bloque>
 
       <AnimatePresence>
         {error && (
@@ -298,14 +308,47 @@ function FormularioSesion({ inicial, totalPaginas, onGuardar, onCancelar }) {
 
 const ENTRADA = 'h-12 w-full min-w-0 rounded-xl2 border border-line bg-bg px-3.5 text-[15px] text-ink outline-none transition-colors placeholder:text-ink-mute focus:border-accent-line'
 
-// Sin `first:mt-0`: cuando dos Campos van uno al lado del otro dentro de un
-// flex, solo el primero es `:first-child` y perdía el margen de arriba — las
-// dos columnas quedaban descuadradas en vertical. Visto en el móvil.
+// Un grupo de campos con su encabezado. Lo que ordena el formulario.
+function Bloque({ titulo, nota = null, children }) {
+  return (
+    <section className="mt-5 min-w-0 first:mt-1">
+      <div className="mb-1 flex items-center gap-2">
+        <h4 className="shrink-0 text-[11px] uppercase tracking-[0.14em] text-ink-mute">{titulo}</h4>
+        <span className="h-px flex-1 bg-line" />
+      </div>
+      {nota && <p className="mb-2 text-xs leading-relaxed text-ink-mute">{nota}</p>}
+      {children}
+    </section>
+  )
+}
+
+// Sin `first:mt-0`: cuando dos Campos van uno al lado del otro dentro de una
+// rejilla, solo el primero es `:first-child` y perdía el margen de arriba —
+// las dos columnas quedaban descuadradas en vertical. Visto en el móvil.
 function Campo({ etiqueta, className = '', children }) {
   return (
-    <label className={`mt-4 block ${className}`}>
+    <label className={`mt-3 block min-w-0 ${className}`}>
       <span className="mb-1.5 block px-1 text-[13px] text-ink-dim">{etiqueta}</span>
       {children}
+    </label>
+  )
+}
+
+// La hora, en su celda y sin el vestido nativo. `appearance-none` no es
+// cosmético: con el aspecto nativo puesto, Safari de iOS le da al control un
+// ancho propio que ignora el de su caja, y las dos horas se salían por la
+// derecha. Quitándoselo obedece al `w-full` y el selector al tocarlo sigue
+// siendo el del sistema.
+function CampoHora({ etiqueta, valor, onCambiar }) {
+  return (
+    <label className="block min-w-0">
+      <span className="mb-1.5 block px-1 text-[13px] text-ink-dim">{etiqueta}</span>
+      <input
+        type="time"
+        value={valor}
+        onChange={e => onCambiar(e.target.value)}
+        className={`${ENTRADA} appearance-none text-center tabular-nums`}
+      />
     </label>
   )
 }
