@@ -52,6 +52,7 @@ export default function VueloDelLibro({ lomo, portada, destino, alTerminar, sent
   const viaje = useRef(null)
   const enderezar = useRef(null)
   const libro = useRef(null)
+  const tapa = useRef(null)
 
   useLayoutEffect(() => {
     if (!lomo || !destino) return
@@ -222,8 +223,34 @@ export default function VueloDelLibro({ lomo, portada, destino, alTerminar, sent
       { duration: DURACION, easing: CURVA_GIRO, fill: 'forwards', direction: volviendo ? 'reverse' : 'normal' },
     )
 
+    // La sombra, dividida por la escala de cada paso.
+    //
+    // El vuelo escala el contenedor entero, así que la sombra se agranda con
+    // él: un desenfoque de 30px se convierte en 120px cuando el libro llega a
+    // cuadruplicar su tamaño, y a esa anchura el mismo negro repartido no se
+    // ve. Quitarla del todo no cambiaba la captura, que es lo que delató que
+    // no estaba pintando nada. Declarándola dividida por la escala del paso,
+    // al multiplicarse por ella queda del mismo tamaño en pantalla todo el
+    // rato. Es el mismo truco que ya usa el relieve de la tapa.
+    //
+    // Dos sombras: la de contacto, corta y pegada, y la larga que separa el
+    // libro de lo que tiene detrás. Sin la primera el libro flota; sin la
+    // segunda parece pegado a la pantalla.
+    const sombra = tapa.current.animate(
+      pasos.map(({ t, crece }) => {
+        const s = 1 + (escala - 1) * crece
+        const px = n => `${(n / s).toFixed(2)}px`
+        return {
+          offset: t,
+          boxShadow: `0 ${px(2)} ${px(6)} ${px(-2)} rgb(var(--color-sombra) / .34),`
+            + ` 0 ${px(14)} ${px(34)} ${px(-10)} rgb(var(--color-sombra) / .45)`,
+        }
+      }),
+      { duration: DURACION, easing: CURVA_GIRO, fill: 'forwards', direction: volviendo ? 'reverse' : 'normal' },
+    )
+
     vuelo.onfinish = () => alTerminar?.()
-    return () => { vuelo.cancel(); derecho.cancel(); giro.cancel() }
+    return () => { vuelo.cancel(); derecho.cancel(); giro.cancel(); sombra.cancel() }
   }, [caja, x, y, escala])
 
   if (!caja || !destino) return null
@@ -259,7 +286,8 @@ export default function VueloDelLibro({ lomo, portada, destino, alTerminar, sent
           >
             {/* La tapa, en el plano del objeto: parte de la bisagra hacia atrás */}
             <div
-              className="absolute top-0 overflow-hidden rounded-l-[2px] rounded-r-md bg-surface-2 sombra-volando"
+              ref={tapa}
+              className="absolute top-0 overflow-hidden rounded-l-[2px] rounded-r-md bg-surface-2"
               style={{
                 // Medio píxel de solape con el lomo: los dos planos se juntan
                 // en la bisagra y, al redondear el navegador a subpíxeles, sin
