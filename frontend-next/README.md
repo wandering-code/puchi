@@ -26,16 +26,22 @@ nginx directamente, igual que el frontend actual.
   (vacía), Luniteca y Ajustes.
 - **Luniteca**: la estantería completa contra los datos reales — sesiones por estado,
   leídos agrupados por año, tres vistas (cuadrícula, lista y estantería de lomos),
-  búsqueda, filtros y orden, ficha del libro con todo lo editable, y edición de los
-  datos del libro y su portada.
+  búsqueda, filtros y orden, ficha del libro con todo lo editable, edición de los
+  datos del libro y su portada, y alta de libros (buscador contra Open Library y a
+  mano; falta el escáner de código de barras).
+- **Lo social**: Actividad, perfiles y la estantería de otra persona, que se ve y se
+  maneja igual que la tuya (mismas vistas, misma barra de herramientas, filtros y
+  búsqueda propios que se deshacen al salir) pero sin poder editar nada suyo.
+- **Claro y oscuro**: el tema se elige en el pie del menú lateral y vale para toda la
+  app. Ver más abajo.
 - **PWA**: manifest con iconos maskable, service worker y safe areas, para que añadida
   a la pantalla de inicio se comporte como una app.
 - **Avisos en vivo**: un WebSocket para toda la app (`platform/live.js`), con
   reconexión, que refresca cuando algo cambia desde otro dispositivo o desde la Puchi
   actual.
 
-Lo que falta (añadir libros, importadores, Club y Amigos) está en
-[issue #18](https://github.com/wandering-code/puchi/issues/18).
+Lo que falta (escáner de código de barras, importadores de Excel y Goodreads, Club y
+Amigos) está en [issue #18](https://github.com/wandering-code/puchi/issues/18).
 
 ## Cómo está montado
 
@@ -90,6 +96,60 @@ otras cosas— y cuyo endpoint lo **reemplaza entero**. Por eso, antes de escrib
 se relee lo que hay y se mezcla: si no, guardar una preferencia se llevaría por
 delante lo que la otra app tenga puesto.
 
+## Claro y oscuro
+
+**Todo el color sale de las variables de `@theme` en `index.css`, así que un tema es
+exactamente eso: los mismos nombres con otros valores.** Ningún componente sabe en
+cuál está. El claro vive en `@theme` (que es donde Tailwind los espera) y el oscuro en
+`:root[data-tema="oscuro"]`. Si algún día hace falta un tercero, es otro bloque igual.
+
+El corolario, y la regla que hay que respetar al escribir componentes: **ningún color
+escrito a mano**. Lo que se salía de los tokens fue justo lo que hubo que arreglar al
+añadir el oscuro:
+
+- El grano de papel del fondo era ruido negro. Sobre un fondo oscuro no se ve y la
+  superficie se queda lisa, que es el banding que ese grano evita. Ahora es
+  `--textura-papel` y en oscuro son manchas claras.
+- Las sombras estaban escritas como `rgba(60,40,20,…)` dentro de cinco componentes.
+  Ahora son utilidades con nombre (`sombra-panel`, `sombra-portada`, `relieve-portada`)
+  y su tinta es `--color-sombra`, que en oscuro es negro puro.
+- El velo de detrás de las hojas usaba `bg-ink/25`, y en oscuro la tinta es casi
+  blanca: **aclaraba** el fondo en vez de apagarlo. Token propio, `--color-velo`.
+- La barra de estado de iOS es una `<meta>`, no una variable, así que hay que moverla
+  a mano: lo hace `platform/tema.js`.
+
+**En oscuro la profundidad se hace con luz, no con sombra.** Un negro sobre casi negro
+no se ve. De ahí que la balda de los lomos tenga la cara MÁS clara que el fondo, y que
+el filo de las portadas (`--filo-portada`) sea claro en oscuro y pardo en claro.
+
+**El tema de verdad vive en la cuenta**, como el resto de gustos, con una copia en
+`localStorage` que `main.jsx` aplica antes del primer pintado: si no, abrir con el
+oscuro puesto suelta un fogonazo blanco mientras llega la cuenta.
+
+### El círculo que abre y cierra la luz
+
+El cambio de tema se anima con la View Transitions API: el navegador guarda una foto
+de la pantalla de antes, se aplica el cambio y se animan una encima de otra. Es la
+única forma de que se vea el contenido nuevo apareciendo; tapando con un color plano,
+el contenido sale de golpe al destaparlo.
+
+Tres cosas que no son opcionales, las tres descubiertas midiendo:
+
+1. **Guardar la preferencia va DENTRO de la transición.** Provoca un render de React, y
+   su efecto vuelve a aplicar el tema; fuera, eso se cuela antes de que se saque la
+   foto del "antes" y las dos fotos salen idénticas: la animación corre entera sin que
+   se vea nada.
+2. **El grupo de la transición tiene que durar lo mismo que el círculo.** El navegador
+   le pone 250 ms por su cuenta y al acabar se lleva las capas por delante: el círculo
+   se cortaba a la mitad.
+3. **Encima va siempre la foto que se recorta.** Encendiendo se recorta la nueva (la
+   luz crece desde el botón); apagando, la de antes (la luz se recoge hacia él). El
+   `z-index` de un `::view-transition-*` no se puede tocar desde JS, de ahí el
+   `data-transicion` que pone `platform/tema.js`.
+
+`page.screenshot()` **no captura las capas de `::view-transition`**: para verlo hay que
+grabar (screencast por CDP en Chromium, vídeo en WebKit).
+
 ## Convenciones de interfaz
 
 Fijadas probando en el móvil; cambiarlas sin motivo rompe la coherencia:
@@ -127,6 +187,12 @@ Es la tercera vista de la Luniteca y vive entera en `screens/luniteca/Lomos.jsx`
 `colorPortada.js` + `medirTexto.js`. Está aparte **a propósito**: si no acaba de
 convencer, se borran esos tres archivos y su entrada en el selector de vista, y las
 otras dos siguen exactamente igual.
+
+**La balda es un canto, no una línea.** Se dibuja con un `repeating-linear-gradient`
+que se repite cada fila, así que no hay que partir los libros en filas a mano ni saber
+cuántos caben. Y tiene cuatro piezas, que es lo que tiene un canto de verdad: la sombra
+donde los libros la tocan, el filo de luz, la cara y la sombra que proyecta debajo
+(`--balda-*`). En oscuro se invierte: la cara queda MÁS clara que el fondo.
 
 **Los lomos se dibujan, no se buscan.** No existe ninguna fuente de imágenes de lomos
 por ISBN: Open Library y Google Books sirven la portada (la cara frontal), y el lomo
@@ -325,7 +391,7 @@ así que el elemento es el mismo objeto entre renders y React se salta ese subá
 ```bash
 cd frontend-next
 npm install
-npm run dev     # https://<ip-lan>:5176/next/
+npm run dev -- --strictPort   # https://<ip-lan>:5176/next/
 ```
 
 - Escucha en `0.0.0.0`: se abre desde el móvil con la IP LAN del Mac
@@ -344,6 +410,27 @@ medio, el 5177 y la app instalada en el móvil pueden quedarse en una versión v
 que se note —el `registerType` es `prompt`, así que no se actualiza hasta aceptar el
 aviso—, y entonces lo que se mide en local y lo que se ve en el móvil no son el mismo
 código. Para desarrollo, el 5176 va siempre al día.
+
+**El sello de versión va en vivo en dev.** `__VERSION__` se calcula al arrancar Vite y
+se queda congelado: se sigue commiteando y el sello sigue enseñando el commit de
+entonces, que engaña más que no poner nada. Por eso hay un endpoint `/next/__version`
+(plugin `selloEnCaliente` en `vite.config.js`) que lo devuelve al momento, y la app lo
+consulta cuando corre en dev.
+
+**Si un dispositivo se queda atascado en una versión vieja: `/limpiar`.** Un service
+worker registrado en el origen de dev —de alguna prueba con el build— cachea el
+arranque y sirve una copia congelada para siempre. Intercepta TODA navegación bajo
+`/next/`, así que recargar no arregla nada, ni con `?v=`, ni con recarga forzada: no
+hay forma de salir desde el propio navegador. Pasó de verdad, con un iPhone 31 commits
+por detrás. `https://<ip>:5176/limpiar` vive FUERA de `/next/` —que es justo lo que la
+salva, porque el scope del service worker es `/next/`— y desde ahí se desregistra todo.
+Además, en dev la app desregistra al arrancar cualquier service worker que encuentre,
+que cubre las próximas veces pero no la actual (un dispositivo atascado tiene código
+viejo que por definición no lo trae).
+
+**Arranca el dev con `--strictPort`.** Si el 5176 está ocupado, Vite se mueve solo al
+siguiente y te deja mirando una versión vieja en el puerto de antes sin avisar. Pasó,
+con tres servidores apilados a la vez.
 
 **Prueba en los dos motores.** Chromium y WebKit no maquetan igual, y hay fallos que
 solo se ven en uno: el texto de los lomos se salía por los lados en Safari mientras en
