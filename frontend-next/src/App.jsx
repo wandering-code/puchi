@@ -2,6 +2,7 @@ import { AnimatePresence, motion } from 'motion/react'
 import { useAuth } from './platform/auth'
 import { useMobileViewport } from './platform/viewport'
 import { useLiveConnection } from './platform/live'
+import { usarTema } from './platform/preferencias'
 import LoginScreen from './screens/LoginScreen'
 import Shell from './screens/Shell'
 import UpdatePrompt from './ui/UpdatePrompt'
@@ -13,6 +14,11 @@ export default function App() {
   // que un cambio hecho en otro dispositivo (o en la Puchi actual, que comparte
   // base de datos) se vea aquí sin recargar.
   useLiveConnection(player?.token)
+  // Aquí arriba, y no en Ajustes: el tema es de toda la app, así que en cuanto
+  // llega la cuenta hay que ponerlo, se esté donde se esté. Si viviera en la
+  // pantalla que lo cambia, entrar directamente a Luniteca dejaría el tema de
+  // la copia local aunque en la cuenta hubiera otro.
+  usarTema()
 
   return (
     <div className="relative h-full w-full overflow-hidden bg-bg">

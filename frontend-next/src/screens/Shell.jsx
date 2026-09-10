@@ -10,7 +10,8 @@ import Luniteca from './luniteca/Luniteca'
 import Actividad from './actividad/Actividad'
 import Perfil from './perfil/Perfil'
 import { SelectorSeparacion, usarSeparacion } from './luniteca/separacion'
-import { IconActividad, IconBooks, IconExit, IconHome, IconMenu, IconPaw, IconSettings } from '../ui/icons'
+import { usarTema } from '../platform/preferencias'
+import { IconActividad, IconBooks, IconExit, IconHome, IconLuna, IconMenu, IconPaw, IconSettings, IconSol } from '../ui/icons'
 
 const SECCIONES = [
   { to: '/',           label: 'Inicio',     Icon: IconHome },
@@ -162,7 +163,7 @@ function MenuLateral({ abierto, onCerrar, onNavegar }) {
       {/* El velo se pinta con la tinta de la paleta, no con negro: sobre el
           crema, un negro puro corta demasiado. */}
       <motion.div
-        className="fixed inset-0 z-40 bg-ink/25"
+        className="fixed inset-0 z-40 bg-velo"
         initial={false}
         animate={{ opacity: abierto ? 1 : 0 }}
         transition={{ duration: 0.2 }}
@@ -286,6 +287,8 @@ function Ajustes() {
       <h2 className="font-display text-[1.75rem] font-bold tracking-[-0.02em]">Ajustes</h2>
       <p className="mt-2 text-sm text-ink-dim">Sesión de {player?.name}.</p>
 
+      <SelectorDeTema />
+
       <SeparacionDeSecciones />
 
       <div className="mt-6 overflow-hidden rounded-xl2 border border-line bg-surface">
@@ -311,6 +314,56 @@ function Ajustes() {
       <p className="mt-2 px-1 text-xs text-ink-mute">
         La sesión es la misma que la de la Puchi actual: al cerrarla aquí, se cierra también allí.
       </p>
+    </div>
+  )
+}
+
+// Claro u oscuro, para toda Puchi. Va con la cuenta, así que se elige una vez
+// y se ve igual en el móvil y en el ordenador.
+//
+// Dos opciones y no tres: no hay "seguir al sistema". Se puede añadir cuando
+// haga falta —es leer prefers-color-scheme—, pero mientras el tema sea una
+// elección explícita, lo que se ve es lo que se pidió.
+const OPCIONES_DE_TEMA = [
+  { id: 'claro',  nombre: 'Claro',  Icon: IconSol },
+  { id: 'oscuro', nombre: 'Oscuro', Icon: IconLuna },
+]
+
+function SelectorDeTema() {
+  const [tema, ponerTema] = usarTema()
+  return (
+    <div className="mt-6 overflow-hidden rounded-xl2 border border-line bg-surface">
+      <p className="border-b border-line px-4 py-2 text-xs uppercase tracking-wider text-ink-mute">
+        Aspecto
+      </p>
+      <div className="flex gap-2 p-3">
+        {OPCIONES_DE_TEMA.map(({ id, nombre, Icon }) => {
+          const activo = tema === id
+          return (
+            <button
+              key={id}
+              onClick={() => ponerTema(id)}
+              aria-pressed={activo}
+              className="relative flex flex-1 items-center justify-center gap-2 rounded-xl2 border border-line py-3"
+            >
+              {/* La misma pastilla que se desplaza en el selector de vista de
+                  Luniteca: el cambio se ve moverse de un lado a otro en vez de
+                  encenderse y apagarse. */}
+              {activo && (
+                <motion.span
+                  layoutId="tema-elegido"
+                  className="absolute inset-0 rounded-xl2 bg-accent-soft"
+                  transition={{ type: 'spring', stiffness: 420, damping: 34 }}
+                />
+              )}
+              <Icon className={`relative h-5 w-5 ${activo ? 'text-accent' : 'text-ink-mute'}`} />
+              <span className={`relative text-sm font-semibold ${activo ? 'text-accent' : 'text-ink-dim'}`}>
+                {nombre}
+              </span>
+            </button>
+          )
+        })}
+      </div>
     </div>
   )
 }

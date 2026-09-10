@@ -5,6 +5,12 @@ import './index.css'
 import App from './App'
 import { AuthProvider } from './platform/auth'
 import { PreferenciasProvider } from './platform/preferencias'
+import { aplicarTema, temaGuardado } from './platform/tema'
+
+// Antes de montar nada: el tema tiene que estar puesto en el primer pintado.
+// El que manda es el de la cuenta, pero esa tarda en llegar del servidor, así
+// que se arranca con la copia local y el proveedor lo corrige si no coincide.
+aplicarTema(temaGuardado())
 
 // En dev no hay service worker (devOptions está desactivado), así que si hay
 // uno registrado es basura de alguna prueba con el build servida en este mismo

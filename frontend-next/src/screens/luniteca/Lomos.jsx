@@ -656,7 +656,7 @@ const Lomo = memo(function Lomo({ entry, onAbrir, volando = false, sinPrisa = fa
           // de contacto con la balda. Es lo que hace que la fila parezca tener
           // fondo en vez de ser un montón de rectángulos pegados.
           boxShadow: conContenido
-            ? '3px 0 6px -2px rgba(60,40,20,.45), 0 2px 3px -1px rgba(60,40,20,.35)'
+            ? '3px 0 6px -2px rgb(var(--color-sombra) / .45), 0 2px 3px -1px rgb(var(--color-sombra) / .35)'
             : 'none',
           ...(conContenido && libro.cover_url && {
             backgroundImage: `url(${libro.cover_url})`,
@@ -687,7 +687,7 @@ const Lomo = memo(function Lomo({ entry, onAbrir, volando = false, sinPrisa = fa
                 style={{ backgroundColor: paleta.color, opacity: 0.45 }}
               />
             )}
-            <span className={`pointer-events-none absolute inset-0 ${claro ? 'bg-white/25' : 'bg-ink/20'}`} />
+            <span className={`pointer-events-none absolute inset-0 ${claro ? 'bg-white/25' : 'bg-black/20'}`} />
           </>
         )}
 

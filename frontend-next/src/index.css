@@ -106,6 +106,18 @@
   --color-read:      #3f6b52;   /* luni3-read */
   --color-want:      #9a9184;   /* luni3-want */
 
+  /* La tinta de las sombras. En claro es parda, del color de la madera y el
+     papel; en oscuro, negra, que es lo único que se ve sobre un fondo así.
+     Las sombras concretas se declaran abajo como utilidades con nombre para
+     que no haya un rgba() suelto por los componentes. */
+  --color-sombra: 60 40 20;
+
+  /* El velo que se pone detrás de una hoja o de la ficha. No puede salir de
+     --color-ink: en oscuro la tinta es casi blanca y el velo aclaraba el
+     fondo en vez de apagarlo, que es justo lo contrario de lo que hace un
+     velo. */
+  --color-velo: rgba(36,31,26,0.25);
+
   --radius-xl2: 1.25rem;
   --radius-xl3: 1.75rem;
 
@@ -156,7 +168,10 @@
        que esa capa costaba frames, y la medición con calentamiento demostró
        que no era ella. */
     background-color: var(--color-bg);
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='128' height='128'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='128' height='128' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
+    /* El grano va en una variable porque en oscuro tiene que ser al revés:
+       manchas claras. El mismo ruido negro sobre un fondo oscuro no se ve, y
+       el fondo se queda liso — que es justo el banding que esto evita. */
+    background-image: var(--textura-papel);
     color: var(--color-ink);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
@@ -185,6 +200,66 @@
     }
   }
 
+}
+
+/* ── Los dos temas ───────────────────────────────────────────────────────
+   Todo el color de la app sale de las variables de @theme, así que un tema es
+   exactamente esto: los mismos nombres con otros valores. Ningún componente
+   sabe en cuál está.
+
+   El claro es el de siempre y vive en @theme (arriba), que es donde Tailwind
+   los espera; aquí solo se añade lo que no es un color y el oscuro entero.
+   `[data-tema="claro"]` está escrito aparte para que también gane si algún día
+   el oscuro pasa a ser el de por defecto.
+
+   Quién pone el atributo: platform/tema.js, y main.jsx lo aplica antes del
+   primer pintado leyendo la copia de localStorage, para que no haya un
+   fogonazo claro al abrir con el tema oscuro puesto. */
+:root,
+:root[data-tema="claro"] {
+  --textura-papel: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='128' height='128'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='128' height='128' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
+  color-scheme: light;
+}
+
+:root[data-tema="oscuro"] {
+  /* Mismo carácter que el claro, del otro lado: no un gris neutro, sino tinta
+     parda oscura, y el terracota subido de luz para que aguante el contraste
+     sobre ella. El acento claro pide texto oscuro encima, así que on-accent
+     se da la vuelta. */
+  --color-bg:        #16120e;
+  --color-surface:   #1e1a15;
+  --color-surface-2: #2a231b;
+  --color-line:      #3a3128;
+  --color-ink:       #f2ece3;
+  --color-ink-dim:   #b6ab9c;
+  --color-ink-mute:  #8d8375;
+  --color-accent:    #d97a4f;
+  --color-accent-soft: rgba(217,122,79,0.16);
+  --color-accent-line: rgba(217,122,79,0.42);
+  --color-on-accent: #1a1410;
+  --color-accent-2:  #6fae88;
+  --color-danger:    #e07a5f;
+  --color-read:      #6fae88;
+  --color-want:      #8d8375;
+
+  --color-sombra: 0 0 0;
+  --color-velo: rgba(0,0,0,0.55);
+  --textura-papel: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='128' height='128'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='128' height='128' filter='url(%23n)' fill='%23ffffff' opacity='0.03'/%3E%3C/svg%3E");
+  /* Que el navegador sepa en qué tema está: sin esto, los controles nativos
+     (barras de scroll, el calendario de un input) siguen saliendo en claro. */
+  color-scheme: dark;
+}
+
+/* ── Sombras ─────────────────────────────────────────────────────────────
+   Con nombre, y no un rgba() escrito dentro de cada componente, porque su
+   tinta cambia con el tema (--color-sombra). Cada una es la de un sitio
+   concreto; si hace falta una nueva, se añade aquí. */
+@utility sombra-panel   { box-shadow: 0 -12px 40px -12px rgb(var(--color-sombra) / .35); }
+@utility sombra-volando { box-shadow: 0 10px 30px -8px rgb(var(--color-sombra) / .5); }
+@utility sombra-pastilla { box-shadow: 0 1px 3px rgb(var(--color-sombra) / .25); }
+@utility sombra-portada {
+  box-shadow: 0 6px 14px rgb(var(--color-sombra) / .18),
+              0 18px 34px -16px rgb(var(--color-sombra) / .4);
 }
 
 /* ── Safe areas ──────────────────────────────────────────────────────────

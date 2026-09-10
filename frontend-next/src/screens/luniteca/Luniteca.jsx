@@ -584,7 +584,7 @@ function BotonHerramienta({ activo, principal, onClick, etiqueta, children }) {
       aria-pressed={activo}
       className={`relative flex h-10 w-10 items-center justify-center rounded-full transition-colors ${
         principal
-          ? 'bg-accent text-on-accent shadow-[0_1px_3px_rgba(60,40,20,.25)] active:bg-accent/90'
+          ? 'bg-accent text-on-accent sombra-pastilla active:bg-accent/90'
           : activo
             ? 'bg-accent/20 text-accent'
             : 'bg-accent/[0.08] text-accent active:bg-accent/20'

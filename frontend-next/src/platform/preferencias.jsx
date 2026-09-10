@@ -1,6 +1,7 @@
-import { createContext, useCallback, useContext, useMemo, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { api } from './api'
 import { useAuth } from './auth'
+import { aplicarTema, temaGuardado } from './tema'
 
 // Los gustos de cada uno viajan con la CUENTA, no con el navegador.
 //
@@ -50,6 +51,16 @@ export function PreferenciasProvider({ children }) {
 
   const valor = useMemo(() => ({ valores, guardar }), [valores, guardar])
   return <PreferenciasContext.Provider value={valor}>{children}</PreferenciasContext.Provider>
+}
+
+// El tema no basta con leerlo: hay que ponerlo en el documento, porque el
+// color no lo pinta ningún componente sino las variables de :root. Se arranca
+// con la copia local (main.jsx ya la aplicó) y se corrige en cuanto llega la
+// cuenta, que es la que manda.
+export function usarTema() {
+  const [tema, poner] = usarPreferencia('tema', temaGuardado())
+  useEffect(() => { aplicarTema(tema) }, [tema])
+  return [tema, poner]
 }
 
 // Una preferencia suelta, con su valor por defecto. Se usa como useState.
