@@ -471,12 +471,23 @@ function Herramientas({
               </BotonHerramienta>
           </motion.div>
 
+          {/* Crece desde la lupa, que es de donde sale, en vez de encenderse
+              sin más. Lo que se anima es el ANCHO, con lo de dentro recortado:
+              escalarlo (el primer intento) estiraba el texto del campo, que
+              salía aplastado y se iba estirando hasta su sitio.
+              Puede animarse a gusto porque aquí ya no se construye nada: el
+              campo vive montado y solo se enciende y se apaga. */}
           <motion.div
-            className="absolute inset-0 flex min-w-0 items-center gap-2 rounded-xl2 border border-line bg-surface px-3"
+            className="absolute inset-y-0 left-0 flex min-w-0 items-center gap-2 overflow-hidden rounded-xl2 border border-line bg-surface"
             initial={false}
-            animate={{ opacity: buscando ? 1 : 0 }}
-            transition={{ duration: 0.14, ease: [0.32, 0.72, 0, 1] }}
-            style={{ pointerEvents: buscando ? 'auto' : 'none' }}
+            animate={{ width: buscando ? '100%' : 40, opacity: buscando ? 1 : 0 }}
+            transition={{
+              width: { duration: 0.24, ease: [0.32, 0.72, 0, 1] },
+              // La opacidad va por delante al abrir y por detrás al cerrar, para
+              // que no se vea la caja vacía ni al empezar ni al acabar.
+              opacity: { duration: 0.14, delay: buscando ? 0 : 0.08 },
+            }}
+            style={{ pointerEvents: buscando ? 'auto' : 'none', paddingLeft: 12, paddingRight: 12 }}
             inert={!buscando}
           >
             <input
@@ -484,6 +495,10 @@ function Herramientas({
               value={query}
               onChange={e => onQuery(e.target.value)}
               placeholder="Título o autor"
+              // Con nombre propio: ahora este campo vive siempre montado y
+              // convive con el de "añadir libro", que lleva el mismo texto de
+              // ayuda. Uno busca en TU estantería y el otro en el catálogo.
+              aria-label="Buscar en tu estantería"
               className="h-10 w-full min-w-0 bg-transparent text-[15px] outline-none placeholder:text-ink-mute"
             />
             <AnimatePresence>
