@@ -2,25 +2,41 @@ import { useEffect, useMemo, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { NavLink, Route, Routes, useLocation } from 'react-router-dom'
 import { AnimatePresence, motion } from 'motion/react'
-import { useAuth } from '../platform/auth'
+import { esAdmin, useAuth } from '../platform/auth'
 import { useVersion } from '../platform/version'
 import { isIOS, isStandalone, safeInsets } from '../platform/pwa'
 import { useCapa } from '../platform/capas'
 import { LLEGADA, SALIDA } from '../ui/curvas'
 import Luniteca from './luniteca/Luniteca'
+import Club from './club/Club'
 import Actividad from './actividad/Actividad'
 import Perfil from './perfil/Perfil'
+import Admin from './admin/Admin'
+import Avatar from '../ui/Avatar'
 import { SelectorSeparacion, usarSeparacion } from './luniteca/separacion'
 import { usarTema } from '../platform/preferencias'
 import { cambiarDeTema } from '../platform/tema'
-import { IconActividad, IconBooks, IconExit, IconHome, IconLuna, IconMenu, IconPaw, IconSettings, IconSol } from '../ui/icons'
+import { IconActividad, IconBooks, IconClub, IconEscudo, IconExit, IconHome, IconLuna, IconMenu, IconPaw, IconSettings, IconSol } from '../ui/icons'
 
+// El menú entero. Dos de las entradas no son para todo el mundo: el club solo
+// para quien esté en el club de lectura, y la administración solo para el
+// admin. Quien no tenga el permiso no la ve — y si escribe la URL a mano, la
+// pantalla se lo explica (y el backend lo rechaza igual, que es lo que de
+// verdad lo impide).
 const SECCIONES = [
-  { to: '/',           label: 'Inicio',     Icon: IconHome },
-  { to: '/luniteca',   label: 'Luniteca',   Icon: IconBooks },
-  { to: '/actividad',  label: 'Actividad',  Icon: IconActividad },
-  { to: '/ajustes',    label: 'Ajustes',    Icon: IconSettings },
+  { to: '/',           label: 'Inicio',          Icon: IconHome },
+  { to: '/luniteca',   label: 'Luniteca',        Icon: IconBooks },
+  { to: '/club',       label: 'Club de lectura', Icon: IconClub,   soloClub: true },
+  { to: '/actividad',  label: 'Actividad',       Icon: IconActividad },
+  { to: '/ajustes',    label: 'Ajustes',         Icon: IconSettings },
+  { to: '/admin',      label: 'Administración',  Icon: IconEscudo, soloAdmin: true },
 ]
+
+function seccionesDe(player) {
+  return SECCIONES.filter(s => (
+    (!s.soloClub || !!player?.club_member) && (!s.soloAdmin || esAdmin(player))
+  ))
+}
 
 export default function Shell() {
   const location = useLocation()
@@ -67,6 +83,11 @@ export default function Shell() {
         <Routes location={location}>
           <Route path="/"           element={<Placeholder title="Inicio" nota="Aquí irá lo que abra la app: novedades del club, lo que estás leyendo, accesos rápidos." />} />
           <Route path="/luniteca"   element={<Luniteca />} />
+          {/* El club y la administración se montan siempre: cada una comprueba
+              el permiso por su cuenta y explica por qué no, en vez de dejar la
+              URL en un "esa ruta no existe" que no dice nada. */}
+          <Route path="/club"       element={<Club />} />
+          <Route path="/admin"      element={<Admin />} />
           <Route path="/actividad"  element={<Actividad />} />
           {/* La estantería de otra persona. Ruta propia para que el gesto de
               volver funcione y el enlace se pueda compartir. */}
@@ -134,14 +155,7 @@ function TopBar({ titulo, onAbrirMenu }) {
             Va dentro de un hueco del mismo ancho que el botón de menú, para
             que el título quede centrado de verdad y no descuadrado. */}
         <div className="flex h-11 w-11 shrink-0 items-center justify-end">
-          <div
-            className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-line"
-            style={{ background: player?.color || 'var(--color-surface-2)' }}
-          >
-            {player?.avatar_url
-              ? <img src={player.avatar_url} alt="" className="h-full w-full object-cover" />
-              : <span>{player?.avatar_emoji || '⭐'}</span>}
-          </div>
+          <Avatar jugador={player} size={36} />
         </div>
       </div>
     </header>
@@ -150,6 +164,7 @@ function TopBar({ titulo, onAbrirMenu }) {
 
 function MenuLateral({ abierto, onCerrar, onNavegar }) {
   const { player } = useAuth()
+  const secciones = useMemo(() => seccionesDe(player), [player])
   // El panel se queda SIEMPRE montado y solo se mueve. Montarlo y desmontarlo
   // con AnimatePresence salía medido: la primera apertura de cada sesión
   // metía un frame de 50-67ms (33ms hasta en WebKit sin frenar la CPU) porque
@@ -212,7 +227,7 @@ function MenuLateral({ abierto, onCerrar, onNavegar }) {
       </div>
 
       <nav className="flex-1 overflow-y-auto overscroll-contain px-3">
-        {SECCIONES.map(({ to, label, Icon }) => (
+        {secciones.map(({ to, label, Icon }) => (
           <NavLink
             key={to}
             to={to}
@@ -243,14 +258,7 @@ function MenuLateral({ abierto, onCerrar, onNavegar }) {
       </nav>
 
       <div className="flex items-center gap-3 border-t border-line px-5 py-4">
-        <div
-          className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-line"
-          style={{ background: player?.color || 'var(--color-surface-2)' }}
-        >
-          {player?.avatar_url
-            ? <img src={player.avatar_url} alt="" className="h-full w-full object-cover" />
-            : <span>{player?.avatar_emoji || '⭐'}</span>}
-        </div>
+        <Avatar jugador={player} size={36} />
         <div className="min-w-0 flex-1">
           <p className="truncate font-display font-semibold leading-tight">{player?.name}</p>
           <p className="text-xs text-ink-mute leading-tight">Sesión iniciada</p>

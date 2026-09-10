@@ -122,3 +122,42 @@ export const IconLuna = (p) => (
     <path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a7 7 0 1 0 10.5 10.5Z" />
   </svg>
 )
+
+// ─── Club y administración ─────────────────────────────────────────────────
+// El club es un libro ABIERTO, no lomos: la Luniteca (IconBooks) son los
+// libros que tienes, y el club es el que se está leyendo entre todos.
+export const IconClub = (p) => (
+  <svg {...base} {...p}>
+    <path d="M12 6.5C10.4 5 7.4 4.4 4 5v13c3.4-.6 6.4 0 8 1.5 1.6-1.5 4.6-2.1 8-1.5V5c-3.4-.6-6.4 0-8 1.5z" />
+    <path d="M12 6.5v13" />
+  </svg>
+)
+
+// Administración: un escudo con su visto. Nada de engranajes, que ese es el
+// gesto de Ajustes y no es lo mismo decidir quién entra que elegir un tema.
+export const IconEscudo = (p) => (
+  <svg {...base} {...p}>
+    <path d="M12 3.2 19 6v5.4c0 4.4-2.9 7.6-7 9.4-4.1-1.8-7-5-7-9.4V6z" />
+    <path d="m9 12 2.2 2.2L15.5 10" />
+  </svg>
+)
+
+export const IconTrash = (p) => (
+  <svg {...base} {...p}>
+    <path d="M4 7h16M9.5 7V5.2a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1V7" />
+    <path d="m6.5 7 .9 12.1a1 1 0 0 0 1 .9h7.2a1 1 0 0 0 1-.9L17.5 7" />
+  </svg>
+)
+
+export const IconCalendario = (p) => (
+  <svg {...base} {...p}>
+    <rect x="4" y="5.5" width="16" height="14.5" rx="2" />
+    <path d="M8 3v4M16 3v4M4 10.5h16" />
+  </svg>
+)
+
+// El marcador de la lectura actual: la cinta que se deja puesta en el libro
+// que el club está leyendo ahora mismo.
+export const IconMarcador = (p) => (
+  <svg {...base} {...p}><path d="M7 4h10v16l-5-4.2L7 20z" /></svg>
+)

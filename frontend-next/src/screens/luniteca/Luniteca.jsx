@@ -399,13 +399,14 @@ function Aviso({ titulo, texto }) {
 
 // ─── Barra de herramientas ─────────────────────────────────────────────────
 //
-// La usan las DOS estanterías, la tuya y la de cualquiera desde su perfil: son
-// las mismas herramientas y tienen que verse y comportarse igual. Lo único que
-// cambia es que en la de otra persona no hay nada que añadir, así que sin
-// `onAnadir` ese botón no se pinta.
+// La usan TODAS las estanterías: la tuya, la de cualquiera desde su perfil y
+// la del club. Son las mismas herramientas y tienen que verse y comportarse
+// igual. Lo único que cambia es qué hace el botón de añadir: en la de otra
+// persona no hay nada que añadir (sin `onAnadir` no se pinta) y en la del club
+// lo que se añade es una propuesta, así que su etiqueta también cambia.
 export function Herramientas({
   vista, onVista, query, onQuery,
-  onAbrirHoja, onAnadir, ordenActivo, filtrosActivos,
+  onAbrirHoja, onAnadir, etiquetaAnadir = 'Añadir libro', ordenActivo, filtrosActivos,
 }) {
   // Que la búsqueda esté abierta es cosa SOLO de esta barra: si vive arriba,
   // abrirla vuelve a renderizar la estantería entera y el toque se comía 49ms
@@ -474,7 +475,7 @@ export function Herramientas({
                   usar sin volver a la Puchi actual. En la estantería de otra
                   persona no hay nada que añadir aquí. */}
               {onAnadir && (
-                <BotonHerramienta principal onClick={onAnadir} etiqueta="Añadir libro">
+                <BotonHerramienta principal onClick={onAnadir} etiqueta={etiquetaAnadir}>
                   <IconPlus className="h-[18px] w-[18px]" />
                 </BotonHerramienta>
               )}

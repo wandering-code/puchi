@@ -7,6 +7,7 @@ import { readingDatesLabel, statusPatch, totalPages } from './shelf'
 import { Chip, Cover, EditableRating, MANTENER_MS, ProgressBar, StarRating, StatusChip } from './piezas'
 import { EditorCarpeta, EditorEstado, EditorFechas, EditorLecturas, Sinopsis } from './editores'
 import { IconArrowLeft, IconCheck, IconPencil } from '../../ui/icons'
+import Avatar from '../../ui/Avatar'
 import BookEditForm from './BookEditForm'
 import PantallaInferior from './PantallaInferior'
 
@@ -123,14 +124,7 @@ export default function BookDetail({
               no se sabe de quién son esas fechas ni esa nota. */}
           {soloLectura && deQuien && (
             <p className="mt-2 flex items-center justify-center gap-1.5 text-xs text-ink-mute">
-              <span
-                className="flex h-5 w-5 items-center justify-center overflow-hidden rounded-full text-[11px]"
-                style={{ background: deQuien.color || 'var(--color-surface-2)' }}
-              >
-                {deQuien.avatar_url
-                  ? <img src={deQuien.avatar_url} alt="" className="h-full w-full object-cover" />
-                  : <span>{deQuien.avatar_emoji || '⭐'}</span>}
-              </span>
+              <Avatar jugador={deQuien} size={20} />
               En la estantería de {deQuien.name}
             </p>
           )}
@@ -221,7 +215,7 @@ export default function BookDetail({
 // servidor: saberlo de antemano obligaría a cargar tu estantería entera cada
 // vez que te asomas a una ficha ajena, y el backend ya responde 409 con ese
 // mismo significado.
-function BotonGuardarlo({ onGuardar }) {
+export function BotonGuardarlo({ onGuardar }) {
   const [estado, setEstado] = useState('nada')   // nada | guardando | hecho | ya | error
 
   const texto = {
@@ -288,14 +282,7 @@ function OtrasLecturas({ libroId, exceptoId }) {
               onClick={() => navegar(`/quien/${l.player.id}?libro=${libroId}`)}
               className="flex w-full items-center gap-3 py-2.5 text-left"
             >
-              <span
-                className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full text-sm"
-                style={{ background: l.player.color || 'var(--color-surface-2)' }}
-              >
-                {l.player.avatar_url
-                  ? <img src={l.player.avatar_url} alt="" className="h-full w-full object-cover" />
-                  : <span>{l.player.avatar_emoji || '⭐'}</span>}
-              </span>
+              <Avatar jugador={l.player} size={32} />
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm">{l.player.name}</span>
                 <span className="block text-xs text-ink-mute">

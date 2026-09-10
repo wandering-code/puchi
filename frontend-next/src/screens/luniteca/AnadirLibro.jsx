@@ -7,12 +7,20 @@ import PantallaInferior from './PantallaInferior'
 import { CamposFecha } from './editores'
 import { IconCheck, IconPlus, IconSearch, IconX } from '../../ui/icons'
 
-// Añadir un libro a tu estantería: buscándolo (en lo que ya tiene el club y en
-// Open Library) o escribiéndolo a mano cuando la búsqueda no lo encuentra.
+// Añadir un libro: buscándolo (en lo que ya tiene el club y en Open Library) o
+// escribiéndolo a mano cuando la búsqueda no lo encuentra.
+//
+// `destino` dice dónde va. 'personal' es tu estantería, lo de siempre. 'club'
+// es la estantería del club, donde un libro no se añade sino que se PROPONE:
+// entra como propuesta y es el admin quien decide cuál se lee. Es la misma
+// búsqueda, la misma alta a mano y la misma pantalla — solo cambia a qué
+// endpoint se manda y cómo se llama la acción—, así que no hay dos altas de
+// libro que mantener en paralelo.
 //
 // Falta el escáner de código de barras que tiene la Puchi actual; irá en su
 // propia pasada, porque trae dependencia nueva y permisos de cámara.
-export default function AnadirLibro({ onCerrar, onAnadido }) {
+export default function AnadirLibro({ onCerrar, onAnadido, destino = 'personal' }) {
+  const alClub = destino === 'club'
   const [modo, setModo] = useState('buscar')
 
   return (
@@ -21,7 +29,9 @@ export default function AnadirLibro({ onCerrar, onAnadido }) {
       cabecera={
         <div className="mx-auto w-full max-w-md px-6">
           <div className="flex items-center gap-3 py-3">
-            <h2 className="flex-1 font-display text-xl font-bold tracking-[-0.01em]">Añadir libro</h2>
+            <h2 className="flex-1 font-display text-xl font-bold tracking-[-0.01em]">
+              {alClub ? 'Proponer al club' : 'Añadir libro'}
+            </h2>
             <button
               onClick={onCerrar}
               aria-label="Cerrar"
@@ -67,8 +77,8 @@ export default function AnadirLibro({ onCerrar, onAnadido }) {
             transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
           >
             {modo === 'buscar'
-              ? <Buscador onAnadido={onAnadido} />
-              : <AltaManual onAnadido={onAnadido} onHecho={onCerrar} />}
+              ? <Buscador onAnadido={onAnadido} alClub={alClub} />
+              : <AltaManual onAnadido={onAnadido} onHecho={onCerrar} alClub={alClub} />}
           </motion.div>
         </AnimatePresence>
       </div>
@@ -77,7 +87,7 @@ export default function AnadirLibro({ onCerrar, onAnadido }) {
 }
 
 // ─── Buscar ────────────────────────────────────────────────────────────────
-function Buscador({ onAnadido }) {
+function Buscador({ onAnadido, alClub }) {
   const [consulta, setConsulta] = useState('')
   const [resultados, setResultados] = useState(null)   // null = sin buscar todavía
   const [buscando, setBuscando] = useState(false)
@@ -149,7 +159,7 @@ function Buscador({ onAnadido }) {
       {resultados && !buscando && (
         <div className="mt-4 divide-y divide-[color:var(--color-line)]">
           {resultados.map((libro, i) => (
-            <Resultado key={libro.book_id ?? libro.open_lib_key ?? i} libro={libro} onAnadido={onAnadido} />
+            <Resultado key={libro.book_id ?? libro.open_lib_key ?? i} libro={libro} onAnadido={onAnadido} alClub={alClub} />
           ))}
         </div>
       )}
@@ -158,25 +168,31 @@ function Buscador({ onAnadido }) {
         <p className="mt-4 text-sm leading-relaxed text-ink-mute">
           Busca por título o por autor. Salen primero los libros que ya tiene alguien del
           club, que vienen con su portada y sus datos puestos.
+          {alClub && ' Lo que elijas entra como propuesta: el admin decide cuál se lee.'}
         </p>
       )}
     </div>
   )
 }
 
-function Resultado({ libro, onAnadido }) {
-  const [estado, setEstado] = useState(libro.added_by_me ? 'hecho' : 'quieto')
+function Resultado({ libro, onAnadido, alClub }) {
+  // "Ya lo tienes" es de TU estantería: en el club no dice nada, porque lo que
+  // importa ahí es si el libro ya está propuesto, y eso no lo trae la búsqueda
+  // — lo contesta el servidor con un 409 al intentarlo.
+  const [estado, setEstado] = useState(!alClub && libro.added_by_me ? 'hecho' : 'quieto')
 
   async function anadir() {
     setEstado('anadiendo')
     try {
-      const entrada = await api('/shelf/personal', {
-        method: 'POST',
-        body: { ...libro, status: 'want_to_read', origin: 'search' },
-      })
+      const entrada = alClub
+        ? await api('/shelf/club', { method: 'POST', body: { ...libro } })
+        : await api('/shelf/personal', { method: 'POST', body: { ...libro, status: 'want_to_read', origin: 'search' } })
       onAnadido(entrada)
       setEstado('hecho')
-    } catch {
+    } catch (err) {
+      // 409 no es un fallo, es la respuesta: el libro ya estaba. Se queda
+      // dicho en el sitio en vez de parpadear en rojo y volver a ofrecerse.
+      if (err?.status === 409) { setEstado('ya'); return }
       setEstado('error')
       setTimeout(() => setEstado('quieto'), 2000)
     }
@@ -199,19 +215,29 @@ function Resultado({ libro, onAnadido }) {
         <p className="mt-0.5 truncate text-xs text-ink-mute">{libro.author || 'Sin autor'}</p>
         {nota && <p className="mt-0.5 truncate text-[11px] text-ink-mute/80">{nota}</p>}
       </div>
-      <BotonAnadir estado={estado} onAnadir={anadir} />
+      <BotonAnadir
+        estado={estado}
+        onAnadir={anadir}
+        etiqueta={alClub ? 'Proponer al club' : 'Añadir a mi estantería'}
+      />
     </div>
   )
 }
 
-function BotonAnadir({ estado, onAnadir }) {
-  if (estado === 'hecho') {
+function BotonAnadir({ estado, onAnadir, etiqueta }) {
+  // Puesto ahora ('hecho') y puesto de antes ('ya') se ven distinto: el
+  // primero es algo que acabas de hacer y se celebra en verde; el segundo solo
+  // informa, y en verde parecería que ha pasado algo cuando no ha pasado nada.
+  if (estado === 'hecho' || estado === 'ya') {
     return (
       <motion.span
         initial={{ scale: 0.6, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         transition={{ type: 'spring', stiffness: 480, damping: 26 }}
-        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-read/15 text-read"
+        title={estado === 'ya' ? 'Ya estaba' : 'Hecho'}
+        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${
+          estado === 'ya' ? 'bg-surface-2 text-ink-mute' : 'bg-read/15 text-read'
+        }`}
       >
         <IconCheck className="h-5 w-5" />
       </motion.span>
@@ -222,7 +248,7 @@ function BotonAnadir({ estado, onAnadir }) {
       onClick={onAnadir}
       disabled={estado === 'anadiendo'}
       whileTap={{ scale: 0.92 }}
-      aria-label="Añadir a mi estantería"
+      aria-label={etiqueta}
       className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border transition-colors ${
         estado === 'error' ? 'border-danger text-danger' : 'border-accent-line text-accent'
       }`}
@@ -237,7 +263,7 @@ function BotonAnadir({ estado, onAnadir }) {
 // ─── A mano ────────────────────────────────────────────────────────────────
 // Para lo que la búsqueda no encuentra: ediciones raras, libros que no están en
 // Open Library, o cosas que no son libros al uso.
-function AltaManual({ onAnadido, onHecho }) {
+function AltaManual({ onAnadido, onHecho, alClub }) {
   const [datos, setDatos] = useState({
     title: '', author: '', genre: '', year: '', num_pages: '',
     status: 'want_to_read', started_at: '', finished_at: '',
@@ -247,25 +273,33 @@ function AltaManual({ onAnadido, onHecho }) {
   const primero = useRef(null)
 
   const set = (clave) => (ev) => setDatos(d => ({ ...d, [clave]: ev.target.value }))
-  const llevaInicio = datos.status === 'reading' || datos.status === 'read'
-  const llevaFin = datos.status === 'read'
+  // Un libro propuesto al club no tiene estado ni fechas que elegir: entra
+  // siempre como propuesta, y cuándo se empieza y se termina lo pone el admin
+  // desde la ficha cuando toca. Así que en el club esas dos partes del
+  // formulario no existen.
+  const llevaInicio = !alClub && (datos.status === 'reading' || datos.status === 'read')
+  const llevaFin = !alClub && datos.status === 'read'
 
   async function guardar(ev) {
     ev.preventDefault()
     if (!datos.title.trim()) { setError('El título es lo único imprescindible'); primero.current?.focus(); return }
     setGuardando(true); setError(null)
+    const libro = {
+      title: datos.title.trim(),
+      author: datos.author.trim() || null,
+      genre: datos.genre.trim() || null,
+      year: datos.year ? Number(datos.year) : null,
+      num_pages: datos.num_pages ? Number(datos.num_pages) : null,
+    }
     try {
+      if (alClub) {
+        onAnadido(await api('/shelf/club', { method: 'POST', body: libro }))
+        onHecho()
+        return
+      }
       const entrada = await api('/shelf/personal', {
         method: 'POST',
-        body: {
-          title: datos.title.trim(),
-          author: datos.author.trim() || null,
-          genre: datos.genre.trim() || null,
-          year: datos.year ? Number(datos.year) : null,
-          num_pages: datos.num_pages ? Number(datos.num_pages) : null,
-          status: datos.status,
-          origin: 'search',
-        },
+        body: { ...libro, status: datos.status, origin: 'search' },
       })
       // El alta no admite fechas (el servidor solo las usa para registrar
       // actividad), así que si se han puesto van en un segundo paso.
@@ -278,7 +312,9 @@ function AltaManual({ onAnadido, onHecho }) {
       onAnadido(conFechas)
       onHecho()
     } catch (err) {
-      setError(err.message || 'No se ha podido añadir')
+      setError(err.status === 409 && alClub
+        ? 'Ese libro ya está en la estantería del club'
+        : (err.message || 'No se ha podido añadir'))
       setGuardando(false)
     }
   }
@@ -311,6 +347,7 @@ function AltaManual({ onAnadido, onHecho }) {
         </Campo>
       </div>
 
+      {!alClub && (
       <Campo etiqueta="Cómo entra en tu estantería">
         <div className="flex flex-wrap gap-2">
           {['want_to_read', 'reading', 'read'].map(id => (
@@ -334,6 +371,7 @@ function AltaManual({ onAnadido, onHecho }) {
           ))}
         </div>
       </Campo>
+      )}
 
       {/* Las fechas que tienen sentido para el estado elegido, y solo esas:
           un libro por leer no tiene ninguna, uno que estás leyendo tiene
@@ -369,7 +407,9 @@ function AltaManual({ onAnadido, onHecho }) {
         whileTap={{ scale: 0.98 }}
         className="mt-5 h-12 w-full rounded-xl2 bg-accent text-[15px] font-semibold text-on-accent disabled:opacity-60"
       >
-        {guardando ? 'Añadiendo…' : 'Añadir a mi estantería'}
+        {guardando
+          ? (alClub ? 'Proponiendo…' : 'Añadiendo…')
+          : (alClub ? 'Proponer al club' : 'Añadir a mi estantería')}
       </motion.button>
     </form>
   )

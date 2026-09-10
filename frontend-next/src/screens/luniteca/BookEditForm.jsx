@@ -5,6 +5,7 @@ import { Cover } from './piezas'
 import { useHoja } from './HojaInferior'
 import SelectorPortada from './SelectorPortada'
 import { IconRefresh, IconX } from '../../ui/icons'
+import BotonPeligro from '../../ui/BotonPeligro'
 
 // Editar los datos del LIBRO: título, autor, género, año, páginas, sinopsis y
 // portada. Son datos compartidos con todo el club (PATCH /books/{id}), a
@@ -145,7 +146,11 @@ export default function BookEditForm({ entry, generos, onGuardar, onCancelar, on
       </div>
 
       <div className="mt-8 border-t border-line pt-4">
-        <BotonEliminar onEliminar={onEliminar} />
+        <BotonPeligro
+          etiqueta="Eliminar de mi estantería"
+          pregunta="¿Seguro? Se pierden tus notas y fechas."
+          onConfirmar={onEliminar}
+        />
       </div>
 
       <SelectorPortada
@@ -234,39 +239,3 @@ function RellenarDatos({ borrador, setBorrador }) {
   )
 }
 
-// Lo único de la ficha que no tiene vuelta atrás. No pide mantener pulsado ni
-// una pantalla aparte: solo mete medio segundo entre "eliminar" y que el botón
-// de confirmar responda, para que un doble toque por error no baste.
-function BotonEliminar({ onEliminar }) {
-  const [confirmando, setConfirmando] = useState(false)
-  const [armado, setArmado] = useState(false)
-
-  function pedirConfirmacion() {
-    setConfirmando(true)
-    setArmado(false)
-    setTimeout(() => setArmado(true), 500)
-  }
-
-  if (!confirmando) {
-    return (
-      <button onClick={pedirConfirmacion} className="text-sm text-ink-mute">
-        Eliminar de mi estantería
-      </button>
-    )
-  }
-  return (
-    <div className="flex items-center gap-3">
-      <span className="flex-1 text-sm text-ink-dim">¿Seguro? Se pierden tus notas y fechas.</span>
-      <button
-        onClick={() => armado && onEliminar()}
-        disabled={!armado}
-        className="rounded-xl2 bg-danger px-3.5 py-2 text-sm font-semibold text-on-accent transition-opacity disabled:opacity-50"
-      >
-        Eliminar
-      </button>
-      <button onClick={() => setConfirmando(false)} className="text-sm text-ink-mute">
-        No
-      </button>
-    </div>
-  )
-}

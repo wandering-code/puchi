@@ -52,3 +52,12 @@ export function AuthProvider({ children }) {
 export function useAuth() {
   return useContext(AuthContext)
 }
+
+// Quién es el admin, en un solo sitio. El backend lo decide igual —por el
+// nombre, no por un campo (`require_admin`, `current.name.lower() == "wander"`)—
+// así que aquí se calca esa regla en vez de inventar otra que se
+// desincronizaría. Lo de la pantalla es solo para no enseñar botones que van a
+// devolver 403: quien manda sigue siendo el servidor.
+export function esAdmin(player) {
+  return player?.name?.toLowerCase() === 'wander'
+}

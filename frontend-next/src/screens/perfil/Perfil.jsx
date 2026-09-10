@@ -12,6 +12,7 @@ import { usarVuelo } from '../luniteca/usarVuelo'
 import { usarPreferencia } from '../../platform/preferencias'
 import { CajaSeccion, TituloSeccion, huecoEntreSecciones, usarSeparacion } from '../luniteca/separacion'
 import { IconArrowLeft } from '../../ui/icons'
+import Avatar from '../../ui/Avatar'
 
 // La estantería de otra persona, con sus números. Se llega desde Actividad, y
 // es una pantalla propia (no un modal ni una hoja) para que el gesto de volver
@@ -148,14 +149,7 @@ export default function Perfil() {
       </button>
 
       <header className="mb-5 flex items-center gap-3.5">
-        <span
-          className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full border border-line text-2xl"
-          style={{ background: quien?.color || 'var(--color-surface-2)' }}
-        >
-          {quien?.avatar_url
-            ? <img src={quien.avatar_url} alt="" className="h-full w-full object-cover" />
-            : <span>{quien?.avatar_emoji || '⭐'}</span>}
-        </span>
+        <Avatar jugador={quien} size={56} />
         <div className="min-w-0">
           <h2 className="truncate font-display text-[1.6rem] font-bold leading-tight tracking-[-0.02em]">
             {quien?.name || '…'}{soyYo && <span className="ml-2 align-middle text-xs font-normal text-ink-mute">tú</span>}

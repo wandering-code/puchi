@@ -32,6 +32,12 @@ nginx directamente, igual que el frontend actual.
 - **Lo social**: Actividad, perfiles y la estantería de otra persona, que se ve y se
   maneja igual que la tuya (mismas vistas, misma barra de herramientas, filtros y
   búsqueda propios que se deshacen al salir) pero sin poder editar nada suyo.
+- **Club de lectura**: la estantería del club, con su lectura actual, lo propuesto y
+  lo leído por año; la ficha de cada libro con quién lo propuso, las puntuaciones de
+  todo el club y sus sesiones. Solo la ven los miembros del club, desde el menú
+  lateral. Ver más abajo.
+- **Administración**: aprobar, rechazar, desactivar y borrar cuentas, y marcar quién
+  entra en el club. Solo la ve el admin, desde el menú lateral.
 - **Claro y oscuro**: el tema se elige en el pie del menú lateral y vale para toda la
   app. Ver más abajo.
 - **PWA**: manifest con iconos maskable, service worker y safe areas, para que añadida
@@ -40,8 +46,8 @@ nginx directamente, igual que el frontend actual.
   reconexión, que refresca cuando algo cambia desde otro dispositivo o desde la Puchi
   actual.
 
-Lo que falta (escáner de código de barras, importadores de Excel y Goodreads, Club y
-Amigos) está en [issue #18](https://github.com/wandering-code/puchi/issues/18).
+Lo que falta (escáner de código de barras, importadores de Excel y Goodreads, Amigos)
+está en [issue #18](https://github.com/wandering-code/puchi/issues/18).
 
 ## Cómo está montado
 
@@ -52,14 +58,22 @@ src/
 └── screens/
     ├── Shell.jsx        armazón: barra superior, menú lateral, rutas
     ├── LoginScreen.jsx
-    └── luniteca/        la app de libros
-        ├── shelf.js         reglas de negocio (portadas de la Luniteca actual)
-        ├── Luniteca.jsx     estantería: carga, filtros, secciones
-        ├── BookDetail.jsx   ficha de un libro
-        ├── BookEditForm.jsx edición de los datos del libro
-        ├── editores.jsx     estado, fechas, carpeta, veces leído, sinopsis
-        ├── HojaInferior.jsx la hoja que sube desde abajo (una para toda la app)
-        └── piezas.jsx       portada, estrellas, barra de progreso, insignias
+    ├── luniteca/        la app de libros
+    │   ├── shelf.js         reglas de negocio (portadas de la Luniteca actual)
+    │   ├── Luniteca.jsx     estantería: carga, filtros, secciones
+    │   ├── BookDetail.jsx   ficha de un libro
+    │   ├── BookEditForm.jsx edición de los datos del libro
+    │   ├── editores.jsx     estado, fechas, carpeta, veces leído, sinopsis
+    │   ├── HojaInferior.jsx la hoja que sube desde abajo (una para toda la app)
+    │   └── piezas.jsx       portada, estrellas, barra de progreso, insignias
+    ├── club/            el club de lectura, montado sobre lo de luniteca/
+    │   ├── clubShelf.js     traducción club → estantería y reparto por secciones
+    │   ├── Club.jsx         la estantería del club
+    │   ├── ClubBookDetail.jsx  ficha de un libro del club
+    │   ├── Puntuaciones.jsx    la nota de cada uno
+    │   └── Sesiones.jsx        las quedadas de cada libro
+    └── admin/
+        └── Admin.jsx    cuentas: aprobar, club, desactivar, borrar
 ```
 
 ### Reglas de negocio: no se inventan aquí
@@ -77,6 +91,34 @@ la presentación.
 - De **tu copia** (`PATCH /shelf/personal/{id}`): estado, fechas, puntuación, notas,
   carpeta, veces leído, progreso **y la portada**. Se tocan directamente en la ficha.
   Que la portada sea personal es a propósito: cada jugador ve la que ha elegido.
+
+### El club es una estantería más
+
+La estantería del club no es otra app: es la misma, con otros libros. `clubShelf.js`
+traduce el estado de un libro del club al de una estantería —`active` → *leyendo*,
+`proposed` → *por leer*, `finished` → *leído*— y a partir de ahí lo pintan los mismos
+componentes que la Luniteca: las tres vistas, la barra de herramientas con su búsqueda
+y sus filtros, el vuelo del libro al abrirlo desde los lomos y la misma ficha con la
+portada grande y las pastillas. Lo único propio del club es lo que no cabe en una
+entrada personal —quién lo propuso, las notas del club, las puntuaciones de todos y las
+sesiones—, y eso viaja en `.club` dentro de la entrada traducida.
+
+Lo mismo con proponer un libro: `AnadirLibro` recibe `destino="club"` y manda al
+endpoint del club en vez de al de tu estantería. No hay dos altas de libro.
+
+### Quién puede qué
+
+Dos permisos distintos, los dos del backend:
+
+- **Miembro del club** (`Player.club_member`): abre `/club`. Sin él la entrada no
+  aparece en el menú y la pantalla explica por qué; el servidor lo rechaza igual
+  (`require_club_member`, 403).
+- **Admin** (el jugador que se llama `wander`, tal cual lo decide `require_admin`):
+  abre `/admin`, y dentro del club es quien elige la lectura actual, pone fechas y
+  notas, gestiona las sesiones y quita libros. Proponer puede cualquier miembro.
+
+Las pantallas solo deciden **qué botones se enseñan**, para no ofrecer acciones que van
+a devolver 403. Quien lo impide de verdad es el backend.
 
 ## Los gustos de cada uno van con la cuenta
 
