@@ -3,14 +3,16 @@ import { motion } from 'motion/react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api } from '../../platform/api'
 import { useAuth } from '../../platform/auth'
-import { EMPTY_FILTERS, agruparEstanteria, copiarAMiEstanteria, generosDeAutores } from '../luniteca/shelf'
-import { Coleccion, TarjetaLeyendo } from '../luniteca/Luniteca'
+import { EMPTY_FILTERS, agruparEstanteria, copiarAMiEstanteria, generosDeAutores, opcionesDeFiltro } from '../luniteca/shelf'
+import { BotonPlegarAnos, Coleccion, Plegable, TarjetaLeyendo } from '../luniteca/Luniteca'
 import BookDetail from '../luniteca/BookDetail'
+import HojaFiltros from '../luniteca/HojaFiltros'
+import { useHoja } from '../luniteca/HojaInferior'
 import { useCapa } from '../../platform/capas'
 import { usarVuelo } from '../luniteca/usarVuelo'
 import { usarPreferencia } from '../../platform/preferencias'
 import { CajaSeccion, TituloSeccion, huecoEntreSecciones, usarSeparacion } from '../luniteca/separacion'
-import { IconArrowLeft, IconGrid, IconList, IconLomos } from '../../ui/icons'
+import { IconArrowLeft, IconFilter, IconGrid, IconList, IconLomos } from '../../ui/icons'
 
 // La estantería de otra persona, con sus números. Se llega desde Actividad, y
 // es una pantalla propia (no un modal ni una hoja) para que el gesto de volver
@@ -61,6 +63,20 @@ export default function Perfil() {
   // también en la tuya, por lo mismo.
   const [vista, setVista] = usarPreferencia('vista', 'grid')
   const [variante] = usarSeparacion()
+  // Filtrar y ordenar aquí es cosa del momento: vive en la pantalla y se
+  // deshace al salir, que lo que se busca en la estantería de otra persona no
+  // tiene por qué seguir puesto cuando vuelvas a la tuya.
+  const [sort, setSort] = useState({ field: '', dir: 'asc' })
+  const [filters, setFilters] = useState(EMPTY_FILTERS)
+  const hojaFiltros = useHoja()
+  const [plegadas, setPlegadas] = useState({ read: false, want: false, dropped: true })
+  const [anosPlegados, setAnosPlegados] = useState(() => new Set())
+  const alternar = clave => setPlegadas(p => ({ ...p, [clave]: !p[clave] }))
+  const alternarAno = year => setAnosPlegados(prev => {
+    const s = new Set(prev)
+    s.has(year) ? s.delete(year) : s.add(year)
+    return s
+  })
   // Igual que en la propia: el género que manda es el del autor, mirando toda
   // su estantería, para que sus libros compartan letra.
   const generosDeAutor = useMemo(() => generosDeAutores(shelf || []), [shelf])
@@ -127,9 +143,13 @@ export default function Perfil() {
   }, [libroPedido, idQuien])
 
   const grupos = useMemo(
-    () => (shelf ? agruparEstanteria(shelf, { filters: EMPTY_FILTERS, query: '', sort: { field: '', dir: 'asc' } }) : null),
-    [shelf],
+    () => (shelf ? agruparEstanteria(shelf, { filters, query: '', sort }) : null),
+    [shelf, filters, sort],
   )
+  // Los géneros, carpetas y autores que se ofrecen son los de SU estantería:
+  // filtrar por algo que no tiene no lleva a ninguna parte.
+  const opciones = useMemo(() => opcionesDeFiltro(shelf), [shelf])
+  const filtrosActivos = Object.keys(EMPTY_FILTERS).some(k => filters[k] !== EMPTY_FILTERS[k])
 
 
 
@@ -173,7 +193,23 @@ export default function Perfil() {
 
       {/* Las mismas tres vistas que en la tuya, sin filtros ni orden: esto es
           para asomarse, no para trabajar. */}
-      <div className="mb-4 flex justify-end">
+      <div className="mb-4 flex items-center justify-end gap-2">
+        {/* Filtrar y ordenar SU estantería. Lo que se elija aquí vale mientras
+            se está mirando y se deshace al salir: no es tuyo, es de este rato. */}
+        <button
+          onClick={hojaFiltros.abrir}
+          aria-label="Filtrar y ordenar"
+          aria-pressed={filtrosActivos || !!sort.field}
+          className={`relative flex h-10 w-10 items-center justify-center rounded-full transition-colors ${
+            filtrosActivos || sort.field ? 'bg-accent/20 text-accent' : 'bg-accent/[0.08] text-accent active:bg-accent/20'
+          }`}
+        >
+          <IconFilter className="h-[18px] w-[18px]" />
+          {(filtrosActivos || sort.field) && (
+            <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-accent" />
+          )}
+        </button>
+
         <div className="flex rounded-full border border-line p-1">
           {VISTAS.map(({ id: v, Icon, label }) => (
             <button
@@ -211,10 +247,17 @@ export default function Perfil() {
         <p className="py-10 text-center text-sm text-ink-mute">{quien?.name || 'Esta persona'} no tiene libros todavía.</p>
       )}
 
+      {grupos?.ningunoVisible && (
+        <p className="py-10 text-center text-sm text-ink-mute">
+          Ningún libro suyo coincide. Prueba a quitar algún filtro.
+        </p>
+      )}
+
       {grupos?.visible?.length > 0 && (
         <div className={huecoEntreSecciones(variante)}>
-          {/* Leyendo no hace caso a la vista, aquí tampoco: se ve con su
-              progreso y sus fechas, igual que en la tuya. */}
+          {/* Misma forma que tu estantería, sección por sección: lo que estaba
+              leyendo con su progreso, los leídos agrupados por año y
+              plegables, y luego lo pendiente y lo dejado a medias. */}
           {grupos.reading.length > 0 && (
             <CajaSeccion variante={variante}>
               <TituloSeccion variante={variante} label="Leyendo" cuenta={grupos.reading.length} desde="top-0" />
@@ -225,22 +268,83 @@ export default function Perfil() {
               </div>
             </CajaSeccion>
           )}
-          {grupos.readYearGroups.map(({ year, items }) => (
-            <Seccion
-              key={year}
-              variante={variante}
-              label={year === 'sin-fecha' ? 'Leídos, sin fecha' : `Leídos en ${year}`}
-              entries={items}
-              vista={vista}
-              onAbrir={abrirLibro}
-              fueraId={fueraId}
-              generosDeAutor={generosDeAutor}
-            />
+
+          {grupos.readYearGroups.length > 0 && (
+            <CajaSeccion variante={variante}>
+              <TituloSeccion
+                variante={variante}
+                label="Leídos"
+                cuenta={grupos.readYearGroups.reduce((n, g) => n + g.items.length, 0)}
+                plegada={plegadas.read}
+                onAlternar={() => alternar('read')}
+                desde="top-0"
+                // Igual que en la tuya: solo con la sección abierta y con más
+                // de un año, que con uno su propio chevron ya hace lo mismo.
+                accion={!plegadas.read && grupos.years.length > 1 && (
+                  <BotonPlegarAnos
+                    todosPlegados={grupos.years.every(y => anosPlegados.has(y))}
+                    onAlternar={() => setAnosPlegados(prev => (
+                      grupos.years.every(y => prev.has(y)) ? new Set() : new Set(grupos.years)
+                    ))}
+                  />
+                )}
+              />
+              <Plegable abierta={!plegadas.read}>
+                <div className="space-y-5 pt-3">
+                  {grupos.readYearGroups.map(({ year, items }) => (
+                    <div key={year}>
+                      <TituloSeccion
+                        variante={variante}
+                        anidado
+                        label={year === 'sin-fecha' ? 'Sin fecha' : year}
+                        cuenta={items.length}
+                        plegada={anosPlegados.has(year)}
+                        onAlternar={() => alternarAno(year)}
+                      />
+                      <Plegable abierta={!anosPlegados.has(year)}>
+                        <div className="pt-2">
+                          <Coleccion entries={items} vista={vista} onAbrir={abrirLibro} fueraId={fueraId} generosDeAutor={generosDeAutor} />
+                        </div>
+                      </Plegable>
+                    </div>
+                  ))}
+                </div>
+              </Plegable>
+            </CajaSeccion>
+          )}
+
+          {[['want', 'Por leer', grupos.want], ['dropped', 'Dropeados', grupos.dropped]].map(([clave, label, entries]) => (
+            entries.length > 0 && (
+              <CajaSeccion key={clave} variante={variante}>
+                <TituloSeccion
+                  variante={variante}
+                  label={label}
+                  cuenta={entries.length}
+                  plegada={plegadas[clave]}
+                  onAlternar={() => alternar(clave)}
+                  desde="top-0"
+                />
+                <Plegable abierta={!plegadas[clave]}>
+                  <div className="pt-3">
+                    <Coleccion entries={entries} vista={vista} onAbrir={abrirLibro} fueraId={fueraId} generosDeAutor={generosDeAutor} />
+                  </div>
+                </Plegable>
+              </CajaSeccion>
+            )
           ))}
-          <Seccion variante={variante} label="Por leer" entries={grupos.want} vista={vista} onAbrir={abrirLibro} fueraId={fueraId} generosDeAutor={generosDeAutor} />
-          <Seccion variante={variante} label="Dropeados" entries={grupos.dropped} vista={vista} onAbrir={abrirLibro} fueraId={fueraId} generosDeAutor={generosDeAutor} />
         </div>
       )}
+
+      <HojaFiltros
+        abierta={hojaFiltros.abierta}
+        onCerrar={hojaFiltros.cerrar}
+        sort={sort}
+        onSort={setSort}
+        filters={filters}
+        onFilters={setFilters}
+        opciones={opciones}
+        visibles={grupos?.visible?.length || 0}
+      />
 
       {enFicha && (
         <BookDetail

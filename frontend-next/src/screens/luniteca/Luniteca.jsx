@@ -589,7 +589,7 @@ function BotonHerramienta({ activo, principal, onClick, etiqueta, children }) {
 
 // Alto animado con `height: auto`, que motion sí sabe interpolar. Lo que entra
 // y sale se anima; nada aparece de golpe.
-function Plegable({ abierta, children }) {
+export function Plegable({ abierta, children }) {
   return (
     <AnimatePresence initial={false}>
       {abierta && (
@@ -608,7 +608,7 @@ function Plegable({ abierta, children }) {
 }
 
 // ─── Secciones ─────────────────────────────────────────────────────────────
-function BotonPlegarAnos({ todosPlegados, onAlternar }) {
+export function BotonPlegarAnos({ todosPlegados, onAlternar }) {
   return (
     <motion.button
       onClick={onAlternar}
