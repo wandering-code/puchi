@@ -32,7 +32,11 @@ export const RELIEVE_LIBRO = relieveLibro()
 // canto izquierdo y un brillo de barniz en diagonal—. Se usa donde la portada
 // se ve grande, o sea en la ficha: en una miniatura de 40px esos matices no se
 // aprecian y solo ensucian.
-export function Cover({ url, title, className = '', priority = false, relieve = false }) {
+// `realce`: el peso de la portada —sombrita y filo— va aquí dentro y no
+// suelto en cada sitio, así que lo llevan todas por igual. Se apaga solo donde
+// ya hay una sombra propia más grande (la portada de la ficha), porque las dos
+// son box-shadow y la segunda pisaría a la primera.
+export function Cover({ url, title, className = '', priority = false, relieve = false, realce = true }) {
   const [roto, setRoto] = useState(false)
   const [cargada, setCargada] = useState(false)
   const [urlPrevia, setUrlPrevia] = useState(url)
@@ -43,7 +47,7 @@ export function Cover({ url, title, className = '', priority = false, relieve = 
   const hayImagen = !!url && !roto
 
   return (
-    <div className={`relative aspect-[2/3] overflow-hidden rounded-md bg-surface-2 ${className}`}>
+    <div className={`relative aspect-[2/3] overflow-hidden rounded-md bg-surface-2 ${realce ? 'relieve-portada' : ''} ${className}`}>
       {/* Sin portada se pinta el título dentro del hueco. En la cuadrícula el
           título ya no va debajo (la portada identifica el libro de sobra), así
           que un libro sin imagen se quedaría sin nada que lo identifique. */}
@@ -78,6 +82,16 @@ export function Cover({ url, title, className = '', priority = false, relieve = 
           style={{ background: RELIEVE_LIBRO }}
         />
       )}
+      {/* El filo, en su propia capa y la última: como `inset` en el contenedor
+          se pinta DEBAJO del contenido, y la portada va encima tapándolo —
+          comprobado por píxeles, el borde salía del mismo color que el centro.
+          Va siempre, también en la portada grande de la ficha: es lo que
+          recorta la portada contra el fondo, y en oscuro es lo único que
+          separa una portada oscura de un fondo casi negro. */}
+      <span
+        className="pointer-events-none absolute inset-0 rounded-md"
+        style={{ boxShadow: 'inset 0 0 0 1px var(--filo-portada)' }}
+      />
     </div>
   )
 }

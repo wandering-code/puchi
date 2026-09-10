@@ -86,13 +86,18 @@
      Es una paleta CLARA, al revés que el arranque de esta app: lo que
      dependía de un fondo oscuro (barra de estado de iOS, splash de la PWA,
      el grano, las manchas del login) está ajustado en consecuencia. */
-  --color-bg:        #f7f3ee;   /* luni3-bg */
-  --color-surface:   #fdfbf9;   /* luni3-surface */
-  --color-surface-2: #ece5db;   /* luni3-surfaceHi */
-  --color-line:      #e2d9cc;   /* luni3-border */
+  /* El fondo baja un punto y surface-2 y la línea bajan de verdad: entre la
+     superficie más clara y la más oscura había 1.21 de contraste —las tres
+     eran prácticamente el mismo tono— y por eso no había dónde apoyar nada.
+     Ahora 1.34, y los colores de texto no se mueven (medido: ink 14.8→14.4,
+     dim 4.44→4.32, y mute incluso mejora, 3.07→3.29). */
+  --color-bg:        #f5f0e7;   /* luni3-bg, un punto más hondo */
+  --color-surface:   #fffdfa;   /* luni3-surface */
+  --color-surface-2: #e6dccb;   /* luni3-surfaceHi */
+  --color-line:      #dacfbc;   /* luni3-border */
   --color-ink:       #241f1a;   /* luni3-text */
   --color-ink-dim:   #7a6f63;   /* luni3-sub */
-  --color-ink-mute:  #948a7c;   /* luni3-muted */
+  --color-ink-mute:  #8d8374;   /* luni3-muted */
   --color-accent:    #b5603c;   /* luni3-accent */
   --color-accent-soft: rgba(181,96,60,0.12);  /* luni3-accentBg */
   --color-accent-line: rgba(181,96,60,0.35);  /* luni3-accentBd */
@@ -219,6 +224,19 @@
 :root[data-tema="claro"] {
   --textura-papel: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='128' height='128'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='128' height='128' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
   color-scheme: light;
+
+  /* La balda de la vista de estantería. Cuatro piezas, que es lo que tiene un
+     canto de verdad: la sombra donde los libros la tocan, el filo de luz, la
+     cara y la sombra que proyecta debajo. Antes era una raya de 3px de
+     --color-line, y unos lomos con relieve apoyados en una línea plana. */
+  --balda-contacto: rgba(60, 40, 20, 0.13);
+  --balda-luz:      rgba(255, 255, 255, 0.9);
+  --balda-cara:     #e0d3bd;
+  --balda-sombra:   rgba(60, 40, 20, 0.16);
+
+  /* El filo de una portada. Sobre el crema basta con una línea parda: la
+     portada se recorta contra el fondo sin parecer que lleve marco. */
+  --filo-portada: rgba(60, 40, 20, 0.18);
 }
 
 :root[data-tema="oscuro"] {
@@ -226,10 +244,10 @@
      parda oscura, y el terracota subido de luz para que aguante el contraste
      sobre ella. El acento claro pide texto oscuro encima, así que on-accent
      se da la vuelta. */
-  --color-bg:        #16120e;
-  --color-surface:   #1e1a15;
-  --color-surface-2: #2a231b;
-  --color-line:      #3a3128;
+  --color-bg:        #141009;
+  --color-surface:   #221d15;
+  --color-surface-2: #332b20;
+  --color-line:      #453b2d;
   --color-ink:       #f2ece3;
   --color-ink-dim:   #b6ab9c;
   --color-ink-mute:  #8d8375;
@@ -248,6 +266,18 @@
   /* Que el navegador sepa en qué tema está: sin esto, los controles nativos
      (barras de scroll, el calendario de un input) siguen saliendo en claro. */
   color-scheme: dark;
+
+  /* En oscuro la balda no puede ser más oscura que el fondo: se hace de luz.
+     La cara queda por encima del fondo, como una madera que recibe algo de
+     luz, y las sombras sí son negras de verdad. */
+  --balda-contacto: rgba(0, 0, 0, 0.55);
+  --balda-luz:      rgba(255, 255, 255, 0.13);
+  --balda-cara:     #2b2418;
+  --balda-sombra:   rgba(0, 0, 0, 0.5);
+
+  /* Y el filo de las portadas es claro, no oscuro: sobre este fondo una línea
+     parda no separa nada y las portadas oscuras se funden con él. */
+  --filo-portada: rgba(255, 255, 255, 0.12);
 }
 
 /* El cambio de tema (platform/tema.js) se anima a mano con un círculo que se
@@ -280,6 +310,16 @@
    Con nombre, y no un rgba() escrito dentro de cada componente, porque su
    tinta cambia con el tema (--color-sombra). Cada una es la de un sitio
    concreto; si hace falta una nueva, se añade aquí. */
+/* El peso de una portada: se apoya en algo y tiene canto. Va dentro de Cover,
+   así que lo llevan todas —cuadrícula, lista, tarjeta de "Leyendo", actividad—
+   sin repetir sombras a mano en cada sitio. En oscuro la sombra apenas se ve y
+   quien separa la portada del fondo es el filo. */
+@utility relieve-portada {
+  box-shadow:
+    0 1px 2px rgb(var(--color-sombra) / .16),
+    0 5px 12px -6px rgb(var(--color-sombra) / .28);
+}
+
 @utility sombra-panel   { box-shadow: 0 -12px 40px -12px rgb(var(--color-sombra) / .35); }
 @utility sombra-volando { box-shadow: 0 10px 30px -8px rgb(var(--color-sombra) / .5); }
 @utility sombra-pastilla { box-shadow: 0 1px 3px rgb(var(--color-sombra) / .25); }

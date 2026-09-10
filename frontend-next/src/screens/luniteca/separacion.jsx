@@ -44,6 +44,18 @@ export function usarSeparacion() {
 
 const CON_BLOQUE = ['bloque', 'mixto']
 
+// Cada sección lleva el color de su estado. Los colores ya existían en la
+// paleta (los usa el punto de estado de la ficha) pero en la estantería no se
+// usaban: las cuatro secciones se veían exactamente iguales. Con esto se sabe
+// en cuál estás sin leer el título, y de paso la pantalla deja de ser toda del
+// mismo tono, que era lo que se notaba flojo.
+const COLOR_DE_ESTADO = {
+  reading: 'var(--color-accent)',
+  read:    'var(--color-read)',
+  want:    'var(--color-want)',
+  dropped: 'var(--color-danger)',
+}
+
 // Cuánto separa una sección de la anterior.
 export function huecoEntreSecciones(variante) {
   if (variante === 'minimal') return 'space-y-12'
@@ -68,8 +80,8 @@ export function CajaSeccion({ variante, children }) {
 // una barra de herramientas fija de 56px y se pega justo debajo; en la de otra
 // persona no la hay, así que se pega arriba del todo. Las clases van completas
 // y no compuestas porque Tailwind solo se queda con las que ve escritas.
-export function TituloSeccion({ variante, label, cuenta, plegada, onAlternar, anidado = false, accion = null, desde = 'top-14' }) {
-  const contenido = <Contenido variante={variante} label={label} cuenta={cuenta} plegada={plegada} hayChevron={!!onAlternar} anidado={anidado} />
+export function TituloSeccion({ variante, label, cuenta, plegada, onAlternar, anidado = false, accion = null, desde = 'top-14', estado = null }) {
+  const contenido = <Contenido variante={variante} label={label} cuenta={cuenta} plegada={plegada} hayChevron={!!onAlternar} anidado={anidado} estado={estado} />
 
   // Los títulos que se quedan pegados bajo la barra de herramientas (56px)
   // mientras se recorre su sección. Siempre con fondo propio: si no, los libros
@@ -123,7 +135,19 @@ export function TituloSeccion({ variante, label, cuenta, plegada, onAlternar, an
   )
 }
 
-function Contenido({ variante, label, cuenta, plegada, hayChevron, anidado }) {
+function Contenido({ variante, label, cuenta, plegada, hayChevron, anidado, estado }) {
+  const color = COLOR_DE_ESTADO[estado] || null
+  // El punto va solo en la cabecera de la sección, no en la del año: dentro de
+  // "Leídos" todos son leídos y repetirlo en cada año es ruido.
+  const punto = color && !anidado
+    ? <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: color }} aria-hidden />
+    : null
+  // La línea que rellena toma un poco de ese color en vez de ser gris: es lo
+  // que hace que la sección se lea como suya de un vistazo. Un poco, no del
+  // todo — si fuera el color puro competiría con los propios libros.
+  const linea = color
+    ? { background: `color-mix(in srgb, ${color} 45%, var(--color-line))` }
+    : undefined
   const tamano = anidado
     ? 'font-display text-base font-semibold'
     : 'font-display text-lg font-bold tracking-[-0.01em]'
@@ -131,6 +155,7 @@ function Contenido({ variante, label, cuenta, plegada, hayChevron, anidado }) {
   if (variante === 'minimal') {
     return (
       <>
+        {punto}
         <span className={anidado ? 'text-[13px] uppercase tracking-[0.16em] text-ink-dim' : 'text-[11px] uppercase tracking-[0.2em] text-ink-mute'}>
           {label}
         </span>
@@ -145,10 +170,13 @@ function Contenido({ variante, label, cuenta, plegada, hayChevron, anidado }) {
 
   return (
     <>
+      {punto}
       <span className={tamano}>{label}</span>
       <span className="text-xs text-ink-mute">{cuenta}</span>
       {/* La línea que llena el hueco solo la tiene la variante que la usa. */}
-      {variante === 'linea' ? <span className="h-px flex-1 bg-line" /> : <span className="flex-1" />}
+      {variante === 'linea'
+        ? <span className="h-px flex-1 bg-line" style={linea} />
+        : <span className="flex-1" />}
       {hayChevron && (
         <IconChevron className={`h-4 w-4 shrink-0 text-ink-mute transition-transform duration-200 ${plegada ? '' : 'rotate-180'}`} />
       )}

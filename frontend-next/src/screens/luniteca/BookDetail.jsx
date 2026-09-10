@@ -108,6 +108,7 @@ export default function BookDetail({
               title={libro.title}
               priority
               relieve
+              realce={false}
               className="sombra-portada"
             />
           </div>

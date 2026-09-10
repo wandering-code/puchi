@@ -530,11 +530,25 @@ export default function Lomos({ entries, onAbrir, fueraId = null, generosDeAutor
   return (
     <div
       className="flex flex-wrap items-end gap-x-1.5"
-      // La balda: una línea al final de cada fila, dibujada con un degradado
-      // que se repite cada fila. Así no hace falta partir los libros en filas
-      // a mano ni saber cuántos caben.
+      // La balda, dibujada con un degradado que se repite cada fila. Así no
+      // hace falta partir los libros en filas a mano ni saber cuántos caben.
+      //
+      // No es una línea, es un canto: la sombra que se acumula donde los
+      // libros la tocan, el filo de luz que recibe por arriba, la cara, y la
+      // sombra que proyecta debajo. Era una raya de 3px, y unos lomos con
+      // relieve propio apoyados sobre algo plano no acababan de asentarse.
+      // Los colores salen de --balda-* porque en oscuro se invierten: allí la
+      // cara es MÁS clara que el fondo, como una madera que recibe algo de luz.
       style={{
-        backgroundImage: `repeating-linear-gradient(to bottom, transparent 0 ${ALTO_FILA - 5}px, var(--color-line) ${ALTO_FILA - 5}px ${ALTO_FILA - 2}px, transparent ${ALTO_FILA - 2}px ${ALTO_FILA}px)`,
+        backgroundImage: [
+          'repeating-linear-gradient(to bottom',
+          `transparent 0 ${ALTO_FILA - 11}px`,          // el aire sobre la balda
+          `var(--balda-contacto) ${ALTO_FILA - 6}px`,   // se va oscureciendo al llegar
+          `var(--balda-luz) ${ALTO_FILA - 6}px ${ALTO_FILA - 5}px`,  // el filo, 1px
+          `var(--balda-cara) ${ALTO_FILA - 5}px ${ALTO_FILA - 2}px`, // la cara
+          `var(--balda-sombra) ${ALTO_FILA - 2}px`,     // y su sombra, que se va
+          `transparent ${ALTO_FILA}px)`,
+        ].join(', '),
       }}
     >
       {entries.map((e, i) => (

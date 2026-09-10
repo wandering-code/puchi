@@ -59,7 +59,7 @@ export default function BookEditForm({ entry, generos, onGuardar, onCancelar, on
           className="w-24 shrink-0"
           aria-label="Cambiar la portada"
         >
-          <Cover url={borrador.cover_url} title={borrador.title} className="shadow-md" />
+          <Cover url={borrador.cover_url} title={borrador.title} />
         </motion.button>
         <p className="flex-1 text-xs leading-relaxed text-ink-dim">
           Toca la portada para elegir otra o subir una foto. La que elijas la ves solo tú;

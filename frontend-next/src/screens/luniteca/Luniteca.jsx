@@ -265,7 +265,7 @@ export default function Luniteca() {
       <div className={`mt-5 ${huecoEntreSecciones(separacion)}`}>
         {grupos.reading.length > 0 && (
           <CajaSeccion variante={separacion}>
-            <TituloSeccion variante={separacion} label="Leyendo" cuenta={grupos.reading.length} />
+            <TituloSeccion variante={separacion} label="Leyendo" cuenta={grupos.reading.length} estado="reading" />
             <div className="mt-3 space-y-2">
               {grupos.reading.map(e => (
                 <TarjetaLeyendo key={e.id} entry={e} onAbrir={abrirLibro} fuera={e.id === fueraId} />
@@ -279,6 +279,7 @@ export default function Luniteca() {
             <TituloSeccion
               variante={separacion}
               label="Leídos"
+              estado="read"
               cuenta={grupos.readYearGroups.reduce((n, g) => n + g.items.length, 0)}
               plegada={plegadas.read}
               onAlternar={alternarRead}
@@ -317,7 +318,7 @@ export default function Luniteca() {
 
         <SeccionPlegable
           variante={separacion}
-          label="Por leer" entries={grupos.want} vista={vista}
+          label="Por leer" entries={grupos.want} vista={vista} estado="want"
           plegada={plegadas.want}
           onAlternar={alternarWant}
           onAbrir={abrirLibro}
@@ -327,7 +328,7 @@ export default function Luniteca() {
 
         <SeccionPlegable
           variante={separacion}
-          label="Dropeados" entries={grupos.dropped} vista={vista}
+          label="Dropeados" entries={grupos.dropped} vista={vista} estado="dropped"
           plegada={plegadas.dropped}
           onAlternar={alternarDropped}
           onAbrir={abrirLibro}
@@ -630,11 +631,11 @@ export function BotonPlegarAnos({ todosPlegados, onAlternar }) {
   )
 }
 
-const SeccionPlegable = memo(function SeccionPlegable({ variante, label, entries, vista, plegada, onAlternar, onAbrir, fueraId = null, generosDeAutor = null }) {
+const SeccionPlegable = memo(function SeccionPlegable({ variante, label, entries, vista, plegada, onAlternar, onAbrir, fueraId = null, generosDeAutor = null, estado = null }) {
   if (entries.length === 0) return null
   return (
     <CajaSeccion variante={variante}>
-      <TituloSeccion variante={variante} label={label} cuenta={entries.length} plegada={plegada} onAlternar={onAlternar} />
+      <TituloSeccion variante={variante} label={label} cuenta={entries.length} plegada={plegada} onAlternar={onAlternar} estado={estado} />
       <Plegable abierta={!plegada}>
         <div className="pt-3">
           <Coleccion entries={entries} vista={vista} onAbrir={onAbrir} fueraId={fueraId} generosDeAutor={generosDeAutor} />
@@ -696,7 +697,7 @@ const PortadaLibro = memo(function PortadaLibro({ entry, onAbrir, fuera = false 
       className={`transition-transform duration-150 active:scale-[0.96] ${fuera ? 'invisible' : ''}`}
     >
       <div className="relative">
-        <Cover url={entry.book.cover_url} title={entry.book.title} className="shadow-sm" />
+        <Cover url={entry.book.cover_url} title={entry.book.title} />
         <NotaBadge rating={entry.rating} />
       </div>
     </button>

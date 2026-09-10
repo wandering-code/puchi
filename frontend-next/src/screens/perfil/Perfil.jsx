@@ -207,7 +207,7 @@ export default function Perfil() {
               plegables, y luego lo pendiente y lo dejado a medias. */}
           {grupos.reading.length > 0 && (
             <CajaSeccion variante={variante}>
-              <TituloSeccion variante={variante} label="Leyendo" cuenta={grupos.reading.length} />
+              <TituloSeccion variante={variante} label="Leyendo" cuenta={grupos.reading.length} estado="reading" />
               <div className="mt-3 space-y-2">
                 {grupos.reading.map(e => (
                   <TarjetaLeyendo key={e.id} entry={e} onAbrir={abrirLibro} fuera={e.id === fueraId} />
@@ -221,6 +221,7 @@ export default function Perfil() {
               <TituloSeccion
                 variante={variante}
                 label="Leídos"
+                estado="read"
                 cuenta={grupos.readYearGroups.reduce((n, g) => n + g.items.length, 0)}
                 plegada={plegadas.read}
                 onAlternar={() => alternar('read')}
@@ -268,6 +269,8 @@ export default function Perfil() {
                   cuenta={entries.length}
                   plegada={plegadas[clave]}
                   onAlternar={() => alternar(clave)}
+                  // 'want' y 'dropped' son ya las claves del estado.
+                  estado={clave}
                 />
                 <Plegable abierta={!plegadas[clave]}>
                   <div className="pt-3">
