@@ -96,15 +96,20 @@ export function fmtDate(iso) {
   return new Date(iso).toLocaleDateString('es', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
-// "inicio – fin" al terminar (o "… – dropeado …" si se dejó), con "¿?" en el
-// lado que falte. Nunca fechas para "por leer".
+// "inicio – fin" al terminar (o "… – dropeado …" si se dejó). La fecha que
+// falte simplemente no se escribe: un libro que estás leyendo pone cuándo lo
+// empezaste y ya está, sin un "¿?" recordando que todavía no lo has acabado.
+// Y si no hay ninguna de las dos, no hay etiqueta. Nunca fechas para "por
+// leer".
 export function readingDatesLabel(e) {
   const tracksDates = ['reading', 'rereading', 'read', 'dropped'].includes(e.status)
   if (!tracksDates || (!e.started_at && !e.finished_at)) return null
-  const start = e.started_at ? fmtDate(e.started_at) : '¿?'
-  if (!e.finished_at) return `${start} – ¿?`
+  const start = e.started_at ? fmtDate(e.started_at) : ''
+  if (!e.finished_at) return start
   const end = fmtDate(e.finished_at)
-  return e.status === 'dropped' ? `${start} – dropeado ${end}` : `${start} – ${end}`
+  const fin = e.status === 'dropped' ? `dropeado ${end}` : end
+  // Sin inicio no hay rango que escribir: solo el final.
+  return start ? `${start} – ${fin}` : fin
 }
 
 // Al pasar a "leyendo"/"leído"/"dropeado" se rellenan las fechas que falten

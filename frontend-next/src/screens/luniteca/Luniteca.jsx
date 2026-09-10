@@ -708,8 +708,8 @@ const FilaLibro = memo(function FilaLibro({ entry, onAbrir, fuera = false }) {
   // es lo que se viene a mirar cuando se pasa a esta vista. Van en su propia
   // línea y no pegadas al autor, para que un autor largo no se las coma al
   // truncar. Mismo texto que en la ficha y en las tarjetas de "Leyendo"
-  // ("inicio – fin", con "¿?" en el lado que falte), así que no hay dos
-  // formas distintas de escribir lo mismo por la app.
+  // ("inicio – fin", o solo la que haya), así que no hay dos formas
+  // distintas de escribir lo mismo por la app.
   const fechas = readingDatesLabel(entry)
   return (
     <button
