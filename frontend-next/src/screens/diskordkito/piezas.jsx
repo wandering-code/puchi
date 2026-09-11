@@ -84,18 +84,20 @@ export function hora(iso) {
 
 // Un bloque de mensajes de la misma persona.
 //
-// `conNombre` solo en las conversaciones de varios: en un uno a uno solo
-// podéis ser dos, y repetir el nombre de la otra persona en cada bloque es
-// ruido puro.
+// `conNombre` distingue las conversaciones de varios de un uno a uno, y decide
+// las dos cosas que ahí sobran: el nombre y la cara. En un uno a uno solo
+// podéis ser dos — repetir quién habla en cada bloque, y su foto al lado de
+// cada tanda, es ruido puro y encima descuadra el hilo, porque deja una
+// columna vacía a la izquierda de todo lo tuyo.
 export function BloqueDeMensajes({ bloque, mio, conNombre, nuevo = false }) {
   const { autor, mensajes } = bloque
   return (
-    <div className={`mt-3 flex gap-2 ${mio ? 'flex-row-reverse' : ''}`}>
-      {/* La cara solo en lo ajeno: en lo tuyo ya sabes quién eres, y ocupa un
-          hueco que le viene mejor al texto. */}
-      {!mio && <Avatar jugador={autor} size={28} className="mt-auto" />}
+    <div className={`mt-2.5 flex gap-2 ${mio ? 'flex-row-reverse' : ''}`}>
+      {/* La cara solo donde hace falta saber de quién es: en el canal del club
+          y en lo ajeno. En lo tuyo ya sabes quién eres. */}
+      {conNombre && !mio && <Avatar jugador={autor} size={28} className="mt-auto" />}
 
-      <div className={`flex min-w-0 flex-col gap-1 ${mio ? 'items-end' : 'items-start'}`}>
+      <div className={`flex min-w-0 flex-col gap-0.5 ${mio ? 'items-end' : 'items-start'}`}>
         {conNombre && !mio && (
           <span className="px-1 text-[11px] font-semibold" style={{ color: autor.color || 'var(--color-ink-dim)' }}>
             {autor.name}
@@ -132,7 +134,11 @@ function Burbuja({ mensaje, mio, primera, ultima, nuevo }) {
       initial={nuevo ? { opacity: 0, y: 8, scale: 0.96 } : false}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
-      className={`max-w-[78%] px-3.5 py-2 ${esquinas} ${
+      // Tope doble: un porcentaje para el móvil y un ancho fijo para cuando hay
+      // panel de sobra. Solo con el porcentaje, en una pantalla de ordenador un
+      // mensaje largo cruzaba media pantalla y se leía fatal; solo con el fijo,
+      // en el móvil no dejaba ver de quién era cada burbuja.
+      className={`max-w-[min(80%,32rem)] px-3.5 py-2 ${esquinas} ${
         mio
           ? 'bg-accent text-on-accent'
           : 'border border-line bg-surface text-ink'

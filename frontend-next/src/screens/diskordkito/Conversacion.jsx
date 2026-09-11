@@ -201,7 +201,12 @@ function Tripas({ canalId, abierta, onCerrar, suelta, refCuerpo }) {
   )
 
   const hilo = (
-    <div className={`w-full py-3 ${suelta ? 'mx-auto max-w-3xl px-6' : 'mx-auto max-w-2xl px-4'}`}>
+    /* Suelto, el hilo ocupa el panel entero. Centrado en una columna estrecha
+       dentro de un panel ancho quedaba como una cinta flotando en medio, con
+       aire de sobra a los dos lados y las burbujas lejos de los bordes. Lo que
+       impide que un mensaje largo cruce la pantalla es el tope de la propia
+       burbuja, no un corsé alrededor de todo. */
+    <div className={`w-full py-3 ${suelta ? 'px-5' : 'mx-auto max-w-2xl px-4'}`}>
       {bloques === null && (
         <div className="space-y-3 py-4">
           {[70, 45, 60].map((w, i) => (

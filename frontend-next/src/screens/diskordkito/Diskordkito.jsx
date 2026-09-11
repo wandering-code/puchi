@@ -159,12 +159,19 @@ export default function Diskordkito() {
   if (ancha) {
     return (
       <div className="flex h-full min-h-0 flex-col py-5">
-        <header className="mb-3 shrink-0">
+        <header className="mx-auto mb-3 w-full max-w-[1180px] shrink-0">
           <h2 className="font-display text-[1.6rem] font-bold leading-none tracking-[-0.02em]">Diskordkito</h2>
           <p className="mt-1 text-sm text-ink-dim">{textoConectados(conectados)}</p>
         </header>
 
-        <div className="grid min-h-0 flex-1 grid-cols-[minmax(240px,300px)_1fr] gap-4">
+        {/* Acotado, y centrado con lo que sobre a los lados. Sin tope, en una
+            pantalla de ordenador el hilo se estiraba a más de mil píxeles: los
+            mensajes cortos quedaban como islas en los dos extremos con un
+            desierto en medio, que es lo que se leía como "mucho aire". Una
+            conversación quiere ancho de conversación, no de hoja de cálculo —
+            y el tope de cada burbuja por sí solo no arregla eso, porque lo que
+            sobra es el hueco ENTRE los dos lados. */}
+        <div className="mx-auto grid min-h-0 w-full max-w-[1180px] flex-1 grid-cols-[minmax(260px,320px)_1fr] gap-4">
           <div className="flex min-h-0 flex-col">{lista}</div>
           {abierta != null
             ? <Conversacion key={abierta} canalId={abierta} suelta />
