@@ -1,10 +1,30 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { motion } from 'motion/react'
 import { nombreDeCanal, useChat } from '../../platform/chat'
+import { useLlamadas } from '../../platform/llamadas'
 import PantallaInferior from '../luniteca/PantallaInferior'
 import Avatar from '../../ui/Avatar'
-import { IconArrowLeft, IconClub, IconEnviar } from '../../ui/icons'
+import { IconArrowLeft, IconClub, IconEnviar, IconTelefono, IconVideoCamara } from '../../ui/icons'
 import { BloqueDeMensajes, PuntoConectado, SeparadorDeDia, agruparMensajes } from './piezas'
+
+// Un botón de llamar de la cabecera. En redondo y del color de la app, como
+// los de la barra de la estantería — no en verde de teléfono, que aquí
+// desentonaría: el verde se reserva para "contestar" en la tarjeta de una
+// llamada entrante, donde sí hay que distinguirlo del rojo de rechazar.
+function BotonLlamar({ etiqueta, deshabilitado, onClick, children }) {
+  return (
+    <motion.button
+      onClick={onClick}
+      disabled={deshabilitado}
+      whileTap={{ scale: 0.9 }}
+      aria-label={etiqueta}
+      title={deshabilitado ? 'Ya estás en una llamada' : etiqueta}
+      className="flex h-10 w-10 items-center justify-center rounded-full bg-accent/[0.08] text-accent transition-colors active:bg-accent/20 disabled:bg-surface-2 disabled:text-ink-mute"
+    >
+      {children}
+    </motion.button>
+  )
+}
 
 // Una conversación. La misma en los dos sitios donde puede vivir:
 //
@@ -41,6 +61,7 @@ function Tripas({ canalId, abierta, onCerrar, suelta, refCuerpo }) {
 
   const esDelClub = canal?.type !== 'dm'
   const otro = canal?.other_player
+  const { llamar, hayLlamada } = useLlamadas()
 
   useEffect(() => {
     if (!abierta || !canalId) return
@@ -114,6 +135,27 @@ function Tripas({ canalId, abierta, onCerrar, suelta, refCuerpo }) {
               : (estaOnline(otro?.id) ? 'Conectada ahora' : 'Desconectada')}
           </p>
         </div>
+
+        {/* Llamar, desde la propia conversación. Es donde se decide: estás
+            escribiéndole a alguien y ves que está conectado. */}
+        {!esDelClub && otro && (
+          <div className="flex shrink-0 items-center gap-1.5">
+            <BotonLlamar
+              etiqueta={`Llamar a ${otro.name}`}
+              deshabilitado={hayLlamada}
+              onClick={() => llamar(otro, 'audio')}
+            >
+              <IconTelefono className="h-[18px] w-[18px]" />
+            </BotonLlamar>
+            <BotonLlamar
+              etiqueta={`Videollamar a ${otro.name}`}
+              deshabilitado={hayLlamada}
+              onClick={() => llamar(otro, 'video')}
+            >
+              <IconVideoCamara className="h-[18px] w-[18px]" />
+            </BotonLlamar>
+          </div>
+        )}
       </div>
     </div>
   )

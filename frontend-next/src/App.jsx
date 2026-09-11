@@ -5,7 +5,11 @@ import { useLiveConnection } from './platform/live'
 import { usarTema } from './platform/preferencias'
 import { AvisosProvider } from './platform/avisos'
 import { ChatProvider } from './platform/chat'
+import { LlamadasProvider } from './platform/llamadas'
 import AvisosDeMensaje from './screens/diskordkito/AvisosDeMensaje'
+import AvisoDeLlamada from './screens/diskordkito/AvisoDeLlamada'
+import Llamada from './screens/diskordkito/Llamada'
+import PastillaLlamada from './screens/diskordkito/PastillaLlamada'
 import LoginScreen from './screens/LoginScreen'
 import Shell from './screens/Shell'
 import UpdatePrompt from './ui/UpdatePrompt'
@@ -59,8 +63,17 @@ export default function App() {
                 que nadie se quede sin enterarse. */}
             <AvisosProvider>
               <ChatProvider>
-                <AvisosDeMensaje />
-                <Shell />
+                <LlamadasProvider>
+                  <AvisosDeMensaje />
+                  <AvisoDeLlamada />
+                  {/* El escenario y la pastilla van en portales a <body>, así
+                      que da igual dónde se pongan aquí — lo que importa es que
+                      están FUERA del Shell: la llamada sobrevive a cambiar de
+                      pantalla, que es justo la gracia. */}
+                  <Llamada />
+                  <PastillaLlamada />
+                  <Shell />
+                </LlamadasProvider>
               </ChatProvider>
             </AvisosProvider>
           </motion.div>
