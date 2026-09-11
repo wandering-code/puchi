@@ -3,9 +3,13 @@ import { AnimatePresence, motion } from 'motion/react'
 import { useAuth } from '../platform/auth'
 import { api } from '../platform/api'
 import { IconArrow, IconPaw } from '../ui/icons'
+import Registro from './Registro'
 
 export default function LoginScreen() {
   const { login } = useAuth()
+  // Entrar y registrarse comparten pantalla, fondo y forma: son dos caras de lo
+  // mismo, no dos sitios. Se cruzan con una animación en vez de navegar.
+  const [modo, setModo] = useState('entrar')   // entrar | registro
   const [players, setPlayers] = useState([])
   const [name, setName] = useState('')
   const [pin, setPin] = useState('')
@@ -39,7 +43,30 @@ export default function LoginScreen() {
 
       {/* pb-kb aparta el contenido del teclado con padding, sin encoger la
           caja: encogiéndola se corta el fondo y asoma lo de detrás. */}
-      <div className="relative z-10 flex flex-1 flex-col justify-center px-6 pt-safe pb-kb">
+      {/* overflow-y-auto: el formulario de registro es más alto que una
+          pantalla de móvil, y sin esto lo de abajo queda inalcanzable. */}
+      <div className="relative z-10 flex flex-1 flex-col justify-center overflow-y-auto px-6 py-8 pt-safe pb-kb">
+        <AnimatePresence mode="wait" initial={false}>
+          {modo === 'registro' ? (
+            <motion.div
+              key="registro"
+              initial={{ opacity: 0, x: 24 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -24 }}
+              transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+              className="w-full"
+            >
+              <Registro onVolver={() => setModo('entrar')} />
+            </motion.div>
+          ) : (
+          <motion.div
+            key="entrar"
+            className="w-full"
+            initial={{ opacity: 0, x: -24 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 24 }}
+            transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+          >
         <motion.div
           className="mx-auto w-full max-w-sm"
           initial="hidden"
@@ -117,13 +144,19 @@ export default function LoginScreen() {
           </form>
 
           <Fade className="mt-8 text-center text-sm text-ink-mute">
-            ¿Cuenta nueva?{' '}
-            {/* El registro (con avatar, recorte de foto y aprobación del
-                admin) todavía no está portado — se hace en la Puchi actual y
-                luego se entra aquí, que la sesión es la misma. */}
-            <a href="/" className="text-ink-dim underline underline-offset-4">Regístrate en la Puchi actual</a>
+            ¿No tienes cuenta?{' '}
+            <button
+              type="button"
+              onClick={() => setModo('registro')}
+              className="text-ink-dim underline underline-offset-4"
+            >
+              Crear una
+            </button>
           </Fade>
         </motion.div>
+          </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   )
