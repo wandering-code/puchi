@@ -31,20 +31,31 @@ import { Cronometro, Video } from './Llamada'
 
 const ROJO_COLGAR = '#e0483f'
 
-// Cuántas columnas dejan los cuadros más grandes, probando todas. Es lo que
-// hace que dos personas salgan en dos mitades en horizontal pero una encima de
-// otra en un móvil en vertical: no depende solo de cuántos sois, sino de la
-// forma del hueco.
-function mejoresColumnas(n, ancho, alto, proporcion = 4 / 3) {
-  let mejor = 1, mayorArea = 0
+// Hueco entre cuadros. Entra en el cálculo, no se le suma después: si no, lo
+// que cabía justo deja de caber y la fila se parte donde no toca.
+const HUECO = 8
+
+// Los cuadros de la llamada son **cuadrados**, no del tamaño de su celda.
+//
+// Antes cada uno se estiraba hasta llenar lo que le tocara, y eso da formas
+// distintas según la pantalla: en un iPad en vertical, dos personas salían en
+// dos cajas de 834x500 — muy apaisadas, con la cara pequeña en medio de un
+// panorama. Un cuadrado recorta algo por los lados pero encuadra la cara, que
+// es lo único que se mira aquí.
+const PROPORCION = 1
+
+// Cómo repartir n cuadros en un hueco: se prueban todas las columnas posibles y
+// gana la que deja los cuadros más grandes. No depende solo de cuántos sois,
+// sino de la forma del hueco — dos personas quieren dos columnas en un portátil
+// y una sola en un móvil en vertical.
+function mejorReparto(n, ancho, alto) {
+  let mejor = { columnas: 1, lado: 0 }
   for (let col = 1; col <= n; col++) {
     const filas = Math.ceil(n / col)
-    const cajaAncho = ancho / col
-    const cajaAlto = alto / filas
-    // Lo que de verdad mide el vídeo dentro de su celda, respetando proporción.
-    const real = Math.min(cajaAncho, cajaAlto * proporcion)
-    const area = real * (real / proporcion)
-    if (area > mayorArea) { mayorArea = area; mejor = col }
+    const cabeAncho = (ancho - HUECO * (col - 1)) / col
+    const cabeAlto = (alto - HUECO * (filas - 1)) / filas
+    const lado = Math.min(cabeAncho, cabeAlto * PROPORCION)
+    if (lado > mejor.lado) mejor = { columnas: col, lado }
   }
   return mejor
 }
@@ -156,23 +167,39 @@ export default function LlamadaGrupo() {
 // dos en un móvil vertical quieren una columna y dos en un portátil quieren dos.
 function Repartida({ ids, datosDe, conVideo, onElegir }) {
   const [caja, medir] = usarMedida()
-  const columnas = caja.ancho > 0 ? mejoresColumnas(ids.length, caja.ancho, caja.alto) : 1
+  const { columnas, lado } = caja.ancho > 0
+    ? mejorReparto(ids.length, caja.ancho, caja.alto)
+    : { columnas: 1, lado: 0 }
 
+  // Flex y no una rejilla, y con el ancho atado a lo que ocupan exactamente
+  // esas columnas. Es lo que hace que una última fila incompleta quede
+  // CENTRADA: con tres personas en dos columnas, la tercera se ponía pegada a
+  // la izquierda porque una celda de rejilla está donde está. Atando el ancho,
+  // además, el flex no puede colar un cuadro de más en una fila.
+  // El relleno va FUERA de lo que se mide. Midiendo la caja con su relleno
+  // dentro, los cuadros salían calculados para un hueco mayor del que tienen:
+  // por dieciséis píxeles, la fila que cabía justo se partía y las dos filas
+  // resultantes se salían por abajo de la pantalla. Visto en una captura.
   return (
-    <div ref={medir} className="absolute inset-0 p-2">
-      <div
-        className="grid h-full w-full place-content-center gap-2"
-        style={{
-          gridTemplateColumns: `repeat(${columnas}, minmax(0, 1fr))`,
-          gridAutoRows: 'minmax(0, 1fr)',
-          // Centrado de verdad: sin esto, una última fila incompleta se pega a
-          // la izquierda y la rejilla se ve descuadrada.
-          justifyItems: 'center',
-        }}
-      >
-        {ids.map(id => (
-          <Cuadro key={id} {...datosDe(id)} conVideo={conVideo} onTocar={() => onElegir(id)} lleno />
-        ))}
+    <div className="absolute inset-0 p-2">
+      <div ref={medir} className="flex h-full w-full items-center justify-center">
+        <div
+          className="flex flex-wrap content-center items-center justify-center"
+          style={{
+            gap: HUECO,
+            maxWidth: lado ? columnas * lado + HUECO * (columnas - 1) : undefined,
+          }}
+        >
+          {ids.map(id => (
+            <Cuadro
+              key={id}
+              {...datosDe(id)}
+              conVideo={conVideo}
+              lado={lado}
+              onTocar={() => onElegir(id)}
+            />
+          ))}
+        </div>
       </div>
     </div>
   )
@@ -206,11 +233,11 @@ function ConPrimerPlano({ id, ids, datosDe, conVideo, onElegir, onVolverAReparti
 }
 
 // ── Un cuadro ───────────────────────────────────────────────────────────────
-// `lleno` es para los de la rejilla y el de primer plano: ocupan lo que les
-// den. Los de la fila llevan un ancho fijo.
+// `lleno` es el de primer plano: ocupa todo el hueco. `lado` es el cuadrado de
+// la rejilla, y `ancho` el de la fila de abajo.
 function Cuadro({
   persona, stream, conVideo, camaraApagada, hablando, mio = false, mudo = false,
-  ancho = null, lleno = false, grande = false, onTocar,
+  ancho = null, lado = null, lleno = false, grande = false, onTocar,
 }) {
   const hayImagen = conVideo && stream && !camaraApagada
   const Etiqueta = onTocar ? motion.button : motion.div
@@ -221,7 +248,11 @@ function Cuadro({
       layout
       transition={{ type: 'spring', stiffness: 380, damping: 32 }}
       aria-label={onTocar ? `Poner a ${mio ? 'ti' : persona?.name} en primer plano` : undefined}
-      style={ancho ? { width: ancho, height: ancho / 0.75 } : undefined}
+      style={
+        ancho ? { width: ancho, height: ancho / 0.75 }
+        : lado ? { width: lado, height: lado / PROPORCION }
+        : undefined
+      }
       className={`relative overflow-hidden bg-black/40 ${
         lleno ? 'h-full w-full' : 'shrink-0'
       } ${grande ? '' : 'rounded-xl2 border'} ${
