@@ -22,8 +22,12 @@ nginx directamente, igual que el frontend actual.
 
 ## Qué hay hecho
 
-- **Armazón**: login contra el backend real, menú lateral, y pantallas de Inicio
-  (vacía), Luniteca y Ajustes.
+- **Armazón**: login contra el backend real, menú lateral, y pantallas de Inicio,
+  Luniteca y Ajustes.
+- **Inicio**: una guía corta de la app —qué hay en cada sección y las cuatro cosas
+  que no se adivinan mirando la pantalla—, armada a partir del mismo catálogo de
+  secciones que el menú, así que a quien no es del club no se le menciona el club.
+  Cada uno elige en Ajustes con qué pantalla arranca Puchi.
 - **Luniteca**: la estantería completa contra los datos reales — sesiones por estado,
   leídos agrupados por año, tres vistas (cuadrícula, lista y estantería de lomos),
   búsqueda, filtros y orden, ficha del libro con todo lo editable, edición de los

@@ -1,12 +1,13 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
-import { NavLink, Route, Routes, useLocation } from 'react-router-dom'
+import { NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { AnimatePresence, motion } from 'motion/react'
-import { esAdmin, useAuth } from '../platform/auth'
+import { useAuth } from '../platform/auth'
 import { useVersion } from '../platform/version'
 import { isIOS, isStandalone, safeInsets } from '../platform/pwa'
 import { useCapa } from '../platform/capas'
 import { LLEGADA, SALIDA } from '../ui/curvas'
+import Inicio from './inicio/Inicio'
 import Luniteca from './luniteca/Luniteca'
 import Club from './club/Club'
 import Actividad from './actividad/Actividad'
@@ -14,33 +15,17 @@ import Perfil from './perfil/Perfil'
 import Admin from './admin/Admin'
 import Avatar from '../ui/Avatar'
 import { SelectorSeparacion, usarSeparacion } from './luniteca/separacion'
-import { usarTema } from '../platform/preferencias'
+import { usarPreferencia, usarTema } from '../platform/preferencias'
 import { cambiarDeTema } from '../platform/tema'
-import { IconActividad, IconBooks, IconClub, IconEscudo, IconExit, IconHome, IconLuna, IconMenu, IconPaw, IconSettings, IconSol } from '../ui/icons'
-
-// El menú entero. Dos de las entradas no son para todo el mundo: el club solo
-// para quien esté en el club de lectura, y la administración solo para el
-// admin. Quien no tenga el permiso no la ve — y si escribe la URL a mano, la
-// pantalla se lo explica (y el backend lo rechaza igual, que es lo que de
-// verdad lo impide).
-const SECCIONES = [
-  { to: '/',           label: 'Inicio',          Icon: IconHome },
-  { to: '/luniteca',   label: 'Luniteca',        Icon: IconBooks },
-  { to: '/club',       label: 'Club de lectura', Icon: IconClub,   soloClub: true },
-  { to: '/actividad',  label: 'Actividad',       Icon: IconActividad },
-  { to: '/ajustes',    label: 'Ajustes',         Icon: IconSettings },
-  { to: '/admin',      label: 'Administración',  Icon: IconEscudo, soloAdmin: true },
-]
-
-function seccionesDe(player) {
-  return SECCIONES.filter(s => (
-    (!s.soloClub || !!player?.club_member) && (!s.soloAdmin || esAdmin(player))
-  ))
-}
+import { IconExit, IconLuna, IconMenu, IconPaw, IconSol } from '../ui/icons'
+// El catálogo de secciones y quién puede ver cada una vive aparte: lo comparten
+// el menú, la guía de Inicio y el selector de pantalla de arranque de Ajustes.
+import { SECCIONES, puedeVer, seccionesDe } from './secciones'
 
 export default function Shell() {
   const location = useLocation()
   const menu = useCapa()
+  usarPantallaDeArranque(location)
 
   // El botón atrás de Android (y el gesto de volver) cierra el menú en vez de
   // salir de la app: instalada no hay barra de navegador que deshaga nada, y
@@ -81,7 +66,7 @@ export default function Shell() {
         transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
       >
         <Routes location={location}>
-          <Route path="/"           element={<Placeholder title="Inicio" nota="Aquí irá lo que abra la app: novedades del club, lo que estás leyendo, accesos rápidos." />} />
+          <Route path="/"           element={<Inicio />} />
           <Route path="/luniteca"   element={<Luniteca />} />
           {/* El club y la administración se montan siempre: cada una comprueba
               el permiso por su cuenta y explica por qué no, en vez de dejar la
@@ -112,6 +97,35 @@ export default function Shell() {
       <MenuLateral abierto={menu.abierta} onCerrar={menu.cerrar} onNavegar={cerrarMenuAlNavegar} />
     </div>
   )
+}
+
+// Con qué pantalla arranca Puchi. Se elige en Ajustes y va con la cuenta, así
+// que acompaña a quien entra esté en el móvil o en el ordenador.
+//
+// Solo AL ABRIR la app, y solo si se ha entrado por la raíz: pulsar "Inicio"
+// en el menú tiene que llevar a Inicio y no rebotar a otro sitio, y un enlace
+// directo a un libro o a la estantería de alguien tiene que abrir eso.
+//
+// Con `replace` para no dejar Inicio enterrado en el historial: si no, el gesto
+// de volver llevaría a la pantalla por la que se acaba de pasar de largo en vez
+// de salir de la app.
+function usarPantallaDeArranque(location) {
+  const navegar = useNavigate()
+  const { player } = useAuth()
+  const [inicio] = usarPreferencia('inicio', '/')
+  const yaColocado = useRef(false)
+
+  useEffect(() => {
+    if (yaColocado.current) return
+    yaColocado.current = true
+    if (location.pathname !== '/' || inicio === '/') return
+    // La elección pudo quedarse obsoleta: alguien elige el club y deja de ser
+    // del club después. Entonces no vale y se queda en Inicio.
+    if (!puedeVer(player, inicio)) return
+    navegar(inicio, { replace: true })
+    // Solo al montar.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 }
 
 function TopBar({ titulo, onAbrirMenu }) {
@@ -302,6 +316,8 @@ function Ajustes() {
       <h2 className="font-display text-[1.75rem] font-bold tracking-[-0.02em]">Ajustes</h2>
       <p className="mt-2 text-sm text-ink-dim">Sesión de {player?.name}.</p>
 
+      <PantallaDeInicio />
+
       <SeparacionDeSecciones />
 
       <div className="mt-6 overflow-hidden rounded-xl2 border border-line bg-surface">
@@ -384,6 +400,60 @@ function BotonDeTema() {
         </motion.span>
       </AnimatePresence>
     </motion.button>
+  )
+}
+
+// Con qué pantalla arranca Puchi. Lo elige cada uno y va con su cuenta.
+//
+// Las opciones salen de `seccionesDe`, el mismo sitio del que salen las
+// entradas del menú, así que quien no es del club no puede elegir el club aquí
+// — ni siquiera verlo en la lista. Si se listaran a mano, este selector y el
+// menú acabarían diciendo cosas distintas.
+function PantallaDeInicio() {
+  const { player } = useAuth()
+  const [elegida, elegir] = usarPreferencia('inicio', '/')
+  const opciones = useMemo(() => seccionesDe(player), [player])
+  // La guardada puede haber dejado de valer (se perdió el acceso al club): se
+  // enseña Inicio como puesta, que es lo que va a pasar de verdad al arrancar.
+  const actual = opciones.some(o => o.to === elegida) ? elegida : '/'
+
+  return (
+    <div className="mt-6 overflow-hidden rounded-xl2 border border-line bg-surface">
+      <p className="border-b border-line px-4 py-2 text-xs uppercase tracking-wider text-ink-mute">
+        Al abrir Puchi
+      </p>
+      <div className="flex flex-col divide-y divide-[color:var(--color-line)]">
+        {opciones.map(({ to, label, Icon, resumen }) => {
+          const activa = actual === to
+          return (
+            <button
+              key={to}
+              onClick={() => elegir(to)}
+              className="flex items-center gap-3 px-4 py-3 text-left"
+            >
+              <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-colors ${activa ? 'border-accent bg-accent' : 'border-line'}`}>
+                {activa && (
+                  <motion.span
+                    layoutId="inicio-elegida"
+                    className="h-2 w-2 rounded-full bg-on-accent"
+                    transition={{ type: 'spring', stiffness: 420, damping: 34 }}
+                  />
+                )}
+              </span>
+              <Icon className={`h-[18px] w-[18px] shrink-0 ${activa ? 'text-accent' : 'text-ink-mute'}`} />
+              <span className="min-w-0">
+                <span className={`block text-sm font-semibold ${activa ? 'text-accent' : 'text-ink'}`}>{label}</span>
+                <span className="mt-0.5 block text-xs leading-relaxed text-ink-mute">{resumen}</span>
+              </span>
+            </button>
+          )
+        })}
+      </div>
+      <p className="border-t border-line px-4 py-2.5 text-xs leading-relaxed text-ink-mute">
+        Se aplica la próxima vez que abras la app. Entrar en Inicio desde el menú sigue llevándote
+        a Inicio, elijas lo que elijas aquí.
+      </p>
+    </div>
   )
 }
 
