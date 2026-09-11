@@ -134,54 +134,88 @@ export default function AvisoDeLlamada() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [grupo.entrante, grupo.dentro, mostrar, cerrar])
 
-  // ── Alguien se ha unido a la llamada del club ─────────────────────────────
-  // El backend solo hace sonar el timbre cuando la llamada ARRANCA de cero: si
-  // sonara con cada persona que entra, una llamada de cinco daría cuatro
-  // timbrazos a todo el mundo. Pero enterarse de quién va entrando sí interesa,
-  // y eso se puede saber aquí sin tocar el servidor — la lista de quién está
-  // dentro ya llega a todo el club, entre y salga quien sea.
+  // ── Alguien ha entrado a la llamada del club ──────────────────────────────
+  // Esto avisa de CUALQUIER entrada, incluida la primera. Antes se callaba
+  // cuando la llamada arrancaba de cero, dando por hecho que de eso ya avisaba
+  // el timbre del servidor — y ese timbre solo se manda si la llamada arranca
+  // de cero DE VERDAD (`is_first` en el backend). Con cualquier resto de estado
+  // colgado en el servidor, no era la primera, no sonaba, y aquí tampoco: nadie
+  // avisaba. Dos condiciones para un aviso que debería depender de una.
   //
-  // Se avisa distinto según dónde estés:
+  // Ahora este se basta solo, mirando quién está dentro — una lista que llega a
+  // todo el club entre y salga quien sea. El timbre del servidor sigue llegando
+  // y comparte clave con este, así que uno reemplaza al otro en vez de salir
+  // los dos.
   //
-  // - **Dentro de la llamada**: un aviso de paso, "Sofía se ha unido". No lleva
-  //   botones: ya estás dentro, no hay nada que decidir.
+  // Cómo avisa, según dónde estés:
   //
-  // - **Fuera**: con un botón para entrar. Es el caso que faltaba de verdad —
-  //   si no estabas cuando arrancó, hasta ahora no te enterabas de nada.
+  // - **Fuera**: tarjeta con botones, igual que el timbre. Es una decisión —
+  //   entras o no.
+  // - **Dentro**: un aviso de paso, "Sofía se ha unido", sin botones. Ya estás
+  //   dentro, no hay nada que decidir.
   const idsPrevios = useRef(null)
   useEffect(() => {
     const ahora = grupo.ids
     const antes = idsPrevios.current
     idsPrevios.current = ahora
 
-    // La primera vez no se avisa de nadie: son los que ya estaban, no gente
-    // que acabe de entrar.
+    // La primera vuelta no cuenta: son los que ya estaban, no gente que acabe
+    // de entrar.
     if (antes === null) return
 
     const nuevos = ahora.filter(id => !antes.includes(id) && id !== miId)
     if (!nuevos.length) return
-    // Si la llamada acaba de arrancar, de eso ya avisa el timbre de arriba.
-    if (!antes.length) return
 
     const quienes = nuevos.map(id => (jugadores || []).find(p => p.id === id)).filter(Boolean)
-    if (!quienes.length) return
-
+    // Si la lista de jugadores todavía no ha llegado, se avisa igual sin
+    // nombres: perder el aviso por eso sería peor que no decir quién es.
     const nombres = quienes.map(p => p.name)
-    const titulo = nombres.length === 1
-      ? `${nombres[0]} se ha unido`
-      : `${nombres.slice(0, -1).join(', ')} y ${nombres.at(-1)} se han unido`
+    const titulo = nombres.length === 0
+      ? (nuevos.length === 1 ? 'Alguien se ha unido' : `${nuevos.length} personas se han unido`)
+      : nombres.length === 1
+        ? `${nombres[0]} se ha unido`
+        : `${nombres.slice(0, -1).join(', ')} y ${nombres.at(-1)} se han unido`
+
+    if (grupo.dentro) {
+      mostrar({
+        clave: 'alguien-entra-al-club',
+        color: quienes[0]?.color,
+        titulo,
+        texto: 'A la llamada del club',
+        icono: <Avatar jugador={quienes[0]} size={38} />,
+      })
+      return
+    }
 
     mostrar({
-      clave: 'alguien-entra-al-club',
-      color: quienes[0].color,
+      // La misma clave que el timbre del servidor: si llegan los dos, se
+      // reemplazan en vez de apilarse dos tarjetas de lo mismo.
+      clave: 'llamada-del-club',
+      espera: true,
+      color: quienes[0]?.color,
       titulo,
-      texto: grupo.dentro ? 'A la llamada del club' : `Llamada del club · ${ahora.length} dentro`,
-      icono: <Avatar jugador={quienes[0]} size={38} />,
-      // Fuera de la llamada, el aviso sirve para entrar. Dentro, solo informa.
-      ...(grupo.dentro ? {} : { onTocar: () => grupo.entrar(grupo.tipo) }),
+      texto: `Llamada del club · ${ahora.length} ${ahora.length === 1 ? 'dentro' : 'dentro'}`,
+      icono: <Avatar jugador={quienes[0]} size={44} />,
+      acciones: (
+        <>
+          <button
+            onClick={() => cerrar('llamada-del-club')}
+            className="h-11 flex-1 rounded-xl2 border border-line text-sm text-ink-dim"
+          >
+            Ahora no
+          </button>
+          <button
+            onClick={() => { grupo.entrar(grupo.tipo); cerrar('llamada-del-club') }}
+            className="flex h-11 flex-[1.3] items-center justify-center gap-2 rounded-xl2 bg-read text-sm font-semibold text-white"
+          >
+            {grupo.tipo === 'video' ? <IconVideoCamara className="h-[18px] w-[18px]" /> : <IconTelefono className="h-[18px] w-[18px]" />}
+            Entrar
+          </button>
+        </>
+      ),
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [grupo.ids, grupo.dentro, miId, jugadores, mostrar])
+  }, [grupo.ids, grupo.dentro, miId, jugadores, mostrar, cerrar])
 
   return null
 }

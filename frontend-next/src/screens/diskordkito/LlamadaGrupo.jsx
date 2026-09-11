@@ -7,7 +7,6 @@ import Avatar from '../../ui/Avatar'
 import { LLEGADA, SALIDA } from '../../ui/curvas'
 import { IconColgar, IconEncoger, IconMicro, IconMicroOff, IconVideoCamara, IconVideoCamaraOff } from '../../ui/icons'
 import { Cronometro, Video } from './Llamada'
-import { EN_LA_FILA, EN_LA_REJILLA, usarMiTamano } from './miTamano'
 
 // La llamada del club, en dos modos:
 //
@@ -17,6 +16,12 @@ import { EN_LA_FILA, EN_LA_REJILLA, usarMiTamano } from './miTamano'
 //   esperando a gente que no está.
 // - **Primer plano** (al tocar a alguien): esa persona ocupa el hueco entero y
 //   el resto se van a una fila pequeña. Tocarla otra vez vuelve a repartir.
+//
+// **Todos funcionan igual, tú incluido.** Hubo una versión en la que tocarte a
+// ti solo te agrandaba el cuadro, para no "robarte el primer plano a ti mismo".
+// Sonaba razonable y no lo era: obligaba a recordar que tu cuadro se maneja
+// distinto al de los demás en la misma pantalla. Un toque pone a quien sea en
+// primer plano —a ti también— y otro vuelve a repartir.
 //
 // La primera versión era siempre el segundo modo, y con dos personas dejaba
 // media pantalla negra: un cuadrito diminuto arriba y una franja muerta abajo.
@@ -54,15 +59,26 @@ export default function LlamadaGrupo() {
 
   // A quién he puesto en primer plano tocándole. Null = repartido.
   const [enPrimerPlano, setEnPrimerPlano] = useState(null)
-  const [miTamano, agrandarme] = usarMiTamano()
 
   const porId = useMemo(() => new Map((jugadores || []).map(p => [p.id, p])), [jugadores])
   const otros = useMemo(() => ids.filter(id => id !== miId), [ids, miId])
 
-  // Si a quien tenía en primer plano se va, se vuelve a repartir.
+  // Si a quien tenía en primer plano se va de la llamada, se vuelve a repartir.
   useEffect(() => {
-    if (enPrimerPlano != null && !otros.includes(enPrimerPlano)) setEnPrimerPlano(null)
-  }, [otros, enPrimerPlano])
+    if (enPrimerPlano != null && !ids.includes(enPrimerPlano)) setEnPrimerPlano(null)
+  }, [ids, enPrimerPlano])
+
+  // Lo que hace falta de cada uno para pintarlo, sin repetir el "¿soy yo?" en
+  // cada sitio: tu imagen viene de tu propia cámara y no del mesh, va espejada
+  // y sin sonido (oírte a ti mismo con retardo es insoportable).
+  const datosDe = (id) => ({
+    persona: porId.get(id),
+    stream: id === miId ? miVideo : streams[id],
+    camaraApagada: id === miId ? sinCamara : camarasApagadas[id],
+    mio: id === miId,
+    mudo: id === miId ? mudo : false,
+    hablando: quienHabla === id,
+  })
 
   const aLaVista = dentro && !encogida
   const conVideo = tipo === 'video'
@@ -80,32 +96,18 @@ export default function LlamadaGrupo() {
           {enPrimerPlano != null ? (
             <ConPrimerPlano
               id={enPrimerPlano}
-              otros={otros}
-              porId={porId}
-              streams={streams}
+              ids={ids}
+              datosDe={datosDe}
               conVideo={conVideo}
-              camarasApagadas={camarasApagadas}
-              quienHabla={quienHabla}
-              yo={{ id: miId, persona: porId.get(miId), stream: miVideo, mudo, sinCamara, tamano: miTamano }}
               onElegir={setEnPrimerPlano}
               onVolverARepartir={() => setEnPrimerPlano(null)}
-              onAgrandarme={agrandarme}
             />
           ) : (
             <Repartida
               ids={ids}
-              miId={miId}
-              porId={porId}
-              streams={streams}
-              miVideo={miVideo}
+              datosDe={datosDe}
               conVideo={conVideo}
-              camarasApagadas={camarasApagadas}
-              mudo={mudo}
-              sinCamara={sinCamara}
-              quienHabla={quienHabla}
-              miTamano={miTamano}
               onElegir={setEnPrimerPlano}
-              onAgrandarme={agrandarme}
             />
           )}
 
@@ -152,10 +154,7 @@ export default function LlamadaGrupo() {
 // Todos iguales, llenando la pantalla y centrados. Las columnas se calculan con
 // el hueco real, medido: no vale hacerlo por número de personas a secas, porque
 // dos en un móvil vertical quieren una columna y dos en un portátil quieren dos.
-function Repartida({
-  ids, miId, porId, streams, miVideo, conVideo, camarasApagadas,
-  mudo, sinCamara, quienHabla, miTamano, onElegir, onAgrandarme,
-}) {
+function Repartida({ ids, datosDe, conVideo, onElegir }) {
   const [caja, medir] = usarMedida()
   const columnas = caja.ancho > 0 ? mejoresColumnas(ids.length, caja.ancho, caja.alto) : 1
 
@@ -171,37 +170,17 @@ function Repartida({
           justifyItems: 'center',
         }}
       >
-        {ids.map(id => {
-          const mio = id === miId
-          return (
-            <Cuadro
-              key={id}
-              persona={porId.get(id)}
-              stream={mio ? miVideo : streams[id]}
-              conVideo={conVideo}
-              camaraApagada={mio ? sinCamara : camarasApagadas[id]}
-              hablando={quienHabla === id}
-              mio={mio}
-              mudo={mio ? mudo : false}
-              // Tocarte a ti solo te agranda un poco, en tu sitio. Tocar a otro
-              // le da el primer plano.
-              escala={mio ? EN_LA_REJILLA[miTamano] : 1}
-              onTocar={() => (mio ? onAgrandarme() : onElegir(id))}
-              lleno
-            />
-          )
-        })}
+        {ids.map(id => (
+          <Cuadro key={id} {...datosDe(id)} conVideo={conVideo} onTocar={() => onElegir(id)} lleno />
+        ))}
       </div>
     </div>
   )
 }
 
 // ── Con alguien en primer plano ─────────────────────────────────────────────
-function ConPrimerPlano({
-  id, otros, porId, streams, conVideo, camarasApagadas, quienHabla, yo,
-  onElegir, onVolverARepartir, onAgrandarme,
-}) {
-  const resto = otros.filter(o => o !== id)
+function ConPrimerPlano({ id, ids, datosDe, conVideo, onElegir, onVolverARepartir }) {
+  const resto = ids.filter(o => o !== id)
   return (
     <div className="absolute inset-0 flex flex-col">
       <button
@@ -210,15 +189,7 @@ function ConPrimerPlano({
         title="Volver a ver a todos"
         className="relative min-h-0 flex-1"
       >
-        <Cuadro
-          persona={porId.get(id)}
-          stream={streams[id]}
-          conVideo={conVideo}
-          camaraApagada={camarasApagadas[id]}
-          hablando={quienHabla === id}
-          grande
-          lleno
-        />
+        <Cuadro {...datosDe(id)} conVideo={conVideo} grande lleno />
       </button>
 
       {/* La fila, flotando sobre el vídeo y por encima de los mandos. Sin barra
@@ -226,28 +197,8 @@ function ConPrimerPlano({
       <div className="pointer-events-none absolute inset-x-0 bottom-24 z-10 overflow-x-auto px-3">
         <div className="pointer-events-auto flex items-end justify-center gap-2">
           {resto.map(o => (
-            <Cuadro
-              key={o}
-              persona={porId.get(o)}
-              stream={streams[o]}
-              conVideo={conVideo}
-              camaraApagada={camarasApagadas[o]}
-              hablando={quienHabla === o}
-              onTocar={() => onElegir(o)}
-              ancho={72}
-            />
+            <Cuadro key={o} {...datosDe(o)} conVideo={conVideo} onTocar={() => onElegir(o)} ancho={78} />
           ))}
-          <Cuadro
-            mio
-            persona={yo.persona}
-            stream={yo.stream}
-            conVideo={conVideo}
-            camaraApagada={yo.sinCamara}
-            mudo={yo.mudo}
-            escala={EN_LA_FILA[yo.tamano]}
-            onTocar={onAgrandarme}
-            ancho={72}
-          />
         </div>
       </div>
     </div>
@@ -256,10 +207,10 @@ function ConPrimerPlano({
 
 // ── Un cuadro ───────────────────────────────────────────────────────────────
 // `lleno` es para los de la rejilla y el de primer plano: ocupan lo que les
-// den. Los de la fila llevan un ancho fijo y crecen con `escala`.
+// den. Los de la fila llevan un ancho fijo.
 function Cuadro({
   persona, stream, conVideo, camaraApagada, hablando, mio = false, mudo = false,
-  escala = 1, ancho = null, lleno = false, grande = false, onTocar,
+  ancho = null, lleno = false, grande = false, onTocar,
 }) {
   const hayImagen = conVideo && stream && !camaraApagada
   const Etiqueta = onTocar ? motion.button : motion.div
@@ -268,22 +219,9 @@ function Cuadro({
     <Etiqueta
       {...(onTocar ? { onClick: onTocar, whileTap: { scale: 0.97 } } : {})}
       layout
-      // El tamaño se lo pide a Motion, nunca con un `transform` a mano en
-      // `style`: Motion gestiona el transform del elemento (lo compone de sus
-      // propios valores) y machaca cualquiera que se le ponga por fuera — el
-      // cuadro se quedaba clavado del mismo tamaño por más toques que le
-      // dieras. En la rejilla se escala; en la fila se animan las medidas,
-      // porque ahí lo que hay que mover es el hueco que ocupa, no solo su
-      // dibujo.
-      animate={ancho
-        ? { width: ancho * escala, height: (ancho / 0.75) * escala }
-        : { scale: escala }}
       transition={{ type: 'spring', stiffness: 380, damping: 32 }}
-      // Por encima de sus vecinos al agrandarse, pero por DEBAJO de la
-      // cabecera y de los mandos (z-20): con z-10 se colaba delante de la
-      // botonera y dejaba de poder tocarse el micro o el colgar.
-      style={lleno && !ancho && escala > 1 ? { zIndex: 5 } : undefined}
-      aria-label={onTocar ? (mio ? 'Cambiar el tamaño de tu imagen' : `Poner a ${persona?.name} en primer plano`) : undefined}
+      aria-label={onTocar ? `Poner a ${mio ? 'ti' : persona?.name} en primer plano` : undefined}
+      style={ancho ? { width: ancho, height: ancho / 0.75 } : undefined}
       className={`relative overflow-hidden bg-black/40 ${
         lleno ? 'h-full w-full' : 'shrink-0'
       } ${grande ? '' : 'rounded-xl2 border'} ${
@@ -294,7 +232,7 @@ function Cuadro({
         ? <Video stream={stream} className={`h-full w-full object-cover ${mio ? 'scale-x-[-1]' : ''}`} mudo={mio} />
         : (
           <span className="flex h-full w-full items-center justify-center">
-            <Avatar jugador={persona} size={grande ? 120 : Math.round(40 * escala)} className="border-white/15" />
+            <Avatar jugador={persona} size={grande ? 120 : 40} className="border-white/15" />
           </span>
         )}
 
