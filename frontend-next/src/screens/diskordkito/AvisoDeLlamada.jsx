@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { useAvisos } from '../../platform/avisos'
+import { useChat } from '../../platform/chat'
 import { useLlamadas } from '../../platform/llamadas'
 import Avatar from '../../ui/Avatar'
 import { IconColgar, IconTelefono, IconVideoCamara } from '../../ui/icons'
@@ -17,6 +18,7 @@ import { IconColgar, IconTelefono, IconVideoCamara } from '../../ui/icons'
 
 export default function AvisoDeLlamada() {
   const { estado, conQuien, tipo, enOtroSitio, aceptar, rechazar, traerAqui, grupo } = useLlamadas()
+  const { jugadores, miId } = useChat() || {}
   const { mostrar, cerrar } = useAvisos()
   // Los ids de los avisos puestos, para poder quitarlos cuando toca.
   const puesto = useRef({ entrante: null, otroSitio: null, grupo: null })
@@ -131,6 +133,55 @@ export default function AvisoDeLlamada() {
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [grupo.entrante, grupo.dentro, mostrar, cerrar])
+
+  // ── Alguien se ha unido a la llamada del club ─────────────────────────────
+  // El backend solo hace sonar el timbre cuando la llamada ARRANCA de cero: si
+  // sonara con cada persona que entra, una llamada de cinco daría cuatro
+  // timbrazos a todo el mundo. Pero enterarse de quién va entrando sí interesa,
+  // y eso se puede saber aquí sin tocar el servidor — la lista de quién está
+  // dentro ya llega a todo el club, entre y salga quien sea.
+  //
+  // Se avisa distinto según dónde estés:
+  //
+  // - **Dentro de la llamada**: un aviso de paso, "Sofía se ha unido". No lleva
+  //   botones: ya estás dentro, no hay nada que decidir.
+  //
+  // - **Fuera**: con un botón para entrar. Es el caso que faltaba de verdad —
+  //   si no estabas cuando arrancó, hasta ahora no te enterabas de nada.
+  const idsPrevios = useRef(null)
+  useEffect(() => {
+    const ahora = grupo.ids
+    const antes = idsPrevios.current
+    idsPrevios.current = ahora
+
+    // La primera vez no se avisa de nadie: son los que ya estaban, no gente
+    // que acabe de entrar.
+    if (antes === null) return
+
+    const nuevos = ahora.filter(id => !antes.includes(id) && id !== miId)
+    if (!nuevos.length) return
+    // Si la llamada acaba de arrancar, de eso ya avisa el timbre de arriba.
+    if (!antes.length) return
+
+    const quienes = nuevos.map(id => (jugadores || []).find(p => p.id === id)).filter(Boolean)
+    if (!quienes.length) return
+
+    const nombres = quienes.map(p => p.name)
+    const titulo = nombres.length === 1
+      ? `${nombres[0]} se ha unido`
+      : `${nombres.slice(0, -1).join(', ')} y ${nombres.at(-1)} se han unido`
+
+    mostrar({
+      clave: 'alguien-entra-al-club',
+      color: quienes[0].color,
+      titulo,
+      texto: grupo.dentro ? 'A la llamada del club' : `Llamada del club · ${ahora.length} dentro`,
+      icono: <Avatar jugador={quienes[0]} size={38} />,
+      // Fuera de la llamada, el aviso sirve para entrar. Dentro, solo informa.
+      ...(grupo.dentro ? {} : { onTocar: () => grupo.entrar(grupo.tipo) }),
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [grupo.ids, grupo.dentro, miId, jugadores, mostrar])
 
   return null
 }

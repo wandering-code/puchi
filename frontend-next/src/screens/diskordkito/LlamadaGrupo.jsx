@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { AnimatePresence, motion } from 'motion/react'
 import { useChat } from '../../platform/chat'
@@ -9,26 +9,40 @@ import { IconColgar, IconEncoger, IconMicro, IconMicroOff, IconVideoCamara, Icon
 import { Cronometro, Video } from './Llamada'
 import { EN_LA_FILA, usarMiTamano } from './miTamano'
 
-// La llamada del club.
+// La llamada del club, en dos modos:
 //
-// **Uno grande y los demás en una fila abajo**, no una rejilla de cajas
-// iguales. Una rejilla reparte la atención a partes iguales entre gente que no
-// está diciendo lo mismo; en una conversación de verdad siempre hay alguien
-// hablando, y es a quien se mira.
+// - **Repartida** (lo normal): todos ocupan la pantalla a partes iguales, en
+//   una rejilla que se calcula con cuántos sois y qué forma tiene la pantalla.
+//   Con dos, dos mitades; con cuatro, dos por dos. Nada de franjas negras
+//   esperando a gente que no está.
+// - **Primer plano** (al tocar a alguien): esa persona ocupa el hueco entero y
+//   el resto se van a una fila pequeña. Tocarla otra vez vuelve a repartir.
 //
-// Quién ocupa el primer plano:
+// La primera versión era siempre el segundo modo, y con dos personas dejaba
+// media pantalla negra: un cuadrito diminuto arriba y una franja muerta abajo.
 //
-// 1. A quien toques. Manda siempre, y se queda hasta que toques a otro.
-// 2. Si no has tocado a nadie, quien esté hablando — se mide el nivel de audio
-//    (ver el motor) con un umbral y un margen entre cambios, para que una tos
-//    no cambie el plano.
-// 3. Y si no hay nada de eso, el primero que haya.
-//
-// **Tocarte a ti no te pone en primer plano**: solo hace tu cuadrito más
-// grande, en su sitio de la fila. Verte a ti mismo es para comprobar que sales
-// bien, no para protagonizar la llamada.
+// Y nada flota sobre una barra: la cabecera y los mandos van ENCIMA del vídeo,
+// sobre un degradado. Lo que se ve es la gente, no el marco.
 
 const ROJO_COLGAR = '#e0483f'
+
+// Cuántas columnas dejan los cuadros más grandes, probando todas. Es lo que
+// hace que dos personas salgan en dos mitades en horizontal pero una encima de
+// otra en un móvil en vertical: no depende solo de cuántos sois, sino de la
+// forma del hueco.
+function mejoresColumnas(n, ancho, alto, proporcion = 4 / 3) {
+  let mejor = 1, mayorArea = 0
+  for (let col = 1; col <= n; col++) {
+    const filas = Math.ceil(n / col)
+    const cajaAncho = ancho / col
+    const cajaAlto = alto / filas
+    // Lo que de verdad mide el vídeo dentro de su celda, respetando proporción.
+    const real = Math.min(cajaAncho, cajaAlto * proporcion)
+    const area = real * (real / proporcion)
+    if (area > mayorArea) { mayorArea = area; mejor = col }
+  }
+  return mejor
+}
 
 export default function LlamadaGrupo() {
   const { grupo, encogida, encoger } = useLlamadas()
@@ -38,22 +52,18 @@ export default function LlamadaGrupo() {
     mudo, sinCamara, quienHabla, salir, alternarMudo, alternarCamara,
   } = grupo
 
-  // A quién he puesto yo en primer plano. Null = que decida quien hable.
-  const [elegido, setElegido] = useState(null)
+  // A quién he puesto en primer plano tocándole. Null = repartido.
+  const [enPrimerPlano, setEnPrimerPlano] = useState(null)
   const [miTamano, agrandarme] = usarMiTamano()
 
-  const porId = useMemo(
-    () => new Map((jugadores || []).map(p => [p.id, p])),
-    [jugadores],
-  )
+  const porId = useMemo(() => new Map((jugadores || []).map(p => [p.id, p])), [jugadores])
   const otros = useMemo(() => ids.filter(id => id !== miId), [ids, miId])
 
-  // Si a quien tenía puesto se va de la llamada, no dejar el plano congelado.
+  // Si a quien tenía en primer plano se va, se vuelve a repartir.
   useEffect(() => {
-    if (elegido != null && !otros.includes(elegido)) setElegido(null)
-  }, [otros, elegido])
+    if (enPrimerPlano != null && !otros.includes(enPrimerPlano)) setEnPrimerPlano(null)
+  }, [otros, enPrimerPlano])
 
-  const enPrimerPlano = elegido ?? (otros.includes(quienHabla) ? quienHabla : otros[0]) ?? null
   const aLaVista = dentro && !encogida
   const conVideo = tipo === 'video'
 
@@ -61,17 +71,55 @@ export default function LlamadaGrupo() {
     <AnimatePresence>
       {aLaVista && (
         <motion.div
-          className="fixed inset-0 z-[65] flex flex-col bg-[#0d0b09] text-white"
+          className="fixed inset-0 z-[65] bg-[#0d0b09] text-white"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0, transition: SALIDA }}
           transition={LLEGADA}
         >
-          {/* ── Cabecera ─────────────────────────────────────────────── */}
-          <div className="relative z-10 flex items-start gap-3 px-4 pt-safe">
-            <div className="min-w-0 flex-1 pt-3">
-              <p className="truncate font-display text-xl font-bold leading-tight">El club</p>
-              <p className="mt-0.5 text-[13px] text-white/60">
+          {enPrimerPlano != null ? (
+            <ConPrimerPlano
+              id={enPrimerPlano}
+              otros={otros}
+              porId={porId}
+              streams={streams}
+              conVideo={conVideo}
+              camarasApagadas={camarasApagadas}
+              quienHabla={quienHabla}
+              yo={{ id: miId, persona: porId.get(miId), stream: miVideo, mudo, sinCamara, tamano: miTamano }}
+              onElegir={setEnPrimerPlano}
+              onVolverARepartir={() => setEnPrimerPlano(null)}
+              onAgrandarme={agrandarme}
+            />
+          ) : (
+            <Repartida
+              ids={ids}
+              miId={miId}
+              porId={porId}
+              streams={streams}
+              miVideo={miVideo}
+              conVideo={conVideo}
+              camarasApagadas={camarasApagadas}
+              mudo={mudo}
+              sinCamara={sinCamara}
+              quienHabla={quienHabla}
+              miTamano={miTamano}
+              onElegir={setEnPrimerPlano}
+              onAgrandarme={agrandarme}
+            />
+          )}
+
+          {/* El audio de TODOS, siempre. Si el <video> de quien no se ve
+              estuviera desmontado, dejarías de oír a quien no estás mirando. */}
+          <div className="hidden">
+            {otros.map(id => (streams[id] ? <Video key={id} stream={streams[id]} /> : null))}
+          </div>
+
+          {/* Encima del vídeo, no en una barra: lo que se ve es la gente. */}
+          <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start gap-3 bg-gradient-to-b from-black/60 to-transparent px-4 pb-10 pt-safe">
+            <div className="min-w-0 flex-1 pt-2">
+              <p className="truncate font-display text-lg font-bold leading-tight">El club</p>
+              <p className="mt-0.5 text-xs text-white/60">
                 {ids.length} {ids.length === 1 ? 'dentro' : 'dentro'} · <Cronometro />
               </p>
             </div>
@@ -79,102 +127,20 @@ export default function LlamadaGrupo() {
               onClick={encoger}
               whileTap={{ scale: 0.9 }}
               aria-label="Seguir en Puchi con la llamada en marcha"
-              className="mt-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur"
+              className="pointer-events-auto mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur"
             >
               <IconEncoger className="h-5 w-5" />
             </motion.button>
           </div>
 
-          {/* ── Primer plano ─────────────────────────────────────────── */}
-          <div className="relative min-h-0 flex-1">
-            <AnimatePresence mode="popLayout" initial={false}>
-              <motion.div
-                key={enPrimerPlano ?? 'nadie'}
-                initial={{ opacity: 0, scale: 1.02 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-                className="absolute inset-0 flex items-center justify-center overflow-hidden"
-              >
-                {enPrimerPlano != null ? (
-                  <Grande
-                    persona={porId.get(enPrimerPlano)}
-                    stream={streams[enPrimerPlano]}
-                    conVideo={conVideo}
-                    camaraApagada={camarasApagadas[enPrimerPlano]}
-                    hablando={quienHabla === enPrimerPlano}
-                  />
-                ) : (
-                  <p className="px-8 text-center text-white/50">
-                    Estás dentro. Cuando entre alguien más, lo verás aquí.
-                  </p>
-                )}
-              </motion.div>
-            </AnimatePresence>
-
-            {/* El audio de TODOS, siempre, aunque solo se vea a uno: si el
-                <video> del que no está en primer plano no estuviera montado,
-                dejarías de oír a quien no estás mirando. */}
-            <div className="hidden">
-              {otros.filter(id => id !== enPrimerPlano).map(id => (
-                streams[id] ? <Video key={id} stream={streams[id]} /> : null
-              ))}
-            </div>
-          </div>
-
-          {/* ── La fila ──────────────────────────────────────────────── */}
-          <div className="relative z-10 shrink-0 overflow-x-auto px-4 pb-2">
-            <div className="flex items-end gap-2">
-              {otros.map(id => (
-                <Cuadrito
-                  key={id}
-                  persona={porId.get(id)}
-                  stream={streams[id]}
-                  conVideo={conVideo}
-                  camaraApagada={camarasApagadas[id]}
-                  enPrimerPlano={id === enPrimerPlano}
-                  hablando={quienHabla === id}
-                  onTocar={() => setElegido(id)}
-                />
-              ))}
-
-              {/* El tuyo, al final y con otro comportamiento: tocarlo te
-                  agranda, no te pone en primer plano. */}
-              <Cuadrito
-                mio
-                persona={porId.get(miId)}
-                stream={miVideo}
-                conVideo={conVideo}
-                camaraApagada={sinCamara}
-                mudo={mudo}
-                escala={EN_LA_FILA[miTamano]}
-                onTocar={agrandarme}
-              />
-            </div>
-          </div>
-
-          {/* ── Mandos ───────────────────────────────────────────────── */}
-          <div className="relative z-10 flex shrink-0 justify-center px-4 pb-safe">
-            <div className="mb-5 flex items-center gap-3 rounded-full border border-white/10 bg-white/10 px-3 py-3 backdrop-blur-xl">
-              <Mando activo={!mudo} onClick={alternarMudo} etiqueta={mudo ? 'Activar micrófono' : 'Silenciar micrófono'}>
-                {mudo ? <IconMicroOff className="h-6 w-6" /> : <IconMicro className="h-6 w-6" />}
-              </Mando>
-              {conVideo && (
-                <Mando activo={!sinCamara} onClick={alternarCamara} etiqueta={sinCamara ? 'Encender cámara' : 'Apagar cámara'}>
-                  {sinCamara ? <IconVideoCamaraOff className="h-6 w-6" /> : <IconVideoCamara className="h-6 w-6" />}
-                </Mando>
-              )}
-              <motion.button
-                onClick={salir}
-                whileTap={{ scale: 0.9 }}
-                aria-label="Salir de la llamada"
-                style={{ background: ROJO_COLGAR }}
-                className="ml-1 flex h-14 w-14 items-center justify-center rounded-full text-white"
-              >
-                <IconColgar className="h-6 w-6" />
-              </motion.button>
-            </div>
-          </div>
+          <Mandos
+            conVideo={conVideo}
+            mudo={mudo}
+            sinCamara={sinCamara}
+            onMudo={alternarMudo}
+            onCamara={alternarCamara}
+            onSalir={salir}
+          />
         </motion.div>
       )}
     </AnimatePresence>,
@@ -182,76 +148,195 @@ export default function LlamadaGrupo() {
   )
 }
 
-function Grande({ persona, stream, conVideo, camaraApagada, hablando }) {
-  const hayImagen = conVideo && stream && !camaraApagada
-  return (
-    <>
-      {hayImagen
-        ? <Video stream={stream} className="h-full w-full object-cover" />
-        : (
-          <div className="flex flex-col items-center gap-4">
-            <Avatar jugador={persona} size={132} className="border-white/15" />
-            {stream && <Video stream={stream} oculto />}
-          </div>
-        )}
+// ── Repartida ───────────────────────────────────────────────────────────────
+// Todos iguales, llenando la pantalla y centrados. Las columnas se calculan con
+// el hueco real, medido: no vale hacerlo por número de personas a secas, porque
+// dos en un móvil vertical quieren una columna y dos en un portátil quieren dos.
+function Repartida({
+  ids, miId, porId, streams, miVideo, conVideo, camarasApagadas,
+  mudo, sinCamara, quienHabla, miTamano, onElegir, onAgrandarme,
+}) {
+  const [caja, medir] = usarMedida()
+  const columnas = caja.ancho > 0 ? mejoresColumnas(ids.length, caja.ancho, caja.alto) : 1
 
-      {/* Quién es, abajo a la izquierda. Sobre el vídeo hace falta: con tres
-          personas en la fila no siempre se sabe a quién estás mirando. */}
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-end gap-2 bg-gradient-to-t from-black/60 to-transparent px-5 pb-4 pt-16">
-        <span className="font-display text-lg font-semibold">{persona?.name}</span>
-        {hablando && <OndaHablando />}
+  return (
+    <div ref={medir} className="absolute inset-0 p-2">
+      <div
+        className="grid h-full w-full place-content-center gap-2"
+        style={{
+          gridTemplateColumns: `repeat(${columnas}, minmax(0, 1fr))`,
+          gridAutoRows: 'minmax(0, 1fr)',
+          // Centrado de verdad: sin esto, una última fila incompleta se pega a
+          // la izquierda y la rejilla se ve descuadrada.
+          justifyItems: 'center',
+        }}
+      >
+        {ids.map(id => {
+          const mio = id === miId
+          return (
+            <Cuadro
+              key={id}
+              persona={porId.get(id)}
+              stream={mio ? miVideo : streams[id]}
+              conVideo={conVideo}
+              camaraApagada={mio ? sinCamara : camarasApagadas[id]}
+              hablando={quienHabla === id}
+              mio={mio}
+              mudo={mio ? mudo : false}
+              // Tocarte a ti solo te agranda un poco, en tu sitio. Tocar a otro
+              // le da el primer plano.
+              escala={mio ? EN_LA_FILA[miTamano] : 1}
+              onTocar={() => (mio ? onAgrandarme() : onElegir(id))}
+              lleno
+            />
+          )
+        })}
       </div>
-    </>
+    </div>
   )
 }
 
-// Un cuadrito de la fila. El de los demás se toca para ponerlos en primer
-// plano; el tuyo, para agrandarse.
-function Cuadrito({ persona, stream, conVideo, camaraApagada, enPrimerPlano, hablando, mio = false, mudo = false, escala = 1, onTocar }) {
-  const hayImagen = conVideo && stream && !camaraApagada
+// ── Con alguien en primer plano ─────────────────────────────────────────────
+function ConPrimerPlano({
+  id, otros, porId, streams, conVideo, camarasApagadas, quienHabla, yo,
+  onElegir, onVolverARepartir, onAgrandarme,
+}) {
+  const resto = otros.filter(o => o !== id)
   return (
-    <motion.button
-      onClick={onTocar}
+    <div className="absolute inset-0 flex flex-col">
+      <button
+        onClick={onVolverARepartir}
+        aria-label="Volver a ver a todos"
+        title="Volver a ver a todos"
+        className="relative min-h-0 flex-1"
+      >
+        <Cuadro
+          persona={porId.get(id)}
+          stream={streams[id]}
+          conVideo={conVideo}
+          camaraApagada={camarasApagadas[id]}
+          hablando={quienHabla === id}
+          grande
+          lleno
+        />
+      </button>
+
+      {/* La fila, flotando sobre el vídeo y por encima de los mandos. Sin barra
+          propia: antes ocupaba su franja y, con poca gente, era un desierto. */}
+      <div className="pointer-events-none absolute inset-x-0 bottom-24 overflow-x-auto px-3">
+        <div className="pointer-events-auto flex items-end justify-center gap-2">
+          {resto.map(o => (
+            <Cuadro
+              key={o}
+              persona={porId.get(o)}
+              stream={streams[o]}
+              conVideo={conVideo}
+              camaraApagada={camarasApagadas[o]}
+              hablando={quienHabla === o}
+              onTocar={() => onElegir(o)}
+              ancho={72}
+            />
+          ))}
+          <Cuadro
+            mio
+            persona={yo.persona}
+            stream={yo.stream}
+            conVideo={conVideo}
+            camaraApagada={yo.sinCamara}
+            mudo={yo.mudo}
+            escala={EN_LA_FILA[yo.tamano]}
+            onTocar={onAgrandarme}
+            ancho={72}
+          />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Un cuadro ───────────────────────────────────────────────────────────────
+// `lleno` es para los de la rejilla y el de primer plano: ocupan lo que les
+// den. Los de la fila llevan un ancho fijo y crecen con `escala`.
+function Cuadro({
+  persona, stream, conVideo, camaraApagada, hablando, mio = false, mudo = false,
+  escala = 1, ancho = null, lleno = false, grande = false, onTocar,
+}) {
+  const hayImagen = conVideo && stream && !camaraApagada
+  const Etiqueta = onTocar ? motion.button : motion.div
+
+  return (
+    <Etiqueta
+      {...(onTocar ? { onClick: onTocar, whileTap: { scale: 0.97 } } : {})}
       layout
-      animate={{ width: 76 * escala, height: 100 * escala }}
+      animate={ancho ? { width: ancho * escala, height: (ancho / 0.75) * escala } : undefined}
       transition={{ type: 'spring', stiffness: 380, damping: 32 }}
-      whileTap={{ scale: 0.94 }}
-      aria-label={mio ? 'Cambiar el tamaño de tu imagen' : `Poner a ${persona?.name} en primer plano`}
-      title={mio ? 'Tu tamaño' : `Ver a ${persona?.name} en grande`}
-      className={`relative shrink-0 overflow-hidden rounded-xl2 border bg-black/40 ${
-        enPrimerPlano ? 'border-white/70' : hablando ? 'border-read' : 'border-white/15'
+      style={lleno && !ancho ? { transform: `scale(${escala})`, zIndex: escala > 1 ? 10 : undefined } : undefined}
+      aria-label={onTocar ? (mio ? 'Cambiar el tamaño de tu imagen' : `Poner a ${persona?.name} en primer plano`) : undefined}
+      className={`relative overflow-hidden bg-black/40 ${
+        lleno ? 'h-full w-full' : 'shrink-0'
+      } ${grande ? '' : 'rounded-xl2 border'} ${
+        grande ? '' : hablando ? 'border-read' : 'border-white/15'
       }`}
     >
       {hayImagen
         ? <Video stream={stream} className={`h-full w-full object-cover ${mio ? 'scale-x-[-1]' : ''}`} mudo={mio} />
         : (
           <span className="flex h-full w-full items-center justify-center">
-            <Avatar jugador={persona} size={Math.round(38 * escala)} className="border-white/15" />
+            <Avatar jugador={persona} size={grande ? 120 : Math.round(40 * escala)} className="border-white/15" />
           </span>
         )}
 
-      <span className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center gap-1 bg-gradient-to-t from-black/75 to-transparent px-1.5 pb-1 pt-4">
-        <span className="truncate text-[10px] font-medium text-white">{mio ? 'Tú' : persona?.name}</span>
-        {mudo && <IconMicroOff className="h-3 w-3 shrink-0 text-white/70" />}
+      <span className={`pointer-events-none absolute inset-x-0 bottom-0 flex items-center gap-1.5 bg-gradient-to-t from-black/70 to-transparent ${
+        grande ? 'px-5 pb-4 pt-14' : 'px-2 pb-1.5 pt-6'
+      }`}>
+        <span className={`truncate font-medium text-white ${grande ? 'font-display text-lg' : 'text-[11px]'}`}>
+          {mio ? 'Tú' : persona?.name}
+        </span>
+        {mudo && <IconMicroOff className={`shrink-0 text-white/70 ${grande ? 'h-4 w-4' : 'h-3 w-3'}`} />}
+        {hablando && <OndaHablando />}
       </span>
-    </motion.button>
+    </Etiqueta>
   )
 }
 
-// Tres rayitas que suben y bajan: quién está hablando, sin poner un icono de
-// micrófono que se confunde con el botón de silenciar.
 function OndaHablando() {
   return (
-    <span className="mb-1.5 flex items-end gap-[3px]" aria-label="Hablando">
+    <span className="flex items-end gap-[2px]" aria-label="Hablando">
       {[0, 0.15, 0.3].map(retraso => (
         <motion.span
           key={retraso}
-          className="w-[3px] rounded-full bg-read"
-          animate={{ height: [5, 13, 5] }}
+          className="w-[2.5px] rounded-full bg-read"
+          animate={{ height: [4, 11, 4] }}
           transition={{ duration: 0.7, repeat: Infinity, delay: retraso, ease: 'easeInOut' }}
         />
       ))}
     </span>
+  )
+}
+
+function Mandos({ conVideo, mudo, sinCamara, onMudo, onCamara, onSalir }) {
+  return (
+    <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center bg-gradient-to-t from-black/60 to-transparent px-4 pt-14 pb-safe">
+      <div className="pointer-events-auto mb-4 flex items-center gap-3 rounded-full border border-white/10 bg-black/40 px-3 py-2.5 backdrop-blur-xl">
+        <Mando activo={!mudo} onClick={onMudo} etiqueta={mudo ? 'Activar micrófono' : 'Silenciar micrófono'}>
+          {mudo ? <IconMicroOff className="h-5 w-5" /> : <IconMicro className="h-5 w-5" />}
+        </Mando>
+        {conVideo && (
+          <Mando activo={!sinCamara} onClick={onCamara} etiqueta={sinCamara ? 'Encender cámara' : 'Apagar cámara'}>
+            {sinCamara ? <IconVideoCamaraOff className="h-5 w-5" /> : <IconVideoCamara className="h-5 w-5" />}
+          </Mando>
+        )}
+        <motion.button
+          onClick={onSalir}
+          whileTap={{ scale: 0.9 }}
+          aria-label="Salir de la llamada"
+          style={{ background: ROJO_COLGAR }}
+          className="ml-1 flex h-12 w-12 items-center justify-center rounded-full text-white"
+        >
+          <IconColgar className="h-5 w-5" />
+        </motion.button>
+      </div>
+    </div>
   )
 }
 
@@ -262,11 +347,47 @@ function Mando({ activo, onClick, etiqueta, children }) {
       whileTap={{ scale: 0.9 }}
       aria-label={etiqueta}
       aria-pressed={!activo}
-      className={`flex h-14 w-14 items-center justify-center rounded-full transition-colors ${
+      className={`flex h-12 w-12 items-center justify-center rounded-full transition-colors ${
         activo ? 'bg-white/15 text-white' : 'bg-white text-[#0d0b09]'
       }`}
     >
       {children}
     </motion.button>
   )
+}
+
+// Mide el hueco disponible y se entera cuando cambia (girar el móvil, cambiar
+// el tamaño de la ventana): las columnas dependen de la forma, no solo de
+// cuánta gente hay.
+//
+// El nodo va en ESTADO y no en un ref, y el efecto depende de él. Con un ref,
+// el efecto no tiene de qué depender: o se queda sin lista de dependencias y
+// corre en cada render —llamando a setCaja, que provoca otro render, que vuelve
+// a correrlo: bucle infinito, y React lo corta con "Maximum update depth
+// exceeded"— o se queda con lista vacía y nunca ve el nodo. Con estado, el
+// efecto corre exactamente una vez por nodo.
+//
+// Y la medida solo se guarda si ha cambiado de verdad: el ResizeObserver avisa
+// también de cambios de menos de un píxel, y cada aviso sería otro render.
+function usarMedida() {
+  const [caja, setCaja] = useState({ ancho: 0, alto: 0 })
+  const [nodo, setNodo] = useState(null)
+
+  useLayoutEffect(() => {
+    if (!nodo) return
+    const actualizar = () => {
+      const r = nodo.getBoundingClientRect()
+      setCaja(previa => (
+        Math.abs(previa.ancho - r.width) < 1 && Math.abs(previa.alto - r.height) < 1
+          ? previa
+          : { ancho: r.width, alto: r.height }
+      ))
+    }
+    actualizar()
+    const observador = new ResizeObserver(actualizar)
+    observador.observe(nodo)
+    return () => observador.disconnect()
+  }, [nodo])
+
+  return [caja, setNodo]
 }
