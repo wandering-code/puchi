@@ -5,9 +5,11 @@ import { useLiveConnection } from './platform/live'
 import { usarTema } from './platform/preferencias'
 import { AvisosProvider } from './platform/avisos'
 import { ChatProvider } from './platform/chat'
+import { PendientesProvider } from './platform/pendientes'
 import { LlamadasProvider } from './platform/llamadas'
 import AvisosDeMensaje from './screens/diskordkito/AvisosDeMensaje'
 import AvisoDeLlamada from './screens/diskordkito/AvisoDeLlamada'
+import AvisoDeRegistro from './screens/admin/AvisoDeRegistro'
 import Llamada from './screens/diskordkito/Llamada'
 import LlamadaGrupo from './screens/diskordkito/LlamadaGrupo'
 import PastillaLlamada from './screens/diskordkito/PastillaLlamada'
@@ -65,16 +67,19 @@ export default function App() {
             <AvisosProvider>
               <ChatProvider>
                 <LlamadasProvider>
-                  <AvisosDeMensaje />
-                  <AvisoDeLlamada />
-                  {/* El escenario y la pastilla van en portales a <body>, así
-                      que da igual dónde se pongan aquí — lo que importa es que
-                      están FUERA del Shell: la llamada sobrevive a cambiar de
-                      pantalla, que es justo la gracia. */}
-                  <Llamada />
-                  <LlamadaGrupo />
-                  <PastillaLlamada />
-                  <Shell />
+                  <PendientesProvider>
+                    <AvisosDeMensaje />
+                    <AvisoDeLlamada />
+                    <AvisoDeRegistro />
+                    {/* El escenario y la pastilla van en portales a <body>, así
+                        que da igual dónde se pongan aquí — lo que importa es que
+                        están FUERA del Shell: la llamada sobrevive a cambiar de
+                        pantalla, que es justo la gracia. */}
+                    <Llamada />
+                    <LlamadaGrupo />
+                    <PastillaLlamada />
+                    <Shell />
+                  </PendientesProvider>
                 </LlamadasProvider>
               </ChatProvider>
             </AvisosProvider>

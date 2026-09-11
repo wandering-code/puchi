@@ -1424,8 +1424,9 @@ async def register(
     final_avatar_url = _save_avatar_file(avatar_file) if avatar_file is not None else (avatar_url or None)
 
     # Cuenta pendiente de aprobación por el admin — sin acceso a nada todavía:
-    # no se emite cookie/token, no se une a #club-general y no se avisa por WS
-    # a nadie (eso ocurre cuando el admin la apruebe, ver PATCH /admin/players).
+    # no se emite cookie/token y no se une a #club-general (eso ocurre cuando el
+    # admin la apruebe, ver PATCH /admin/players). Lo único que sale de aquí es
+    # el aviso al admin, unas líneas más abajo.
     player = Player(
         name=name, pin_hash=hash_pin(pin),
         color=color, avatar_url=final_avatar_url,
@@ -1433,6 +1434,18 @@ async def register(
     )
     db.add(player)
     db.commit()
+    db.refresh(player)
+
+    # Avisar al admin, y SOLO a él: una cuenta pendiente no le importa a nadie
+    # más, y enterarse de que existe ya sería contar algo que no toca. Sin esto,
+    # una solicitud podía quedarse días esperando a que al admin le diera por
+    # entrar en Administración a mirar si había algo.
+    admin = db.query(Player).filter(func.lower(Player.name) == "wander").first()
+    if admin:
+        await manager.send_to_players([admin.id], {
+            "type": "cuenta_pendiente",
+            "player": _admin_player_out(player),
+        })
 
     return {"pending": True, "message": "Cuenta creada. Un admin tiene que aprobarla antes de que puedas entrar."}
 

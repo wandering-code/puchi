@@ -23,6 +23,7 @@ import { IconExit, IconLuna, IconMenu, IconPaw, IconSol } from '../ui/icons'
 // el menú, la guía de Inicio y el selector de pantalla de arranque de Ajustes.
 import { SECCIONES, puedeVer, seccionesDe } from './secciones'
 import { useChat } from '../platform/chat'
+import { usePendientes } from '../platform/pendientes'
 
 export default function Shell() {
   const location = useLocation()
@@ -182,8 +183,11 @@ function TopBar({ titulo, onAbrirMenu }) {
 function MenuLateral({ abierto, onCerrar, onNavegar }) {
   const { player } = useAuth()
   const secciones = useMemo(() => seccionesDe(player), [player])
-  // Conversaciones sin leer, para que el menú lo diga sin tener que entrar.
+  // Lo que pide atención sin tener que entrar a mirarlo: conversaciones sin
+  // leer y cuentas esperando aprobación.
   const { sinLeer } = useChat() || {}
+  const { cuantas: pendientes } = usePendientes()
+  const cuantosEsperan = { '/diskordkito': sinLeer, '/admin': pendientes }
   // El panel se queda SIEMPRE montado y solo se mueve. Montarlo y desmontarlo
   // con AnimatePresence salía medido: la primera apertura de cada sesión
   // metía un frame de 50-67ms (33ms hasta en WebKit sin frenar la CPU) porque
@@ -270,12 +274,13 @@ function MenuLateral({ abierto, onCerrar, onNavegar }) {
                 <span className={`relative text-[15px] ${isActive ? 'font-semibold text-accent' : 'text-ink-dim'}`}>
                   {label}
                 </span>
-                {/* Cuántas conversaciones tienen algo sin leer. Va en el menú y
-                    no solo dentro de Diskordkito porque el sentido es enterarse
-                    SIN entrar. */}
-                {to === '/diskordkito' && sinLeer > 0 && (
+                {/* Lo que espera en esa sección. Va en el menú y no solo dentro
+                    de cada pantalla porque el sentido es enterarse SIN entrar:
+                    una cuenta pendiente puede tirarse días esperando a que a
+                    alguien le dé por mirar. */}
+                {cuantosEsperan[to] > 0 && (
                   <span className="relative ml-auto flex h-5 min-w-[20px] items-center justify-center rounded-full bg-accent px-1.5 text-[11px] font-bold text-on-accent">
-                    {sinLeer}
+                    {cuantosEsperan[to]}
                   </span>
                 )}
               </>
