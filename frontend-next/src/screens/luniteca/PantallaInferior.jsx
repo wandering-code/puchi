@@ -23,7 +23,10 @@ import { useArrastreParaCerrar } from '../../ui/arrastre'
 // estado.
 const HUECO = 'max(2rem, env(safe-area-inset-top))'
 
-export default function PantallaInferior({ abierta = true, onCerrar, cabecera, children, aparicion = 'subir', visible = true }) {
+export default function PantallaInferior({
+  abierta = true, onCerrar, cabecera, children, pie = null,
+  aparicion = 'subir', visible = true, refCuerpo = null, desdeAbajo = false,
+}) {
   // `aparicion`: 'subir' es la de siempre. 'fundido' es para cuando el libro ya
   // ha volado hasta aquí desde la estantería: la pantalla no puede subir
   // también, porque entonces la portada se movería mientras el libro aterriza
@@ -41,6 +44,13 @@ export default function PantallaInferior({ abierta = true, onCerrar, cabecera, c
   // no se podría desplazar con el dedo (ver ui/arrastre.js).
   const arrastre = useArrastreParaCerrar(onCerrar, { umbral: 110 })
   const cuerpo = useRef(null)
+  // Quien la usa puede querer el nodo del scroll (la conversación del chat lo
+  // necesita para irse al último mensaje cuando llega uno nuevo). Se le pasa
+  // por aquí en vez de que lo busque en el documento a ciegas.
+  const ponerCuerpo = (nodo) => {
+    cuerpo.current = nodo
+    if (refCuerpo) refCuerpo.current = nodo
+  }
   // Mientras la ficha va de un sitio a otro —subiendo o bajando— no se
   // desplaza nada: ni ella ni la pantalla de debajo. Un scroll a media
   // animación se ve como un tirón, y con el libro volando además lo deja
@@ -73,7 +83,11 @@ export default function PantallaInferior({ abierta = true, onCerrar, cabecera, c
   useLayoutEffect(() => {
     // El primer render no es un movimiento: la ficha nace donde le toca.
     if (!estrenada.current) { estrenada.current = true; if (!abierta) return }
-    if (abierta && cuerpo.current) cuerpo.current.scrollTop = 0
+    // Al abrirse llega siempre por el principio… salvo un chat, donde el
+    // principio es el final: lo último dicho es lo que se viene a leer.
+    if (abierta && cuerpo.current) {
+      cuerpo.current.scrollTop = desdeAbajo ? cuerpo.current.scrollHeight : 0
+    }
     clearTimeout(colchon.current)
     setMoviendose(true)
     // Red de seguridad, y no un adorno: si el panel ya está donde tiene que
@@ -150,10 +164,16 @@ export default function PantallaInferior({ abierta = true, onCerrar, cabecera, c
           <span className="h-1 w-10 rounded-full bg-line" />
         </div>
 
-        <div ref={cuerpo} className="flex-1 overflow-y-auto overscroll-contain">
+        <div ref={ponerCuerpo} className="flex-1 overflow-y-auto overscroll-contain">
           {cabecera}
           {children}
         </div>
+
+        {/* El pie va FUERA del scroll: lo usa la conversación del chat para
+            dejar el campo de escribir pegado abajo mientras los mensajes se
+            desplazan por detrás. Dentro del scroll se iría con ellos, que es
+            justo lo que no se quiere de un campo de escribir. */}
+        {pie && <div className="shrink-0">{pie}</div>}
       </motion.div>
     </>,
     document.body,

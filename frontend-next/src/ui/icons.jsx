@@ -171,3 +171,18 @@ export const IconObjetivo = (p) => (
     <circle cx="12" cy="12" r="1.1" fill="currentColor" stroke="none" />
   </svg>
 )
+
+// ─── Diskordkito ───────────────────────────────────────────────────────────
+// Un bocadillo, que es lo que es. Sin la cola apuntando a ningún sitio: a
+// tamaño de icono de menú, la cola solo ensucia la silueta.
+export const IconChat = (p) => (
+  <svg {...base} {...p}>
+    <path d="M20 12.5c0 3.9-3.6 7-8 7-1 0-2-.2-2.9-.5L4 20.5l1.6-3.4A6.6 6.6 0 0 1 4 12.5c0-3.9 3.6-7 8-7s8 3.1 8 7z" />
+  </svg>
+)
+
+// Enviar: la flecha que sale, no un avión de papel — el resto de iconos de la
+// app son trazos simples y un avión canta como prestado de otra parte.
+export const IconEnviar = (p) => (
+  <svg {...base} {...p}><path d="M5 12h13m-6-6 6 6-6 6" /></svg>
+)

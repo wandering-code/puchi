@@ -10,6 +10,7 @@ import { LLEGADA, SALIDA } from '../ui/curvas'
 import Inicio from './inicio/Inicio'
 import Luniteca from './luniteca/Luniteca'
 import Club from './club/Club'
+import Diskordkito from './diskordkito/Diskordkito'
 import Actividad from './actividad/Actividad'
 import Perfil from './perfil/Perfil'
 import Admin from './admin/Admin'
@@ -21,6 +22,7 @@ import { IconExit, IconLuna, IconMenu, IconPaw, IconSol } from '../ui/icons'
 // El catálogo de secciones y quién puede ver cada una vive aparte: lo comparten
 // el menú, la guía de Inicio y el selector de pantalla de arranque de Ajustes.
 import { SECCIONES, puedeVer, seccionesDe } from './secciones'
+import { useChat } from '../platform/chat'
 
 export default function Shell() {
   const location = useLocation()
@@ -72,6 +74,7 @@ export default function Shell() {
               el permiso por su cuenta y explica por qué no, en vez de dejar la
               URL en un "esa ruta no existe" que no dice nada. */}
           <Route path="/club"       element={<Club />} />
+          <Route path="/diskordkito" element={<Diskordkito />} />
           <Route path="/admin"      element={<Admin />} />
           <Route path="/actividad"  element={<Actividad />} />
           {/* La estantería de otra persona. Ruta propia para que el gesto de
@@ -179,6 +182,8 @@ function TopBar({ titulo, onAbrirMenu }) {
 function MenuLateral({ abierto, onCerrar, onNavegar }) {
   const { player } = useAuth()
   const secciones = useMemo(() => seccionesDe(player), [player])
+  // Conversaciones sin leer, para que el menú lo diga sin tener que entrar.
+  const { sinLeer } = useChat() || {}
   // El panel se queda SIEMPRE montado y solo se mueve. Montarlo y desmontarlo
   // con AnimatePresence salía medido: la primera apertura de cada sesión
   // metía un frame de 50-67ms (33ms hasta en WebKit sin frenar la CPU) porque
@@ -265,6 +270,14 @@ function MenuLateral({ abierto, onCerrar, onNavegar }) {
                 <span className={`relative text-[15px] ${isActive ? 'font-semibold text-accent' : 'text-ink-dim'}`}>
                   {label}
                 </span>
+                {/* Cuántas conversaciones tienen algo sin leer. Va en el menú y
+                    no solo dentro de Diskordkito porque el sentido es enterarse
+                    SIN entrar. */}
+                {to === '/diskordkito' && sinLeer > 0 && (
+                  <span className="relative ml-auto flex h-5 min-w-[20px] items-center justify-center rounded-full bg-accent px-1.5 text-[11px] font-bold text-on-accent">
+                    {sinLeer}
+                  </span>
+                )}
               </>
             )}
           </NavLink>

@@ -1,5 +1,5 @@
 import { esAdmin } from '../platform/auth'
-import { IconActividad, IconBooks, IconClub, IconEscudo, IconHome, IconSettings } from '../ui/icons'
+import { IconActividad, IconBooks, IconChat, IconClub, IconEscudo, IconHome, IconSettings } from '../ui/icons'
 
 // Las secciones de la app, en un solo sitio.
 //
@@ -46,6 +46,18 @@ export const SECCIONES = [
       'Las sesiones de cada libro: cuándo fue, qué parte tocaba y qué se dijo.',
       'La puntuación de cada uno y la media del club, en los libros ya terminados.',
       'Proponer un libro puede cualquiera del club; elegir cuál se lee, el admin.',
+    ],
+  },
+  {
+    to: '/diskordkito',
+    label: 'Diskordkito',
+    Icon: IconChat,
+    soloClub: true,
+    resumen: 'Hablar con el club, y con cada uno por separado.',
+    puntos: [
+      'Quién está conectado, lo primero de la pantalla: tocar una cara abre la conversación con esa persona.',
+      'El canal de todo el club, y una conversación aparte con cada uno.',
+      'Los mensajes te avisan estés en la pantalla que estés, no solo aquí dentro.',
     ],
   },
   {

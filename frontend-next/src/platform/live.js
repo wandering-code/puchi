@@ -30,6 +30,17 @@ function conectar() {
     window.dispatchEvent(new CustomEvent('puchi:ws', { detail: msg }))
   }
   ws.onclose = () => {
+    // Solo si el que se cierra sigue siendo el de ahora. Si ya se creó otro
+    // mientras tanto, poner `socket = null` aquí deja a null un socket VIVO: la
+    // app sigue recibiendo por él (los mensajes llegan) pero deja de poder
+    // enviar nada, porque enviarPorWS mira esta variable y la ve vacía.
+    //
+    // Pasa de verdad y por dos caminos: en desarrollo, StrictMode monta el
+    // efecto dos veces y el cierre del primer socket llega cuando el segundo ya
+    // existe; y al volver de segundo plano, la reconexión puede crear uno nuevo
+    // antes de que llegue el onclose del que se murió sin avisar. Se destapó al
+    // estrenar el chat — hasta entonces nada salía por aquí, solo entraba.
+    if (socket !== ws) return
     socket = null
     if (suscriptores === 0) return
     // Espera creciente hasta 15s, para no martillear al backend mientras está
@@ -66,6 +77,21 @@ export function useLiveConnection(token) {
       }
     }
   }, [token])
+}
+
+// Mandar por el mismo socket. Hasta ahora esto solo escuchaba —los cambios se
+// hacían por HTTP y el socket servía para enterarse—, pero el chat y la
+// señalización de las llamadas van POR AQUÍ: un mensaje o una oferta de WebRTC
+// no pueden pasar por una petición HTTP y esperar a que el servidor los
+// reparta, tienen que salir por el mismo tubo que ya está abierto.
+//
+// Devuelve si ha salido. No encola: si el socket está cerrado (se cayó la red
+// y la reconexión todavía no ha entrado), quien llama se entera y puede
+// decidir qué hacer — en el chat, no dar por enviado un mensaje que no salió.
+export function enviarPorWS(mensaje) {
+  if (socket?.readyState !== WebSocket.OPEN) return false
+  socket.send(JSON.stringify(mensaje))
+  return true
 }
 
 // Escucha los avisos que interesen. `scopes` son los del backend

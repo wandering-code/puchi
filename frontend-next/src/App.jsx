@@ -3,6 +3,9 @@ import { useAuth } from './platform/auth'
 import { useMobileViewport } from './platform/viewport'
 import { useLiveConnection } from './platform/live'
 import { usarTema } from './platform/preferencias'
+import { AvisosProvider } from './platform/avisos'
+import { ChatProvider } from './platform/chat'
+import AvisosDeMensaje from './screens/diskordkito/AvisosDeMensaje'
 import LoginScreen from './screens/LoginScreen'
 import Shell from './screens/Shell'
 import UpdatePrompt from './ui/UpdatePrompt'
@@ -49,7 +52,17 @@ export default function App() {
             exit={{ opacity: 0 }}
             transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
           >
-            <Shell />
+            {/* Los avisos y el chat van POR ENCIMA de las pantallas, envolviendo
+                al Shell entero. Es lo que hace que un mensaje (y, cuando estén,
+                una llamada) te llegue estés en la Luniteca, en el club o donde
+                sea — y que la pantalla de Diskordkito pueda estar cerrada sin
+                que nadie se quede sin enterarse. */}
+            <AvisosProvider>
+              <ChatProvider>
+                <AvisosDeMensaje />
+                <Shell />
+              </ChatProvider>
+            </AvisosProvider>
           </motion.div>
         )}
       </AnimatePresence>
