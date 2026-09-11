@@ -61,7 +61,7 @@ function Tripas({ canalId, abierta, onCerrar, suelta, refCuerpo }) {
 
   const esDelClub = canal?.type !== 'dm'
   const otro = canal?.other_player
-  const { llamar, hayLlamada } = useLlamadas()
+  const { llamar, hayLlamada, grupo } = useLlamadas()
 
   useEffect(() => {
     if (!abierta || !canalId) return
@@ -135,6 +135,40 @@ function Tripas({ canalId, abierta, onCerrar, suelta, refCuerpo }) {
               : (estaOnline(otro?.id) ? 'Conectada ahora' : 'Desconectada')}
           </p>
         </div>
+
+        {/* En el club, lo mismo pero para todos. Si ya hay alguien dentro, deja
+            de ser "llamar" y pasa a ser "entrar": un solo botón, encendido y
+            con cuántos hay, porque la decisión ya no es con qué llamar sino si
+            te unes o no. */}
+        {esDelClub && (
+          grupo.activa && !grupo.dentro ? (
+            <motion.button
+              onClick={() => grupo.entrar(grupo.tipo)}
+              whileTap={{ scale: 0.96 }}
+              className="flex h-10 shrink-0 items-center gap-2 rounded-full bg-read px-3.5 text-sm font-semibold text-white"
+            >
+              <IconVideoCamara className="h-[18px] w-[18px]" />
+              Entrar · {grupo.ids.length}
+            </motion.button>
+          ) : (
+            <div className="flex shrink-0 items-center gap-1.5">
+              <BotonLlamar
+                etiqueta="Llamar al club"
+                deshabilitado={hayLlamada}
+                onClick={() => grupo.entrar('audio')}
+              >
+                <IconTelefono className="h-[18px] w-[18px]" />
+              </BotonLlamar>
+              <BotonLlamar
+                etiqueta="Videollamar al club"
+                deshabilitado={hayLlamada}
+                onClick={() => grupo.entrar('video')}
+              >
+                <IconVideoCamara className="h-[18px] w-[18px]" />
+              </BotonLlamar>
+            </div>
+          )
+        )}
 
         {/* Llamar, desde la propia conversación. Es donde se decide: estás
             escribiéndole a alguien y ves que está conectado. */}

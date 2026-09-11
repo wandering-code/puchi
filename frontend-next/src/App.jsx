@@ -9,6 +9,7 @@ import { LlamadasProvider } from './platform/llamadas'
 import AvisosDeMensaje from './screens/diskordkito/AvisosDeMensaje'
 import AvisoDeLlamada from './screens/diskordkito/AvisoDeLlamada'
 import Llamada from './screens/diskordkito/Llamada'
+import LlamadaGrupo from './screens/diskordkito/LlamadaGrupo'
 import PastillaLlamada from './screens/diskordkito/PastillaLlamada'
 import LoginScreen from './screens/LoginScreen'
 import Shell from './screens/Shell'
@@ -71,6 +72,7 @@ export default function App() {
                       están FUERA del Shell: la llamada sobrevive a cambiar de
                       pantalla, que es justo la gracia. */}
                   <Llamada />
+                  <LlamadaGrupo />
                   <PastillaLlamada />
                   <Shell />
                 </LlamadasProvider>

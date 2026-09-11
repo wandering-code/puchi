@@ -16,10 +16,10 @@ import { IconColgar, IconTelefono, IconVideoCamara } from '../../ui/icons'
 // escenario ya viene detrás.
 
 export default function AvisoDeLlamada() {
-  const { estado, conQuien, tipo, enOtroSitio, aceptar, rechazar, traerAqui } = useLlamadas()
+  const { estado, conQuien, tipo, enOtroSitio, aceptar, rechazar, traerAqui, grupo } = useLlamadas()
   const { mostrar, cerrar } = useAvisos()
   // Los ids de los avisos puestos, para poder quitarlos cuando toca.
-  const puesto = useRef({ entrante: null, otroSitio: null })
+  const puesto = useRef({ entrante: null, otroSitio: null, grupo: null })
 
   // ── Llamada entrante ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -89,6 +89,48 @@ export default function AvisoDeLlamada() {
       ),
     })
   }, [enOtroSitio, mostrar, cerrar, traerAqui])
+
+  // ── Alguien ha abierto la llamada del club ────────────────────────────────
+  // Suena a todo el club conectado, pero solo cuando la llamada ARRANCA de cero
+  // (lo decide el backend): si no, cada persona que entra haría sonar el
+  // teléfono de todos los demás otra vez.
+  //
+  // Ignorarla no cierra nada: la llamada sigue ahí y se puede entrar después
+  // desde la conversación del club. Por eso, a diferencia de la de uno a uno,
+  // esta sí se puede apartar.
+  useEffect(() => {
+    if (!grupo.entrante || grupo.dentro) {
+      if (puesto.current.grupo) { cerrar(puesto.current.grupo); puesto.current.grupo = null }
+      return
+    }
+    const quien = grupo.entrante.quien
+    puesto.current.grupo = mostrar({
+      clave: 'llamada-del-club',
+      espera: true,
+      color: quien?.color,
+      titulo: `${quien?.name} ha abierto una llamada`,
+      texto: 'En el club',
+      icono: <Avatar jugador={quien} size={44} />,
+      acciones: (
+        <>
+          <button
+            onClick={() => { grupo.descartarEntrante(); cerrar('llamada-del-club') }}
+            className="h-11 flex-1 rounded-xl2 border border-line text-sm text-ink-dim"
+          >
+            Ahora no
+          </button>
+          <button
+            onClick={() => { grupo.entrar(grupo.entrante.tipo); cerrar('llamada-del-club') }}
+            className="flex h-11 flex-[1.3] items-center justify-center gap-2 rounded-xl2 bg-read text-sm font-semibold text-white"
+          >
+            {grupo.entrante.tipo === 'video' ? <IconVideoCamara className="h-[18px] w-[18px]" /> : <IconTelefono className="h-[18px] w-[18px]" />}
+            Entrar
+          </button>
+        </>
+      ),
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [grupo.entrante, grupo.dentro, mostrar, cerrar])
 
   return null
 }

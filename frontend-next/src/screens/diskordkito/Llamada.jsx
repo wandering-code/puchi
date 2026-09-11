@@ -5,6 +5,7 @@ import { useLlamadas } from '../../platform/llamadas'
 import Avatar from '../../ui/Avatar'
 import { LLEGADA, SALIDA } from '../../ui/curvas'
 import { IconColgar, IconEncoger, IconMicro, IconMicroOff, IconVideoCamara, IconVideoCamaraOff } from '../../ui/icons'
+import { CAJA, usarMiTamano } from './miTamano'
 
 // El escenario de la llamada. A pantalla completa y por encima de todo.
 //
@@ -153,24 +154,35 @@ export function Cronometro() {
   return <span className="tabular-nums">{m}:{s}</span>
 }
 
-// Tu cámara, en una tarjeta que se puede mover a cualquier esquina: en el móvil
-// siempre acaba tapando justo lo que quieres ver.
+// Tu cámara, en una tarjeta que se puede mover a cualquier esquina (en el móvil
+// siempre acaba tapando justo lo que quieres ver) y que **crece al tocarla**:
+// tres tamaños en ciclo. Es para comprobar que sales bien encuadrado, que es lo
+// único que se quiere de verse a uno mismo. No cambia nada de la llamada.
+//
+// Arrastrar y tocar conviven porque Motion distingue uno de otro: un toque sin
+// desplazamiento no dispara el arrastre, y un arrastre no acaba en click.
 function MiCaja({ stream }) {
   const limites = useRef(null)
+  const [tamano, siguiente] = usarMiTamano()
   return (
     <>
       <div ref={limites} className="pointer-events-none absolute inset-0 p-3 pt-safe" />
-      <motion.div
+      <motion.button
+        onClick={siguiente}
         drag
         dragConstraints={limites}
         dragElastic={0.12}
         dragMomentum={false}
-        className="absolute right-4 top-24 z-10 h-36 w-24 cursor-grab overflow-hidden rounded-xl2 border border-white/15 bg-black/40 shadow-lg active:cursor-grabbing"
+        animate={CAJA[tamano]}
+        transition={{ type: 'spring', stiffness: 380, damping: 32 }}
+        aria-label="Cambiar el tamaño de tu imagen"
+        title="Tu tamaño"
+        className="absolute right-4 top-24 z-10 cursor-grab overflow-hidden rounded-xl2 border border-white/15 bg-black/40 shadow-lg active:cursor-grabbing"
       >
         {/* Espejada, como cualquier cámara frontal: si no, levantas la mano
             derecha y se mueve la izquierda. */}
         <Video stream={stream} className="h-full w-full scale-x-[-1] object-cover" mudo />
-      </motion.div>
+      </motion.button>
     </>
   )
 }

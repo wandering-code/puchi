@@ -1,9 +1,10 @@
 import { createPortal } from 'react-dom'
 import { AnimatePresence, motion } from 'motion/react'
+import { useChat } from '../../platform/chat'
 import { useLlamadas } from '../../platform/llamadas'
 import Avatar from '../../ui/Avatar'
 import { LLEGADA, SALIDA } from '../../ui/curvas'
-import { IconColgar, IconMicroOff } from '../../ui/icons'
+import { IconClub, IconColgar, IconMicroOff } from '../../ui/icons'
 import { Cronometro, Video } from './Llamada'
 
 // La llamada encogida: una pastilla que te sigue por Puchi.
@@ -21,9 +22,23 @@ import { Cronometro, Video } from './Llamada'
 // eso.
 
 export default function PastillaLlamada() {
-  const { estado, conQuien, tipo, suVideo, mudo, suCamaraApagada, encogida, agrandar, colgar } = useLlamadas()
-  const aLaVista = estado === 'activa' && encogida
-  const hayImagen = tipo === 'video' && suVideo && !suCamaraApagada
+  const { estado, conQuien, tipo, suVideo, mudo, suCamaraApagada, encogida, agrandar, colgar, grupo } = useLlamadas()
+  const { jugadores } = useChat() || {}
+
+  // La misma pastilla para las dos clases de llamada: lo único que cambia es a
+  // quién enseña y qué hace el botón rojo (colgar o salirse).
+  const enGrupo = grupo.dentro
+  const aLaVista = (estado === 'activa' || enGrupo) && encogida
+
+  const quienSale = enGrupo
+    ? (jugadores || []).find(p => p.id === grupo.quienHabla) || null
+    : conQuien
+  const streamQueSale = enGrupo ? grupo.streams[grupo.quienHabla] : suVideo
+  const tipoDeLlamada = enGrupo ? grupo.tipo : tipo
+  const camaraApagada = enGrupo ? grupo.camarasApagadas[grupo.quienHabla] : suCamaraApagada
+  const estoyMudo = enGrupo ? grupo.mudo : mudo
+  const salirse = enGrupo ? grupo.salir : colgar
+  const hayImagen = tipoDeLlamada === 'video' && streamQueSale && !camaraApagada
 
   return createPortal(
     <AnimatePresence>
@@ -42,16 +57,22 @@ export default function PastillaLlamada() {
         >
           <button
             onClick={agrandar}
-            aria-label={`Volver a la llamada con ${conQuien?.name}`}
+            aria-label={enGrupo ? 'Volver a la llamada del club' : `Volver a la llamada con ${conQuien?.name}`}
             className="flex items-center gap-2.5 pr-1"
           >
             <span className="relative">
               {hayImagen ? (
                 <span className="block h-11 w-11 overflow-hidden rounded-full border border-line">
-                  <Video stream={suVideo} className="h-full w-full object-cover" mudo />
+                  <Video stream={streamQueSale} className="h-full w-full object-cover" mudo />
                 </span>
+              ) : quienSale ? (
+                <Avatar jugador={quienSale} size={44} />
               ) : (
-                <Avatar jugador={conQuien} size={44} />
+                // En el club, mientras no hable nadie todavía: el icono del
+                // club en vez de una cara al azar.
+                <span className="flex h-11 w-11 items-center justify-center rounded-full bg-accent-soft text-accent">
+                  <IconClub className="h-5 w-5" />
+                </span>
               )}
               {/* El punto de "estás en directo": late, para que no parezca una
                   tarjeta muerta olvidada en la esquina. */}
@@ -64,17 +85,19 @@ export default function PastillaLlamada() {
 
             <span className="min-w-0 text-left">
               <span className="flex items-center gap-1.5">
-                <span className="truncate text-sm font-semibold">{conQuien?.name}</span>
-                {mudo && <IconMicroOff className="h-3.5 w-3.5 shrink-0 text-ink-mute" />}
+                <span className="truncate text-sm font-semibold">
+                  {enGrupo ? `El club · ${grupo.ids.length}` : conQuien?.name}
+                </span>
+                {estoyMudo && <IconMicroOff className="h-3.5 w-3.5 shrink-0 text-ink-mute" />}
               </span>
               <span className="block text-[11px] text-ink-mute"><Cronometro /></span>
             </span>
           </button>
 
           <motion.button
-            onClick={colgar}
+            onClick={salirse}
             whileTap={{ scale: 0.9 }}
-            aria-label="Colgar"
+            aria-label={enGrupo ? 'Salir de la llamada' : 'Colgar'}
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-danger text-white"
           >
             <IconColgar className="h-[18px] w-[18px]" />
