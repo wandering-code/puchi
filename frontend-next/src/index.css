@@ -357,3 +357,10 @@
    platform/viewport.js). Encogiendo la caja el fondo se corta y asoma lo de
    detrás — eso ya se probó en la Puchi actual y se descartó. */
 @utility pb-kb { padding-bottom: calc(var(--kb, 0px) + env(safe-area-inset-bottom, 0px)); }
+
+/* Igual que pb-kb pero con un respiro propio: para lo que se queda PEGADO
+   abajo del todo, como el campo de escribir del chat. Con pb-kb a secas, sin
+   teclado y en un móvil sin zona segura por abajo, la caja queda rozando el
+   borde de la pantalla (y en Safari, pegada a su barra de herramientas). Se
+   veía apretado en una captura del iPhone. */
+@utility pb-escritura { padding-bottom: calc(var(--kb, 0px) + env(safe-area-inset-bottom, 0px) + 0.625rem); }

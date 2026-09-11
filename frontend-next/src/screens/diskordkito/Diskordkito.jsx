@@ -2,8 +2,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { AnimatePresence, motion } from 'motion/react'
 import { useAuth } from '../../platform/auth'
-import { CANAL_DEL_CLUB, nombreDeCanal, ordenarCanales, useChat } from '../../platform/chat'
+import { nombreDeCanal, useChat } from '../../platform/chat'
 import { useCapa } from '../../platform/capas'
+import { usarPantallaAncha } from '../../ui/ancho'
 import Avatar from '../../ui/Avatar'
 import { IconChat, IconClub } from '../../ui/icons'
 import { PuntoConectado, hora } from './piezas'
@@ -11,110 +12,112 @@ import Conversacion from './Conversacion'
 
 // Diskordkito, rehecho.
 //
-// El reparto de Discord —una columna de servidores, otra de canales, y el chat
-// en lo que queda— está pensado para tener catorce sitios a la vista a la vez.
-// Aquí sois cinco y se entra desde el móvil. Así que no hay barra lateral: esto
-// es una pantalla de lista, como la Luniteca o la Actividad, y una conversación
-// es algo que se abre encima y se cierra, como la ficha de un libro.
+// **Una sola lista, no tres bloques.** La primera versión tenía una fila de
+// caras arriba ("quién anda por aquí"), la tarjeta del club, y debajo las
+// conversaciones — y la misma persona salía DOS veces, como cara y como fila.
+// Con cinco personas, la lista de gente y la de conversaciones son la misma
+// lista. Así que aquí hay una: el club arriba, y debajo una fila por persona,
+// esté o no esté empezada la conversación.
 //
-// Lo primero de la pantalla no son los canales: es **quién está conectado**.
-// Discord esconde eso en una columna de la derecha que en el móvil no existe, y
-// es justo el dato que decide si escribes o llamas. Aquí son caras grandes, y
-// tocar una abre su conversación.
+// **Dos columnas donde hay sitio.** El resto de Puchi se usa desde el móvil,
+// pero para hablar se entra desde la tablet o el ordenador: ahí la conversación
+// no tapa la lista, se pone al lado. En el móvil sigue abriéndose encima, como
+// la ficha de un libro.
+//
+// Nada de esto es el reparto de Discord: no hay columna de servidores, ni árbol
+// de canales, ni fondo oscuro. Es la misma hoja de papel que el resto de Puchi,
+// con una lista a un lado.
 
 export default function Diskordkito() {
   const { player } = useAuth()
-  const chat = useChat()
-  const { cargado, canales, otros, estaOnline, sinLeerDe, abrirDM } = chat
-  const conversacion = useCapa(null)   // el id del canal abierto, o null
+  const { cargado, canales, otros, estaOnline, sinLeerDe, abrirDM, mensajesDe } = useChat()
+  const ancha = usarPantallaAncha()
+
+  // En una columna, la conversación es una capa (entra en el historial, y el
+  // gesto de volver la cierra). En dos, es solo cuál está elegida: no hay nada
+  // que cerrar, siempre hay una a la vista.
+  const capa = useCapa(null)
+  const [elegida, setElegida] = useState(null)
+  const abierta = ancha ? elegida : capa.abierta
+
+  const abrir = useCallback((canalId) => {
+    if (ancha) setElegida(canalId)
+    else capa.abrir(canalId)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ancha, capa.abrir])
+
   const [abriendo, setAbriendo] = useState(null)
   const [error, setError] = useState(null)
 
-  // Llegar aquí con ?conversacion=ID abre esa conversación: es lo que hace el
-  // aviso de un mensaje nuevo al tocarlo, desde donde sea que estuvieras.
-  //
-  // A diferencia del ?libro= de la Luniteca, esto NO es de una sola vez: ya
-  // estando aquí puede llegar otro aviso de otra conversación, y tocarlo tiene
-  // que llevar a esa. Se vacía el parámetro después para que cerrar y volver no
-  // la reabra.
+  const canalDelClub = useMemo(() => canales.find(c => c.type !== 'dm'), [canales])
+
+  // Una fila por persona del club, con su conversación si ya existe. Ordenadas
+  // por lo último que se dijo; las que nunca han hablado, al final por nombre.
+  const gente = useMemo(() => {
+    const canalDe = new Map(canales.filter(c => c.type === 'dm').map(c => [c.other_player?.id, c]))
+    return otros
+      .map(persona => ({ persona, canal: canalDe.get(persona.id) || null }))
+      .sort((a, b) => {
+        const ma = a.canal?.last_message_at, mb = b.canal?.last_message_at
+        if (ma && mb) return mb.localeCompare(ma)
+        if (ma) return -1
+        if (mb) return 1
+        return a.persona.name.localeCompare(b.persona.name, 'es')
+      })
+  }, [canales, otros])
+
+  // Llegar con ?conversacion=ID abre esa: es lo que hace el aviso de un mensaje
+  // al tocarlo. No es de una sola vez — ya estando aquí puede llegar otro aviso
+  // de otra conversación. Se vacía el parámetro después.
   const [params, setParams] = useSearchParams()
   const pedida = params.get('conversacion')
   useEffect(() => {
     if (!pedida) return
-    conversacion.reemplazar(Number(pedida))
+    const id = Number(pedida)
+    if (ancha) setElegida(id)
+    else capa.reemplazar(id)
     setParams(p => { const q = new URLSearchParams(p); q.delete('conversacion'); return q }, { replace: true })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pedida])
+  }, [pedida, ancha])
 
-  const ordenados = useMemo(() => ordenarCanales(canales), [canales])
-  const canalDelClub = ordenados.find(c => c.type !== 'dm')
-  const personales = ordenados.filter(c => c.type === 'dm')
+  // Con dos columnas nunca se está mirando el vacío: al entrar se abre el canal
+  // del club, que es el que más se usa.
+  useEffect(() => {
+    if (ancha && elegida == null && canalDelClub) setElegida(canalDelClub.id)
+  }, [ancha, elegida, canalDelClub])
 
-  // Quién tiene ya conversación abierta, para no ofrecer dos caminos al mismo
-  // sitio en la fila de caras.
-  const conConversacion = useMemo(
-    () => new Set(personales.map(c => c.other_player?.id)),
-    [personales],
-  )
-
-  const escribirA = useCallback(async (otro) => {
-    setAbriendo(otro.id); setError(null)
+  const hablarCon = useCallback(async ({ persona, canal }) => {
+    if (canal) { abrir(canal.id); return }
+    setAbriendo(persona.id); setError(null)
     try {
-      conversacion.abrir(await abrirDM(otro.id))
+      abrir(await abrirDM(persona.id))
     } catch (err) {
       // Lo normal: esa persona ha dejado de ser del club mientras esta pantalla
       // estaba abierta. Antes fallaba en silencio.
       setError(err.status === 404 || err.status === 403
-        ? `${otro.name} ya no está en el club.`
+        ? `${persona.name} ya no está en el club.`
         : (err.message || 'No se ha podido abrir la conversación'))
     } finally {
       setAbriendo(null)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [abrirDM])
+  }, [abrir, abrirDM])
 
   if (!player?.club_member) return <SinAcceso />
   if (!cargado) return <Cargando />
 
-  const conectados = otros.filter(p => estaOnline(p.id))
-  const desconectados = otros.filter(p => !estaOnline(p.id))
+  const conectados = otros.filter(p => estaOnline(p.id)).length
 
-  return (
-    <div className="py-6">
-      <header className="mb-5">
-        <h2 className="font-display text-[1.75rem] font-bold tracking-[-0.02em]">Diskordkito</h2>
-        <p className="mt-1 text-sm text-ink-dim">
-          {conectados.length
-            ? `${conectados.length} ${conectados.length === 1 ? 'persona conectada' : 'personas conectadas'} ahora mismo`
-            : 'No hay nadie conectado ahora mismo'}
-        </p>
-      </header>
-
-      {/* ── Quién anda por aquí ────────────────────────────────────────────
-          Caras grandes y en fila, los conectados primero. Es lo primero que se
-          mira al entrar y el atajo para escribir a alguien sin buscarlo en una
-          lista. */}
-      <section className="mb-6">
-        <h3 className="mb-2.5 text-[11px] uppercase tracking-[0.14em] text-ink-mute">Quién anda por aquí</h3>
-        {/* Se desplaza de lado y se sale por los bordes de la pantalla a
-            propósito: así se ve que hay más gente a los lados sin meter una
-            flecha ni recortar las caras contra un borde duro. */}
-        <div className="-mx-5 flex gap-3 overflow-x-auto px-5 pb-1">
-          {[...conectados, ...desconectados].map(p => (
-            <BotonPersona
-              key={p.id}
-              persona={p}
-              conectada={estaOnline(p.id)}
-              yaHablais={conConversacion.has(p.id)}
-              abriendo={abriendo === p.id}
-              onTocar={() => escribirA(p)}
-            />
-          ))}
-          {otros.length === 0 && (
-            <p className="py-2 text-sm text-ink-mute">Todavía no hay nadie más en el club.</p>
-          )}
-        </div>
-      </section>
+  const lista = (
+    <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+      {canalDelClub && (
+        <FilaDelClub
+          canal={canalDelClub}
+          activa={abierta === canalDelClub.id}
+          sinLeer={sinLeerDe(canalDelClub)}
+          ultimo={ultimoDe(mensajesDe(canalDelClub.id), canalDelClub)}
+          onTocar={() => abrir(canalDelClub.id)}
+        />
+      )}
 
       <AnimatePresence>
         {error && (
@@ -122,139 +125,155 @@ export default function Diskordkito() {
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
-            className="mb-4 text-sm text-danger"
+            className="px-1 py-2 text-sm text-danger"
           >
             {error}
           </motion.p>
         )}
       </AnimatePresence>
 
-      {/* ── El canal de todos ──────────────────────────────────────────────
-          En su propia tarjeta ancha y con el color de la app: no es "un canal
-          más de una lista", es donde habla el club entero. */}
-      {canalDelClub && (
-        <section className="mb-6">
-          <TarjetaDelClub
-            canal={canalDelClub}
-            sinLeer={sinLeerDe(canalDelClub)}
-            onTocar={() => conversacion.abrir(canalDelClub.id)}
-          />
-        </section>
+      {gente.length === 0 ? (
+        <p className="px-1 py-6 text-sm leading-relaxed text-ink-mute">
+          Todavía no hay nadie más en el club.
+        </p>
+      ) : (
+        <div className="mt-1">
+          {gente.map(fila => (
+            <FilaPersona
+              key={fila.persona.id}
+              {...fila}
+              activa={!!fila.canal && abierta === fila.canal.id}
+              conectada={estaOnline(fila.persona.id)}
+              sinLeer={!!fila.canal && sinLeerDe(fila.canal)}
+              ultimo={ultimoDe(mensajesDe(fila.canal?.id), fila.canal)}
+              abriendo={abriendo === fila.persona.id}
+              onTocar={() => hablarCon(fila)}
+            />
+          ))}
+        </div>
       )}
+    </div>
+  )
 
-      {/* ── Conversaciones ─────────────────────────────────────────────── */}
-      <section>
-        <h3 className="mb-1 text-[11px] uppercase tracking-[0.14em] text-ink-mute">Conversaciones</h3>
-        {personales.length === 0 ? (
-          <p className="py-6 text-sm leading-relaxed text-ink-mute">
-            Ninguna todavía. Toca una cara de arriba para empezar.
-          </p>
-        ) : (
-          <div className="divide-y divide-[color:var(--color-line)]">
-            {personales.map(canal => (
-              <FilaConversacion
-                key={canal.id}
-                canal={canal}
-                conectada={estaOnline(canal.other_player?.id)}
-                sinLeer={sinLeerDe(canal)}
-                onTocar={() => conversacion.abrir(canal.id)}
-              />
-            ))}
-          </div>
-        )}
-      </section>
+  // ── Dos columnas ────────────────────────────────────────────────────────
+  if (ancha) {
+    return (
+      <div className="flex h-full min-h-0 flex-col py-5">
+        <header className="mb-3 shrink-0">
+          <h2 className="font-display text-[1.6rem] font-bold leading-none tracking-[-0.02em]">Diskordkito</h2>
+          <p className="mt-1 text-sm text-ink-dim">{textoConectados(conectados)}</p>
+        </header>
 
-      {/* La conversación se monta solo cuando hace falta y se desmonta al
-          cerrarse: aquí no hay nada que "premontar" como en la ficha de un
-          libro, porque no se abren cincuenta seguidas. */}
+        <div className="grid min-h-0 flex-1 grid-cols-[minmax(240px,300px)_1fr] gap-4">
+          <div className="flex min-h-0 flex-col">{lista}</div>
+          {abierta != null
+            ? <Conversacion key={abierta} canalId={abierta} suelta />
+            : <PanelVacio />}
+        </div>
+      </div>
+    )
+  }
+
+  // ── Una columna ─────────────────────────────────────────────────────────
+  return (
+    <div className="flex h-full min-h-0 flex-col py-6">
+      <header className="mb-4 shrink-0">
+        <h2 className="font-display text-[1.75rem] font-bold tracking-[-0.02em]">Diskordkito</h2>
+        <p className="mt-1 text-sm text-ink-dim">{textoConectados(conectados)}</p>
+      </header>
+
+      {lista}
+
       <AnimatePresence>
-        {conversacion.abierta != null && (
-          <Conversacion
-            canalId={conversacion.abierta}
-            abierta
-            onCerrar={conversacion.cerrar}
-          />
+        {capa.abierta != null && (
+          <Conversacion canalId={capa.abierta} abierta onCerrar={capa.cerrar} />
         )}
       </AnimatePresence>
     </div>
   )
 }
 
-// Una cara de la fila de arriba. El aro dice si está conectada; el punto verde
-// lo confirma sin depender solo del color, que en oscuro se lee peor.
-function BotonPersona({ persona, conectada, yaHablais, abriendo, onTocar }) {
-  return (
-    <motion.button
-      onClick={onTocar}
-      whileTap={{ scale: 0.94 }}
-      className="flex w-[68px] shrink-0 flex-col items-center gap-1.5"
-      aria-label={`Escribir a ${persona.name}`}
-    >
-      <span
-        className={`relative flex items-center justify-center rounded-full p-[3px] transition-opacity ${conectada ? '' : 'opacity-55'}`}
-        style={{ background: conectada ? `color-mix(in srgb, ${persona.color || 'var(--color-accent)'} 60%, transparent)` : 'transparent' }}
-      >
-        <Avatar jugador={persona} size={52} />
-        {conectada && <PuntoConectado />}
-        {abriendo && (
-          <motion.span
-            className="absolute inset-0 rounded-full border-2 border-accent"
-            animate={{ opacity: [0.3, 1, 0.3] }}
-            transition={{ duration: 1, repeat: Infinity }}
-          />
-        )}
-      </span>
-      <span className={`w-full truncate text-center text-[11px] ${conectada ? 'text-ink' : 'text-ink-mute'}`}>
-        {persona.name}
-      </span>
-      {/* Un punto pequeñito para quien ya tiene conversación: evita la duda de
-          "¿esto crea una nueva o abre la que ya teníamos?". */}
-      {yaHablais && <span className="-mt-1 h-1 w-1 rounded-full bg-ink-mute/50" aria-hidden />}
-    </motion.button>
-  )
+function textoConectados(n) {
+  if (!n) return 'No hay nadie conectado ahora mismo'
+  return `${n} ${n === 1 ? 'persona conectada' : 'personas conectadas'} ahora mismo`
 }
 
-function TarjetaDelClub({ canal, sinLeer, onTocar }) {
-  return (
-    <motion.button
-      onClick={onTocar}
-      whileTap={{ scale: 0.99 }}
-      className="flex w-full items-center gap-3.5 rounded-xl3 border border-accent-line bg-accent-soft p-4 text-left"
-    >
-      <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl2 bg-accent text-on-accent">
-        <IconClub className="h-6 w-6" />
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="flex items-center gap-2">
-          <span className="font-display text-lg font-bold leading-tight text-accent">El club</span>
-          {sinLeer && <span className="h-2 w-2 shrink-0 rounded-full bg-accent" aria-label="Sin leer" />}
-        </span>
-        <span className="mt-0.5 block text-[13px] text-accent/75">
-          {canal.last_message_at ? `Última vez, ${cuando(canal.last_message_at)}` : 'Donde habla todo el club'}
-        </span>
-      </span>
-    </motion.button>
-  )
+// Lo último que se dijo, para la fila. Solo si esa conversación ya está
+// cargada en memoria: no se piden los mensajes de todas solo para poder
+// enseñar una línea — con `last_message_at` basta para decir CUÁNDO, y el qué
+// aparece en cuanto se ha abierto una vez.
+function ultimoDe(mensajes, canal) {
+  if (!canal) return null
+  const ultimo = mensajes?.[mensajes.length - 1]
+  if (ultimo) return { texto: ultimo.content, cuando: cuando(ultimo.created_at) }
+  if (canal.last_message_at) return { texto: null, cuando: cuando(canal.last_message_at) }
+  return null
 }
 
-function FilaConversacion({ canal, conectada, sinLeer, onTocar }) {
-  const otro = canal.other_player
+const FILA = 'flex w-full items-center gap-3 rounded-xl2 px-2 py-2.5 text-left transition-colors'
+
+function FilaDelClub({ canal, activa, sinLeer, ultimo, onTocar }) {
   return (
-    <button onClick={onTocar} className="flex w-full items-center gap-3 py-3 text-left transition-transform duration-150 active:scale-[0.99]">
-      <span className="relative shrink-0">
-        <Avatar jugador={otro} size={42} />
-        {conectada && <PuntoConectado />}
+    <button
+      onClick={onTocar}
+      className={`${FILA} ${activa ? 'bg-accent-soft' : 'active:bg-surface-2'}`}
+    >
+      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent text-on-accent">
+        <IconClub className="h-5 w-5" />
       </span>
       <span className="min-w-0 flex-1">
-        <span className={`block truncate ${sinLeer ? 'font-semibold text-ink' : 'text-ink'}`}>
-          {nombreDeCanal(canal)}
+        <span className={`block truncate font-display font-bold ${activa ? 'text-accent' : 'text-ink'}`}>
+          El club
         </span>
         <span className="mt-0.5 block truncate text-xs text-ink-mute">
-          {canal.last_message_at ? cuando(canal.last_message_at) : 'Sin mensajes todavía'}
+          {ultimo?.texto || (ultimo ? `Última vez, ${ultimo.cuando}` : 'Donde habla todo el club')}
         </span>
       </span>
-      {sinLeer && <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-accent" aria-label="Sin leer" />}
+      {sinLeer && <Punto />}
     </button>
+  )
+}
+
+// Una persona del club. Tenga conversación empezada o no: con cinco personas,
+// "la gente" y "las conversaciones" son la misma lista, y tenerlas separadas
+// hacía que la misma cara saliera dos veces en la misma pantalla.
+function FilaPersona({ persona, canal, activa, conectada, sinLeer, ultimo, abriendo, onTocar }) {
+  return (
+    <button
+      onClick={onTocar}
+      className={`${FILA} ${activa ? 'bg-accent-soft' : 'active:bg-surface-2'} ${abriendo ? 'opacity-60' : ''}`}
+    >
+      <span className="relative shrink-0">
+        <Avatar jugador={persona} size={44} />
+        {conectada && <PuntoConectado />}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className={`block truncate ${sinLeer ? 'font-semibold' : ''} ${activa ? 'text-accent' : 'text-ink'}`}>
+          {persona.name}
+        </span>
+        <span className="mt-0.5 block truncate text-xs text-ink-mute">
+          {ultimo?.texto
+            || (ultimo ? `Última vez, ${ultimo.cuando}` : (conectada ? 'Conectada · sin mensajes' : 'Sin mensajes todavía'))}
+        </span>
+      </span>
+      {sinLeer && <Punto />}
+    </button>
+  )
+}
+
+function Punto() {
+  return <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-accent" aria-label="Sin leer" />
+}
+
+// Solo con dos columnas, y solo el instante que tarda en elegirse la primera.
+function PanelVacio() {
+  return (
+    <div className="flex min-h-0 items-center justify-center rounded-xl3 border border-dashed border-line">
+      <div className="px-8 text-center">
+        <IconChat className="mx-auto h-8 w-8 text-ink-mute/50" />
+        <p className="mt-3 text-sm text-ink-mute">Elige con quién hablar.</p>
+      </div>
+    </div>
   )
 }
 
@@ -274,15 +293,9 @@ function Cargando() {
   return (
     <div className="py-6">
       <div className="h-8 w-48 animate-pulse rounded-md bg-surface-2" />
-      <div className="mt-6 flex gap-3">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="h-[52px] w-[52px] shrink-0 animate-pulse rounded-full bg-surface-2" />
-        ))}
-      </div>
-      <div className="mt-6 h-20 animate-pulse rounded-xl3 bg-surface-2" />
-      <div className="mt-4 space-y-3">
-        {Array.from({ length: 3 }).map((_, i) => (
-          <div key={i} className="h-12 animate-pulse rounded-xl2 bg-surface-2" />
+      <div className="mt-6 space-y-2">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <div key={i} className="h-16 animate-pulse rounded-xl2 bg-surface-2" />
         ))}
       </div>
     </div>
