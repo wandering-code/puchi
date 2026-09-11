@@ -7,7 +7,7 @@ import Avatar from '../../ui/Avatar'
 import { LLEGADA, SALIDA } from '../../ui/curvas'
 import { IconColgar, IconEncoger, IconMicro, IconMicroOff, IconVideoCamara, IconVideoCamaraOff } from '../../ui/icons'
 import { Cronometro, Video } from './Llamada'
-import { EN_LA_FILA, usarMiTamano } from './miTamano'
+import { EN_LA_FILA, EN_LA_REJILLA, usarMiTamano } from './miTamano'
 
 // La llamada del club, en dos modos:
 //
@@ -116,7 +116,7 @@ export default function LlamadaGrupo() {
           </div>
 
           {/* Encima del vídeo, no en una barra: lo que se ve es la gente. */}
-          <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start gap-3 bg-gradient-to-b from-black/60 to-transparent px-4 pb-10 pt-safe">
+          <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-start gap-3 bg-gradient-to-b from-black/60 to-transparent px-4 pb-10 pt-safe">
             <div className="min-w-0 flex-1 pt-2">
               <p className="truncate font-display text-lg font-bold leading-tight">El club</p>
               <p className="mt-0.5 text-xs text-white/60">
@@ -185,7 +185,7 @@ function Repartida({
               mudo={mio ? mudo : false}
               // Tocarte a ti solo te agranda un poco, en tu sitio. Tocar a otro
               // le da el primer plano.
-              escala={mio ? EN_LA_FILA[miTamano] : 1}
+              escala={mio ? EN_LA_REJILLA[miTamano] : 1}
               onTocar={() => (mio ? onAgrandarme() : onElegir(id))}
               lleno
             />
@@ -223,7 +223,7 @@ function ConPrimerPlano({
 
       {/* La fila, flotando sobre el vídeo y por encima de los mandos. Sin barra
           propia: antes ocupaba su franja y, con poca gente, era un desierto. */}
-      <div className="pointer-events-none absolute inset-x-0 bottom-24 overflow-x-auto px-3">
+      <div className="pointer-events-none absolute inset-x-0 bottom-24 z-10 overflow-x-auto px-3">
         <div className="pointer-events-auto flex items-end justify-center gap-2">
           {resto.map(o => (
             <Cuadro
@@ -268,9 +268,21 @@ function Cuadro({
     <Etiqueta
       {...(onTocar ? { onClick: onTocar, whileTap: { scale: 0.97 } } : {})}
       layout
-      animate={ancho ? { width: ancho * escala, height: (ancho / 0.75) * escala } : undefined}
+      // El tamaño se lo pide a Motion, nunca con un `transform` a mano en
+      // `style`: Motion gestiona el transform del elemento (lo compone de sus
+      // propios valores) y machaca cualquiera que se le ponga por fuera — el
+      // cuadro se quedaba clavado del mismo tamaño por más toques que le
+      // dieras. En la rejilla se escala; en la fila se animan las medidas,
+      // porque ahí lo que hay que mover es el hueco que ocupa, no solo su
+      // dibujo.
+      animate={ancho
+        ? { width: ancho * escala, height: (ancho / 0.75) * escala }
+        : { scale: escala }}
       transition={{ type: 'spring', stiffness: 380, damping: 32 }}
-      style={lleno && !ancho ? { transform: `scale(${escala})`, zIndex: escala > 1 ? 10 : undefined } : undefined}
+      // Por encima de sus vecinos al agrandarse, pero por DEBAJO de la
+      // cabecera y de los mandos (z-20): con z-10 se colaba delante de la
+      // botonera y dejaba de poder tocarse el micro o el colgar.
+      style={lleno && !ancho && escala > 1 ? { zIndex: 5 } : undefined}
       aria-label={onTocar ? (mio ? 'Cambiar el tamaño de tu imagen' : `Poner a ${persona?.name} en primer plano`) : undefined}
       className={`relative overflow-hidden bg-black/40 ${
         lleno ? 'h-full w-full' : 'shrink-0'
@@ -316,7 +328,7 @@ function OndaHablando() {
 
 function Mandos({ conVideo, mudo, sinCamara, onMudo, onCamara, onSalir }) {
   return (
-    <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center bg-gradient-to-t from-black/60 to-transparent px-4 pt-14 pb-safe">
+    <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex justify-center bg-gradient-to-t from-black/60 to-transparent px-4 pt-14 pb-safe">
       <div className="pointer-events-auto mb-4 flex items-center gap-3 rounded-full border border-white/10 bg-black/40 px-3 py-2.5 backdrop-blur-xl">
         <Mando activo={!mudo} onClick={onMudo} etiqueta={mudo ? 'Activar micrófono' : 'Silenciar micrófono'}>
           {mudo ? <IconMicroOff className="h-5 w-5" /> : <IconMicro className="h-5 w-5" />}
