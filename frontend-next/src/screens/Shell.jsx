@@ -264,10 +264,16 @@ function MenuLateral({ abierto, onCerrar, onNavegar }) {
                     desplaza de una entrada a otra en vez de aparecer y
                     desaparecer. */}
                 {isActive && (
+                  // Sin muelle: navegar cierra el menú en el mismo instante
+                  // (cerrarMenuAlNavegar), así que esta pastilla nunca se ve
+                  // deslizar limpia — se ve a medias, deformada por el
+                  // transform de salida del panel. De golpe, el panel sale ya
+                  // con la pastilla en su sitio y no hay dos movimientos
+                  // compitiendo.
                   <motion.span
                     layoutId="menu-activo"
                     className="absolute inset-0 rounded-xl2 bg-accent-soft"
-                    transition={{ type: 'spring', stiffness: 420, damping: 34 }}
+                    transition={{ duration: 0 }}
                   />
                 )}
                 <Icon className={`relative h-5 w-5 ${isActive ? 'text-accent' : 'text-ink-mute'}`} />
