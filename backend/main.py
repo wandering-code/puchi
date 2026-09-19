@@ -2092,6 +2092,7 @@ async def get_book_covers(
     # portadas"/"subidas por otros" sin dejar rastro de que existía.
     user_uploads = [
         {
+            "id":              u.id,
             "url":             u.url,
             "uploaded_by":     u.uploader.name if u.uploader else None,
             "uploaded_by_id":  u.uploaded_by,
@@ -2119,6 +2120,49 @@ async def get_book_covers(
     cover_cache_map = {url: _cover_cache_path(url)[1] for url in covers}
 
     return {"covers": covers, "user_uploads": user_uploads, "cover_cache_map": cover_cache_map}
+
+
+def _borrar_archivo_local_si_huerfano(db: Session, url: Optional[str]) -> None:
+    """Borra del disco el archivo de `url` (una ruta local /uploads/...) solo
+    si ya no lo usa nadie: ni el libro compartido (cover_url/spine_url) ni la
+    copia personal de ningún jugador (PersonalShelf.cover_url/spine_url). Si
+    alguien lo sigue teniendo puesto, se deja — borrarlo le rompería la
+    portada o el lomo sin avisar. Se llama al borrar una fila de la galería
+    (BookCover/BookSpine); la fila desaparece siempre, el archivo solo si
+    queda huérfano."""
+    if not url or not url.startswith('/uploads/'):
+        return
+    en_uso = (
+        db.query(Book).filter(or_(Book.cover_url == url, Book.spine_url == url)).first()
+        or db.query(PersonalShelf).filter(or_(PersonalShelf.cover_url == url, PersonalShelf.spine_url == url)).first()
+    )
+    if en_uso:
+        return
+    ruta = os.path.join(os.path.dirname(__file__), url.lstrip('/'))
+    if os.path.isfile(ruta):
+        os.remove(ruta)
+
+
+@app.delete("/books/{book_id}/covers/{cover_id}")
+async def delete_book_cover(
+    book_id: int,
+    cover_id: int,
+    db: Session = Depends(get_db),
+    current: Player = Depends(get_current_player),
+):
+    """Borra una portada de la galería del libro — solo quien la subió puede
+    quitarla, para que nadie borre por error la que ha puesto otro."""
+    cover = db.query(BookCover).filter_by(id=cover_id, book_id=book_id).first()
+    if not cover:
+        raise HTTPException(404, "Portada no encontrada")
+    if cover.uploaded_by != current.id:
+        raise HTTPException(403, "Solo quien la subió puede borrarla")
+    url = cover.url
+    db.delete(cover)
+    db.commit()
+    _borrar_archivo_local_si_huerfano(db, url)
+    await _notify_luni("books", book_id=book_id)
+    return {"ok": True}
 
 
 @app.post("/books/{book_id}/spine")
@@ -2196,10 +2240,31 @@ async def get_book_spines(
         "default_url": book.spine_url,
         "default_generado": bool(book.spine_url) and not book.spine_custom,
         "user_uploads": [
-            {"url": u.url, "uploaded_by": u.uploader.name if u.uploader else None, "uploaded_by_id": u.uploaded_by}
+            {"id": u.id, "url": u.url, "uploaded_by": u.uploader.name if u.uploader else None, "uploaded_by_id": u.uploaded_by}
             for u in uploads
         ],
     }
+
+
+@app.delete("/books/{book_id}/spines/{spine_id}")
+async def delete_book_spine(
+    book_id: int,
+    spine_id: int,
+    db: Session = Depends(get_db),
+    current: Player = Depends(get_current_player),
+):
+    """Mismo mecanismo que delete_book_cover (arriba), para el lomo."""
+    spine = db.query(BookSpine).filter_by(id=spine_id, book_id=book_id).first()
+    if not spine:
+        raise HTTPException(404, "Lomo no encontrado")
+    if spine.uploaded_by != current.id:
+        raise HTTPException(403, "Solo quien lo subió puede borrarlo")
+    url = spine.url
+    db.delete(spine)
+    db.commit()
+    _borrar_archivo_local_si_huerfano(db, url)
+    await _notify_luni("books", book_id=book_id)
+    return {"ok": True}
 
 
 def _accept_search_result(results: list[dict], candidate: dict) -> None:

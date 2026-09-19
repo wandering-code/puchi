@@ -118,7 +118,13 @@ export default function VueloDelLibro({ lomo, portada, destino, alTerminar, sent
   // lomo y tapa se abre hacia ti: se ve el libro por dentro. Y con la bisagra
   // en el canto izquierdo, el libro se abre al revés y el lomo acaba a la
   // derecha de la portada.
-  const anchoTapa = caja ? caja.alto * (2 / 3) : 0
+  // La proporción de la tapa que vuela tiene que ser la MISMA que la portada
+  // de la ficha donde aterriza (destino.width/height) — antes era 2/3 fija,
+  // que es lo que la ficha usaba también hasta hace nada; ahora que la ficha
+  // respeta la proporción real de cada portada (ver `ajustar` en Cover,
+  // piezas.jsx) una tapa siempre-2/3 aterrizaba con un ancho distinto al de
+  // la ficha y se veía "saltar" de tamaño al acoplarse.
+  const anchoTapa = caja ? caja.alto * (destino ? destino.width / destino.height : 2 / 3) : 0
   const escala = caja ? destino.height / caja.alto : 1
   const grosorLomo = caja ? caja.ancho : 0
   // La caja del vuelo empieza donde empieza el lomo y da cabida a los dos.

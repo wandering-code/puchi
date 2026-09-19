@@ -1,11 +1,12 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { api } from '../../platform/api'
 import { Cover } from './piezas'
 import { useHoja } from './HojaInferior'
 import SelectorPortada from './SelectorPortada'
 import SelectorLomo from './SelectorLomo'
-import { medidas } from './Lomos'
+import { ANCHO_FOTO_MAX, ANCHO_FOTO_MIN, medidas } from './Lomos'
+import { proporcionFoto } from './proporcionLomo'
 import { IconRefresh, IconX } from '../../ui/icons'
 import BotonPeligro from '../../ui/BotonPeligro'
 
@@ -33,9 +34,25 @@ export default function BookEditForm({ entry, generos, onGuardar, onCancelar, on
   const portada = useHoja()
   const lomo = useHoja()
   // Mismo tamaño que ve la estantería para este libro (ver medidas() en
-  // Lomos.jsx) — el recorte tiene que salir con esa proporción exacta, o se
-  // vería estirado al ponerlo ahí.
-  const { ancho: anchoLomo, alto: altoLomo } = medidas(entry)
+  // Lomos.jsx).
+  const { ancho: anchoLomoBase, alto: altoLomo } = medidas(entry)
+  // Con una foto de verdad puesta, el ancho de la vista previa tiene que
+  // salir de la proporción REAL de esa foto (igual que en la balda — ver el
+  // mismo mecanismo en Lomos.jsx) y no del ancho por páginas: si no, esta
+  // miniatura recorta la foto a una forma que no es la que se subió, y lo
+  // que se ve aquí no es lo que se ve luego en la balda (visto: un lomo fino
+  // de verdad, apretado aquí en un hueco mucho más ancho, se veía "cortado").
+  const esFotoLomo = !!borrador.spine_url
+  const [anchoLomoFoto, setAnchoLomoFoto] = useState(null)
+  useEffect(() => {
+    if (!esFotoLomo) { setAnchoLomoFoto(null); return }
+    let vigente = true
+    proporcionFoto(borrador.spine_url).then(r => {
+      if (vigente && r) setAnchoLomoFoto(Math.round(Math.min(ANCHO_FOTO_MAX, Math.max(ANCHO_FOTO_MIN, altoLomo * r))))
+    })
+    return () => { vigente = false }
+  }, [borrador.spine_url, esFotoLomo, altoLomo])
+  const anchoLomo = (esFotoLomo && anchoLomoFoto) ? anchoLomoFoto : anchoLomoBase
 
   const set = (clave) => (ev) => setBorrador(b => ({ ...b, [clave]: ev.target.value }))
 
@@ -61,7 +78,13 @@ export default function BookEditForm({ entry, generos, onGuardar, onCancelar, on
         </button>
       </div>
 
-      <div className="flex items-center gap-4">
+      <p className="text-xs leading-relaxed text-ink-dim">
+        Toca la portada o el lomo para cambiarlos — lo que elijas se guarda en tu copia, el
+        resto del club sigue con la suya. El lomo, si no le pones una foto de verdad (tuya o
+        de otro del club, recortada en el momento), se genera solo a partir de la portada.
+      </p>
+
+      <div className="mt-3 flex items-end gap-4">
         <motion.button
           onClick={portada.abrir}
           whileTap={{ scale: 0.96 }}
@@ -70,13 +93,6 @@ export default function BookEditForm({ entry, generos, onGuardar, onCancelar, on
         >
           <Cover url={borrador.cover_url} title={borrador.title} />
         </motion.button>
-        <p className="flex-1 text-xs leading-relaxed text-ink-dim">
-          Toca la portada para elegir otra o subir una foto. La que elijas la ves solo tú;
-          el resto del club sigue con la suya.
-        </p>
-      </div>
-
-      <div className="mt-4 flex items-center gap-4">
         <motion.button
           onClick={lomo.abrir}
           whileTap={{ scale: 0.96 }}
@@ -88,10 +104,6 @@ export default function BookEditForm({ entry, generos, onGuardar, onCancelar, on
             <div className="h-full w-full" style={{ backgroundImage: `url(${borrador.spine_url})`, backgroundSize: 'cover' }} />
           )}
         </motion.button>
-        <p className="flex-1 text-xs leading-relaxed text-ink-dim">
-          El de la estantería se genera solo a partir de la portada. Toca el lomo para poner
-          una foto de verdad, tuya o de otro del club — la puedes recortar en el momento.
-        </p>
       </div>
 
       <RellenarDatos borrador={borrador} setBorrador={setBorrador} />

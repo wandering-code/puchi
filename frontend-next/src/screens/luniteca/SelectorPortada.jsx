@@ -1,14 +1,26 @@
 import { useEffect, useRef, useState } from 'react'
 import { motion } from 'motion/react'
 import { api } from '../../platform/api'
-import { Cover } from './piezas'
+import { useAuth } from '../../platform/auth'
+import { BotonBorrarEsquina, Cover } from './piezas'
 import HojaInferior from './HojaInferior'
+import RecortarFoto from './RecortarFoto'
 
 // Elegir la portada de TU copia del libro. No cambia la del libro compartido:
 // cada jugador ve la que ha elegido (PersonalShelf.cover_url), y lo que se
 // sube va a una galería común con atribución, para que otros puedan usarla.
+//
+// Una foto de la portada real (la cubierta del libro en la mano, no una
+// captura de pantalla ya recortada) casi nunca sale encuadrada a la
+// proporción de un libro por sí sola — sale con mesa, con dedos, con lo que
+// hubiera alrededor. Por eso, igual que el lomo (ver SelectorLomo), antes de
+// subirla pasa por RecortarFoto: mismo mecanismo, cuatro esquinas libres,
+// solo que aquí el rectángulo de partida ya tiene forma de libro (2/3) en
+// vez de una franja fina.
 export default function SelectorPortada({ abierta, libro, elegida, onCerrar, onElegir, onSubir }) {
+  const { player } = useAuth()
   const [datos, setDatos] = useState(null)   // null = cargando
+  const [pendiente, setPendiente] = useState(null) // File esperando recorte
   const [subiendo, setSubiendo] = useState(false)
   const [error, setError] = useState(null)
   const archivo = useRef(null)
@@ -24,14 +36,18 @@ export default function SelectorPortada({ abierta, libro, elegida, onCerrar, onE
     return () => { cancelado = true }
   }, [abierta, libro.id])
 
-  async function alElegirArchivo(ev) {
+  function alElegirArchivo(ev) {
     const fichero = ev.target.files?.[0]
     ev.target.value = ''   // permite volver a elegir el mismo archivo
-    if (!fichero) return
+    if (fichero) setPendiente(fichero)
+  }
+
+  async function alConfirmarRecorte(blob) {
+    setPendiente(null)
     setSubiendo(true)
     setError(null)
     try {
-      const url = await onSubir(fichero)
+      const url = await onSubir(blob)
       onElegir(url)
     } catch {
       setError('No se ha podido subir la imagen.')
@@ -40,11 +56,25 @@ export default function SelectorPortada({ abierta, libro, elegida, onCerrar, onE
     }
   }
 
+  // Borra una portada de la galería (nunca la elegida ahora mismo: si
+  // apuntaba a esta, sigue apuntando al mismo archivo — el servidor solo
+  // borra el archivo si ya no lo usa nadie, ver delete_book_cover). Se quita
+  // de la lista al momento, sin esperar a recargar toda la galería.
+  async function borrarSubida(id) {
+    try {
+      await api(`/books/${libro.id}/covers/${id}`, { method: 'DELETE' })
+      setDatos(d => (d ? { ...d, user_uploads: d.user_uploads.filter(u => u.id !== id) } : d))
+    } catch {
+      setError('No se ha podido borrar la portada.')
+    }
+  }
+
   const subidas = datos?.user_uploads || []
   const automaticas = datos?.covers || []
 
   return (
-    <HojaInferior abierta={abierta} titulo="Portada" onCerrar={onCerrar}>
+    <>
+    <HojaInferior abierta={abierta && !pendiente} titulo="Portada" onCerrar={onCerrar}>
       <button
         onClick={() => archivo.current?.click()}
         disabled={subiendo}
@@ -73,6 +103,7 @@ export default function SelectorPortada({ abierta, libro, elegida, onCerrar, onE
               pie={u.uploaded_by ? `por ${u.uploaded_by}` : null}
               elegida={elegida === u.url}
               onElegir={() => onElegir(u.url)}
+              onBorrar={u.uploaded_by_id === player?.id ? () => borrarSubida(u.id) : null}
             />
           ))}
         </Grupo>
@@ -100,6 +131,18 @@ export default function SelectorPortada({ abierta, libro, elegida, onCerrar, onE
         </p>
       )}
     </HojaInferior>
+
+    {pendiente && (
+      <RecortarFoto
+        file={pendiente}
+        titulo="Encuadra la portada"
+        instrucciones="Ajusta las esquinas a la cubierta · pellizca o usa la rueda para acercar"
+        proporcionInicial={2 / 3}
+        onCancelar={() => setPendiente(null)}
+        onConfirmar={alConfirmarRecorte}
+      />
+    )}
+    </>
   )
 }
 
@@ -112,13 +155,21 @@ function Grupo({ titulo, children }) {
   )
 }
 
-function Opcion({ url, pie, elegida, onElegir }) {
+function Opcion({ url, pie, elegida, onElegir, onBorrar }) {
   return (
-    <motion.button onClick={onElegir} whileTap={{ scale: 0.95 }} className="text-left">
-      <div className={`overflow-hidden rounded-md ring-offset-2 ring-offset-surface transition-[box-shadow] ${elegida ? 'ring-2 ring-accent' : ''}`}>
-        <Cover url={url} />
+    <div className="text-left">
+      {/* El botón de borrar va FUERA de este, no dentro: dos <button>
+          anidados es HTML inválido, y aquí además tocar la cruz no debe
+          elegir también la portada. */}
+      <div className="relative">
+        <motion.button onClick={onElegir} whileTap={{ scale: 0.95 }} className="block w-full">
+          <div className={`overflow-hidden rounded-md ring-offset-2 ring-offset-surface transition-[box-shadow] ${elegida ? 'ring-2 ring-accent' : ''}`}>
+            <Cover url={url} />
+          </div>
+        </motion.button>
+        {onBorrar && <BotonBorrarEsquina etiqueta="Borrar esta portada" onConfirmar={onBorrar} />}
       </div>
       {pie && <p className="mt-1 truncate text-[10px] text-ink-mute">{pie}</p>}
-    </motion.button>
+    </div>
   )
 }

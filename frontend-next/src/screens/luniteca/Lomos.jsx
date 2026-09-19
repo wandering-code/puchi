@@ -1,6 +1,7 @@
 import { memo, useEffect, useState } from 'react'
 import { claveDeAutor, totalPages } from './shelf'
 import { colorDePortada } from './colorPortada'
+import { proporcionFoto } from './proporcionLomo'
 import { alCargarFuentes, anchoDeRenglonPorPunto, anchoPorPunto, fuenteLista } from './medirTexto'
 
 // Vista de estantería: los libros de canto, como en una balda de verdad.
@@ -32,15 +33,15 @@ const ALTO_MIN = 134         // el más bajo
 const ANCHO_MIN = 26         // un libro finito
 const ANCHO_MAX = 56         // un tocho
 
-// Proporción del recorte de una foto de lomo (ver RecorteLomo.jsx) — SIEMPRE
-// la misma, salga de un libro fino o de un tocho, porque el recorte no sabe
-// nada de a qué libro va destinado. Se usa aquí también: cuando el libro
-// tiene una foto de verdad puesta, su alto no puede salir del hash como el de
-// cualquier otro (eso daba fotos estiradas o recortadas de más según a quién
-// le tocara un hash alto o bajo) — tiene que ser justo el que hace que el
-// hueco mida lo mismo que la foto, para que se vea entera y tal cual se
-// recortó.
-export const RATIO_FOTO_LOMO = 46 / 190
+// Un libro con FOTO DE VERDAD no tiene por qué caber en el rango de arriba
+// (26-56px): ese rango sale de las páginas, una aproximación para libros sin
+// foto, y un lomo real puede ser bastante más fino que el más fino de esa
+// horquilla (visto: el de "Proyecto Hail Mary" en la mano de Daniel). Con
+// foto se sabe la forma real (ver proporcionLomo.js) y se respeta, con un
+// mínimo solo para que siga siendo un botón que se pueda tocar y un máximo
+// para que un libro no se coma media balda por un recorte casi cuadrado.
+export const ANCHO_FOTO_MIN = 14
+export const ANCHO_FOTO_MAX = 90
 
 // Número estable a partir de un texto: el mismo libro sale siempre igual, y
 // dos libros distintos casi nunca coinciden.
@@ -484,14 +485,16 @@ export function medidas(entry, generoDelAutor) {
     ? ANCHO_MIN + Math.min(paginas, 1000) / 1000 * (ANCHO_MAX - ANCHO_MIN)
     : ANCHO_MIN + (h % 100) / 100 * (ANCHO_MAX - ANCHO_MIN)
   // Los libros de una balda no miden todos lo mismo: el alto varía un poco,
-  // siempre igual para el mismo libro — salvo que tenga una foto de verdad
-  // puesta, donde el alto lo decide la foto (ver RATIO_FOTO_LOMO) y no un
-  // hash que no sabe nada de ella.
-  const libro = entry.book
-  const esFoto = !!(libro.spine_url && libro.spine_custom)
-  const alto = esFoto
-    ? ancho / RATIO_FOTO_LOMO
-    : ALTO_MIN + (h % 100) / 100 * (ALTO_MAX - ALTO_MIN)
+  // siempre igual para el mismo libro. Es el mismo cálculo tenga o no una
+  // foto de verdad puesta: el hueco del libro no cambia de forma según lo
+  // que le pongas dentro — es al revés, es la foto la que se recorta a ESTE
+  // hueco (ver RecortarFoto.jsx, que pide estas mismas medidas para saber a
+  // qué proporción recortar). Antes el alto de un libro con foto salía de
+  // dividir su ancho por una proporción fija y ajena al libro, así que un
+  // tocho de 56px de ancho acababa con un hueco de 231px — más alto que la
+  // balda entera (190px) — mientras uno fino se quedaba en 107px, por debajo
+  // del mínimo de cualquier otro libro.
+  const alto = ALTO_MIN + (h % 100) / 100 * (ALTO_MAX - ALTO_MIN)
   // Uno de cada ocho libros, más o menos, va torcido: en una balda de verdad
   // nunca están todos a plomo. El ángulo es pequeño y siempre el mismo para el
   // mismo libro, y se apoya en su esquina de abajo, como se apoyaría de
@@ -708,6 +711,23 @@ const Lomo = memo(function Lomo({ entry, onAbrir, volando = false, sinPrisa = fa
   // la imagen (ver generarLomo.js).
   const tieneLomoPropio = !!libro.spine_url
   const esFoto = tieneLomoPropio && libro.spine_custom
+  // El ancho de un libro con foto sale de la forma real de esa foto, no de
+  // las páginas: se lee en cuanto se sabe (ver proporcionLomo.js) y hasta
+  // entonces se usa el de las páginas como reserva, igual que con el color.
+  // El ALTO no cambia por esto — se queda con el de siempre (ver medidas()),
+  // que es lo que mantiene a todos los libros apoyados en la misma balda; lo
+  // único que varía con una foto de verdad es lo ancho o fino que se ve.
+  const [anchoFoto, setAnchoFoto] = useState(null)
+  useEffect(() => {
+    if (!conContenido || !esFoto) return
+    let vigente = true
+    proporcionFoto(libro.spine_url).then(r => {
+      if (!vigente || !r) return
+      setAnchoFoto(Math.round(Math.min(ANCHO_FOTO_MAX, Math.max(ANCHO_FOTO_MIN, alto * r))))
+    })
+    return () => { vigente = false }
+  }, [libro.spine_url, conContenido, esFoto, alto])
+  const anchoEfectivo = (esFoto && anchoFoto) ? anchoFoto : ancho
   // El color de la portada llega después (hay que cargarla y leerla), así que
   // el lomo nace con su color de reserva y cambia al de verdad en cuanto está.
   // Con una foto de verdad no hace falta: no hay texto al que decidirle la
@@ -772,14 +792,14 @@ const Lomo = memo(function Lomo({ entry, onAbrir, volando = false, sinPrisa = fa
         title={`${libro.title}${libro.author ? ` — ${libro.author}` : ''}`}
         className={`relative overflow-hidden transition-[background-color,transform] duration-300 active:translate-y-[-4px] ${volando ? 'invisible' : ''}`}
         style={{
-          width: ancho,
+          width: anchoEfectivo,
           height: alto,
           // El navegador se salta el pintado de los lomos que no se ven, pero
           // el lomo SIGUE en el DOM: al desplazarse no hay que montar nada, así
           // que el scroll no da tirones. El tamaño va declarado para que no
           // haga falta mirar dentro para saber cuánto ocupa.
           contentVisibility: 'auto',
-          containIntrinsicSize: `${ancho}px ${alto}px`,
+          containIntrinsicSize: `${anchoEfectivo}px ${alto}px`,
           // Sin llenar todavía: un hueco del color del papel, no un libro. Con
           // el color de reserva se veía un lomo morado que un instante después
           // se volvía azul marino al llegar su portada, y ese cambio de color

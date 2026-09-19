@@ -16,6 +16,7 @@ import HojaFiltros from './HojaFiltros'
 import AnadirLibro from './AnadirLibro'
 import Lomos from './Lomos'
 import { colorDePortada, precargarColores } from './colorPortada'
+import { precargarProporciones } from './proporcionLomo'
 import { generarYSubirLomo } from './generarLomo'
 import { usarVuelo } from './usarVuelo'
 import { CajaSeccion, TituloSeccion, huecoEntreSecciones, usarSeparacion } from './separacion'
@@ -170,7 +171,7 @@ export default function Luniteca() {
     return r.url
   }, [])
 
-  // Sube una foto de lomo YA RECORTADA (ver RecorteLomo) a la galería del
+  // Sube una foto de lomo YA RECORTADA (ver RecortarFoto) a la galería del
   // libro y devuelve su URL. Sin `generado=true`: una foto de verdad nunca
   // pisa el lomo compartido sola, cada uno pone la suya en su propia entrada
   // (ver guardarLibro, más arriba).
@@ -237,6 +238,16 @@ export default function Luniteca() {
   useEffect(() => {
     if (!shelf?.length) return
     return precargarColores(shelf.map(e => e.book?.cover_url))
+  }, [shelf])
+
+  // Mismo motivo que arriba, pero con la forma de los lomos subidos a mano
+  // (ver proporcionFoto en proporcionLomo.js): que no se vea a cada libro
+  // ensancharse o afinarse uno a uno al bajar por la balda.
+  useEffect(() => {
+    if (!shelf?.length) return
+    return precargarProporciones(
+      shelf.filter(e => e.book?.spine_url && e.book?.spine_custom).map(e => e.book.spine_url),
+    )
   }, [shelf])
 
 

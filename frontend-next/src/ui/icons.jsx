@@ -45,6 +45,18 @@ export const IconArrow = (p) => (
 export const IconRefresh = (p) => (
   <svg {...base} {...p}><path d="M20 12a8 8 0 1 1-2.6-5.9" /><path d="M20 4v4h-4" /></svg>
 )
+export const IconZoom = (p) => (
+  <svg {...base} {...p}><circle cx="10.5" cy="10.5" r="6.5" /><path d="M15.2 15.2 21 21M10.5 8v5M8 10.5h5" /></svg>
+)
+// Girar una foto un poco (RecortarFoto): un arco corto con flecha en cada
+// extremo, no una vuelta entera como IconRefresh — aquí no se recarga nada,
+// se inclina la imagen a un lado u otro.
+export const IconRotate = (p) => (
+  <svg {...base} {...p}>
+    <path d="M7 5.5a8 8 0 1 1-3 6.2" />
+    <path d="M6.5 2.8 7.2 5.6 4.4 6.3" />
+  </svg>
+)
 export const IconInfo = (p) => (
   <svg {...base} {...p}>
     <circle cx="12" cy="12" r="9" />

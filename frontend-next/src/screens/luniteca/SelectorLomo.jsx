@@ -1,19 +1,22 @@
 import { useEffect, useRef, useState } from 'react'
 import { motion } from 'motion/react'
 import { api } from '../../platform/api'
+import { useAuth } from '../../platform/auth'
 import HojaInferior from './HojaInferior'
-import RecorteLomo from './RecorteLomo'
+import RecortarFoto from './RecortarFoto'
+import { BotonBorrarEsquina } from './piezas'
 import { IconCamara, IconImagen } from '../../ui/icons'
 
 // Elegir el lomo de TU copia del libro: igual que SelectorPortada, lo que se
 // pone aquí va a tu entrada de la estantería (PersonalShelf.spine_url), no al
 // libro compartido. A diferencia de la portada, una foto de lomo casi nunca
 // encaja tal cual en forma de lomo — por eso, antes de subirla, siempre pasa
-// por RecorteLomo (con su propia proporción fija, no la de este libro en
-// concreto: ver el comentario de ese archivo). `ancho`/`alto` aquí son solo
+// por RecortarFoto, que deja recortar a la forma que tenga el lomo de verdad
+// en la foto (sin una proporción impuesta). `ancho`/`alto` aquí son solo
 // para las miniaturas de la galería, del tamaño de ESTE libro para hacerse
 // una idea de cómo quedaría.
 export default function SelectorLomo({ abierta, libro, ancho, alto, elegida, onCerrar, onElegir, onSubir }) {
+  const { player } = useAuth()
   const [datos, setDatos] = useState(null)   // null = cargando
   const [pendiente, setPendiente] = useState(null) // File esperando recorte
   const [subiendo, setSubiendo] = useState(false)
@@ -49,6 +52,18 @@ export default function SelectorLomo({ abierta, libro, ancho, alto, elegida, onC
       setError('No se ha podido subir la foto.')
     } finally {
       setSubiendo(false)
+    }
+  }
+
+  // Mismo mecanismo que SelectorPortada: borra la fila de la galería (nunca
+  // el lomo elegido ahora mismo, que sigue apuntando al mismo archivo — el
+  // servidor solo borra el archivo si ya no lo usa nadie).
+  async function borrarSubida(id) {
+    try {
+      await api(`/books/${libro.id}/spines/${id}`, { method: 'DELETE' })
+      setDatos(d => (d ? { ...d, user_uploads: d.user_uploads.filter(u => u.id !== id) } : d))
+    } catch {
+      setError('No se ha podido borrar el lomo.')
     }
   }
 
@@ -110,6 +125,7 @@ export default function SelectorLomo({ abierta, libro, ancho, alto, elegida, onC
                   pie={u.uploaded_by ? `por ${u.uploaded_by}` : null}
                   elegida={elegida === u.url}
                   onElegir={() => onElegir(u.url)}
+                  onBorrar={u.uploaded_by_id === player?.id ? () => borrarSubida(u.id) : null}
                 />
               ))}
             </div>
@@ -124,8 +140,11 @@ export default function SelectorLomo({ abierta, libro, ancho, alto, elegida, onC
       </HojaInferior>
 
       {pendiente && (
-        <RecorteLomo
+        <RecortarFoto
           file={pendiente}
+          titulo="Encuadra el lomo"
+          instrucciones="Ajusta las esquinas al lomo · pellizca o usa la rueda para acercar"
+          proporcionInicial={0.28}
           onCancelar={() => setPendiente(null)}
           onConfirmar={alConfirmarRecorte}
         />
@@ -143,13 +162,21 @@ function MiniLomo({ url, ancho, alto }) {
   )
 }
 
-function Opcion({ url, ancho, alto, pie, elegida, onElegir }) {
+function Opcion({ url, ancho, alto, pie, elegida, onElegir, onBorrar }) {
   return (
-    <motion.button onClick={onElegir} whileTap={{ scale: 0.95 }} className="text-left">
-      <div className={`overflow-hidden rounded-sm ring-offset-2 ring-offset-surface transition-[box-shadow] ${elegida ? 'ring-2 ring-accent' : ''}`}>
-        <MiniLomo url={url} ancho={ancho} alto={alto} />
+    <div className="text-left">
+      {/* El botón de borrar va FUERA de este, no dentro: dos <button>
+          anidados es HTML inválido, y aquí además tocar la cruz no debe
+          elegir también el lomo. */}
+      <div className="relative" style={{ width: ancho }}>
+        <motion.button onClick={onElegir} whileTap={{ scale: 0.95 }} className="block">
+          <div className={`overflow-hidden rounded-sm ring-offset-2 ring-offset-surface transition-[box-shadow] ${elegida ? 'ring-2 ring-accent' : ''}`}>
+            <MiniLomo url={url} ancho={ancho} alto={alto} />
+          </div>
+        </motion.button>
+        {onBorrar && <BotonBorrarEsquina etiqueta="Borrar este lomo" onConfirmar={onBorrar} />}
       </div>
       {pie && <p className="mt-1 max-w-[--w] truncate text-[10px] text-ink-mute" style={{ '--w': `${ancho}px`, maxWidth: ancho }}>{pie}</p>}
-    </motion.button>
+    </div>
   )
 }

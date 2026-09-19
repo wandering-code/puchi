@@ -122,6 +122,7 @@ export default function BookDetail({
               priority
               relieve
               realce={false}
+              ajustar
               className="sombra-portada"
             />
           </div>

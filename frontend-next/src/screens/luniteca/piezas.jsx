@@ -1,6 +1,7 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { motion } from 'motion/react'
 import { STATUS_COLOR, STATUS_LABEL, progressPct, totalPages } from './shelf'
+import { IconX } from '../../ui/icons'
 
 // ─── Portada ───────────────────────────────────────────────────────────────
 // Proporción de libro fija (2/3) para que la cuadrícula sea una rejilla de
@@ -36,18 +37,30 @@ export const RELIEVE_LIBRO = relieveLibro()
 // suelto en cada sitio, así que lo llevan todas por igual. Se apaga solo donde
 // ya hay una sombra propia más grande (la portada de la ficha), porque las dos
 // son box-shadow y la segunda pisaría a la primera.
-export function Cover({ url, title, className = '', priority = false, relieve = false, realce = true }) {
+// `ajustar`: la proporción 2/3 de arriba es para que una CUADRÍCULA de
+// portadas quede alineada (Open Library las sirve con alturas dispares) — en
+// un sitio donde la portada va SOLA, sin nada al lado con lo que alinearse
+// (la ficha grande de un libro), ese recorte no aporta nada y solo esconde
+// parte de la imagen sin motivo (visto: "El perfume", con una portada más
+// alargada que 2/3, perdía título y pie por el recorte). Con `ajustar` la
+// caja adopta la proporción REAL de la portada en cuanto se conoce (antes de
+// eso, mientras carga, se usa 2/3 como reserva) y no se recorta nada.
+export function Cover({ url, title, className = '', priority = false, relieve = false, realce = true, ajustar = false }) {
   const [roto, setRoto] = useState(false)
   const [cargada, setCargada] = useState(false)
+  const [ratioNatural, setRatioNatural] = useState(null)
   const [urlPrevia, setUrlPrevia] = useState(url)
   // Al cambiar de portada (se puede elegir otra) se reinicia el estado sin
   // esperar a un efecto, que dejaría un frame con la imagen anterior ya
   // marcada como cargada.
-  if (urlPrevia !== url) { setUrlPrevia(url); setRoto(false); setCargada(false) }
+  if (urlPrevia !== url) { setUrlPrevia(url); setRoto(false); setCargada(false); setRatioNatural(null) }
   const hayImagen = !!url && !roto
 
   return (
-    <div className={`relative aspect-[2/3] overflow-hidden rounded-md bg-surface-2 ${realce ? 'relieve-portada' : ''} ${className}`}>
+    <div
+      className={`relative overflow-hidden rounded-md bg-surface-2 ${realce ? 'relieve-portada' : ''} ${ajustar ? '' : 'aspect-[2/3]'} ${className}`}
+      style={ajustar ? { aspectRatio: ratioNatural || 2 / 3 } : undefined}
+    >
       {/* Sin portada se pinta el título dentro del hueco. En la cuadrícula el
           título ya no va debajo (la portada identifica el libro de sobra), así
           que un libro sin imagen se quedaría sin nada que lo identifique. */}
@@ -68,11 +81,11 @@ export function Cover({ url, title, className = '', priority = false, relieve = 
             loading={priority ? 'eager' : 'lazy'}
             decoding="async"
             onError={() => setRoto(true)}
-            onLoad={() => setCargada(true)}
+            onLoad={e => { setCargada(true); if (ajustar) setRatioNatural(e.target.naturalWidth / e.target.naturalHeight) }}
             initial={false}
             animate={{ opacity: cargada ? 1 : 0 }}
             transition={{ duration: 0.25 }}
-            className="absolute inset-0 h-full w-full object-cover"
+            className={`absolute inset-0 h-full w-full ${ajustar ? 'object-contain' : 'object-cover'}`}
           />
         </>
       )}
@@ -93,6 +106,59 @@ export function Cover({ url, title, className = '', priority = false, relieve = 
         style={{ boxShadow: 'inset 0 0 0 1px var(--filo-portada)' }}
       />
     </div>
+  )
+}
+
+// El botón de borrar una miniatura SUBIDA POR TI MISMO (SelectorPortada,
+// SelectorLomo): una cruz pequeña en una esquina, con el mismo mecanismo de
+// "arma, luego confirma" que IconoPeligro (BotonPeligro.jsx) —un solo toque
+// no basta, y se desarma solo si no se confirma a tiempo— pero a un tamaño
+// que cabe en la esquina de una miniatura en vez de un botón de fila entera.
+//
+// Va SIEMPRE fuera del botón que elige la miniatura, nunca dentro: dos
+// `<button>` uno metido en el otro es HTML inválido (el navegador cierra el
+// de fuera antes de tiempo) y aquí además el toque de borrar no puede
+// disparar también el de elegir.
+const ARMADO_MS = 500
+export function BotonBorrarEsquina({ etiqueta = 'Borrar', onConfirmar }) {
+  const [confirmando, setConfirmando] = useState(false)
+  const [armado, setArmado] = useState(false)
+  const temporizador = useRef(null)
+
+  useEffect(() => () => clearTimeout(temporizador.current), [])
+  // Si no se confirma en unos segundos, vuelve a su sitio: un botón que se
+  // quedó en rojo de antes es justo el que se toca sin querer.
+  useEffect(() => {
+    if (!confirmando) return
+    const id = setTimeout(() => setConfirmando(false), 3000)
+    return () => clearTimeout(id)
+  }, [confirmando])
+
+  function alPulsar() {
+    if (!confirmando) {
+      setConfirmando(true)
+      setArmado(false)
+      clearTimeout(temporizador.current)
+      temporizador.current = setTimeout(() => setArmado(true), ARMADO_MS)
+      return
+    }
+    if (armado) { setConfirmando(false); onConfirmar() }
+  }
+
+  return (
+    <motion.button
+      type="button"
+      onClick={alPulsar}
+      whileTap={{ scale: 0.85 }}
+      aria-label={confirmando ? `Confirmar: ${etiqueta}` : etiqueta}
+      title={confirmando ? '¿Seguro?' : etiqueta}
+      animate={{ opacity: confirmando && !armado ? 0.5 : 1 }}
+      className={`absolute right-1 top-1 z-10 flex h-6 w-6 items-center justify-center rounded-full border shadow-sm transition-colors ${
+        confirmando ? 'border-danger bg-danger text-on-accent' : 'border-white/40 bg-black/55 text-white'
+      }`}
+    >
+      <IconX className="h-3 w-3" />
+    </motion.button>
   )
 }
 
