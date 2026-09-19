@@ -16,6 +16,7 @@ import HojaFiltros from './HojaFiltros'
 import AnadirLibro from './AnadirLibro'
 import Lomos from './Lomos'
 import { colorDePortada, precargarColores } from './colorPortada'
+import { generarYSubirLomo } from './generarLomo'
 import { usarVuelo } from './usarVuelo'
 import { CajaSeccion, TituloSeccion, huecoEntreSecciones, usarSeparacion } from './separacion'
 import { LLEGADA } from '../../ui/curvas'
@@ -110,6 +111,25 @@ export default function Luniteca() {
     }
   }, [shelf])
 
+  // El lomo generado, en cuanto hay portada de la que sacarlo — al añadir un
+  // libro que ya trae portada (de la búsqueda) o al ponerle/cambiarle una a
+  // uno que no la tenía. Si el libro ya tiene un lomo SUBIDO A MANO
+  // (spine_custom) no se toca — eso lo decide ya el propio backend
+  // (POST /books/{id}/spine), aquí solo se intenta. Nunca bloquea ni avisa
+  // de un fallo: sin lomo generado, Lomos.jsx lo sigue dibujando en vivo
+  // como hace hoy con todos, que es exactamente el estado de "no ha pasado
+  // nada todavía".
+  const regenerarLomoSiToca = useCallback(async (entrada) => {
+    const libro = entrada?.book
+    if (!libro?.cover_url || libro.spine_custom) return
+    const generado = await generarYSubirLomo(libro.id, entrada)
+    if (!generado) return
+    const aplicar = (lista) => lista.map(x => x.book.id === libro.id ? { ...x, book: { ...x.book, ...generado } } : x)
+    setShelf(prev => prev && aplicar(prev))
+    ficha.reemplazar(prev => prev?.book.id === libro.id ? { ...prev, book: { ...prev.book, ...generado } } : prev)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   // Guardar la edición: lo que ha cambiado del libro va al libro; la portada
   // va a TU entrada, porque cada jugador ve la que ha elegido.
   const guardarLibro = useCallback(async (entrada, borrador) => {
@@ -127,7 +147,16 @@ export default function Luniteca() {
     if (borrador.cover_url !== (entrada.own_cover_url || '')) {
       await actualizarEntrada(entrada.id, { cover_url: borrador.cover_url })
     }
-  }, [actualizarLibro, actualizarEntrada])
+    // El grosor/alto del lomo generado depende de página/título, y el color
+    // de la portada que se vea AHORA MISMO (la tuya, si has elegido una) —
+    // cualquiera de los dos cambios de arriba puede dejarlo desactualizado,
+    // así que se intenta de nuevo con los datos frescos.
+    regenerarLomoSiToca({
+      ...entrada,
+      book: { ...b, ...patch, cover_url: borrador.cover_url || b.cover_url },
+      own_cover_url: borrador.cover_url,
+    })
+  }, [actualizarLibro, actualizarEntrada, regenerarLomoSiToca])
 
   // Sube una foto a la galería del libro (compartida, con atribución) y
   // devuelve su URL; quien la elige como portada es el formulario.
@@ -161,7 +190,10 @@ export default function Luniteca() {
 
   const libroAnadido = useCallback((entrada) => {
     setShelf(prev => (prev || []).some(x => x.id === entrada.id) ? prev : [...(prev || []), entrada])
-  }, [])
+    // Si ya trae portada (lo normal, viene de la búsqueda), el lomo se
+    // genera de una vez — así no queda ni un instante dibujándose en vivo.
+    regenerarLomoSiToca(entrada)
+  }, [regenerarLomoSiToca])
 
   // Solo una vez: abrir la ficha mete una entrada en el historial, así que al
   // cerrarla se vuelve a la URL que traía el parámetro y se reabría sola.

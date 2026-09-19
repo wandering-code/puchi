@@ -65,6 +65,34 @@ class Book(Base):
     year         = Column(Integer, nullable=True)
     genre        = Column(String, nullable=True)
     added_at     = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    # El lomo de canto de la vista de estantería. Antes se dibujaba entero con
+    # CSS a partir de title/author/num_pages/cover_url (ver frontend-next,
+    # Lomos.jsx) — caro de pintar con cientos a la vez. Ahora se genera UNA
+    # vez como imagen (mismo dibujo, hecho en un <canvas>) y se guarda aquí;
+    # mientras no exista, la vista sigue dibujándolo al vuelo como hasta
+    # ahora. `spine_custom` distingue el generado (se puede regenerar solo si
+    # cambian título/autor/páginas/portada) del subido a mano por alguien
+    # (nunca se pisa solo). Mismo patrón que cover_url/BookCover, con
+    # PersonalShelf.spine_url de contrapartida para quien quiera su propia
+    # foto del lomo sin cambiárselo a los demás.
+    spine_url    = Column(String, nullable=True)
+    spine_custom = Column(Boolean, nullable=False, default=False)
+
+
+class BookSpine(Base):
+    """Galería de lomos subidos a mano para un libro — mismo papel que
+    BookCover para las portadas: no sustituye el lomo del libro por sí sola,
+    queda disponible con atribución para quien quiera elegirla."""
+    __tablename__ = "book_spines"
+
+    id          = Column(Integer, primary_key=True, index=True)
+    book_id     = Column(Integer, ForeignKey("books.id"), nullable=False)
+    uploaded_by = Column(Integer, ForeignKey("players.id"), nullable=True)
+    url         = Column(String, nullable=False)
+    created_at  = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    book     = relationship("Book")
+    uploader = relationship("Player")
 
 
 class BookCover(Base):
@@ -115,6 +143,10 @@ class PersonalShelf(Base):
     # portada del libro (books.cover_url) como valor por defecto. Así, elegir
     # una portada distinta a la del catálogo no se la cambia a todo el mundo.
     cover_url   = Column(String, nullable=True)
+    # Mismo mecanismo que cover_url, para el lomo: NULL usa el del libro
+    # (books.spine_url, generado o subido por otro), y aquí solo se guarda
+    # cuando ESTE jugador ha subido el suyo para su copia.
+    spine_url   = Column(String, nullable=True)
     started_at  = Column(DateTime, nullable=True)
     finished_at = Column(DateTime, nullable=True)
     notes       = Column(Text, nullable=True)

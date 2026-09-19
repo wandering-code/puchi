@@ -16,7 +16,7 @@ from jose import JWTError, jwt
 
 from database import (
     get_db, crear_tablas, SessionLocal, engine,
-    Player, Book, BookCover, PersonalShelf, ClubShelf, ClubReadingLog, Vote,
+    Player, Book, BookCover, BookSpine, PersonalShelf, ClubShelf, ClubReadingLog, Vote,
     Channel, ChannelMember, Message, Activity, ShopItem,
     Session as ClubSession,
 )
@@ -166,6 +166,9 @@ def _pick_genre(subjects: list) -> str | None:
 
 _UPLOAD_DIR = os.path.join(os.path.dirname(__file__), 'uploads', 'covers')
 os.makedirs(_UPLOAD_DIR, exist_ok=True)
+
+_SPINE_UPLOAD_DIR = os.path.join(os.path.dirname(__file__), 'uploads', 'spines')
+os.makedirs(_SPINE_UPLOAD_DIR, exist_ok=True)
 
 _COVER_CACHE_MAX_BYTES = 8 * 1024 * 1024  # portada razonable ~cientos de KB; 8MB da margen sin abrir la puerta a abusos
 
@@ -1223,6 +1226,12 @@ def _migrate():
         # estadísticas futuras)
         "ALTER TABLE personal_shelf ADD COLUMN IF NOT EXISTS price FLOAT",
 
+        # books: el lomo de la vista de estantería, generado o subido a mano
+        # (ver Book.spine_url en database.py), y su propia copia por jugador
+        "ALTER TABLE books ADD COLUMN IF NOT EXISTS spine_url VARCHAR",
+        "ALTER TABLE books ADD COLUMN IF NOT EXISTS spine_custom BOOLEAN NOT NULL DEFAULT false",
+        "ALTER TABLE personal_shelf ADD COLUMN IF NOT EXISTS spine_url VARCHAR",
+
         # personal_shelf: rating pasa a float para admitir medios puntos
         """DO $$ BEGIN
              IF (SELECT data_type FROM information_schema.columns
@@ -2112,6 +2121,70 @@ async def get_book_covers(
     return {"covers": covers, "user_uploads": user_uploads, "cover_cache_map": cover_cache_map}
 
 
+@app.post("/books/{book_id}/spine")
+async def upload_spine(
+    book_id: int,
+    file: UploadFile = File(...),
+    generado: bool = False,
+    db: Session = Depends(get_db),
+    current: Player = Depends(get_current_player),
+):
+    """Sube un lomo nuevo a la galería del libro (con atribución) — igual que
+    /cover, NO sustituye el lomo del libro para nadie más salvo dos casos:
+    el hueco está vacío (primer lomo que llega, generado o no), o el que hay
+    puesto es uno generado y este también lo es (refresco tras cambiar
+    título/portada/páginas). Un lomo subido a mano (spine_custom) nunca se
+    pisa solo — cada jugador que quiera el suyo lo pone en su propia copia
+    (PATCH /shelf/personal/{id} con spine_url).
+    `generado=true` lo manda el propio cliente al subir el PNG que acaba de
+    dibujar en canvas — ver frontend-next, generarLomo.js."""
+    book = db.query(Book).filter(Book.id == book_id).first()
+    if not book:
+        raise HTTPException(404, "Libro no encontrado")
+    ext = os.path.splitext(file.filename or '')[1].lower()
+    if ext not in ('.jpg', '.jpeg', '.png', '.webp', '.gif'):
+        ext = '.jpg'
+    filename = f"{uuid.uuid4().hex}{ext}"
+    with open(os.path.join(_SPINE_UPLOAD_DIR, filename), 'wb') as f:
+        shutil.copyfileobj(file.file, f)
+    url = f"/uploads/spines/{filename}"
+    db.add(BookSpine(book_id=book.id, uploaded_by=current.id, url=url))
+    if not book.spine_url:
+        book.spine_url = url
+        book.spine_custom = not generado
+    elif generado and not book.spine_custom:
+        book.spine_url = url
+    db.commit()
+    await _notify_luni("books", book_id=book.id)
+    return {"url": url}
+
+
+@app.get("/books/{book_id}/spines")
+async def get_book_spines(
+    book_id: int,
+    db: Session = Depends(get_db),
+    _: Player = Depends(get_current_player),
+):
+    """Los lomos subidos a mano para este libro, con atribución — sin fuente
+    automática que consultar (a diferencia de las portadas, un lomo nunca
+    viene de una API externa)."""
+    book = db.query(Book).filter(Book.id == book_id).first()
+    if not book:
+        raise HTTPException(404, "Libro no encontrado")
+    uploads = (
+        db.query(BookSpine)
+        .filter(BookSpine.book_id == book_id)
+        .order_by(BookSpine.created_at.desc())
+        .all()
+    )
+    return {
+        "user_uploads": [
+            {"url": u.url, "uploaded_by": u.uploader.name if u.uploader else None, "uploaded_by_id": u.uploaded_by}
+            for u in uploads
+        ],
+    }
+
+
 def _accept_search_result(results: list[dict], candidate: dict) -> None:
     """Añade `candidate` a `results`, fusionándolo con uno ya aceptado si es
     el mismo libro (misma _core_title_key, o muy parecida) — antes se
@@ -2637,6 +2710,7 @@ class ShelfUpdateRequest(BaseModel):
     reading_format:      Optional[str]   = None   # fisico | ereader | ambos | "" (borrar)
     ereader_total_pages: Optional[int]   = None
     price:               Optional[float] = None   # lo que costó esta copia
+    spine_url:           Optional[str]   = None   # "" o null → volver al lomo del libro
 
 @app.get("/shelf/personal")
 def get_personal_shelf(
@@ -2842,6 +2916,12 @@ async def update_personal_shelf(
         # galería del libro.
         if entry.cover_url and not db.query(BookCover).filter_by(book_id=entry.book_id, url=entry.cover_url).first():
             db.add(BookCover(book_id=entry.book_id, uploaded_by=current.id, url=entry.cover_url))
+    if body.spine_url          is not None:
+        # Sin _cache_cover_url: un lomo nunca es una URL externa, siempre
+        # sale de /uploads/spines/ (POST /books/{id}/spine lo sube antes).
+        entry.spine_url = body.spine_url.strip() or None
+        if entry.spine_url and not db.query(BookSpine).filter_by(book_id=entry.book_id, url=entry.spine_url).first():
+            db.add(BookSpine(book_id=entry.book_id, uploaded_by=current.id, url=entry.spine_url))
     # Recalcular progress cuando se actualizan páginas
     total = entry.custom_total_pages or (entry.book.num_pages if entry.book else None)
     if total and entry.current_page is not None:
@@ -3486,6 +3566,8 @@ def _book_out(b: Book) -> dict:
         "synopsis":    b.synopsis,
         "year":        b.year,
         "genre":       b.genre,
+        "spine_url":    b.spine_url,
+        "spine_custom": b.spine_custom,
     }
 
 def _player_out(p: Player) -> dict:
@@ -3506,11 +3588,22 @@ def _shelf_entry_out(e: PersonalShelf, hide_notes=False) -> dict:
     book_out = _book_out(e.book)
     if e.cover_url:
         book_out["cover_url"] = e.cover_url
+    # Mismo mecanismo que la portada: si este jugador subió su propio lomo,
+    # es el que se enseña en SU estantería; el resto sigue viendo el del
+    # libro (generado o subido por otro). spine_custom se fuerza a True aquí
+    # porque una foto puesta a mano por ESTE jugador nunca es la generada
+    # del libro, aunque el libro en sí tenga spine_custom=False — si no,
+    # Lomos.jsx le pondría el título encima pensando que es un fondo
+    # generado, sobre una foto de verdad.
+    if e.spine_url:
+        book_out["spine_url"] = e.spine_url
+        book_out["spine_custom"] = True
     return {
         "id":          e.id,
         "player_id":   e.player_id,
         "book":        book_out,
         "own_cover_url": e.cover_url,
+        "own_spine_url": e.spine_url,
         "status":      e.status,
         "times_read":         e.times_read,
         "progress":           e.progress,

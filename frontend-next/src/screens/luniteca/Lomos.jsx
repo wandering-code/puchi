@@ -462,7 +462,10 @@ function repartirTexto({ titulo: tituloEntero, autor, largoUtil, anchoLomo, tipo
 
 function paginasDe(entry) { return totalPages(entry) }
 
-function medidas(entry, generoDelAutor) {
+// Exportada: generarLomo.js la usa para saber el tamaño y el grosor del
+// lomo (ancho, alto, tapaDura) al generar la imagen — el mismo cálculo,
+// para que la imagen generada mida justo lo que mide el lomo en vivo.
+export function medidas(entry, generoDelAutor) {
   const h = huella(`${entry.book.title}·${entry.book.author || ''}`)
   const paginas = totalPages(entry)
   // El grosor sale de las páginas cuando se saben; si no, del hash, para que
@@ -682,17 +685,26 @@ const Lomo = memo(function Lomo({ entry, onAbrir, volando = false, sinPrisa = fa
   const { ancho, alto, color, tamano, tipografia, torcido, tapaDura } = medido
   const conLetra = sinPrisa || fuenteLista(tipografia)
   const libro = entry.book
+  // Con lomo propio (generado o subido) ya no hay nada que dibujar en vivo:
+  // el color, el relieve y la portada vienen todos dentro de esa imagen. Uno
+  // SUBIDO A MANO (spine_custom) es una foto de verdad, así que tampoco lleva
+  // el título encima — uno generado sí, porque ese texto nunca se metió en
+  // la imagen (ver generarLomo.js).
+  const tieneLomoPropio = !!libro.spine_url
+  const esFoto = tieneLomoPropio && libro.spine_custom
   // El color de la portada llega después (hay que cargarla y leerla), así que
   // el lomo nace con su color de reserva y cambia al de verdad en cuanto está.
+  // Con una foto de verdad no hace falta: no hay texto al que decidirle la
+  // tinta ni relieve al que teñir.
   const [paleta, setPaleta] = useState(null)
   useEffect(() => {
     // Solo el que se va a llenar: leer la portada cuesta cargarla y mirarla
     // píxel a píxel, y con la balda entera montada eran trescientas a la vez.
-    if (!conContenido) return
+    if (!conContenido || esFoto) return
     let vigente = true
     colorDePortada(libro.cover_url).then(p => { if (vigente && p) setPaleta(p) })
     return () => { vigente = false }
-  }, [libro.cover_url, conContenido])
+  }, [libro.cover_url, conContenido, esFoto])
 
   // Un lomo de fondo claro pide tinta oscura, como cualquier libro con la
   // cubierta clara. Solo se sabe cuando la portada se ha podido leer; con el
@@ -709,9 +721,10 @@ const Lomo = memo(function Lomo({ entry, onAbrir, volando = false, sinPrisa = fa
   // título quedaba pegado al canto de arriba (visto en "La voluntad de
   // muchos"). Un lomo impreso deja bastante más margen que eso.
   const { margen, ...argumentos } = argumentosDeTexto(entry, generoDelAutor, medido)
-  // Repartir el título es lo más caro de un lomo, así que el que va vacío ni
-  // lo intenta: se hará cuando le toque llenarse.
-  const texto = conContenido ? repartirTextoGuardado(argumentos) : null
+  // Repartir el título es lo más caro de un lomo, así que el que va vacío —o
+  // el que ya tiene una foto de verdad puesta, que no lleva texto encima— ni
+  // lo intenta.
+  const texto = (conContenido && !esFoto) ? repartirTextoGuardado(argumentos) : null
 
   // Nervios: las bandas en relieve del lomo de una tapa dura. Solo en los
   // libros gruesos, que son los que se encuadernan así.
@@ -767,21 +780,26 @@ const Lomo = memo(function Lomo({ entry, onAbrir, volando = false, sinPrisa = fa
           boxShadow: conContenido
             ? '3px 0 6px -2px rgb(var(--color-sombra) / .45), 0 2px 3px -1px rgb(var(--color-sombra) / .35)'
             : 'none',
-          // Toda la decoración (tinte, velo, volumen, filetes, cabezada,
-          // nervios, textura y la propia portada) va aquí, en capas del
-          // mismo fondo — ver capasDeFondo. Antes eran ocho o diez <span>
-          // superpuestos; el resultado en pantalla es el mismo.
-          ...(conContenido && capasDeFondo({ libro, paleta, claro, alto, conNervios, tapaDura })),
+          // Con lomo propio, la imagen ES el fondo entero — una sola capa,
+          // más barata todavía que capasDeFondo (que ya de por sí fusionaba
+          // las de siempre en una). Sin uno, se sigue dibujando en vivo
+          // exactamente como hasta ahora, para no dejar coja a la balda
+          // mientras se van generando los que faltan.
+          ...(conContenido && (tieneLomoPropio
+            ? { backgroundImage: `url(${libro.spine_url})`, backgroundSize: '100% 100%', backgroundPosition: '0 0', backgroundRepeat: 'no-repeat' }
+            : capasDeFondo({ libro, paleta, claro, alto, conNervios, tapaDura }))),
         }}
       >
         {/* Un lomo sin llenar todavía: se ve su tamaño y su color, que es lo
             que hace falta para que la balda mida lo que tiene que medir.
             Todo el relieve (volumen, filetes, cabezada, nervios, textura,
             tinte, velo y la propia portada) va como capas del fondo del
-            botón — ver capasDeFondo, arriba. Aquí solo queda lo que de
-            verdad necesita ser un elemento: el texto y el punto de nota. */}
+            botón — ver capasDeFondo, arriba, o directo de la imagen si el
+            libro ya tiene lomo propio. Aquí solo queda lo que de verdad
+            necesita ser un elemento: el texto (si no es una foto) y el
+            punto de nota. */}
         {conContenido && (<>
-        <span
+        {!esFoto && <span
           className="absolute inset-0 flex items-center text-center"
           // De arriba abajo, que es como se leen los lomos aquí: se inclina la
           // cabeza a la derecha y se lee. Al revés (de abajo arriba) es la
@@ -885,7 +903,7 @@ const Lomo = memo(function Lomo({ entry, onAbrir, volando = false, sinPrisa = fa
               {texto.autor}
             </span>
           )}
-        </span>
+        </span>}
 
         {entry.rating > 0 && (
           // La nota, como un punto: en 30px de ancho no cabe un número que se
