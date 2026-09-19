@@ -32,6 +32,16 @@ const ALTO_MIN = 134         // el más bajo
 const ANCHO_MIN = 26         // un libro finito
 const ANCHO_MAX = 56         // un tocho
 
+// Proporción del recorte de una foto de lomo (ver RecorteLomo.jsx) — SIEMPRE
+// la misma, salga de un libro fino o de un tocho, porque el recorte no sabe
+// nada de a qué libro va destinado. Se usa aquí también: cuando el libro
+// tiene una foto de verdad puesta, su alto no puede salir del hash como el de
+// cualquier otro (eso daba fotos estiradas o recortadas de más según a quién
+// le tocara un hash alto o bajo) — tiene que ser justo el que hace que el
+// hueco mida lo mismo que la foto, para que se vea entera y tal cual se
+// recortó.
+export const RATIO_FOTO_LOMO = 46 / 190
+
 // Número estable a partir de un texto: el mismo libro sale siempre igual, y
 // dos libros distintos casi nunca coinciden.
 function huella(texto) {
@@ -474,8 +484,14 @@ export function medidas(entry, generoDelAutor) {
     ? ANCHO_MIN + Math.min(paginas, 1000) / 1000 * (ANCHO_MAX - ANCHO_MIN)
     : ANCHO_MIN + (h % 100) / 100 * (ANCHO_MAX - ANCHO_MIN)
   // Los libros de una balda no miden todos lo mismo: el alto varía un poco,
-  // siempre igual para el mismo libro.
-  const alto = ALTO_MIN + (h % 100) / 100 * (ALTO_MAX - ALTO_MIN)
+  // siempre igual para el mismo libro — salvo que tenga una foto de verdad
+  // puesta, donde el alto lo decide la foto (ver RATIO_FOTO_LOMO) y no un
+  // hash que no sabe nada de ella.
+  const libro = entry.book
+  const esFoto = !!(libro.spine_url && libro.spine_custom)
+  const alto = esFoto
+    ? ancho / RATIO_FOTO_LOMO
+    : ALTO_MIN + (h % 100) / 100 * (ALTO_MAX - ALTO_MIN)
   // Uno de cada ocho libros, más o menos, va torcido: en una balda de verdad
   // nunca están todos a plomo. El ángulo es pequeño y siempre el mismo para el
   // mismo libro, y se apoya en su esquina de abajo, como se apoyaría de
