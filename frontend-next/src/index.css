@@ -317,6 +317,18 @@
    pantalla cambiaba de golpe. */
 ::view-transition-group(root) { animation-duration: 520ms; }
 
+/* Se probó a apagar aquí el relieve de los lomos (Lomos.jsx, clases
+   lomo-relieve/lomo-texto/lomo-caja) mientras dura data-transicion, para
+   abaratar las dos fotos que necesita la transición en la vista de
+   estantería. Descartado: la View Transition anima FOTOS FIJAS, no
+   elementos vivos, y data-transicion ya está puesto al sacar la foto de
+   "antes" y sigue puesto hasta que acaba toda la animación — así que las
+   dos fotos salían con los lomos aplanados, y eso es lo que se ve DURANTE
+   TODA la animación, no solo el instante en que se sacan. Más barato de
+   fotografiar a costa de que la foto se vea mal mientras dura no es una
+   mejora. El camino real es que cada lomo cueste menos de pintar siempre,
+   no menos solo aquí (ver Lomos.jsx, medidas() y el render de Lomo). */
+
 /* ── Sombras ─────────────────────────────────────────────────────────────
    Con nombre, y no un rgba() escrito dentro de cada componente, porque su
    tinta cambia con el tema (--color-sombra). Cada una es la de un sitio

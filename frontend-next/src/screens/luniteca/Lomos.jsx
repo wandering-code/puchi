@@ -580,6 +580,101 @@ export default function Lomos({ entries, onAbrir, fueraId = null, generosDeAutor
 // portadas de Open Library: solo hay que pintarlas, no inspeccionarlas.
 const FRANJA = 0.04
 
+// El grano de la textura, con la opacidad YA multiplicada dentro del SVG
+// (0.6 del rect × 0.18 del elemento que lo llevaba = 0.108): al fusionar la
+// textura en el fondo del propio botón no hay un `opacity` de elemento
+// aparte donde repartir esa cuenta, así que se hace una vez aquí.
+const TEXTURA_LOMO = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='64' height='64' filter='url(%23n)' opacity='0.108'/%3E%3C/svg%3E\")"
+
+// Todo el relieve de un lomo —tinte de portada, velo, volumen, filetes,
+// cabezada, nervios y la textura de grano— fusionado en las CAPAS del propio
+// fondo del botón, en vez de ocho o diez `<span>` superpuestos. Mismo
+// resultado en pantalla: el orden de esta lista es exactamente el orden en
+// que se pintaban esos elementos (de arriba abajo, que en `background-image`
+// es de primero a último), y cada capa lleva el mismo blend que tenía como
+// elemento aparte — `background-blend-mode` compone de abajo arriba igual
+// que lo hacían los `<span>` apilados, así que la textura sigue viendo
+// debajo el resultado ya mezclado de todo lo demás, no solo el color base.
+//
+// Por qué merece la pena: con la balda entera en pantalla, cada capa de más
+// se multiplica por el número de lomos, y una de ellas (la textura, con
+// `mix-blend-mode`) es de las operaciones más caras que tiene CSS porque
+// obliga a recalcular el resultado píxel a píxel contra lo de debajo. Fusionar
+// no cambia lo que se ve — lo comprobado a ojo y por captura, lomo a lomo—,
+// pero reduce lo que el navegador tiene que componer por separado: de
+// ocho-diez elementos con su propio paso de pintado a uno solo con varias
+// capas resueltas en la misma pasada. Es lo que hacía lento el cambio de
+// claro a oscuro específicamente aquí (issue del cambio de tema): la View
+// Transition necesita una foto de toda la pantalla antes y después, y esta
+// vista era la más cara de fotografiar.
+function capasDeFondo({ libro, paleta, claro, alto, conNervios, tapaDura }) {
+  const imagenes = [], tamanos = [], posiciones = [], blends = []
+  const capa = (imagen, tamano, posicion, blend = 'normal') => {
+    imagenes.push(imagen); tamanos.push(tamano); posiciones.push(posicion); blends.push(blend)
+  }
+  // Un color liso como capa de fondo no existe como tal en CSS — el mismo
+  // color repetido en los dos extremos de un degradado sí pinta liso, y es
+  // el truco de siempre para meter un color plano en una lista de capas.
+  const solido = (color) => `linear-gradient(${color}, ${color})`
+
+  // Textura: la capa de más arriba, y la única con blend distinto de normal.
+  capa(TEXTURA_LOMO, '100% 100%', '0 0', 'overlay')
+
+  // Nervios: bandas de 4px a la altura que le toque, en píxeles reales — no
+  // en porcentaje, que en una capa de fondo un `50%` no cae donde caería un
+  // `top: 50%` de un elemento (el navegador descuenta el alto de la propia
+  // capa al repartir el porcentaje) y las bandas quedarían un pelín movidas.
+  if (conNervios) {
+    for (const p of [0.34, 0.5, 0.66]) {
+      capa('linear-gradient(to bottom, rgba(255,255,255,.16), rgba(0,0,0,.28))', '100% 4px', `0 ${Math.round(p * alto)}px`)
+    }
+  }
+
+  // Cabezada: el hilo de tela, a 1px de cada canto lateral y pegado arriba o
+  // abajo. Los colores llevan ya multiplicada la opacidad que antes ponía el
+  // elemento (0.55→0.209, 0.45→0.171 al 38%), por el mismo motivo que la
+  // textura: aquí no hay un `opacity` de capa suelto que aplicar después.
+  if (tapaDura) {
+    for (const arriba of [true, false]) {
+      capa(
+        'repeating-linear-gradient(to right, rgba(238,226,205,.209) 0 1px, rgba(155,115,90,.171) 1px 2px)',
+        'calc(100% - 2px) 2px',
+        `1px ${arriba ? 1 : alto - 3}px`,
+      )
+    }
+  }
+
+  // Filetes: cuatro líneas de 1px, arriba y abajo.
+  for (const [y, i] of [6, 9, alto - 10, alto - 7].map((y, i) => [y, i])) {
+    capa(solido(i % 2 ? 'rgba(255,255,255,.14)' : 'rgba(255,255,255,.3)'), '100% 1px', `0 ${y}px`)
+  }
+
+  // Volumen: el degradado de toda la cara, siempre presente.
+  capa(
+    'linear-gradient(to right, rgba(0,0,0,.35) 0%, rgba(255,255,255,.10) 28%, rgba(0,0,0,.10) 62%, rgba(0,0,0,.32) 100%)',
+    '100% 100%', '0 0',
+  )
+
+  if (libro.cover_url) {
+    // Velo: aclara u oscurece la portada estirada para que el título no
+    // compita con sus bandas de color.
+    capa(solido(claro ? 'rgba(255,255,255,.25)' : 'rgba(0,0,0,.2)'), '100% 100%', '0 0')
+    // Tinte de la propia portada, si se ha podido leer.
+    if (paleta) capa(solido(`color-mix(in srgb, ${paleta.color} 45%, transparent)`), '100% 100%', '0 0')
+    // La franja de la portada, la capa de más abajo de todas — justo encima
+    // del backgroundColor liso, que sigue siendo una propiedad aparte.
+    capa(`url(${libro.cover_url})`, `${100 / FRANJA}% 100%`, 'left center')
+  }
+
+  return {
+    backgroundImage: imagenes.join(', '),
+    backgroundSize: tamanos.join(', '),
+    backgroundPosition: posiciones.join(', '),
+    backgroundRepeat: imagenes.map(() => 'no-repeat').join(', '),
+    backgroundBlendMode: blends.join(', '),
+  }
+}
+
 const Lomo = memo(function Lomo({ entry, onAbrir, volando = false, sinPrisa = false, generoDelAutor = null, conContenido = true }) {
   // Una sola vez: antes se medía aquí y otra vez dentro de argumentosDeTexto,
   // y con la balda entera montada eso era el doble de trabajo por lomo.
@@ -672,94 +767,20 @@ const Lomo = memo(function Lomo({ entry, onAbrir, volando = false, sinPrisa = fa
           boxShadow: conContenido
             ? '3px 0 6px -2px rgb(var(--color-sombra) / .45), 0 2px 3px -1px rgb(var(--color-sombra) / .35)'
             : 'none',
-          ...(conContenido && libro.cover_url && {
-            backgroundImage: `url(${libro.cover_url})`,
-            // 1/0.04 = 2500%: el 4% izquierdo ocupa todo el ancho del lomo.
-            backgroundSize: `${100 / FRANJA}% 100%`,
-            backgroundPosition: 'left center',
-            backgroundRepeat: 'no-repeat',
-          }),
+          // Toda la decoración (tinte, velo, volumen, filetes, cabezada,
+          // nervios, textura y la propia portada) va aquí, en capas del
+          // mismo fondo — ver capasDeFondo. Antes eran ocho o diez <span>
+          // superpuestos; el resultado en pantalla es el mismo.
+          ...(conContenido && capasDeFondo({ libro, paleta, claro, alto, conNervios, tapaDura })),
         }}
       >
         {/* Un lomo sin llenar todavía: se ve su tamaño y su color, que es lo
-            que hace falta para que la balda mida lo que tiene que medir. */}
+            que hace falta para que la balda mida lo que tiene que medir.
+            Todo el relieve (volumen, filetes, cabezada, nervios, textura,
+            tinte, velo y la propia portada) va como capas del fondo del
+            botón — ver capasDeFondo, arriba. Aquí solo queda lo que de
+            verdad necesita ser un elemento: el texto y el punto de nota. */}
         {conContenido && (<>
-        {/* Velo: separa el texto del fondo. En un lomo oscuro oscurece un poco
-            más; en uno claro aclara, porque ahí el título va en tinta oscura,
-            como en un libro de verdad con la cubierta clara. */}
-        {libro.cover_url && (
-          <>
-            {/* La franja de la portada estirada trae sus bandas horizontales
-                (cielo, tierra, la faja de color), y con tanto contraste el
-                título tenía que competir con ellas. Un velo del propio color
-                del lomo las calma sin quitarle el carácter: el lomo sigue
-                siendo el de ese libro, pero de un color más uniforme, que es
-                justo lo que pasa en el lomo impreso. */}
-            {paleta && (
-              <span
-                className="pointer-events-none absolute inset-0"
-                style={{ backgroundColor: paleta.color, opacity: 0.45 }}
-              />
-            )}
-            <span className={`pointer-events-none absolute inset-0 ${claro ? 'bg-white/25' : 'bg-black/20'}`} />
-          </>
-        )}
-
-        {/* Volumen: un lomo no es plano. Sombra en los dos cantos y una franja
-            de luz descentrada hacia la izquierda, que es como le da la luz a un
-            libro puesto de pie en una balda. */}
-        <span
-          className="pointer-events-none absolute inset-0"
-          style={{ background: 'linear-gradient(to right, rgba(0,0,0,.35) 0%, rgba(255,255,255,.10) 28%, rgba(0,0,0,.10) 62%, rgba(0,0,0,.32) 100%)' }}
-        />
-
-        {/* Filetes dobles arriba y abajo, como los de un lomo impreso. */}
-        {[6, 9, alto - 10, alto - 7].map((y, i) => (
-          <span
-            key={i}
-            className="pointer-events-none absolute inset-x-0 h-px"
-            style={{ top: y, background: i % 2 ? 'rgba(255,255,255,.14)' : 'rgba(255,255,255,.3)' }}
-          />
-        ))}
-
-        {/* Cabezada: el hilo de tela que asoma por arriba y por abajo del lomo
-            en un libro cosido. Solo en tapa dura, que es donde la lleva. */}
-        {tapaDura && [true, false].map(arriba => (
-          <span
-            key={String(arriba)}
-            className="pointer-events-none absolute inset-x-[1px] h-[2px]"
-            style={{
-              [arriba ? 'top' : 'bottom']: 1,
-              borderRadius: 1,
-              // Rayas finas y de poco contraste: la cabezada es un hilo
-              // trenzado, no una cremallera (con 2px y mucho contraste
-              // parecía justo eso).
-              background: 'repeating-linear-gradient(to right, rgba(238,226,205,.55) 0 1px, rgba(155,115,90,.45) 1px 2px)',
-              opacity: 0.38,
-            }}
-          />
-        ))}
-
-        {conNervios && [0.34, 0.5, 0.66].map(p => (
-          <span
-            key={p}
-            className="pointer-events-none absolute inset-x-0 h-[4px]"
-            style={{
-              top: `${p * 100}%`,
-              background: 'linear-gradient(to bottom, rgba(255,255,255,.16), rgba(0,0,0,.28))',
-            }}
-          />
-        ))}
-
-        {/* Textura: el mismo grano del fondo de la app, muy flojo, para que el
-            lomo no se lea como un plano de color liso sino como tela o papel. */}
-        <span
-          className="pointer-events-none absolute inset-0 opacity-[.18] mix-blend-overlay"
-          style={{
-            backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='64' height='64' filter='url(%23n)' opacity='0.6'/%3E%3C/svg%3E\")",
-          }}
-        />
-
         <span
           className="absolute inset-0 flex items-center text-center"
           // De arriba abajo, que es como se leen los lomos aquí: se inclina la
