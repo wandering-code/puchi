@@ -24,7 +24,7 @@ import PantallaInferior from './PantallaInferior'
 // de las entradas ajenas), así que aquí no hay nada que esconder: se cambian
 // los editores por su valor a secas y se ofrece guardarse el libro.
 export default function BookDetail({
-  entry, abierta = true, carpetas, generos, onCerrar, onActualizar, onGuardarLibro, onSubirPortada, onEliminar,
+  entry, abierta = true, carpetas, generos, onCerrar, onActualizar, onGuardarLibro, onSubirPortada, onSubirLomo, onEliminar,
   vuelo = null, soloLectura = false, deQuien = null, onGuardarEnMiEstanteria,
 }) {
   const libro = entry.book
@@ -87,6 +87,7 @@ export default function BookDetail({
           generos={generos}
           onCancelar={() => setEditando(false)}
           onSubirPortada={onSubirPortada}
+          onSubirLomo={onSubirLomo}
           onEliminar={onEliminar}
           onGuardar={async (borrador) => { await onGuardarLibro(borrador); setEditando(false) }}
         />

@@ -4,6 +4,8 @@ import { api } from '../../platform/api'
 import { Cover } from './piezas'
 import { useHoja } from './HojaInferior'
 import SelectorPortada from './SelectorPortada'
+import SelectorLomo from './SelectorLomo'
+import { medidas } from './Lomos'
 import { IconRefresh, IconX } from '../../ui/icons'
 import BotonPeligro from '../../ui/BotonPeligro'
 
@@ -15,7 +17,7 @@ import BotonPeligro from '../../ui/BotonPeligro'
 // La portada es la excepción: lo que se elige aquí se guarda en TU entrada de
 // la estantería, no en el libro, así que cada jugador puede ver la que
 // prefiera del mismo libro.
-export default function BookEditForm({ entry, generos, onGuardar, onCancelar, onSubirPortada, onEliminar }) {
+export default function BookEditForm({ entry, generos, onGuardar, onCancelar, onSubirPortada, onSubirLomo, onEliminar }) {
   const libro = entry.book
   const [borrador, setBorrador] = useState(() => ({
     title: libro.title || '',
@@ -25,9 +27,15 @@ export default function BookEditForm({ entry, generos, onGuardar, onCancelar, on
     num_pages: libro.num_pages != null ? String(libro.num_pages) : '',
     synopsis: libro.synopsis || '',
     cover_url: libro.cover_url || '',
+    spine_url: libro.spine_url || '',
   }))
   const [guardando, setGuardando] = useState(false)
   const portada = useHoja()
+  const lomo = useHoja()
+  // Mismo tamaño que ve la estantería para este libro (ver medidas() en
+  // Lomos.jsx) — el recorte tiene que salir con esa proporción exacta, o se
+  // vería estirado al ponerlo ahí.
+  const { ancho: anchoLomo, alto: altoLomo } = medidas(entry)
 
   const set = (clave) => (ev) => setBorrador(b => ({ ...b, [clave]: ev.target.value }))
 
@@ -65,6 +73,24 @@ export default function BookEditForm({ entry, generos, onGuardar, onCancelar, on
         <p className="flex-1 text-xs leading-relaxed text-ink-dim">
           Toca la portada para elegir otra o subir una foto. La que elijas la ves solo tú;
           el resto del club sigue con la suya.
+        </p>
+      </div>
+
+      <div className="mt-4 flex items-center gap-4">
+        <motion.button
+          onClick={lomo.abrir}
+          whileTap={{ scale: 0.96 }}
+          className="shrink-0 overflow-hidden rounded-sm bg-surface-2"
+          style={{ width: anchoLomo, height: altoLomo }}
+          aria-label="Cambiar el lomo"
+        >
+          {borrador.spine_url && (
+            <div className="h-full w-full" style={{ backgroundImage: `url(${borrador.spine_url})`, backgroundSize: 'cover' }} />
+          )}
+        </motion.button>
+        <p className="flex-1 text-xs leading-relaxed text-ink-dim">
+          El de la estantería se genera solo a partir de la portada. Toca el lomo para poner
+          una foto de verdad, tuya o de otro del club — la puedes recortar en el momento.
         </p>
       </div>
 
@@ -160,6 +186,17 @@ export default function BookEditForm({ entry, generos, onGuardar, onCancelar, on
         onCerrar={portada.cerrar}
         onSubir={onSubirPortada}
         onElegir={(url) => { setBorrador(b => ({ ...b, cover_url: url })); portada.cerrar() }}
+      />
+
+      <SelectorLomo
+        abierta={lomo.abierta}
+        libro={libro}
+        ancho={anchoLomo}
+        alto={altoLomo}
+        elegida={borrador.spine_url}
+        onCerrar={lomo.cerrar}
+        onSubir={onSubirLomo}
+        onElegir={(url) => { setBorrador(b => ({ ...b, spine_url: url })); lomo.cerrar() }}
       />
     </div>
   )

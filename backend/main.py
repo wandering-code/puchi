@@ -2129,15 +2129,18 @@ async def upload_spine(
     db: Session = Depends(get_db),
     current: Player = Depends(get_current_player),
 ):
-    """Sube un lomo nuevo a la galería del libro (con atribución) — igual que
-    /cover, NO sustituye el lomo del libro para nadie más salvo dos casos:
-    el hueco está vacío (primer lomo que llega, generado o no), o el que hay
-    puesto es uno generado y este también lo es (refresco tras cambiar
-    título/portada/páginas). Un lomo subido a mano (spine_custom) nunca se
-    pisa solo — cada jugador que quiera el suyo lo pone en su propia copia
-    (PATCH /shelf/personal/{id} con spine_url).
-    `generado=true` lo manda el propio cliente al subir el PNG que acaba de
-    dibujar en canvas — ver frontend-next, generarLomo.js."""
+    """Sube un lomo nuevo. Uno GENERADO (`generado=true`, el que manda
+    generarLomo.js solo, sin que nadie lo pida) se pone directo como el lomo
+    del libro — nunca entra en la galería de fotos con atribución, porque no
+    lo ha subido nadie de verdad: cada edición del libro genera uno nuevo, y
+    si se guardaran todos la galería se llenaría de copias casi idénticas que
+    nadie querría elegir. El anterior se borra del disco al reemplazarlo, o
+    se acumularían para siempre.
+    Una foto subida a mano por un jugador SÍ va a la galería (con
+    atribución) y nunca pisa el lomo compartido, aunque el libro no tuviera
+    ninguno todavía — quien la quiera de verdad la pone en su propia copia
+    (PATCH /shelf/personal/{id} con spine_url), igual que ya funciona con
+    las portadas."""
     book = db.query(Book).filter(Book.id == book_id).first()
     if not book:
         raise HTTPException(404, "Libro no encontrado")
@@ -2148,12 +2151,22 @@ async def upload_spine(
     with open(os.path.join(_SPINE_UPLOAD_DIR, filename), 'wb') as f:
         shutil.copyfileobj(file.file, f)
     url = f"/uploads/spines/{filename}"
-    db.add(BookSpine(book_id=book.id, uploaded_by=current.id, url=url))
-    if not book.spine_url:
+    if generado and book.spine_custom:
+        # El hueco ya lo ocupa una foto de verdad: este generado no pinta
+        # nada (no debería llegar a pasar, generarLomo.js no se llama en
+        # este caso — ver regenerarLomoSiToca en Luniteca.jsx), y desde luego
+        # no es una foto de nadie que deba quedar en la galería.
+        os.remove(os.path.join(_SPINE_UPLOAD_DIR, filename))
+    elif generado:
+        anterior = book.spine_url
         book.spine_url = url
-        book.spine_custom = not generado
-    elif generado and not book.spine_custom:
-        book.spine_url = url
+        book.spine_custom = False
+        if anterior and anterior.startswith('/uploads/spines/'):
+            ruta_anterior = os.path.join(os.path.dirname(__file__), anterior.lstrip('/'))
+            if os.path.isfile(ruta_anterior):
+                os.remove(ruta_anterior)
+    else:
+        db.add(BookSpine(book_id=book.id, uploaded_by=current.id, url=url))
     db.commit()
     await _notify_luni("books", book_id=book.id)
     return {"url": url}
@@ -2167,7 +2180,9 @@ async def get_book_spines(
 ):
     """Los lomos subidos a mano para este libro, con atribución — sin fuente
     automática que consultar (a diferencia de las portadas, un lomo nunca
-    viene de una API externa)."""
+    viene de una API externa). Incluye el lomo del libro tal cual está hoy
+    (generado o no), para poder ofrecer "volver a este" a quien haya puesto
+    el suyo propio."""
     book = db.query(Book).filter(Book.id == book_id).first()
     if not book:
         raise HTTPException(404, "Libro no encontrado")
@@ -2178,6 +2193,8 @@ async def get_book_spines(
         .all()
     )
     return {
+        "default_url": book.spine_url,
+        "default_generado": bool(book.spine_url) and not book.spine_custom,
         "user_uploads": [
             {"url": u.url, "uploaded_by": u.uploader.name if u.uploader else None, "uploaded_by_id": u.uploaded_by}
             for u in uploads

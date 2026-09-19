@@ -107,6 +107,22 @@ export const IconPencil = (p) => (
   <svg {...base} {...p}><path d="M4 20h4L19 9a2.1 2.1 0 0 0-3-3L5 17z" /><path d="m14.5 6.5 3 3" /></svg>
 )
 
+// Cámara de fotos: para "hacer una foto" y no confundirla con la de vídeo.
+export const IconCamara = (p) => (
+  <svg {...base} {...p}>
+    <path d="M4 8.5a1.5 1.5 0 0 1 1.5-1.5h2l1-2h7l1 2h2A1.5 1.5 0 0 1 20 8.5v9A1.5 1.5 0 0 1 18.5 19h-13A1.5 1.5 0 0 1 4 17.5z" />
+    <circle cx="12" cy="12.5" r="3.5" />
+  </svg>
+)
+// Una imagen dentro de un marco: para "elegir de la galería".
+export const IconImagen = (p) => (
+  <svg {...base} {...p}>
+    <rect x="4" y="4.5" width="16" height="15" rx="1.5" />
+    <circle cx="9" cy="9.5" r="1.4" />
+    <path d="m5 16.5 4.5-4.5 3 3 2.5-2.5L20 17" />
+  </svg>
+)
+
 export const IconPlus = (p) => (
   <svg {...base} {...p}><path d="M12 5v14M5 12h14" /></svg>
 )

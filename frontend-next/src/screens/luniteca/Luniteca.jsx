@@ -147,6 +147,9 @@ export default function Luniteca() {
     if (borrador.cover_url !== (entrada.own_cover_url || '')) {
       await actualizarEntrada(entrada.id, { cover_url: borrador.cover_url })
     }
+    if (borrador.spine_url !== (entrada.own_spine_url || '')) {
+      await actualizarEntrada(entrada.id, { spine_url: borrador.spine_url })
+    }
     // El grosor/alto del lomo generado depende de página/título, y el color
     // de la portada que se vea AHORA MISMO (la tuya, si has elegido una) —
     // cualquiera de los dos cambios de arriba puede dejarlo desactualizado,
@@ -164,6 +167,17 @@ export default function Luniteca() {
     const datos = new FormData()
     datos.append('file', fichero)
     const r = await api(`/books/${bookId}/cover`, { method: 'POST', body: datos })
+    return r.url
+  }, [])
+
+  // Sube una foto de lomo YA RECORTADA (ver RecorteLomo) a la galería del
+  // libro y devuelve su URL. Sin `generado=true`: una foto de verdad nunca
+  // pisa el lomo compartido sola, cada uno pone la suya en su propia entrada
+  // (ver guardarLibro, más arriba).
+  const subirLomo = useCallback(async (bookId, blob) => {
+    const datos = new FormData()
+    datos.append('file', blob, 'lomo.jpg')
+    const r = await api(`/books/${bookId}/spine`, { method: 'POST', body: datos })
     return r.url
   }, [])
 
@@ -396,6 +410,7 @@ export default function Luniteca() {
           generos={opciones.generos}
           onGuardarLibro={(borrador) => guardarLibro(enFicha, borrador)}
           onSubirPortada={(fichero) => subirPortada(enFicha.book.id, fichero)}
+          onSubirLomo={(blob) => subirLomo(enFicha.book.id, blob)}
           onEliminar={() => eliminarEntrada(enFicha.id)}
           onCerrar={cerrarFicha}
           onActualizar={patch => actualizarEntrada(enFicha.id, patch)}
