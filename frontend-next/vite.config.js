@@ -177,9 +177,15 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
         // Nada de /api ni /uploads en la caché del shell: son datos vivos del
-        // backend compartido con la Puchi actual, y servirlos de una caché
+        // backend compartido con la Puchi anterior, y servirlos de una caché
         // vieja daría estanterías desactualizadas sin que se note.
-        navigateFallbackDenylist: [/^\/api/, /^\/uploads/, /^\/ws/],
+        //
+        // /v1 tiene que estar aquí también: el scope del service worker es
+        // el origen entero ('/'), así que sin este denylist interceptaba
+        // también la navegación a la Puchi anterior y le servía DE VUELTA el
+        // index.html de esta — se detectó recién desplegado, con /v1/
+        // devolviendo el login de la app nueva en vez del de la anterior.
+        navigateFallbackDenylist: [/^\/api/, /^\/uploads/, /^\/ws/, /^\/v1/],
       },
       devOptions: { enabled: false },
     }),
