@@ -4,7 +4,7 @@ import { motion } from 'motion/react'
 import { useAuth } from '../../platform/auth'
 import { usarPreferencia } from '../../platform/preferencias'
 import { seccionesDe } from '../secciones'
-import { IconArrow, IconInfo, IconPaw, IconSettings } from '../../ui/icons'
+import { IconArrow, IconInfo, IconPaw, IconRefresh, IconSettings } from '../../ui/icons'
 
 // Mientras conviven las dos Puchis, el enlace a la anterior es fijo: cuando
 // se cambien las tornas (esta pase a ser la de siempre y la vieja se mude a
@@ -36,6 +36,7 @@ export default function Inicio() {
   return (
     <div className="py-6">
       <AvisoPuchiNueva />
+      <AvisoReinstalar />
 
       <header className="mb-6">
         <div className="flex items-center gap-2.5">
@@ -82,6 +83,28 @@ function AvisoPuchiNueva() {
         >
           puchi.wanderingcode.dev/v1
         </a>.
+      </p>
+    </div>
+  )
+}
+
+// La dirección cambió (de /next a la raíz) al unificar. Quien ya tenía Puchi
+// añadida a la pantalla de inicio se quedó con un icono que apunta a la
+// dirección vieja — en Android deja de abrir la app instalada y cae al
+// navegador normal; en iOS puede quedarse enseñando una copia congelada de
+// antes del cambio, sin enterarse de nada nuevo. Ninguno de los dos se
+// arregla solo: hay que quitar el icono y añadirlo de nuevo. Color de aviso
+// (no el del acento) porque esto sí pide hacer algo, no es solo información.
+function AvisoReinstalar() {
+  return (
+    <div className="mb-6 flex items-start gap-3 rounded-xl2 border border-danger bg-danger/10 p-4">
+      <IconRefresh className="h-5 w-5 shrink-0 text-danger" />
+      <p className="min-w-0 flex-1 text-[13px] leading-relaxed text-danger">
+        <span className="font-semibold">¿Tienes Puchi añadida a la pantalla de inicio del móvil?</span>{' '}
+        La dirección ha cambiado: quítala (mantén pulsado el icono → Eliminar/Desinstalar) y vuelve a
+        añadirla desde aquí (menú del navegador → "Añadir a pantalla de inicio"), tanto en Android como
+        en iPhone. Si no lo haces, el icono viejo puede dejar de abrir Puchi o enseñar una copia
+        anticuada.
       </p>
     </div>
   )
