@@ -97,8 +97,20 @@ class PersonalShelf(Base):
     progress           = Column(Float, default=0.0)  # 0.0 – 1.0
     current_page       = Column(Integer, nullable=True)
     custom_total_pages = Column(Integer, nullable=True)
+    # Dónde se está leyendo esta copia: 'fisico' | 'ereader' | 'ambos' | NULL
+    # (sin especificar). `ereader_total_pages` es la paginación de esa
+    # edición — casi nunca coincide con la del libro físico, así que necesita
+    # su propio total; `current_page` sigue guardándose en páginas físicas
+    # (custom_total_pages o book.num_pages) y el eReader se calcula por regla
+    # de tres a partir de los dos totales (ver shelf.js, paginaEnLado).
+    reading_format      = Column(String, nullable=True)
+    ereader_total_pages = Column(Integer, nullable=True)
     folder             = Column(String, nullable=True)
     rating             = Column(Float, nullable=True) # 0.5-5.0 con medios puntos
+    # Lo que costó esta copia. Dato personal (como las notas): no se enseña
+    # en la estantería de otro jugador. De momento solo se guarda; pensado
+    # como base para estadísticas y gráficas de gasto más adelante.
+    price              = Column(Float, nullable=True)
     # Portada elegida por este jugador para su copia — si es NULL se usa la
     # portada del libro (books.cover_url) como valor por defecto. Así, elegir
     # una portada distinta a la del catálogo no se la cambia a todo el mundo.

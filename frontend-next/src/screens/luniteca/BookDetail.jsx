@@ -3,9 +3,12 @@ import { useNavigate } from 'react-router-dom'
 import { AnimatePresence, motion } from 'motion/react'
 import { api } from '../../platform/api'
 import { useAuth } from '../../platform/auth'
-import { readingDatesLabel, statusPatch, totalPages } from './shelf'
+import {
+  FORMATO_LABEL, paginaDesdeLado, paginaEnLado, readingDatesLabel, statusPatch,
+  totalEreader, totalFisico, totalPages,
+} from './shelf'
 import { Chip, Cover, EditableRating, MANTENER_MS, ProgressBar, StarRating, StatusChip } from './piezas'
-import { EditorCarpeta, EditorEstado, EditorFechas, EditorLecturas, Sinopsis } from './editores'
+import { EditorCarpeta, EditorEstado, EditorFechas, EditorFormato, EditorLecturas, EditorPrecio, Sinopsis } from './editores'
 import { IconArrowLeft, IconCheck, IconPencil } from '../../ui/icons'
 import Avatar from '../../ui/Avatar'
 import BookEditForm from './BookEditForm'
@@ -146,6 +149,7 @@ export default function BookDetail({
                 <StatusChip status={entry.status} />
                 {readingDatesLabel(entry) && <Chip>{readingDatesLabel(entry)}</Chip>}
                 {entry.folder && <Chip>{entry.folder}</Chip>}
+                {entry.reading_format && <Chip>{FORMATO_LABEL[entry.reading_format]}</Chip>}
                 {llevaLecturas && entry.times_read > 1 && <Chip>{entry.times_read} lecturas</Chip>}
               </>
             ) : (
@@ -153,6 +157,8 @@ export default function BookDetail({
                 <EditorEstado entry={entry} onActualizar={onActualizar} />
                 <EditorFechas entry={entry} onActualizar={onActualizar} />
                 <EditorCarpeta entry={entry} carpetas={carpetas} onActualizar={onActualizar} />
+                <EditorFormato entry={entry} onActualizar={onActualizar} />
+                <EditorPrecio entry={entry} onActualizar={onActualizar} />
                 {llevaLecturas && <EditorLecturas entry={entry} onActualizar={onActualizar} />}
               </>
             )}
@@ -330,35 +336,84 @@ const ZOOM_PROGRESO = 1.3
 // cambia es que la de otro no se puede arrastrar.
 const CAJA_PROGRESO = 'mx-auto w-full max-w-[300px] rounded-xl2 border border-line px-3 py-2.5'
 
-// Un libro marcado como leído no siempre tiene página guardada (puede haberse
-// marcado por otra vía): para la barra, se da por hecho el total.
-function paginaDe(entry, total) {
-  return entry.current_page ?? (entry.status === 'read' ? total : 0)
+// Qué lado enseñar: físico por defecto, y solo se puede elegir cuando el
+// formato es "ambos" Y se conocen las dos paginaciones — con una sola
+// conocida no hay nada que convertir, así que no tiene sentido ofrecer un
+// interruptor que no cambiaría nada.
+//
+// El estado vive aquí y no en la entrada: es "qué estoy mirando ahora mismo",
+// no un dato del libro. Se resetea al lado por defecto si se abre OTRA ficha
+// (esta no se desmonta al cambiar de libro, igual que en EditorFormato).
+function useLadoProgreso(entry) {
+  const fisico = totalFisico(entry)
+  const ereader = totalEreader(entry)
+  const hayDos = entry.reading_format === 'ambos' && !!fisico && !!ereader
+  const porDefecto = !hayDos && entry.reading_format === 'ereader' && ereader ? 'ereader' : 'fisico'
+  const [lado, setLado] = useState(porDefecto)
+  const idPrevio = useRef(entry.id)
+  if (idPrevio.current !== entry.id) {
+    idPrevio.current = entry.id
+    if (lado !== porDefecto) setLado(porDefecto)
+  }
+  const ladoEfectivo = hayDos ? lado : porDefecto
+  return { lado: ladoEfectivo, setLado, hayDos, total: ladoEfectivo === 'ereader' ? ereader : fisico }
 }
 
-function TripasProgreso({ entry, pagina, total, resaltado = false }) {
+// El interruptor Físico/eReader, solo cuando de verdad hay dos paginaciones
+// entre las que elegir. Mismo dibujo que el de las tres vistas de la
+// estantería (una pastilla que desliza detrás de la opción activa).
+function InterruptorLado({ lado, onCambiar }) {
+  return (
+    <div className="mx-auto mb-2.5 inline-flex rounded-full border border-line p-0.5 text-xs">
+      {[['fisico', 'Físico'], ['ereader', 'eReader']].map(([id, etiqueta]) => (
+        <button
+          key={id}
+          onClick={() => onCambiar(id)}
+          aria-pressed={lado === id}
+          className="relative px-3 py-1 font-semibold"
+        >
+          {lado === id && (
+            <motion.span
+              layoutId="progreso-lado"
+              className="absolute inset-0 rounded-full bg-accent"
+              transition={{ type: 'spring', stiffness: 420, damping: 34 }}
+            />
+          )}
+          <span className={`relative ${lado === id ? 'text-on-accent' : 'text-ink-dim'}`}>{etiqueta}</span>
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function TripasProgreso({ pagina, total, resaltado = false }) {
   return (
     <>
       <div className={`mb-1.5 flex justify-between text-xs ${resaltado ? 'font-bold text-accent' : 'text-ink-dim'}`}>
         <span>Pág. {pagina} de {total}</span>
         <span>{Math.round((pagina / total) * 100)}%</span>
       </div>
-      <ProgressBar entry={{ ...entry, current_page: pagina }} />
+      <ProgressBar pct={Math.round((pagina / total) * 100)} />
     </>
   )
 }
 
 function VisorProgreso({ entry }) {
-  const total = totalPages(entry)
+  const { lado, setLado, hayDos, total } = useLadoProgreso(entry)
+  if (!total) return null
+  const pagina = paginaEnLado(entry, lado) ?? 0
   return (
-    <div className={CAJA_PROGRESO}>
-      <TripasProgreso entry={entry} pagina={paginaDe(entry, total)} total={total} />
+    <div>
+      {hayDos && <InterruptorLado lado={lado} onCambiar={setLado} />}
+      <div className={CAJA_PROGRESO}>
+        <TripasProgreso pagina={pagina} total={total} />
+      </div>
     </div>
   )
 }
 
 function EditorProgreso({ entry, onActualizar }) {
-  const total = totalPages(entry)
+  const { lado, setLado, hayDos, total } = useLadoProgreso(entry)
   const [editando, setEditando] = useState(false)
   const [previa, setPrevia] = useState(null)
   const barra = useRef(null)
@@ -367,7 +422,7 @@ function EditorProgreso({ entry, onActualizar }) {
   const xInicial = useRef(0)
   const paginaInicial = useRef(0)
 
-  const paginaBase = paginaDe(entry, total)
+  const paginaBase = paginaEnLado(entry, lado) ?? 0
   const pagina = editando ? previa : paginaBase
 
   function terminar(guardar) {
@@ -379,14 +434,16 @@ function EditorProgreso({ entry, onActualizar }) {
       if (previa >= total && entry.status !== 'read') {
         // Llegar al final arrastrando es, en la práctica, decir "lo he
         // terminado": se aplican las mismas reglas que al cambiar el estado a
-        // mano (fecha de fin, suma una lectura).
+        // mano (fecha de fin, suma una lectura). `statusPatch` ya calcula el
+        // current_page final a partir del total de siempre (el físico, o el
+        // único que haya), así que da igual desde qué lado se haya llegado.
         onActualizar(statusPatch('read', entry))
       } else if (previa < total && entry.status === 'read') {
         // Y al revés, bajar del final en uno ya leído lo devuelve a "leyendo"
         // — nunca a "releyendo", que eso es una decisión que se toma a mano.
-        onActualizar({ ...statusPatch('reading', entry), current_page: previa })
+        onActualizar({ ...statusPatch('reading', entry), current_page: paginaDesdeLado(entry, lado, previa) })
       } else {
-        onActualizar({ current_page: previa })
+        onActualizar({ current_page: paginaDesdeLado(entry, lado, previa) })
       }
     }
     setPrevia(null)
@@ -401,37 +458,40 @@ function EditorProgreso({ entry, onActualizar }) {
   }
 
   return (
-    <motion.div
-      ref={barra}
-      onPointerDown={(ev) => {
-        temporizador.current = setTimeout(() => {
-          arrastrando.current = true
-          setEditando(true)
-          xInicial.current = ev.clientX
-          paginaInicial.current = paginaBase
-          setPrevia(paginaBase)
-          try { barra.current.setPointerCapture(ev.pointerId) } catch { /* el navegador puede negarlo */ }
-        }, MANTENER_MS)
-      }}
-      onPointerMove={(ev) => {
-        if (!arrastrando.current) return
-        const paginas = (ev.clientX - xInicial.current) / PX_POR_PAGINA
-        setPrevia(Math.round(Math.max(0, Math.min(total, paginaInicial.current + paginas))))
-      }}
-      onPointerUp={() => terminar(true)}
-      onPointerCancel={() => terminar(false)}
-      onContextMenu={(ev) => { if (editando) ev.preventDefault() }}
-      animate={{ scale: editando ? ZOOM_PROGRESO : 1 }}
-      transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
-      title="Mantén pulsado para ajustar el progreso"
-      // Mismo motivo que en la puntuación: la página se ajusta de lado y el
-      // desplazamiento vertical sigue siendo del scroll. Esta barra ocupa 300px
-      // de ancho y una buena franja de alto, así que era la más fácil de tocar
-      // sin querer.
-      className={`${CAJA_PROGRESO} touch-pan-y select-none`}
-    >
-      <TripasProgreso entry={entry} pagina={pagina} total={total} resaltado={editando} />
-    </motion.div>
+    <div>
+      {hayDos && <InterruptorLado lado={lado} onCambiar={setLado} />}
+      <motion.div
+        ref={barra}
+        onPointerDown={(ev) => {
+          temporizador.current = setTimeout(() => {
+            arrastrando.current = true
+            setEditando(true)
+            xInicial.current = ev.clientX
+            paginaInicial.current = paginaBase
+            setPrevia(paginaBase)
+            try { barra.current.setPointerCapture(ev.pointerId) } catch { /* el navegador puede negarlo */ }
+          }, MANTENER_MS)
+        }}
+        onPointerMove={(ev) => {
+          if (!arrastrando.current) return
+          const paginas = (ev.clientX - xInicial.current) / PX_POR_PAGINA
+          setPrevia(Math.round(Math.max(0, Math.min(total, paginaInicial.current + paginas))))
+        }}
+        onPointerUp={() => terminar(true)}
+        onPointerCancel={() => terminar(false)}
+        onContextMenu={(ev) => { if (editando) ev.preventDefault() }}
+        animate={{ scale: editando ? ZOOM_PROGRESO : 1 }}
+        transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
+        title="Mantén pulsado para ajustar el progreso"
+        // Mismo motivo que en la puntuación: la página se ajusta de lado y el
+        // desplazamiento vertical sigue siendo del scroll. Esta barra ocupa 300px
+        // de ancho y una buena franja de alto, así que era la más fácil de tocar
+        // sin querer.
+        className={`${CAJA_PROGRESO} touch-pan-y select-none`}
+      >
+        <TripasProgreso pagina={pagina} total={total} resaltado={editando} />
+      </motion.div>
+    </div>
   )
 }
 

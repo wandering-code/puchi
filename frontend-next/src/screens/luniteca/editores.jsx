@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
-import { STATUS_COLOR, STATUS_LABEL, STATUS_ORDER, readingDatesLabel, statusPatch } from './shelf'
+import { FORMATO_LABEL, STATUS_COLOR, STATUS_LABEL, STATUS_ORDER, formatoPrecio, readingDatesLabel, statusPatch } from './shelf'
 import { IconChevron } from '../../ui/icons'
 import HojaInferior, { useHoja } from './HojaInferior'
 
@@ -9,17 +9,23 @@ import HojaInferior, { useHoja } from './HojaInferior'
 // modal pequeño con lo justo para cambiarlo. Es la idea de la Luniteca nueva
 // de la Puchi actual, hecha aquí con las herramientas de esta app.
 
-export function Pastilla({ children, onClick, color, activa }) {
+// Mismo fondo para las seis, tengan valor puesto o no: antes solo lo
+// llevaban Carpeta, Formato y Precio cuando ya tenían algo elegido (para
+// distinguirse de "sin carpeta"/"sin formato"), y Estado, Fechas y Lecturas
+// ninguna vez — así que la mitad de la fila parecía tocable y la otra mitad
+// no, sin que esa diferencia dijera nada de verdad. Todas son el mismo tipo
+// de botón (abren su hoja para cambiar el dato), así que llevan el mismo
+// fondo siempre.
+export function Pastilla({ children, onClick, color }) {
   return (
     <motion.button
       onClick={onClick}
       whileTap={{ scale: 0.96 }}
       transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-      className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs transition-colors"
+      className="inline-flex items-center gap-1.5 rounded-full border bg-accent-soft px-3 py-1.5 text-xs transition-colors"
       style={{
         borderColor: color || 'var(--color-line)',
         color: color || 'var(--color-ink-dim)',
-        background: activa ? 'var(--color-accent-soft)' : 'transparent',
       }}
     >
       {children}
@@ -200,7 +206,7 @@ export function EditorCarpeta({ entry, carpetas, onActualizar }) {
 
   return (
     <>
-      <Pastilla onClick={() => { setNueva(''); hoja.abrir() }} activa={!!entry.folder}>
+      <Pastilla onClick={() => { setNueva(''); hoja.abrir() }}>
         {entry.folder || 'Sin carpeta'}
       </Pastilla>
       <HojaInferior abierta={hoja.abierta} titulo="Carpeta" onCerrar={hoja.cerrar}>
@@ -243,6 +249,175 @@ function BotonCarpeta({ activa, onClick, children }) {
     >
       {children}
     </button>
+  )
+}
+
+// ─── Dónde se lee ──────────────────────────────────────────────────────────
+//
+// A diferencia de Estado o Carpeta, elegir aquí no cierra la hoja: marcar
+// "eReader" (o "Físico y eReader") deja sitio para escribir la paginación de
+// esa edición, y cerrarse de golpe se llevaría por delante esa segunda mitad
+// del gesto antes de que diera tiempo a tocar el campo.
+const FORMATO_OPCIONES = [
+  ['fisico', 'Físico'],
+  ['ereader', 'eReader'],
+  ['ambos', 'Físico y eReader'],
+]
+
+function aTexto(n) { return n != null ? String(n) : '' }
+
+export function EditorFormato({ entry, onActualizar }) {
+  const hoja = useHoja()
+  const libro = entry.book
+  const formato = entry.reading_format
+
+  // Campos de texto locales, guardados al salir del campo — como las notas:
+  // escribir "500" son varias pulsaciones y no hace falta un PATCH por cada
+  // dígito. Se resincronizan si se abre la ficha de OTRO libro (esta ficha
+  // no se desmonta al cambiar de libro).
+  const [fisico, setFisico] = useState(() => aTexto(entry.custom_total_pages))
+  const [ereader, setEreader] = useState(() => aTexto(entry.ereader_total_pages))
+  const idPrevio = useRef(entry.id)
+  if (idPrevio.current !== entry.id) {
+    idPrevio.current = entry.id
+    setFisico(aTexto(entry.custom_total_pages))
+    setEreader(aTexto(entry.ereader_total_pages))
+  }
+
+  const muestraFisico = formato === 'fisico' || formato === 'ambos'
+  const muestraEreader = formato === 'ereader' || formato === 'ambos'
+
+  function elegir(id) {
+    onActualizar({ reading_format: formato === id ? '' : id })
+  }
+  function guardarFisico() {
+    const n = fisico === '' ? null : Number(fisico)
+    if (n !== (entry.custom_total_pages ?? null)) onActualizar({ custom_total_pages: n })
+  }
+  function guardarEreader() {
+    const n = ereader === '' ? null : Number(ereader)
+    if (n !== (entry.ereader_total_pages ?? null)) onActualizar({ ereader_total_pages: n })
+  }
+
+  return (
+    <>
+      <Pastilla onClick={hoja.abrir}>
+        {formato ? FORMATO_LABEL[formato] : 'Dónde lees'}
+      </Pastilla>
+      <HojaInferior abierta={hoja.abierta} titulo="Dónde lees este libro" onCerrar={hoja.cerrar}>
+        <div className="flex flex-col gap-2 pb-2">
+          {FORMATO_OPCIONES.map(([id, etiqueta]) => (
+            <button
+              key={id}
+              onClick={() => elegir(id)}
+              className={`rounded-xl2 border px-4 py-3 text-left text-sm font-semibold transition-colors ${
+                formato === id ? 'border-accent-line bg-accent-soft text-accent' : 'border-line text-ink-dim'
+              }`}
+            >
+              {etiqueta}
+            </button>
+          ))}
+        </div>
+
+        {(muestraFisico || muestraEreader) && (
+          <div className="mt-4 flex flex-col gap-3 border-t border-line pt-4">
+            {muestraFisico && (
+              <CampoPaginas
+                etiqueta="Páginas (edición física)"
+                value={fisico}
+                onChange={setFisico}
+                onBlur={guardarFisico}
+                placeholder={libro.num_pages ? String(libro.num_pages) : '—'}
+              />
+            )}
+            {muestraEreader && (
+              <CampoPaginas
+                etiqueta="Páginas (eReader)"
+                value={ereader}
+                onChange={setEreader}
+                onBlur={guardarEreader}
+                placeholder="—"
+              />
+            )}
+          </div>
+        )}
+      </HojaInferior>
+    </>
+  )
+}
+
+function CampoPaginas({ etiqueta, value, onChange, onBlur, placeholder }) {
+  return (
+    <label className="block">
+      <span className="mb-1.5 block text-[13px] text-ink-dim">{etiqueta}</span>
+      <input
+        value={value}
+        onChange={ev => onChange(ev.target.value.replace(/\D/g, '').slice(0, 5))}
+        onBlur={onBlur}
+        inputMode="numeric"
+        placeholder={placeholder}
+        className="h-11 w-full rounded-xl2 border border-line bg-bg px-3 text-[15px] outline-none transition-colors focus:border-accent-line"
+      />
+    </label>
+  )
+}
+
+// ─── Precio ────────────────────────────────────────────────────────────────
+//
+// Lo que costó esta copia. Dato personal, no de la ficha compartida del
+// libro: cada uno pagó lo que pagó (o nada, si se lo prestaron o le llegó
+// de otra forma). De momento solo se guarda — es la base para las
+// estadísticas y gráficas de gasto que vendrán después, no hay nada más que
+// hacer con él todavía.
+function aTextoPrecio(n) {
+  return n != null ? String(n).replace('.', ',') : ''
+}
+
+export function EditorPrecio({ entry, onActualizar }) {
+  const hoja = useHoja()
+  const [texto, setTexto] = useState(() => aTextoPrecio(entry.price))
+  const idPrevio = useRef(entry.id)
+  if (idPrevio.current !== entry.id) {
+    idPrevio.current = entry.id
+    setTexto(aTextoPrecio(entry.price))
+  }
+
+  function guardar() {
+    hoja.cerrar()
+    if (texto.trim() === '') return
+    const n = Number(texto.replace(',', '.'))
+    if (Number.isFinite(n) && n !== entry.price) onActualizar({ price: n })
+  }
+
+  return (
+    <>
+      <Pastilla onClick={hoja.abrir}>
+        {entry.price != null ? formatoPrecio(entry.price) : 'Precio'}
+      </Pastilla>
+      <HojaInferior abierta={hoja.abierta} titulo="Precio" onCerrar={hoja.cerrar}>
+        <label className="block">
+          <span className="mb-1.5 block text-[13px] text-ink-dim">Lo que costó esta copia</span>
+          <div className="relative">
+            <input
+              value={texto}
+              onChange={ev => setTexto(ev.target.value.replace(/[^\d,]/g, ''))}
+              onKeyDown={ev => { if (ev.key === 'Enter') guardar() }}
+              inputMode="decimal"
+              placeholder="0,00"
+              autoFocus
+              className="h-12 w-full rounded-xl2 border border-line bg-bg pl-3.5 pr-9 text-[15px] outline-none transition-colors focus:border-accent-line"
+            />
+            <span className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-ink-mute">€</span>
+          </div>
+        </label>
+        <button
+          onClick={guardar}
+          className="mt-4 h-12 w-full rounded-xl2 bg-accent text-[15px] font-semibold text-on-accent"
+        >
+          Guardar
+        </button>
+      </HojaInferior>
+    </>
   )
 }
 

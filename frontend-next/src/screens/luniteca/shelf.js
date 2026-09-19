@@ -27,13 +27,66 @@ export const STATUS_COLOR = {
 }
 
 export function progressPct(e) {
-  const total = e.custom_total_pages || e.book.num_pages
+  const total = totalPages(e)
   if (total && e.current_page != null) return Math.min(Math.round(e.current_page / total * 100), 100)
   return Math.round((e.progress || 0) * 100)
 }
 
 export function totalPages(e) {
+  return e.custom_total_pages || e.book.num_pages || e.ereader_total_pages || null
+}
+
+// ─── Dónde se lee: físico, eReader o los dos ────────────────────────────────
+//
+// `current_page` sigue siendo UNA sola cifra (la de siempre): las páginas del
+// físico si se conocen, y solo si no hay ninguna referencia física cae en las
+// del eReader — nunca las dos guardadas a la vez. Pasar de un lado a otro es
+// una regla de tres entre los dos totales, así que mover la página en un
+// formato se nota en el otro sin guardar nada aparte.
+export const FORMATO_LABEL = { fisico: 'Físico', ereader: 'eReader', ambos: 'Físico + eReader' }
+
+export function totalFisico(e) {
   return e.custom_total_pages || e.book.num_pages || null
+}
+
+export function totalEreader(e) {
+  return e.ereader_total_pages || null
+}
+
+// La página "base" en la que vive current_page: físico si se conoce, si no
+// eReader. Un libro marcado leído sin página guardada (se pudo marcar por
+// otra vía) se da por terminado del todo, igual que hacía `paginaDe` antes de
+// que hubiera dos formatos que elegir.
+function paginaBaseDe(e) {
+  const base = totalFisico(e) || totalEreader(e)
+  if (!base) return null
+  return e.current_page ?? (e.status === 'read' ? base : 0)
+}
+
+// La página actual, convertida al lado que se pida ('fisico' o 'ereader').
+export function paginaEnLado(e, lado) {
+  const fisico = totalFisico(e), ereader = totalEreader(e)
+  const base = fisico || ereader
+  const enBase = paginaBaseDe(e)
+  const destino = lado === 'ereader' ? ereader : fisico
+  if (enBase == null || !destino) return null
+  return destino === base ? enBase : Math.round(enBase / base * destino)
+}
+
+// Y al revés: de una página escrita o arrastrada en un lado concreto, la
+// página equivalente en la base que de verdad se guarda como current_page.
+export function paginaDesdeLado(e, lado, pagina) {
+  const fisico = totalFisico(e), ereader = totalEreader(e)
+  const base = fisico || ereader
+  const origen = lado === 'ereader' ? ereader : fisico
+  if (!base || !origen) return pagina
+  return origen === base ? pagina : Math.round(pagina / origen * base)
+}
+
+// Lo que costó una copia, en euros. Sin decimales cuando son un número
+// redondo (12 €, no 12,00 €) — que es como se dice un precio en voz alta.
+export function formatoPrecio(n) {
+  return n.toLocaleString('es', { style: 'currency', currency: 'EUR', minimumFractionDigits: n % 1 === 0 ? 0 : 2 })
 }
 
 export const EMPTY_FILTERS = { genre: '', folder: '', author: '', maxPages: '', minRating: '' }

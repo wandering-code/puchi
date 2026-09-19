@@ -28,7 +28,8 @@ export const SECCIONES = [
     puntos: [
       'Tres formas de mirarla: cuadrícula, lista y la estantería de lomos, con los libros de canto como en una balda de verdad.',
       'Buscar por título o autor, filtrar por género, carpeta, autor, páginas o nota, y ordenar a tu gusto.',
-      'La ficha de cada libro: estado, fechas, carpeta, veces leído y tus notas, que no ve nadie más.',
+      'La ficha de cada libro: estado, fechas, carpeta y veces leído; lo que te costó y tus notas, que esas dos no las ve nadie más.',
+      'Dónde lo llevas — físico, eReader o los dos — con la página de cada uno; muévela en cualquiera de los dos y la otra se ajusta sola.',
       'Para puntuar y para mover el progreso, mantén pulsado y arrastra — así no se toca sin querer al bajar por la lista.',
       'Añadir libros buscándolos (salen primero los que ya tiene alguien, con sus datos puestos) o a mano.',
       'La portada es tuya: cambiarla no se la cambia a los demás.',

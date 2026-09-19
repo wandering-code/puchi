@@ -45,6 +45,28 @@ export const IconArrow = (p) => (
 export const IconRefresh = (p) => (
   <svg {...base} {...p}><path d="M20 12a8 8 0 1 1-2.6-5.9" /><path d="M20 4v4h-4" /></svg>
 )
+export const IconInfo = (p) => (
+  <svg {...base} {...p}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 11v5" />
+    <circle cx="12" cy="7.6" r="0.9" fill="currentColor" stroke="none" />
+  </svg>
+)
+// Un libro físico: dos tapas que se abren en el lomo central, de perfil.
+export const IconLibroFisico = (p) => (
+  <svg {...base} {...p}>
+    <path d="M4 5.3c2.2-1 5.2-1 8 .2 2.8-1.2 5.8-1.2 8-.2v13.4c-2.2-1-5.2-1-8 .2-2.8-1.2-5.8-1.2-8-.2z" />
+    <path d="M12 5.5v13.4" />
+  </svg>
+)
+// Un eReader: pantalla con líneas de texto, sin botones ni cámara — que no
+// se confunda con un móvil.
+export const IconEreader = (p) => (
+  <svg {...base} {...p}>
+    <rect x="6" y="3" width="12" height="18" rx="1.5" />
+    <path d="M9 8h6M9 11.5h6M9 15h3.5" />
+  </svg>
+)
 export const IconPaw = (p) => (
   <svg viewBox="0 0 64 64" fill="currentColor" aria-hidden="true" {...p}>
     <ellipse cx="32" cy="40" rx="16" ry="13" />

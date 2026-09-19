@@ -5,11 +5,12 @@ import { useAuth } from '../../platform/auth'
 import { api } from '../../platform/api'
 import { useLiveUpdates } from '../../platform/live'
 import { usarPreferencia } from '../../platform/preferencias'
-import { EMPTY_FILTERS, agruparEstanteria, generosDeAutores, opcionesDeFiltro, readingDatesLabel } from './shelf'
+import { EMPTY_FILTERS, FORMATO_LABEL, agruparEstanteria, generosDeAutores, opcionesDeFiltro, readingDatesLabel } from './shelf'
 import { Cover, NotaBadge, PagesLabel, ProgressBar, StarRating } from './piezas'
 import BookDetail from './BookDetail'
 import {
-  IconChevron, IconFilter, IconGrid, IconList, IconLomos, IconPlegarTodo, IconPlus, IconSearch, IconX,
+  IconChevron, IconEreader, IconFilter, IconGrid, IconList, IconLibroFisico, IconLomos, IconPlegarTodo,
+  IconPlus, IconSearch, IconX,
 } from '../../ui/icons'
 import HojaFiltros from './HojaFiltros'
 import AnadirLibro from './AnadirLibro'
@@ -726,16 +727,31 @@ const FilaLibro = memo(function FilaLibro({ entry, onAbrir, fuera = false }) {
         <p className="mt-0.5 truncate text-xs text-ink-mute">{entry.book.author || 'Sin autor'}</p>
         {fechas && <p className="mt-0.5 truncate text-[10px] leading-tight text-ink-mute/80">{fechas}</p>}
       </div>
-      {/* La puntuación en estrellas, con las medias de verdad (el relleno se
-          recorta al porcentaje, no se redondea al entero). Aquí sí caben y se
-          leen; en la cuadrícula sigue siendo un número porque sobre una
-          portada de 68px cinco estrellas no se distinguen.
-          Sin punto de estado: cada sección de la lista es de un solo estado y
-          su título ya lo dice. */}
-      {entry.rating > 0 && <StarRating rating={entry.rating} size={11} className="shrink-0" />}
+      <div className="flex shrink-0 items-center gap-2">
+        <IconosFormato formato={entry.reading_format} />
+        {/* La puntuación en estrellas, con las medias de verdad (el relleno se
+            recorta al porcentaje, no se redondea al entero). Aquí sí caben y se
+            leen; en la cuadrícula sigue siendo un número porque sobre una
+            portada de 68px cinco estrellas no se distinguen.
+            Sin punto de estado: cada sección de la lista es de un solo estado y
+            su título ya lo dice. */}
+        {entry.rating > 0 && <StarRating rating={entry.rating} size={11} />}
+      </div>
     </button>
   )
 })
+
+// Dónde se lee este libro, solo si se ha dicho algo: el icono de más no dice
+// nada nuevo, así que un libro sin formato elegido no lleva ninguno.
+function IconosFormato({ formato }) {
+  if (!formato) return null
+  return (
+    <span className="flex items-center gap-1 text-ink-mute" title={FORMATO_LABEL[formato]}>
+      {(formato === 'fisico' || formato === 'ambos') && <IconLibroFisico className="h-3 w-3" />}
+      {(formato === 'ereader' || formato === 'ambos') && <IconEreader className="h-3 w-3" />}
+    </span>
+  )
+}
 
 // Lo que se está leyendo va aparte y más grande: es lo que se viene a mirar.
 // Se exporta porque la estantería de otra persona la usa igual: lo que alguien
@@ -790,7 +806,10 @@ export const TarjetaLeyendo = memo(function TarjetaLeyendo({ entry, onAbrir, fue
         <div className="mt-2">
           <ProgressBar entry={entry} />
           <div className="mt-1.5 flex items-center justify-between gap-2 text-[11px] text-ink-mute">
-            <span className="truncate">{fechas}</span>
+            <span className="flex min-w-0 items-center gap-1">
+              <IconosFormato formato={entry.reading_format} />
+              <span className="truncate">{fechas}</span>
+            </span>
             {/* Un <span> y no un <button>: esto vive DENTRO del botón que abre
                 el libro, y un botón dentro de otro no es HTML válido. El
                 stopPropagation es lo que evita que el toque llegue a la

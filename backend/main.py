@@ -1214,6 +1214,15 @@ def _migrate():
         "ALTER TABLE personal_shelf ADD COLUMN IF NOT EXISTS custom_total_pages INTEGER",
         "ALTER TABLE personal_shelf ADD COLUMN IF NOT EXISTS folder VARCHAR",
 
+        # personal_shelf: en qué formato se lee (físico/eReader/ambos) y la
+        # paginación propia del eReader
+        "ALTER TABLE personal_shelf ADD COLUMN IF NOT EXISTS reading_format VARCHAR",
+        "ALTER TABLE personal_shelf ADD COLUMN IF NOT EXISTS ereader_total_pages INTEGER",
+
+        # personal_shelf: lo que costó esta copia (dato personal, base para
+        # estadísticas futuras)
+        "ALTER TABLE personal_shelf ADD COLUMN IF NOT EXISTS price FLOAT",
+
         # personal_shelf: rating pasa a float para admitir medios puntos
         """DO $$ BEGIN
              IF (SELECT data_type FROM information_schema.columns
@@ -2625,6 +2634,9 @@ class ShelfUpdateRequest(BaseModel):
     sort_order:         Optional[int]   = None
     cover_url:          Optional[str]   = None   # "" o null → volver a la portada del libro
     times_read:         Optional[int]   = None   # editable a mano (ver "Releyendo")
+    reading_format:      Optional[str]   = None   # fisico | ereader | ambos | "" (borrar)
+    ereader_total_pages: Optional[int]   = None
+    price:               Optional[float] = None   # lo que costó esta copia
 
 @app.get("/shelf/personal")
 def get_personal_shelf(
@@ -2811,6 +2823,9 @@ async def update_personal_shelf(
     if body.current_page       is not None: entry.current_page       = body.current_page
     if body.custom_total_pages is not None: entry.custom_total_pages = body.custom_total_pages
     if body.folder             is not None: entry.folder             = body.folder or None
+    if body.reading_format      is not None: entry.reading_format      = body.reading_format or None
+    if body.ereader_total_pages is not None: entry.ereader_total_pages = body.ereader_total_pages
+    if body.price               is not None: entry.price               = body.price
     if body.cover_url          is not None:
         entry.cover_url = await _cache_cover_url(body.cover_url.strip() or None)
         # Misma constancia de autoría que PATCH /books/{id} — elegir una
@@ -3494,8 +3509,13 @@ def _shelf_entry_out(e: PersonalShelf, hide_notes=False) -> dict:
         "progress":           e.progress,
         "current_page":       e.current_page,
         "custom_total_pages": e.custom_total_pages,
+        "reading_format":      e.reading_format,
+        "ereader_total_pages": e.ereader_total_pages,
         "folder":             e.folder,
         "rating":             e.rating,
+        # Mismo trato que las notas: lo que costó tu copia no es asunto de
+        # quien mire tu estantería desde fuera.
+        "price":       None if hide_notes else e.price,
         "notes":       None if hide_notes else e.notes,
         "started_at":  e.started_at.isoformat()  if e.started_at  else None,
         "finished_at": e.finished_at.isoformat()  if e.finished_at else None,

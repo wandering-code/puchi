@@ -239,8 +239,11 @@ export function NotaBadge({ rating }) {
 }
 
 // ─── Progreso ──────────────────────────────────────────────────────────────
-export function ProgressBar({ entry, className = '' }) {
-  const pct = progressPct(entry)
+// `pct` explícito para cuando la barra tiene que reflejar un lado concreto
+// (físico o eReader) y no el que calcularía `progressPct` a partir de la
+// entrada tal cual llega — ver el interruptor de formato en la ficha.
+export function ProgressBar({ entry, pct: pctProp, className = '' }) {
+  const pct = pctProp ?? progressPct(entry)
   return (
     <div className={`h-1 w-full overflow-hidden rounded-full bg-surface-2 ${className}`}>
       <motion.div
