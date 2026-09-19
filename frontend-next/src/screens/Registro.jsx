@@ -14,15 +14,13 @@ import { IconArrow, IconCheck, IconPlus } from '../ui/icons'
 // registro no emite sesión, después no hay forma de llamar a
 // `POST /players/me/avatar`, que exige estar dentro.
 
-// Las mismas diez ilustraciones que la Puchi actual, para que una cuenta creada
-// aquí se vea igual allí mientras convivan.
+// Las mismas diez ilustraciones que la Puchi anterior (ahora en /v1), para
+// que una cuenta creada aquí se vea igual allí.
 //
-// Ojo con las rutas, que no son la misma: lo que se GUARDA es `/avatars/x.svg`
-// (desde la raíz), que es como están las cuentas que ya existen y como lo sirve
-// nginx en producción para las dos Puchis. Pero esta app vive bajo /next/, así
-// que para ENSEÑARLAS aquí hace falta su propia copia — de ahí el BASE_URL. El
-// día que esta versión sustituya a la actual, habrá que servir /avatars/ desde
-// la raíz o migrar lo guardado.
+// Lo que se GUARDA es siempre `/avatars/x.svg` desde la raíz, que es donde
+// las sirve nginx para las dos Puchis (esta versión ya vive en la raíz, así
+// que `guardar` y `ver` coinciden; se mantienen separados por si la app
+// vuelve a vivir bajo un subpath en algún despliegue).
 const CARAS = [
   ['cat-surprised', 'Gato sorprendido'],
   ['dog-happy', 'Perro feliz'],

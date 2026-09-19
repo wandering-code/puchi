@@ -381,7 +381,7 @@ export default function GatOS({ player: initialPlayer, onLogout, onProfileUpdate
     if (!document.hasFocus() && Notification.permission === 'granted') {
       const n = new Notification(`Llamada perdida de ${peer?.name ?? 'alguien'}`, {
         body: 'Diskordkito',
-        icon: '/paw-icon.svg',
+        icon: `${import.meta.env.BASE_URL}paw-icon.svg`,
         tag: 'diskordkito-call',
         silent: false,
       })
@@ -1066,7 +1066,7 @@ export default function GatOS({ player: initialPlayer, onLogout, onProfileUpdate
           if (!document.hasFocus() && Notification.permission === 'granted') {
             const n = new Notification(`${msg.player_name} · Diskordkito`, {
               body: msg.content,
-              icon: '/paw-icon.svg',
+              icon: `${import.meta.env.BASE_URL}paw-icon.svg`,
               tag:  'diskordkito',   // reemplaza la anterior, sin acumulación
               silent: false,
             })

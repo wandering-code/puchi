@@ -2,9 +2,10 @@ import { createContext, useContext, useState, useEffect } from 'react'
 
 // Portado de frontend/src/utils/auth.jsx sin cambios de comportamiento.
 // Comparte a propósito la clave de localStorage y la cookie de sesión con la
-// Puchi actual: las dos viven en el mismo origen, así que si ya has entrado
-// en / no tienes que volver a entrar en /next (y al revés). El precio es que
-// cerrar sesión en una la cierra en la otra — asumido mientras convivan.
+// Puchi anterior (ahora en /v1): las dos viven en el mismo origen, así que si
+// ya has entrado en una no tienes que volver a entrar en la otra. El precio
+// es que cerrar sesión en una la cierra en la otra — asumido mientras
+// convivan las dos versiones.
 const AuthContext = createContext(null)
 
 export function AuthProvider({ children }) {

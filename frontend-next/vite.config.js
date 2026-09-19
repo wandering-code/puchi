@@ -43,7 +43,7 @@ const PROXY = {
 const selloEnCaliente = {
   name: 'sello-en-caliente',
   configureServer(server) {
-    server.middlewares.use('/next/__version', (_req, res) => {
+    server.middlewares.use('/__version', (_req, res) => {
       res.setHeader('content-type', 'application/json')
       res.setHeader('cache-control', 'no-store')
       res.end(JSON.stringify({ version: selloDeVersion(), compilado: 'en vivo' }))
@@ -54,13 +54,13 @@ const selloEnCaliente = {
 // Un service worker registrado en el origen de dev (de un `vite preview`, de
 // una prueba con el build, de lo que sea) se queda mandando para siempre: la
 // PWA cachea el arranque y sirve una copia congelada, y como intercepta TODA
-// navegación bajo /next/, recargar no arregla nada — ni con ?v=, ni con
-// recarga forzada. Pasó de verdad: un iPhone se quedó 31 commits atrás
+// navegación bajo el scope del SW, recargar no arregla nada — ni con ?v=, ni
+// con recarga forzada. Pasó de verdad: un iPhone se quedó 31 commits atrás
 // enseñando el build de la víspera mientras el servidor servía lo de hoy.
 //
-// Esta página vive FUERA de /next/, que es justo lo que la salva: el scope del
-// SW es /next/, así que esto no lo puede interceptar y siempre llega del
-// servidor. Desde aquí se desregistra todo y se borran las cachés.
+// Esta página vive en /limpiar, fuera del scope normal de navegación de la
+// SPA, así que un service worker que solo intercepte rutas de la app no la
+// pilla. Desde aquí se desregistra todo y se borran las cachés.
 const limpiezaDeCachés = {
   name: 'limpieza-de-caches',
   configureServer(server) {
@@ -83,8 +83,8 @@ const limpiezaDeCachés = {
 <h1>Limpiar la caché de Puchi</h1>
 <p>El servidor está en <b>${selloDeVersion()}</b>.</p>
 <pre id="estado">Mirando…</pre>
-<button id="limpiar">Borrar y volver a /next/</button>
-<p><a href="/next/">Ir a /next/ sin borrar nada</a></p>
+<button id="limpiar">Borrar y volver a Puchi</button>
+<p><a href="/">Ir a Puchi sin borrar nada</a></p>
 <script>
   // Sin saltos de línea escapados dentro de esta plantilla, ni siquiera en un
   // comentario: los resolvería el literal de JS de fuera, partiendo la línea en
@@ -115,7 +115,7 @@ const limpiezaDeCachés = {
       await Promise.all(ks.map(function (k) { return caches.delete(k) }))
     }
     await mirar()
-    location.href = '/next/?limpio=' + Date.now()
+    location.href = '/?limpio=' + Date.now()
   }
 </script>`)
     })
@@ -127,12 +127,11 @@ export default defineConfig({
     __VERSION__: JSON.stringify(selloDeVersion()),
     __FECHA_BUILD__: JSON.stringify(new Date().toISOString().slice(0, 16).replace('T', ' ')),
   },
-  // Se sirve bajo puchi.wanderingcode.dev/next/ durante toda la convivencia
-  // con la Puchi actual. Sin este base los dos builds pedirían /assets/… y
-  // chocarían en nginx, que sirve los dos dist/ desde el mismo host.
-  // Al unificar (cuando esta versión pase a ser la única) se quita, junto
-  // con el scope/start_url del manifest de abajo.
-  base: '/next/',
+  // Unificada: esta es ya la única Puchi en puchi.wanderingcode.dev, así que
+  // vive en la raíz. Mientras convivió con la actual (bajo /next/) hacía
+  // falta este base para que los dos builds no chocaran pidiendo /assets/…
+  // del mismo host; la actual se ha movido a /v1/ y lleva su propio base.
+  base: '/',
   resolve: {
     alias: { '@': resolve(__dirname, './src') },
   },
@@ -150,15 +149,17 @@ export default defineConfig({
       // aunque el servidor mande Cache-Control: no-cache.
       includeAssets: ['icons/apple-touch-icon.png'],
       manifest: {
-        id: '/next/',
+        id: '/',
         name: 'Puchi',
         short_name: 'Puchi',
         description: 'Puchi',
-        // scope/start_url llevan el prefijo porque la app vive bajo /next/:
-        // sin scope correcto, Android abre la PWA y se sale de ella al primer
-        // enlace, y iOS la trata como marcador normal.
-        scope: '/next/',
-        start_url: '/next/',
+        // Sin scope correcto, Android abre la PWA y se sale de ella al primer
+        // enlace, y iOS la trata como marcador normal. Quien tenga la PWA
+        // instalada desde cuando vivía en /next/ tendrá que volver a añadirla
+        // a la pantalla de inicio: el id/scope antiguo no se puede migrar in
+        // situ, es un icono distinto para el sistema operativo.
+        scope: '/',
+        start_url: '/',
         display: 'standalone',
         orientation: 'portrait',
         background_color: '#f7f3ee',

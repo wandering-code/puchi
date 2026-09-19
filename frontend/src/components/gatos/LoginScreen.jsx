@@ -199,7 +199,7 @@ export default function LoginScreen() {
                     return (
                       <button type="button" key={a.id} onClick={() => pickPreset(a.url)} title={a.label}
                         style={{ padding:2, borderRadius:'50%', background:'transparent', cursor:'pointer', border:active?'2px solid white':'2px solid transparent' }}>
-                        <img src={a.url} alt={a.label} style={{ width:'100%', aspectRatio:'1', borderRadius:'50%', display:'block' }} />
+                        <img src={a.verLocal} alt={a.label} style={{ width:'100%', aspectRatio:'1', borderRadius:'50%', display:'block' }} />
                       </button>
                     )
                   })}

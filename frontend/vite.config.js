@@ -35,6 +35,11 @@ function versionFilePlugin() {
 
 export default defineConfig({
   plugins: [react(), versionFilePlugin()],
+  // Esta es ya la Puchi anterior: al pasar la nueva a la raíz de
+  // puchi.wanderingcode.dev, esta se muda a /v1/. Sin este base pediría
+  // /assets/… desde la raíz y chocaría con los de la Puchi nueva, que
+  // comparte host y nginx.
+  base: '/v1/',
   // Alias "@" -> src/ — usado por los componentes de shadcn/ui (Luniteca
   // nueva, issue #8) para importar entre ellos con rutas absolutas, como
   // espera el propio ecosistema de shadcn.

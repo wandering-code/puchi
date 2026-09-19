@@ -20,8 +20,7 @@ aplicarTema(temaGuardado())
 // desregistra y se recarga una vez.
 //
 // Cuando el que está atascado es un dispositivo con código viejo (que por
-// definición no trae esto), la salida es /limpiar, que vive fuera de /next/ y
-// el service worker no puede interceptar.
+// definición no trae esto), la salida es /limpiar.
 if (import.meta.env.DEV && 'serviceWorker' in navigator) {
   navigator.serviceWorker.getRegistrations().then(async regs => {
     if (!regs.length) return
@@ -34,13 +33,9 @@ if (import.meta.env.DEV && 'serviceWorker' in navigator) {
   }).catch(() => {})
 }
 
-// basename: la app vive bajo /next/ mientras conviva con la Puchi actual.
-// Sin esto el router creería que la ruta es "/next/algo" y no encontraría
-// ninguna de sus rutas. Se quita el día de la unificación, con el base de
-// vite.config.js y el scope del manifest.
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <BrowserRouter basename="/next">
+    <BrowserRouter>
       <AuthProvider>
         <PreferenciasProvider>
           <App />

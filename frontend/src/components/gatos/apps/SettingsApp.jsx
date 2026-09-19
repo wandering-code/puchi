@@ -253,7 +253,7 @@ export default function SettingsApp({ player, onProfileUpdate, onBackToLuniteca 
                 return (
                   <button type="button" key={a.id} onClick={() => pickPreset(a.url)} title={a.label}
                     style={{ padding: 3, borderRadius: '50%', background: 'transparent', border: active ? '2px solid white' : '2px solid transparent', cursor: 'pointer', transition: 'transform .15s', transform: active ? 'scale(1.1)' : 'scale(1)' }}>
-                    <img src={a.url} alt={a.label} style={{ width: '100%', aspectRatio: '1', borderRadius: '50%', display: 'block' }} />
+                    <img src={a.verLocal} alt={a.label} style={{ width: '100%', aspectRatio: '1', borderRadius: '50%', display: 'block' }} />
                   </button>
                 )
               })}

@@ -17,7 +17,7 @@ export function useVersion() {
   useEffect(() => {
     if (!import.meta.env.DEV) return
     let vigente = true
-    fetch('/next/__version')
+    fetch('/__version')
       .then(r => r.json())
       .then(v => { if (vigente) { setVersion(v.version); setCompilado(v.compilado) } })
       .catch(() => {})
