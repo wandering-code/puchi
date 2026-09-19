@@ -8,8 +8,11 @@ import { IconCamara, IconImagen } from '../../ui/icons'
 // Elegir el lomo de TU copia del libro: igual que SelectorPortada, lo que se
 // pone aquí va a tu entrada de la estantería (PersonalShelf.spine_url), no al
 // libro compartido. A diferencia de la portada, una foto de lomo casi nunca
-// encaja tal cual en la proporción del lomo (ancho×alto, la misma que usa
-// Lomos.jsx) — por eso, antes de subirla, siempre pasa por RecorteLomo.
+// encaja tal cual en forma de lomo — por eso, antes de subirla, siempre pasa
+// por RecorteLomo (con su propia proporción fija, no la de este libro en
+// concreto: ver el comentario de ese archivo). `ancho`/`alto` aquí son solo
+// para las miniaturas de la galería, del tamaño de ESTE libro para hacerse
+// una idea de cómo quedaría.
 export default function SelectorLomo({ abierta, libro, ancho, alto, elegida, onCerrar, onElegir, onSubir }) {
   const [datos, setDatos] = useState(null)   // null = cargando
   const [pendiente, setPendiente] = useState(null) // File esperando recorte
@@ -123,8 +126,6 @@ export default function SelectorLomo({ abierta, libro, ancho, alto, elegida, onC
       {pendiente && (
         <RecorteLomo
           file={pendiente}
-          ancho={ancho}
-          alto={alto}
           onCancelar={() => setPendiente(null)}
           onConfirmar={alConfirmarRecorte}
         />

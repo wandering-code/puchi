@@ -782,11 +782,16 @@ const Lomo = memo(function Lomo({ entry, onAbrir, volando = false, sinPrisa = fa
             : 'none',
           // Con lomo propio, la imagen ES el fondo entero — una sola capa,
           // más barata todavía que capasDeFondo (que ya de por sí fusionaba
-          // las de siempre en una). Sin uno, se sigue dibujando en vivo
-          // exactamente como hasta ahora, para no dejar coja a la balda
-          // mientras se van generando los que faltan.
+          // las de siempre en una). `cover` y no `100% 100%`: una foto de
+          // verdad no tiene por qué salir en la proporción exacta de ESTE
+          // libro (que además varía de uno a otro solo por decoración, ver
+          // medidas() más abajo) — con `cover` se recorta para llenar el
+          // hueco sin estirarse, igual que cualquier portada. Sin lomo
+          // propio, se sigue dibujando en vivo exactamente como hasta ahora,
+          // para no dejar coja a la balda mientras se van generando los que
+          // faltan.
           ...(conContenido && (tieneLomoPropio
-            ? { backgroundImage: `url(${libro.spine_url})`, backgroundSize: '100% 100%', backgroundPosition: '0 0', backgroundRepeat: 'no-repeat' }
+            ? { backgroundImage: `url(${libro.spine_url})`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat' }
             : capasDeFondo({ libro, paleta, claro, alto, conNervios, tapaDura }))),
         }}
       >

@@ -2,21 +2,29 @@ import { useEffect, useRef, useState } from 'react'
 import { motion } from 'motion/react'
 import { IconX } from '../../ui/icons'
 
-// Recorta una foto a la proporción exacta del lomo (ancho×alto, el mismo par
-// que da medidas() en Lomos.jsx) antes de subirla: arrastrar para mover,
-// deslizador para acercar. El recorte se hace en el navegador con un canvas,
-// al tamaño real de salida (×2 para que no se vea borroso en pantallas
-// retina) — así llega ya lista, sin depender de que quien la mire recorte
+// Recorta una foto a una proporción de lomo (una franja alta y estrecha)
+// antes de subirla: arrastrar para mover, deslizador para acercar. El
+// recorte se hace en el navegador con un canvas, a una resolución fija de
+// salida — así llega ya lista, sin depender de que quien la mire recorte
 // nada por su cuenta.
 //
+// La proporción es FIJA y no la del hueco exacto de ESTE libro (ancho/alto
+// de medidas() en Lomos.jsx): esas medidas varían de un libro a otro solo
+// por decoración (grosor según páginas, alto según un hash) — recortar a esa
+// medida exacta daba fotos demasiado cortas/anchas según a qué libro le
+// tocara. Lomos.jsx pinta la foto con `background-size: cover`, así que
+// sobra con acercarse a una proporción realista de lomo; el hueco de cada
+// libro la recorta un poco más si hace falta, igual que una portada.
+//
 // Distinto de AvatarCropModal (frontend/): esa es cuadrada con guía circular;
-// aquí la proporción la decide el propio libro, así que el visor ES ya el
-// recorte — no hace falta una guía aparte dentro.
+// aquí el visor ES ya el recorte — no hace falta una guía aparte dentro.
 const VIEWPORT_ALTO = 380
-const ESCALA = 2
+const RATIO = 46 / 190          // ancho:alto de referencia — una franja alta
+const ANCHO_SALIDA = 220
+const ALTO_SALIDA = Math.round(ANCHO_SALIDA / RATIO)
 
-export default function RecorteLomo({ file, ancho, alto, onCancelar, onConfirmar }) {
-  const viewportAncho = Math.round(VIEWPORT_ALTO * (ancho / alto))
+export default function RecorteLomo({ file, onCancelar, onConfirmar }) {
+  const viewportAncho = Math.round(VIEWPORT_ALTO * RATIO)
   const [imgUrl,     setImgUrl]     = useState(null)
   const [imgSize,    setImgSize]    = useState(null) // {w,h} natural
   const [zoomFactor, setZoomFactor] = useState(1)
@@ -77,8 +85,8 @@ export default function RecorteLomo({ file, ancho, alto, onCancelar, onConfirmar
     if (!imgSize) return
     setGuardando(true)
     const canvas = document.createElement('canvas')
-    canvas.width = Math.round(ancho * ESCALA)
-    canvas.height = Math.round(alto * ESCALA)
+    canvas.width = ANCHO_SALIDA
+    canvas.height = ALTO_SALIDA
     const ctx = canvas.getContext('2d')
     const srcX = -pan.x / scale
     const srcY = -pan.y / scale

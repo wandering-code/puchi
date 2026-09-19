@@ -40,6 +40,13 @@ export default function BookDetail({
   // aparte, que sustituye al contenido de la ficha: son datos compartidos con
   // todo el club, no como el estado o las notas, que se tocan en el sitio.
   const [editando, setEditando] = useState(false)
+  // La ficha no se desmonta al cerrarse (ver PantallaInferior/Luniteca.jsx),
+  // así que sin esto cerrar en mitad de una edición — con el gesto de
+  // arrastre, el velo o "atrás", que cierran directo sin pasar por el botón
+  // de arriba — dejaba `editando` en true, y la siguiente ficha que se abría
+  // (aunque fuera de OTRO libro) aparecía ya en modo edición, con el
+  // formulario todavía montado sobre los datos del libro anterior.
+  useEffect(() => { setEditando(false) }, [entry.book.id, abierta])
 
   return (
     <PantallaInferior
@@ -83,6 +90,7 @@ export default function BookDetail({
     >
       {editando ? (
         <BookEditForm
+          key={entry.book.id}
           entry={entry}
           generos={generos}
           onCancelar={() => setEditando(false)}
