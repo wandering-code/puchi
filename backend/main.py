@@ -2645,9 +2645,16 @@ def get_personal_shelf(
     current: Player = Depends(get_current_player),
 ):
     target_id = player_id or current.id
+    # Sin ORDER BY, Postgres no promete ningún orden concreto — normalmente
+    # sale por dónde caen las filas en el disco, y un UPDATE (poner el
+    # formato de lectura, cambiar de carpeta, lo que sea) puede reescribir
+    # esa fila en otro sitio y reordenar el resultado de la siguiente
+    # consulta sin que nada del contenido haya cambiado. Por id: es el orden
+    # en el que se añadió cada libro y no se mueve nunca, editar o no editar.
     entries = (
         db.query(PersonalShelf)
         .filter(PersonalShelf.player_id == target_id)
+        .order_by(PersonalShelf.id)
         .all()
     )
     return [_shelf_entry_out(e, hide_notes=(target_id != current.id)) for e in entries]
