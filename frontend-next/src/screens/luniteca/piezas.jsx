@@ -167,9 +167,11 @@ export function EditableRating({ rating, onChange, size = 26 }) {
     const caja = fila.current?.getBoundingClientRect()
     if (!caja) return 0
     const proporcion = Math.max(0, Math.min(1, (clientX - caja.left) / caja.width))
-    // A medias, con mínimo de 0,5: la fila nunca se queda "en blanco" a mitad
-    // de un gesto, que se leería como que se ha borrado la nota.
-    return Math.max(0.5, Math.min(5, Math.round(proporcion * 5 * 2) / 2))
+    // A medias, y hasta 0: arrastrar del todo a la izquierda es la forma de
+    // quitar la puntuación, y 0 es justo lo que ya trata el resto de la app
+    // como "sin puntuar" (StarRating no pinta nada, los `rating > 0` de la
+    // ficha y la actividad la esconden). No hace falta guardar null aparte.
+    return Math.max(0, Math.min(5, Math.round(proporcion * 5 * 2) / 2))
   }
 
   function terminar(guardar) {
