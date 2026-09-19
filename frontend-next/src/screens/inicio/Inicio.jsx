@@ -4,7 +4,12 @@ import { motion } from 'motion/react'
 import { useAuth } from '../../platform/auth'
 import { usarPreferencia } from '../../platform/preferencias'
 import { seccionesDe } from '../secciones'
-import { IconArrow, IconPaw, IconSettings } from '../../ui/icons'
+import { IconArrow, IconInfo, IconPaw, IconSettings } from '../../ui/icons'
+
+// Mientras conviven las dos Puchis, el enlace a la anterior es fijo: cuando
+// se cambien las tornas (esta pase a ser la de siempre y la vieja se mude a
+// /v1) solo hay que tocar esta constante.
+const URL_PUCHI_ANTERIOR = 'https://puchi.wanderingcode.dev/v1'
 
 // La pantalla de Inicio: una vuelta rápida por lo que hay, para quien acaba de
 // entrar por primera vez y no sabe por dónde tirar.
@@ -30,6 +35,8 @@ export default function Inicio() {
 
   return (
     <div className="py-6">
+      <AvisoPuchiNueva />
+
       <header className="mb-6">
         <div className="flex items-center gap-2.5">
           <IconPaw className="h-7 w-7 shrink-0 text-accent" />
@@ -53,6 +60,29 @@ export default function Inicio() {
       <Trucos />
 
       <Aviso inicioActual={inicio} />
+    </div>
+  )
+}
+
+// Lo primero que se ve al entrar, antes que el propio saludo: mientras esta
+// versión esté en pruebas, quien no la reconozca tiene que enterarse de que
+// existe la de siempre y de cómo volver a ella, sin tener que leer el resto
+// de la pantalla para encontrarlo.
+function AvisoPuchiNueva() {
+  return (
+    <div className="mb-6 flex items-start gap-3 rounded-xl2 border border-accent-line bg-accent-soft p-4">
+      <IconInfo className="h-5 w-5 shrink-0 text-accent" />
+      <p className="min-w-0 flex-1 text-[13px] leading-relaxed text-accent">
+        Esto es la Puchi nueva, todavía en pruebas. Si prefieres la de siempre, está en{' '}
+        <a
+          href={URL_PUCHI_ANTERIOR}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="font-semibold underline underline-offset-2"
+        >
+          puchi.wanderingcode.dev/v1
+        </a>.
+      </p>
     </div>
   )
 }
