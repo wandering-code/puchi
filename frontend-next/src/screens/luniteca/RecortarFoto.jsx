@@ -114,23 +114,21 @@ export default function RecortarFoto({
   const pinchRef = useRef(null)      // pellizco con dos dedos
   const [lupaEn, setLupaEn] = useState(null)  // {x,y} en coords del lienzo, mientras se arrastra una esquina
 
-  // Tres intentos previos (createImageBitmap, <img>+blob: URL,
-  // FileReader+createImageBitmap) seguían dejando el recorte en negro sin
-  // NINGÚN error, ni siquiera la red de seguridad de window.onerror. Eso
-  // solo cuadra con una cosa: `createImageBitmap` puede tener ÉXITO (sin
-  // rechazar la promesa, sin lanzar nada) y aun así devolver un ImageBitmap
-  // con contenido en negro para ciertos HEIC de iPhone — un fallo de
-  // decodificación silencioso de WebKit, no una excepción. Por eso nunca se
-  // veía ni el texto de info (se oculta en cuanto `lienzo` se pone, y eso
-  // pasaba enseguida porque la promesa SÍ resolvía) ni ningún error.
+  // Confirmado en un dispositivo real: la foto hecha con la cámara (siempre
+  // JPEG) se ve bien; la elegida de la galería (HEIC, el formato por
+  // defecto de las fotos de iPhone desde iOS 11) se queda en negro. Ni
+  // <img>, ni createImageBitmap, decodifican ese HEIC de fiar en esta
+  // combinación de iOS/WebKit — createImageBitmap incluso puede "tener
+  // éxito" con contenido en negro, sin ningún error que capturar.
   //
-  // La solución: dejar de usar `createImageBitmap` del todo para el archivo
-  // que entrega el selector, y decodificar solo con <img> a partir de un
-  // data: URI (vía FileReader, sin blob: URL — evita aparte el bug de
-  // WebKit con blob: URLs en una PWA instalada). El decodificador de <img>
-  // en iOS usa ImageIO, el mismo motor del sistema que llevan años
-  // mostrando fotos HEIC de iPhone en cualquier página web sin este
-  // problema — mucho más probado que la vía nueva de createImageBitmap.
+  // Por eso, si el archivo es HEIC/HEIF, se convierte antes a JPEG con
+  // heic2any (decodificador HEIC de verdad escrito en JS/WASM, no depende
+  // de que el navegador sepa hacerlo) y solo entonces se muestra con <img>
+  // a partir de un data: URI (vía FileReader, sin blob: URL — evita aparte
+  // el bug de WebKit con blob: URLs en una PWA instalada). Import
+  // dinámico porque heic2any pesa ~1.3MB y la inmensa mayoría de fotos no
+  // son HEIC (las hechas con la cámara de este selector, o subidas desde
+  // Android, nunca lo son).
   useEffect(() => {
     let cancelado = false
     let liquidado = false   // ya se resolvió con éxito o con error definitivo
@@ -151,18 +149,7 @@ export default function RecortarFoto({
       onImgLoad(img.naturalWidth, img.naturalHeight)
     }
 
-    // Todo envuelto en try/catch: incluso leer `file.size` podría fallar de
-    // alguna forma que no se ha visto todavía — sin esto, ese fallo se
-    // perdía como un error sin capturar y ni el texto de info ni ningún
-    // mensaje de error llegaban a pintarse.
-    try {
-      // Info del archivo tal cual lo entregó el selector — se ve en pantalla
-      // mientras carga (y se queda si falla) para poder diagnosticar sin
-      // acceso a las herramientas de desarrollador del móvil: qué tipo MIME
-      // manda iOS de verdad (HEIC, JPEG…), tamaño, si acaso llegó vacío.
-      const pesoMB = (file.size / 1024 / 1024).toFixed(2)
-      setInfoArchivo(`${file.name || 'sin nombre'} · ${file.type || 'sin tipo'} · ${pesoMB} MB`)
-
+    function mostrar(blob) {
       const reader = new FileReader()
       reader.onload = () => {
         if (cancelado || liquidado) return
@@ -177,12 +164,44 @@ export default function RecortarFoto({
         img.src = reader.result
       }
       reader.onerror = () => marcarError(`FileReader: ${reader.error?.name || 'desconocido'}`)
-      reader.readAsDataURL(file)
+      reader.readAsDataURL(blob)
+    }
+
+    // Todo envuelto en try/catch: incluso leer `file.size` podría fallar de
+    // alguna forma que no se ha visto todavía — sin esto, ese fallo se
+    // perdía como un error sin capturar y ni el texto de info ni ningún
+    // mensaje de error llegaban a pintarse.
+    try {
+      // Info del archivo tal cual lo entregó el selector — se ve en pantalla
+      // mientras carga (y se queda si falla) para poder diagnosticar sin
+      // acceso a las herramientas de desarrollador del móvil: qué tipo MIME
+      // manda iOS de verdad (HEIC, JPEG…), tamaño, si acaso llegó vacío.
+      const pesoMB = (file.size / 1024 / 1024).toFixed(2)
+      setInfoArchivo(`${file.name || 'sin nombre'} · ${file.type || 'sin tipo'} · ${pesoMB} MB`)
+
+      // El tipo MIME a veces llega vacío en iOS para archivos HEIC, así que
+      // también se mira la extensión del nombre como reserva.
+      const esHEIC = /^image\/hei[cf]/i.test(file.type) || /\.hei[cf]$/i.test(file.name || '')
+      if (esHEIC) {
+        import('heic2any').then(({ default: heic2any }) =>
+          heic2any({ blob: file, toType: 'image/jpeg', quality: 0.9 })
+        ).then(resultado => {
+          if (cancelado || liquidado) return
+          mostrar(Array.isArray(resultado) ? resultado[0] : resultado)
+        }).catch(err => {
+          if (!cancelado && !liquidado) marcarError(`heic2any: ${err?.message || err}`)
+        })
+      } else {
+        mostrar(file)
+      }
     } catch (err) {
       marcarError(`arranque: ${err?.message || err}`)
     }
 
-    const limite = setTimeout(() => marcarError('tiempo agotado'), 6000)
+    // HEIC tarda más (cargar heic2any + decodificar) que una foto normal —
+    // 6s se quedaba corto y disparaba el error antes de que le diera tiempo
+    // a terminar.
+    const limite = setTimeout(() => marcarError('tiempo agotado'), 15000)
 
     return () => {
       cancelado = true
