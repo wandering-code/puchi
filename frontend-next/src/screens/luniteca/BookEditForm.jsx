@@ -5,7 +5,7 @@ import { Cover } from './piezas'
 import { useHoja } from './HojaInferior'
 import SelectorPortada from './SelectorPortada'
 import SelectorLomo from './SelectorLomo'
-import { ANCHO_FOTO_MAX, ANCHO_FOTO_MIN, medidas } from './Lomos'
+import { ANCHO_FOTO_MAX, ANCHO_FOTO_MIN, MM_MAX, MM_MIN, TAMANOS, medidas } from './Lomos'
 import { proporcionFoto } from './proporcionLomo'
 import { IconRefresh, IconX } from '../../ui/icons'
 import BotonPeligro from '../../ui/BotonPeligro'
@@ -29,13 +29,19 @@ export default function BookEditForm({ entry, generos, onGuardar, onCancelar, on
     synopsis: libro.synopsis || '',
     cover_url: libro.cover_url || '',
     spine_url: libro.spine_url || '',
+    height_mm: libro.height_mm != null ? String(libro.height_mm) : '',
   }))
   const [guardando, setGuardando] = useState(false)
   const portada = useHoja()
   const lomo = useHoja()
   // Mismo tamaño que ve la estantería para este libro (ver medidas() en
-  // Lomos.jsx).
-  const { ancho: anchoLomoBase, alto: altoLomo } = medidas(entry)
+  // Lomos.jsx) — pero contando el tamaño que hay en el BORRADOR, no el
+  // guardado: así al tocar "Tapa dura" el lomo de la muestra crece en el
+  // momento y se ve a qué se está diciendo que sí.
+  const mmElegidos = borrador.height_mm === '' ? null : Number(borrador.height_mm)
+  const { ancho: anchoLomoBase, alto: altoLomo } = medidas({
+    ...entry, book: { ...entry.book, height_mm: mmElegidos },
+  })
   // Con una foto de verdad puesta, el ancho de la vista previa tiene que
   // salir de la proporción REAL de esa foto (igual que en la balda — ver el
   // mismo mecanismo en Lomos.jsx) y no del ancho por páginas: si no, esta
@@ -160,6 +166,13 @@ export default function BookEditForm({ entry, generos, onGuardar, onCancelar, on
         </Campo>
       </div>
 
+      <Campo etiqueta="Tamaño">
+        <TamanoLibro
+          mm={mmElegidos}
+          onElegir={mm => setBorrador(b => ({ ...b, height_mm: mm == null ? '' : String(mm) }))}
+        />
+      </Campo>
+
       <Campo etiqueta="Sinopsis">
         <textarea
           value={borrador.synopsis}
@@ -229,6 +242,76 @@ function Campo({ etiqueta, className = '', children }) {
 // Library y Google Books. Escribe en el borrador, no en el libro: se revisa
 // antes de guardar. El título nunca se toca — es lo que identifica al libro y
 // lo que se ha usado para buscarlo.
+// Cuánto mide el libro de alto. Sin esto, la vista de lomos se lo inventa a
+// partir de un hash del título (ver medidas() en Lomos.jsx), y entonces dos
+// tomos de la misma edición salen de alturas distintas solo porque se llaman
+// distinto — que es lo que esto viene a arreglar. Los tres tamaños de
+// siempre están para no tener que medir nada; "a medida" es para el libro
+// raro (un álbum ilustrado, un bolsillo antiguo) que no es ninguno de ellos.
+function TamanoLibro({ mm, onElegir }) {
+  const preset = TAMANOS.find(t => t.mm === mm)
+  const [aMedida, setAMedida] = useState(mm != null && !preset)
+  const cm = mm != null ? (mm / 10).toFixed(1).replace('.', ',') : ''
+
+  function escribirCm(texto) {
+    const limpio = texto.replace(',', '.').replace(/[^\d.]/g, '').slice(0, 5)
+    const valor = Number(limpio)
+    if (!limpio || Number.isNaN(valor)) return onElegir(null)
+    onElegir(Math.round(valor * 10))
+  }
+
+  return (
+    <>
+      <div className="flex flex-wrap gap-1.5">
+        {TAMANOS.map(t => (
+          <button
+            key={t.clave}
+            onClick={() => { setAMedida(false); onElegir(t.mm) }}
+            className={`rounded-full border px-2.5 py-1 text-xs transition-colors ${
+              !aMedida && preset?.clave === t.clave ? 'border-accent-line bg-accent-soft text-accent' : 'border-line text-ink-dim'
+            }`}
+          >
+            {t.nombre} <span className="opacity-60">{(t.mm / 10).toFixed(0)} cm</span>
+          </button>
+        ))}
+        <button
+          onClick={() => setAMedida(v => !v)}
+          className={`rounded-full border px-2.5 py-1 text-xs transition-colors ${
+            aMedida ? 'border-accent-line bg-accent-soft text-accent' : 'border-line text-ink-dim'
+          }`}
+        >
+          A medida
+        </button>
+        {mm != null && (
+          <button
+            onClick={() => { setAMedida(false); onElegir(null) }}
+            className="rounded-full border border-line px-2.5 py-1 text-xs text-ink-mute"
+          >
+            Quitar
+          </button>
+        )}
+      </div>
+      {aMedida && (
+        <div className="mt-2 flex items-center gap-2">
+          <input
+            value={cm}
+            onChange={ev => escribirCm(ev.target.value)}
+            inputMode="decimal"
+            placeholder="23,5"
+            className={ENTRADA + ' w-24'}
+          />
+          <span className="text-xs text-ink-mute">cm de alto (de {MM_MIN / 10} a {MM_MAX / 10})</span>
+        </div>
+      )}
+      <p className="mt-2 text-xs leading-relaxed text-ink-mute">
+        Para que dos libros que miden lo mismo se vean iguales en la balda. Sin esto, el alto del
+        lomo se saca del título, así que dos tomos de una misma saga pueden salir uno más alto que
+        otro. El grosor no se toca aquí: ese sale de las páginas.
+      </p>
+    </>
+  )
+}
+
 function RellenarDatos({ borrador, setBorrador }) {
   const [estado, setEstado] = useState('quieto')   // quieto | buscando | ok | nada
 

@@ -43,6 +43,26 @@ const ANCHO_MAX = 56         // un tocho
 export const ANCHO_FOTO_MIN = 14
 export const ANCHO_FOTO_MAX = 90
 
+// De milímetros de libro de verdad a píxeles de balda. Los dos extremos del
+// rango de alturas de arriba (134-180px) se corresponden con 17 y 25 cm, que
+// es de dónde a dónde van los libros normales: 18 cm un bolsillo, 21 una
+// rústica, 24 una tapa dura grande. Fuera de ahí se topa — un libro no mide
+// 40 cm, y si midiera, no cabría en la balda (ALTO_FILA).
+export const MM_MIN = 170
+export const MM_MAX = 250
+// Los tres tamaños de siempre, para tocarlos en vez de medir el libro con
+// una regla. `mm` es lo que se guarda; el nombre es solo la etiqueta.
+export const TAMANOS = [
+  { clave: 'bolsillo', nombre: 'Bolsillo', mm: 180 },
+  { clave: 'rustica',  nombre: 'Rústica',  mm: 210 },
+  { clave: 'tapadura', nombre: 'Tapa dura', mm: 240 },
+]
+
+export function altoDesdeMm(mm) {
+  const topado = Math.min(MM_MAX, Math.max(MM_MIN, mm))
+  return Math.round(ALTO_MIN + (topado - MM_MIN) / (MM_MAX - MM_MIN) * (ALTO_MAX - ALTO_MIN))
+}
+
 // Número estable a partir de un texto: el mismo libro sale siempre igual, y
 // dos libros distintos casi nunca coinciden.
 function huella(texto) {
@@ -494,7 +514,16 @@ export function medidas(entry, generoDelAutor) {
   // tocho de 56px de ancho acababa con un hueco de 231px — más alto que la
   // balda entera (190px) — mientras uno fino se quedaba en 107px, por debajo
   // del mínimo de cualquier otro libro.
-  const alto = ALTO_MIN + (h % 100) / 100 * (ALTO_MAX - ALTO_MIN)
+  // Si el libro trae su alto de verdad (books.height_mm, puesto a mano en la
+  // ficha), manda ese. El hash es solo la reserva para los que no lo tienen:
+  // da variedad, pero es azar —depende de las LETRAS del título—, y por eso
+  // dos tomos de la misma edición podían salir uno un 13% más alto que el
+  // otro (medido: "Palabras radiantes" 169px contra "Juramentada" 150px,
+  // siendo el mismo libro físico). Con foto se notaba el doble, porque el
+  // ancho sale de multiplicar ESTE alto por la proporción de la foto.
+  const alto = entry.book.height_mm
+    ? altoDesdeMm(entry.book.height_mm)
+    : ALTO_MIN + (h % 100) / 100 * (ALTO_MAX - ALTO_MIN)
   // Uno de cada ocho libros, más o menos, va torcido: en una balda de verdad
   // nunca están todos a plomo. El ángulo es pequeño y siempre el mismo para el
   // mismo libro, y se apoya en su esquina de abajo, como se apoyaría de

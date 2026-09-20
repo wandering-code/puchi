@@ -1230,6 +1230,9 @@ def _migrate():
         # (ver Book.spine_url en database.py), y su propia copia por jugador
         "ALTER TABLE books ADD COLUMN IF NOT EXISTS spine_url VARCHAR",
         "ALTER TABLE books ADD COLUMN IF NOT EXISTS spine_custom BOOLEAN NOT NULL DEFAULT false",
+        # books: el alto real del libro en mm, para que la vista de lomos no
+        # tenga que inventárselo (ver Book.height_mm en database.py)
+        "ALTER TABLE books ADD COLUMN IF NOT EXISTS height_mm INTEGER",
         "ALTER TABLE personal_shelf ADD COLUMN IF NOT EXISTS spine_url VARCHAR",
 
         # personal_shelf: rating pasa a float para admitir medios puntos
@@ -1968,6 +1971,9 @@ class BookUpdateRequest(BaseModel):
     year:      Optional[int] = None
     isbn:      Optional[str] = None
     num_pages: Optional[int] = None
+    # Alto del libro en mm. 0 (no null) es la forma de dejarlo "sin definir":
+    # un null aquí no se distingue de "este PATCH no toca este campo".
+    height_mm: Optional[int] = None
 
 @app.patch("/books/{book_id}")
 async def update_book(
@@ -1996,6 +2002,10 @@ async def update_book(
     if body.year      is not None: book.year      = body.year
     if body.isbn      is not None: book.isbn      = body.isbn.strip() or None
     if body.num_pages is not None: book.num_pages = body.num_pages
+    if body.height_mm is not None:
+        # Fuera de rango se ignora en vez de guardarse: son milímetros, y un
+        # 24 (centímetros, mal convertidos) o un 2400 no son un libro.
+        book.height_mm = body.height_mm if 80 <= body.height_mm <= 500 else None
     db.commit()
     db.refresh(book)
     # El mismo Book es compartido entre estanterías personales y del club —
@@ -3650,6 +3660,7 @@ def _book_out(b: Book) -> dict:
         "genre":       b.genre,
         "spine_url":    b.spine_url,
         "spine_custom": b.spine_custom,
+        "height_mm":    b.height_mm,
     }
 
 def _player_out(p: Player) -> dict:

@@ -77,6 +77,19 @@ class Book(Base):
     # foto del lomo sin cambiárselo a los demás.
     spine_url    = Column(String, nullable=True)
     spine_custom = Column(Boolean, nullable=False, default=False)
+    # Cuánto mide el libro de alto, en MILÍMETROS (235 = 23,5 cm). Es el
+    # único dato real de tamaño que hay: el grosor del lomo sale de
+    # num_pages, pero el alto no se puede deducir de nada —ni las APIs lo
+    # dan de fiar— así que hasta ahora la vista de lomos lo sacaba de un
+    # hash del título (ver medidas() en Lomos.jsx). Eso hace que dos tomos
+    # de la MISMA edición se vean de alturas distintas solo porque sus
+    # títulos tienen letras distintas, que es justo lo que este campo
+    # arregla. Null = sin definir, y se sigue usando el hash.
+    #
+    # Va en el libro (compartido), no en la copia de cada jugador, por el
+    # mismo motivo que num_pages: es un dato de la edición, no una
+    # preferencia personal.
+    height_mm    = Column(Integer, nullable=True)
 
 
 class BookSpine(Base):

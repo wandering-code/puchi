@@ -143,6 +143,11 @@ export default function Luniteca() {
     const paginas = borrador.num_pages === '' ? null : Number(borrador.num_pages)
     if (anio !== (b.year ?? null)) patch.year = anio
     if (paginas !== (b.num_pages ?? null)) patch.num_pages = paginas
+    // El alto del libro en mm. El 0 no es un tamaño: es cómo se dice "quítalo"
+    // (un null en el PATCH significa "este campo no se toca", ver
+    // BookUpdateRequest en main.py).
+    const alturaMm = borrador.height_mm === '' ? null : Number(borrador.height_mm)
+    if (alturaMm !== (b.height_mm ?? null)) patch.height_mm = alturaMm ?? 0
     if (borrador.synopsis !== (b.synopsis || '')) patch.synopsis = borrador.synopsis
     if (Object.keys(patch).length) await actualizarLibro(b.id, patch)
     if (borrador.cover_url !== (entrada.own_cover_url || '')) {
