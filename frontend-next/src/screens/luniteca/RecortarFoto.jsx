@@ -36,7 +36,11 @@ const TOQUE_TIRADOR = 24
 // hay sitio para agarrar ninguna de las dos por separado.
 const RECT_MIN_PANTALLA = 28
 const ZOOM_MIN = 1
-const ZOOM_MAX = 6
+// El zoom se cuenta desde la foto entera a la vista (ver `ajusteBase`), que
+// es bastante más lejos de lo que se empezaba antes — con el tope de 6 de
+// entonces ya no se llegaba igual de cerca, y hace falta: en la foto de una
+// balda entera, el lomo que se quiere recortar puede ocupar un 5% del ancho.
+const ZOOM_MAX = 12
 // El lado más largo de la imagen que se sube, para no mandar fotos enormes
 // solo porque el recorte se hizo con mucho zoom.
 const SALIDA_MAX = 640
@@ -263,20 +267,33 @@ export default function RecortarFoto({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [file])
 
-  // El zoom mínimo (zoomFactor 1) tiene que dejar la FOTO —no el lienzo
-  // entero, que es más grande por el margen para poder girarla— cubriendo
-  // el escenario de punta a punta: nada de fondo detrás, como pide "que al
-  // alejar del todo se vea mi foto entera y punto". Es el mismo cálculo que
-  // un `background-size: cover`, pero para una foto que además puede estar
-  // girada — el ángulo hace falta (a más inclinación, más hay que acercar
-  // para seguir tapando las esquinas del escenario). Recibe `natW`/`natH`
+  // El zoom mínimo (zoomFactor 1) deja la FOTO ENTERA a la vista dentro del
+  // escenario, con bandas de fondo donde sobre sitio — un `contain`, no un
+  // `cover`. Antes era un cover: la foto tapaba el escenario de punta a
+  // punta y lo que se saliera, se salía. Con una foto vertical eso da casi
+  // igual (el escenario también lo es), pero con una foto HORIZONTAL —una
+  // balda entera, con el libro que se busca en un extremo— recortaba justo
+  // los dos extremos, y no había forma de ver la foto entera para encuadrar
+  // el lomo de la izquierda del todo. Lo que se pedía al hacerlo cover ("que
+  // al alejar del todo se vea mi foto entera y punto") es literalmente esto.
+  //
+  // El ángulo hace falta porque lo que tiene que caber es la foto GIRADA
+  // (su caja envolvente crece con la inclinación). Recibe `natW`/`natH`
   // aparte (no los lee de `lienzo`) para poder usarse también al cargar la
   // foto, antes de que ese estado exista todavía.
   function ajusteBase(anguloGrados, natW, natH) {
+    const { w, h } = cajaGirada(anguloGrados, natW, natH)
+    return Math.min(ESCENARIO_ANCHO / w, ESCENARIO_ALTO / h)
+  }
+
+  // El ancho y el alto que ocupa una foto de natW×natH inclinada este
+  // ángulo — su caja envolvente, en unidades de la propia foto.
+  function cajaGirada(anguloGrados, natW, natH) {
     const rad = (Math.abs(anguloGrados) * Math.PI) / 180
-    const porAncho = (ESCENARIO_ANCHO * Math.cos(rad) + ESCENARIO_ALTO * Math.sin(rad)) / natW
-    const porAlto = (ESCENARIO_ANCHO * Math.sin(rad) + ESCENARIO_ALTO * Math.cos(rad)) / natH
-    return Math.max(porAncho, porAlto)
+    return {
+      w: natW * Math.cos(rad) + natH * Math.sin(rad),
+      h: natW * Math.sin(rad) + natH * Math.cos(rad),
+    }
   }
   const baseScale = lienzo ? ajusteBase(rotacion, lienzo.natW, lienzo.natH) : 1
   const scale = baseScale * zoomFactor
@@ -347,7 +364,31 @@ export default function RecortarFoto({
     return { x: clientX - r.left, y: clientY - r.top }
   }
 
-  function cambiarZoom(nuevoZoom, centroPantalla) {
+  // Deja el recorte ENTERO dentro del escenario si cabe (con un margen para
+  // poder agarrar los tiradores de las esquinas, que si no quedan pegados al
+  // borde). Solo mueve lo justo, y por eso nunca puede abrir un hueco sin
+  // foto: el recorte siempre está dentro de la foto, así que acercar su
+  // borde al borde del escenario acerca el de la foto como mucho hasta ahí.
+  function offsetParaVerRecorte(candidato, escalaUsada) {
+    if (!rect) return candidato
+    const margen = RADIO_TIRADOR + 6
+    function ajuste(inicio, tamano, tamanoEscenario) {
+      if (tamano + margen * 2 >= tamanoEscenario) return 0   // no cabe entero: se deja donde está
+      if (inicio < margen) return margen - inicio
+      if (inicio + tamano > tamanoEscenario - margen) return tamanoEscenario - margen - (inicio + tamano)
+      return 0
+    }
+    return {
+      x: candidato.x + ajuste(candidato.x + rect.x * escalaUsada, rect.w * escalaUsada, ESCENARIO_ANCHO),
+      y: candidato.y + ajuste(candidato.y + rect.y * escalaUsada, rect.h * escalaUsada, ESCENARIO_ALTO),
+    }
+  }
+
+  // `traerRecorte`: solo al acercar con la BARRA, que es cuando no hay un
+  // punto de la foto bajo el dedo que mandar respetar. Con el pellizco o la
+  // rueda el punto de referencia es el del gesto y moverlo por su cuenta se
+  // notaría como un tirón.
+  function cambiarZoom(nuevoZoom, centroPantalla, traerRecorte = false) {
     const z = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, nuevoZoom))
     // El punto del lienzo bajo el dedo/rueda se queda fijo en pantalla — si
     // no, cada pellizco desplaza la foto y es imposible afinar.
@@ -356,10 +397,10 @@ export default function RecortarFoto({
     const nuevaScale = baseScale * z
     const candidato = { x: centroPantalla.x - natX * nuevaScale, y: centroPantalla.y - natY * nuevaScale }
     setZoomFactor(z)
-    // Alejar (zoom hacia ZOOM_MIN) con el pellizco lejos del centro podía
-    // dejar la foto sin cubrir una esquina del escenario — se topa aquí,
-    // igual que un arrastre.
-    setOffset(offsetHaciaValido(candidato, nuevaScale))
+    // Alejar (zoom hacia ZOOM_MIN) con el pellizco lejos del centro deja la
+    // foto descolocada respecto al escenario — se topa aquí, igual que un
+    // arrastre.
+    setOffset(offsetTopado(traerRecorte ? offsetParaVerRecorte(candidato, nuevaScale) : candidato, nuevaScale))
   }
 
   // Qué hay bajo el dedo al EMPEZAR a arrastrar: una esquina del recorte
@@ -453,54 +494,45 @@ export default function RecortarFoto({
     return calcular(rectInicial, dx * lo, dy * lo)
   }
 
-  // ¿El escenario entero queda cubierto por la foto si el lienzo se coloca
-  // en `candidato`? Las cuatro esquinas del escenario, pasadas a
-  // coordenadas del lienzo, tienen que caer dentro de la foto real — el
-  // mismo `puntoDentroDeFoto` de arriba, mirado al revés: ahí acota dónde
-  // puede estar el RECORTE, aquí acota dónde puede estar la FOTO. Sin esto,
-  // arrastrar para mover la foto (o hacer zoom hacia fuera) no tenía ningún
-  // tope, así que era fácil dejar una esquina o un borde del escenario sin
-  // foto detrás — otra vía hacia el mismo fondo negro que `limitarAFoto`
-  // evita en el recorte.
-  function escenarioCubierto(candidato, escalaUsada = scale) {
-    const esquinas = [[0, 0], [ESCENARIO_ANCHO, 0], [0, ESCENARIO_ALTO], [ESCENARIO_ANCHO, ESCENARIO_ALTO]]
-    return esquinas.every(([ex, ey]) =>
-      puntoDentroDeFoto((ex - candidato.x) / escalaUsada, (ey - candidato.y) / escalaUsada))
+  // Dónde cae la FOTO (ya girada) dentro del escenario si el lienzo se
+  // coloca en `candidato`: su caja envolvente, en coordenadas de pantalla.
+  // La foto va centrada en el lienzo, así que sale del centro del lienzo
+  // más media caja a cada lado.
+  function cajaDeLaFoto(candidato, escalaUsada = scale) {
+    const caja = cajaGirada(rotacion, lienzo.natW, lienzo.natH)
+    const w = caja.w * escalaUsada, h = caja.h * escalaUsada
+    const cx = candidato.x + (lienzo.w / 2) * escalaUsada
+    const cy = candidato.y + (lienzo.h / 2) * escalaUsada
+    return { x: cx - w / 2, y: cy - h / 2, w, h }
   }
 
-  // Mismo truco de bisección que `limitarAFoto`, pero para el desplazamiento
-  // de la foto: si el destino directo deja algún borde del escenario sin
-  // foto, se prueba la mayor parte de ese mismo movimiento que sí sirva —
-  // así arrastrar o hacer zoom hacia fuera se para justo en el borde, en vez
-  // de dejar ver el fondo negro de detrás.
-  function limitarOffset(offsetInicial, calcular, dx, dy, escalaUsada = scale) {
-    const candidato = calcular(offsetInicial, dx, dy)
-    if (escenarioCubierto(candidato, escalaUsada)) return candidato
-    let lo = 0, hi = 1
-    for (let i = 0; i < 20; i++) {
-      const mid = (lo + hi) / 2
-      if (escenarioCubierto(calcular(offsetInicial, dx * mid, dy * mid), escalaUsada)) lo = mid; else hi = mid
+  // El tope del desplazamiento de la foto, eje a eje. Ya no es "que la foto
+  // cubra el escenario entero" —desde que el zoom mínimo enseña la foto
+  // entera, eso es imposible, y además esas bandas son justo lo que se
+  // quiere ver—, sino "que la foto no se pueda perder de vista":
+  //
+  //   · si por ese eje la foto es MÁS GRANDE que el escenario, se arrastra
+  //     libremente pero sin despegar su borde del borde del escenario (lo
+  //     de siempre: nada de dejar media pantalla vacía al lado de la foto);
+  //   · si es MÁS PEQUEÑA (las bandas del ajuste entero), se queda centrada
+  //     en ese eje — moverla ahí no llevaría a ningún sitio y solo despista.
+  //
+  // Es un tope directo, sin la bisección que hacía falta antes: la condición
+  // anterior miraba las cuatro esquinas del escenario contra una foto
+  // inclinada y no se podía despejar; esta sí.
+  function offsetTopado(candidato, escalaUsada = scale) {
+    if (!lienzo) return candidato
+    const caja = cajaDeLaFoto(candidato, escalaUsada)
+    function ajuste(inicio, tamano, tamanoEscenario) {
+      if (tamano < tamanoEscenario) return (tamanoEscenario - tamano) / 2 - inicio
+      if (inicio > 0) return -inicio
+      if (inicio + tamano < tamanoEscenario) return tamanoEscenario - (inicio + tamano)
+      return 0
     }
-    return calcular(offsetInicial, dx * lo, dy * lo)
-  }
-
-  // Para el zoom y el giro no hay un "arrastre" del que partir — el destino
-  // se calcula de golpe (por el pellizco, o porque acaba de cambiar el
-  // ángulo) — así que aquí el punto de referencia seguro es el lienzo
-  // centrado en el escenario a esa escala (el único del que se SABE, por
-  // cómo se calcula `baseScale`, que cubre el escenario entero): si el
-  // destino directo no cubre el escenario, se busca el punto más cercano a
-  // él, en la línea hacia el centrado, que sí lo cubra.
-  function offsetHaciaValido(candidato, escalaUsada) {
-    if (escenarioCubierto(candidato, escalaUsada)) return candidato
-    const centrado = { x: (ESCENARIO_ANCHO - lienzo.w * escalaUsada) / 2, y: (ESCENARIO_ALTO - lienzo.h * escalaUsada) / 2 }
-    let lo = 0, hi = 1
-    for (let i = 0; i < 20; i++) {
-      const mid = (lo + hi) / 2
-      const prueba = { x: candidato.x + (centrado.x - candidato.x) * mid, y: candidato.y + (centrado.y - candidato.y) * mid }
-      if (escenarioCubierto(prueba, escalaUsada)) hi = mid; else lo = mid
+    return {
+      x: candidato.x + ajuste(caja.x, caja.w, ESCENARIO_ANCHO),
+      y: candidato.y + ajuste(caja.y, caja.h, ESCENARIO_ALTO),
     }
-    return { x: candidato.x + (centrado.x - candidato.x) * hi, y: candidato.y + (centrado.y - candidato.y) * hi }
   }
 
   // El punto exacto de la esquina que se está arrastrando, en coordenadas
@@ -566,13 +598,13 @@ export default function RecortarFoto({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rotacion])
 
-  // Girar también cambia cuánto hace falta acercar para seguir cubriendo el
-  // escenario entero (`baseScale` depende del ángulo) — si la foto estaba
-  // desplazada del centro (por un arrastre previo), un giro puede dejar
-  // igualmente una esquina del escenario sin foto detrás.
+  // Girar cambia el tamaño que ocupa la foto (`baseScale` depende del
+  // ángulo, porque lo que tiene que caber es la foto inclinada) — si estaba
+  // desplazada del centro por un arrastre previo, el giro puede dejarla
+  // descolocada respecto al escenario.
   useEffect(() => {
     if (!lienzo) return
-    setOffset(o => (escenarioCubierto(o) ? o : offsetHaciaValido(o, scale)))
+    setOffset(o => offsetTopado(o, scale))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rotacion])
 
@@ -607,13 +639,12 @@ export default function RecortarFoto({
     if (!g || g.puntero.id !== e.pointerId) return
     const dx = (e.clientX - g.puntero.x) / scale, dy = (e.clientY - g.puntero.y) / scale
     if (g.tipo === 'pan') {
-      // Topado para que la foto no se pueda arrastrar hasta dejar un borde
-      // del escenario sin ella detrás (ver limitarOffset/escenarioCubierto).
-      setOffset(limitarOffset(
-        g.offsetInicial,
-        (o, ddx, ddy) => ({ x: o.x + ddx, y: o.y + ddy }),
-        e.clientX - g.puntero.x, e.clientY - g.puntero.y,
-      ))
+      // Topado para que la foto no se pueda arrastrar hasta perderla de
+      // vista (ver offsetTopado).
+      setOffset(offsetTopado({
+        x: g.offsetInicial.x + (e.clientX - g.puntero.x),
+        y: g.offsetInicial.y + (e.clientY - g.puntero.y),
+      }))
     } else if (g.tipo === 'mover') {
       setRect(limitarAFoto(g.rectInicial, moverRect, dx, dy))
     } else if (g.tipo === 'esquina') {
@@ -786,9 +817,18 @@ export default function RecortarFoto({
               flex-1 puede ignorar el encogimiento y desbordar el contenedor
               por la derecha (min-width: auto por defecto en flexbox, muy
               visible en iOS Safari) — sin esto la barra se salía del modal. */}
+          {/* Acercar con la barra lo hace alrededor del RECORTE, no del
+              centro del escenario: si no, al encuadrar algo que está en un
+              extremo de la foto (el lomo de la izquierda del todo en la foto
+              de una balda entera) el recorte se salía de la vista justo al
+              acercar para afinarlo, y había que volver a buscarlo
+              arrastrando. Con el pellizco el centro sigue siendo el de los
+              dos dedos, que ahí sí es lo que se espera. */}
           <input
             type="range" min={ZOOM_MIN} max={ZOOM_MAX} step="0.01" value={zoomFactor}
-            onChange={e => cambiarZoom(Number(e.target.value), { x: ESCENARIO_ANCHO / 2, y: ESCENARIO_ALTO / 2 })}
+            onChange={e => cambiarZoom(Number(e.target.value), rp
+              ? { x: rp.x + rp.w / 2, y: rp.y + rp.h / 2 }
+              : { x: ESCENARIO_ANCHO / 2, y: ESCENARIO_ALTO / 2 }, true)}
             className="min-w-0 flex-1 accent-accent"
           />
         </div>
