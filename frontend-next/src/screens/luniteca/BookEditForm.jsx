@@ -248,7 +248,10 @@ function Campo({ etiqueta, className = '', children }) {
 // distinto — que es lo que esto viene a arreglar. Los tres tamaños de
 // siempre están para no tener que medir nada; "a medida" es para el libro
 // raro (un álbum ilustrado, un bolsillo antiguo) que no es ninguno de ellos.
-function TamanoLibro({ mm, onElegir }) {
+// Exportado porque la revisión de una importación lo usa igual (ver
+// ListaPrevia.jsx): el alto es un campo que también se puede traer de una
+// hoja de cálculo, y elegirlo ahí tiene que sentirse como elegirlo aquí.
+export function TamanoLibro({ mm, onElegir }) {
   const preset = TAMANOS.find(t => t.mm === mm)
   const [aMedida, setAMedida] = useState(mm != null && !preset)
   const cm = mm != null ? (mm / 10).toFixed(1).replace('.', ',') : ''

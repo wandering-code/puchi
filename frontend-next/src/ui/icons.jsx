@@ -105,6 +105,12 @@ export const IconGrid = (p) => (
 export const IconList = (p) => (
   <svg {...base} {...p}><path d="M4 6h16M4 12h16M4 18h16" /></svg>
 )
+// Una hoja de cálculo: rejilla con la fila de encabezados marcada. Para
+// distinguir "importar desde un Excel" de "importar desde Goodreads" sin
+// depender del texto.
+export const IconTabla = (p) => (
+  <svg {...base} {...p}><rect x="3.5" y="4.5" width="17" height="15" rx="2" /><path d="M3.5 9h17M9.5 9v10.5M15 9v10.5" /></svg>
+)
 export const IconChevron = (p) => (
   <svg {...base} {...p}><path d="m6 9 6 6 6-6" /></svg>
 )

@@ -2868,7 +2868,7 @@ class BulkShelfRequest(BaseModel):
     # (Pydantic rechazaría todo el body de golpe antes de llegar al endpoint)
     # — se valida y convierte a mano dentro del bucle, libro a libro.
     books:  list[dict]
-    origin: Optional[str] = None   # 'search' (por defecto) | 'goodreads' | 'excel' — ver PersonalShelf.origin
+    origin: Optional[str] = None   # 'search' (por defecto) | 'goodreads' | 'excel' | 'scan' — ver PersonalShelf.origin
 
 def _parse_bulk_date(s, field: str):
     if not s:
@@ -2926,29 +2926,75 @@ async def bulk_add_personal_shelf(
             started_at   = _parse_bulk_date(raw.get("started_at"), "started_at")
             finished_at  = _parse_bulk_date(raw.get("finished_at"), "finished_at")
             times_read   = _parse_bulk_int(raw.get("times_read"), "times_read")
+            # Campos añadidos después de los importadores originales (alto del
+            # libro, precio, dónde se lee y las dos paginaciones propias) — ver
+            # Book.height_mm y PersonalShelf.price/reading_format/…: existían ya
+            # en la ficha pero no había forma de traerlos en una importación,
+            # así que una hoja exportada de Puchi perdía justo lo que Puchi
+            # sabe y las otras apps no.
+            height_mm    = _parse_bulk_int(raw.get("height_mm"), "height_mm")
+            price        = _parse_bulk_float(raw.get("price"), "price")
+            custom_total_pages  = _parse_bulk_int(raw.get("custom_total_pages"), "custom_total_pages")
+            ereader_total_pages = _parse_bulk_int(raw.get("ereader_total_pages"), "ereader_total_pages")
+            reading_format = raw.get("reading_format") or None
+            if reading_format is not None and reading_format not in ("fisico", "ereader", "ambos"):
+                raise ValueError('"reading_format" debe ser fisico, ereader o ambos')
             folder = raw.get("folder")
             folder = folder.strip() if isinstance(folder, str) and folder.strip() else None
 
-            book = Book(
-                title=title,
-                author=raw.get("author") or None,
-                cover_url=await _cache_cover_url(raw.get("cover_url") or None),
-                isbn=raw.get("isbn") or None,
-                num_pages=num_pages,
-                synopsis=raw.get("synopsis") or None,
-                year=year,
-                genre=raw.get("genre") or None,
-            )
-            db.add(book)
+            # Un libro que ya está en el catálogo se REUTILIZA en vez de
+            # duplicarse: sin esto, importar un libro que otro del club ya
+            # tiene creaba una segunda ficha con el mismo open_lib_key —
+            # imposible, porque la columna es única (la importación fallaba con
+            # un error de base de datos), y con el ISBN simplemente partía en
+            # dos el "lo tiene X" y las lecturas del mismo libro. Mismo
+            # criterio que _get_or_create_book para el alta de uno en uno.
+            open_lib_key = (raw.get("open_lib_key") or "").strip() or None
+            isbn = (str(raw.get("isbn")).strip() if raw.get("isbn") else None) or None
+            book = None
+            if open_lib_key:
+                book = db.query(Book).filter(Book.open_lib_key == open_lib_key).first()
+            if not book and isbn:
+                book = db.query(Book).filter(Book.isbn == isbn).first()
+            if book:
+                if db.query(PersonalShelf).filter_by(player_id=current.id, book_id=book.id).first():
+                    raise ValueError("Ya está en tu estantería")
+                # Se completa lo que al libro compartido le falte, sin pisar
+                # nada de lo que ya tenga: otro jugador pudo haberlo corregido
+                # a mano y una importación no es motivo para deshacerlo.
+                if num_pages and not book.num_pages: book.num_pages = num_pages
+                if year      and not book.year:      book.year      = year
+                if raw.get("genre")    and not book.genre:    book.genre    = raw["genre"]
+                if raw.get("synopsis") and not book.synopsis: book.synopsis = raw["synopsis"]
+                if height_mm and not book.height_mm: book.height_mm = height_mm
+            else:
+                book = Book(
+                    title=title,
+                    author=raw.get("author") or None,
+                    cover_url=await _cache_cover_url(raw.get("cover_url") or None),
+                    isbn=isbn,
+                    open_lib_key=open_lib_key,
+                    num_pages=num_pages,
+                    synopsis=raw.get("synopsis") or None,
+                    year=year,
+                    genre=raw.get("genre") or None,
+                    height_mm=height_mm,
+                )
+                db.add(book)
             db.flush()
 
             progress = 1.0 if status == "read" else 0.0
-            if current_page and num_pages:
-                progress = min(current_page / num_pages, 1.0)
+            total_propio = custom_total_pages or num_pages or book.num_pages
+            if current_page and total_propio:
+                progress = min(current_page / total_propio, 1.0)
 
             entry = PersonalShelf(
                 player_id=current.id, book_id=book.id, status=status,
                 rating=rating, current_page=current_page, progress=progress,
+                custom_total_pages=custom_total_pages,
+                reading_format=reading_format,
+                ereader_total_pages=ereader_total_pages,
+                price=price,
                 folder=folder, notes=raw.get("notes") or None,
                 started_at=started_at, finished_at=finished_at,
                 sort_order=next_order,

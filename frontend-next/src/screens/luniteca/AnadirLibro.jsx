@@ -5,6 +5,8 @@ import { STATUS_LABEL } from './shelf'
 import { Cover } from './piezas'
 import PantallaInferior from './PantallaInferior'
 import { CamposFecha } from './editores'
+import EscanerISBN from './EscanerISBN'
+import ImportarLibros from './ImportarLibros'
 import { IconCheck, IconPlus, IconSearch, IconX } from '../../ui/icons'
 
 // Añadir un libro: buscándolo (en lo que ya tiene el club y en Open Library) o
@@ -17,11 +19,27 @@ import { IconCheck, IconPlus, IconSearch, IconX } from '../../ui/icons'
 // endpoint se manda y cómo se llama la acción—, así que no hay dos altas de
 // libro que mantener en paralelo.
 //
-// Falta el escáner de código de barras que tiene la Puchi actual; irá en su
-// propia pasada, porque trae dependencia nueva y permisos de cámara.
-export default function AnadirLibro({ onCerrar, onAnadido, destino = 'personal' }) {
+// Además de una a una, los libros pueden entrar en bloque: pasando códigos de
+// barras por la cámara (Escanear) o desde un archivo, sea el export de
+// Goodreads o una hoja de cálculo propia (Importar). Esas dos formas son solo
+// para tu estantería: al club los libros se proponen de uno en uno, que es lo
+// que significa proponer.
+const MODOS_PERSONAL = [
+  ['buscar', 'Buscar'], ['escanear', 'Escanear'], ['importar', 'Importar'], ['manual', 'A mano'],
+]
+const MODOS_CLUB = [['buscar', 'Buscar'], ['manual', 'A mano']]
+
+export default function AnadirLibro({ onCerrar, onAnadido, onImportado, estanteria, destino = 'personal' }) {
   const alClub = destino === 'club'
   const [modo, setModo] = useState('buscar')
+  const modos = alClub ? MODOS_CLUB : MODOS_PERSONAL
+  // El contenido entra por el lado del que viene: la pestaña de la derecha
+  // llega desde la derecha. Con cuatro pestañas hay que mirar el orden, no
+  // basta con comparar contra "buscar" como cuando eran dos.
+  const indice = modos.findIndex(([id]) => id === modo)
+  const previo = useRef(indice)
+  const sentido = indice >= previo.current ? 1 : -1
+  previo.current = indice
 
   return (
     <PantallaInferior
@@ -41,12 +59,12 @@ export default function AnadirLibro({ onCerrar, onAnadido, destino = 'personal' 
             </button>
           </div>
 
-          <div className="mb-4 flex gap-2">
-            {[['buscar', 'Buscar'], ['manual', 'A mano']].map(([id, texto]) => (
+          <div className="mb-4 flex gap-1">
+            {modos.map(([id, texto]) => (
               <button
                 key={id}
                 onClick={() => setModo(id)}
-                className={`relative flex-1 rounded-xl2 py-2.5 text-sm font-semibold transition-colors ${
+                className={`relative flex-1 rounded-xl2 py-2.5 text-[13px] font-semibold transition-colors ${
                   modo === id ? 'text-accent' : 'text-ink-dim'
                 }`}
               >
@@ -71,14 +89,15 @@ export default function AnadirLibro({ onCerrar, onAnadido, destino = 'personal' 
         <AnimatePresence mode="wait" initial={false}>
           <motion.div
             key={modo}
-            initial={{ opacity: 0, x: modo === 'buscar' ? -16 : 16 }}
+            initial={{ opacity: 0, x: 16 * sentido }}
             animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: modo === 'buscar' ? 16 : -16 }}
+            exit={{ opacity: 0, x: -16 * sentido }}
             transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
           >
-            {modo === 'buscar'
-              ? <Buscador onAnadido={onAnadido} alClub={alClub} />
-              : <AltaManual onAnadido={onAnadido} onHecho={onCerrar} alClub={alClub} />}
+            {modo === 'buscar' && <Buscador onAnadido={onAnadido} alClub={alClub} />}
+            {modo === 'escanear' && <EscanerISBN estanteria={estanteria} onImportado={onImportado} />}
+            {modo === 'importar' && <ImportarLibros estanteria={estanteria} onImportado={onImportado} />}
+            {modo === 'manual' && <AltaManual onAnadido={onAnadido} onHecho={onCerrar} alClub={alClub} />}
           </motion.div>
         </AnimatePresence>
       </div>

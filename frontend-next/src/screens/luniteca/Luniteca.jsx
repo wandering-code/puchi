@@ -400,9 +400,19 @@ export default function Luniteca() {
         />
       </div>
 
+      {/* La estantería va con él: los modos que traen muchos libros de golpe
+          (escáner e importación) la necesitan para avisar de lo que ya tienes
+          antes de duplicarlo, y para ofrecer tus géneros y carpetas al
+          corregir. Lo que entra así no llega de uno en uno, así que se recarga
+          entera en vez de ir añadiendo entradas. */}
       <AnimatePresence>
         {hojaAnadir.abierta && (
-          <AnadirLibro onCerrar={hojaAnadir.cerrar} onAnadido={libroAnadido} />
+          <AnadirLibro
+            onCerrar={hojaAnadir.cerrar}
+            onAnadido={libroAnadido}
+            onImportado={cargar}
+            estanteria={shelf}
+          />
         )}
       </AnimatePresence>
 

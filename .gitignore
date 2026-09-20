@@ -25,3 +25,7 @@ backend/uploads/*
 
 # Backups de BBDD (datos personales reales de producción) — nunca al repo
 backend/backups/
+
+# Capturas y archivos sueltos del MCP de Playwright (se generan al probar la
+# interfaz desde Claude Code) — son de usar y tirar, no del proyecto
+.playwright-mcp/

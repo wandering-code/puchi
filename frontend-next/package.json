@@ -10,10 +10,12 @@
   },
   "dependencies": {
     "heic2any": "^0.0.4",
+    "html5-qrcode": "^2.3.8",
     "motion": "^12.23.30",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "react-router-dom": "^7.13.2"
+    "react-router-dom": "^7.13.2",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.18",
