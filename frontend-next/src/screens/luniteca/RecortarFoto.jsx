@@ -68,6 +68,28 @@ export default function RecortarFoto({
   // a las herramientas de desarrollador del móvil (no siempre hay un Mac a
   // mano para el inspector remoto de Safari).
   const [infoArchivo, setInfoArchivo] = useState(null)
+  // Red de seguridad: CUALQUIER excepción de JS (no solo las de la carga de
+  // la foto) mientras este componente está montado, capturada y mostrada en
+  // pantalla. Sin esto, un fallo síncrono en cualquier punto del efecto de
+  // carga (por ejemplo al leer `file.size`) se pierde como un error sin
+  // capturar de React — no hay ErrorBoundary en la app — y deja la pantalla
+  // en negro exactamente igual que el bug que se lleva rato persiguiendo,
+  // pero sin ninguna pista de qué lo causó.
+  const [errorJS, setErrorJS] = useState(null)
+  useEffect(() => {
+    function alError(e) {
+      setErrorJS(`${e.message || e.error?.message || 'error desconocido'} — ${e.filename || ''}:${e.lineno || ''}`)
+    }
+    function alRechazo(e) {
+      setErrorJS(`promesa rechazada sin capturar: ${e.reason?.message || e.reason}`)
+    }
+    window.addEventListener('error', alError)
+    window.addEventListener('unhandledrejection', alRechazo)
+    return () => {
+      window.removeEventListener('error', alError)
+      window.removeEventListener('unhandledrejection', alRechazo)
+    }
+  }, [])
   // El tamaño del LIENZO de trabajo — no el de la foto: algo mayor EN CADA
   // EJE por separado (no un cuadrado del lado mayor — eso malgastaba media
   // pantalla en bandas negras con una foto claramente vertical u horizontal,
@@ -92,34 +114,28 @@ export default function RecortarFoto({
   const pinchRef = useRef(null)      // pellizco con dos dedos
   const [lupaEn, setLupaEn] = useState(null)  // {x,y} en coords del lienzo, mientras se arrastra una esquina
 
-  // Dos intentos previos con `createImageBitmap` (y con <img>+blob: URL como
-  // reserva) seguían dejando el recorte en negro SIN ningún mensaje de error
-  // en una PWA instalada en iOS — ni siquiera el aviso que se añadió para
-  // cuando falla la lectura. Eso solo pasa si la promesa/carga se queda
-  // COLGADA para siempre, ni éxito ni error: es el comportamiento conocido
-  // de WebKit con blob: URLs dentro de una PWA instalada (`onload` y
-  // `onerror` de un <img> nunca llegan a dispararse). `createImageBitmap`
-  // sobre un Blob pasa internamente por el mismo mecanismo, así que se
-  // cuelga igual.
+  // Tres intentos previos (createImageBitmap, <img>+blob: URL,
+  // FileReader+createImageBitmap) seguían dejando el recorte en negro sin
+  // NINGÚN error, ni siquiera la red de seguridad de window.onerror. Eso
+  // solo cuadra con una cosa: `createImageBitmap` puede tener ÉXITO (sin
+  // rechazar la promesa, sin lanzar nada) y aun así devolver un ImageBitmap
+  // con contenido en negro para ciertos HEIC de iPhone — un fallo de
+  // decodificación silencioso de WebKit, no una excepción. Por eso nunca se
+  // veía ni el texto de info (se oculta en cuanto `lienzo` se pone, y eso
+  // pasaba enseguida porque la promesa SÍ resolvía) ni ningún error.
   //
-  // Por eso aquí no se usa `URL.createObjectURL` en ningún punto: se lee el
-  // archivo con FileReader a un data: URI (base64 embebido en la propia
-  // cadena, sin ninguna URL que "resolver") y ESE es el único src que ve el
-  // <img> — evita el bug de raíz en vez de trabajar alrededor de él. Y por
-  // si algún otro paso se queda colgado igualmente sin avisar, un límite de
-  // tiempo fuerza el mensaje de error a los pocos segundos: mejor un aviso
-  // tarde que la pantalla en negro para siempre sin explicación.
+  // La solución: dejar de usar `createImageBitmap` del todo para el archivo
+  // que entrega el selector, y decodificar solo con <img> a partir de un
+  // data: URI (vía FileReader, sin blob: URL — evita aparte el bug de
+  // WebKit con blob: URLs en una PWA instalada). El decodificador de <img>
+  // en iOS usa ImageIO, el mismo motor del sistema que llevan años
+  // mostrando fotos HEIC de iPhone en cualquier página web sin este
+  // problema — mucho más probado que la vía nueva de createImageBitmap.
   useEffect(() => {
     let cancelado = false
     let liquidado = false   // ya se resolvió con éxito o con error definitivo
     setErrorCarga(null)
     setLienzo(null)
-    // Info del archivo tal cual lo entregó el selector — se ve en pantalla
-    // mientras carga (y se queda si falla) para poder diagnosticar sin
-    // acceso a las herramientas de desarrollador del móvil: qué tipo MIME
-    // manda iOS de verdad (HEIC, JPEG…), tamaño, si acaso llegó vacío.
-    const pesoMB = (file.size / 1024 / 1024).toFixed(2)
-    setInfoArchivo(`${file.name || 'sin nombre'} · ${file.type || 'sin tipo'} · ${pesoMB} MB`)
 
     function marcarError(motivo) {
       if (cancelado || liquidado) return
@@ -128,35 +144,42 @@ export default function RecortarFoto({
       setErrorCarga(`No se ha podido leer esta foto${detalle}. Prueba con otra.`)
     }
 
-    function marcarExito(fuente, w, h) {
+    function marcarExito(img) {
       if (cancelado || liquidado) return
       liquidado = true
-      bitmapRef.current = fuente
-      onImgLoad(w, h)
+      bitmapRef.current = img
+      onImgLoad(img.naturalWidth, img.naturalHeight)
     }
 
-    function conFileReader(motivoAnterior) {
+    // Todo envuelto en try/catch: incluso leer `file.size` podría fallar de
+    // alguna forma que no se ha visto todavía — sin esto, ese fallo se
+    // perdía como un error sin capturar y ni el texto de info ni ningún
+    // mensaje de error llegaban a pintarse.
+    try {
+      // Info del archivo tal cual lo entregó el selector — se ve en pantalla
+      // mientras carga (y se queda si falla) para poder diagnosticar sin
+      // acceso a las herramientas de desarrollador del móvil: qué tipo MIME
+      // manda iOS de verdad (HEIC, JPEG…), tamaño, si acaso llegó vacío.
+      const pesoMB = (file.size / 1024 / 1024).toFixed(2)
+      setInfoArchivo(`${file.name || 'sin nombre'} · ${file.type || 'sin tipo'} · ${pesoMB} MB`)
+
       const reader = new FileReader()
       reader.onload = () => {
         if (cancelado || liquidado) return
         const img = new Image()
-        img.onload = () => marcarExito(img, img.naturalWidth, img.naturalHeight)
-        img.onerror = () => marcarError(`img: ${motivoAnterior || 'reserva'}`)
+        img.onload = () => {
+          // naturalWidth/Height en 0 es la otra forma en que un <img> puede
+          // "tener éxito" sin haber decodificado nada de verdad.
+          if (!img.naturalWidth || !img.naturalHeight) { marcarError('imagen vacía (0×0)'); return }
+          marcarExito(img)
+        }
+        img.onerror = () => marcarError('img')
         img.src = reader.result
       }
-      reader.onerror = () => marcarError(`FileReader: ${reader.error?.name || motivoAnterior || 'reserva'}`)
+      reader.onerror = () => marcarError(`FileReader: ${reader.error?.name || 'desconocido'}`)
       reader.readAsDataURL(file)
-    }
-
-    try {
-      createImageBitmap(file).then(bitmap => {
-        if (cancelado || liquidado) { bitmap.close(); return }
-        marcarExito(bitmap, bitmap.width, bitmap.height)
-      }).catch(err => {
-        if (!cancelado && !liquidado) conFileReader(`createImageBitmap: ${err?.name || err}`)
-      })
     } catch (err) {
-      conFileReader(`createImageBitmap síncrono: ${err?.name || err}`)
+      marcarError(`arranque: ${err?.message || err}`)
     }
 
     const limite = setTimeout(() => marcarError('tiempo agotado'), 6000)
@@ -588,6 +611,11 @@ export default function RecortarFoto({
         onClick={e => e.stopPropagation()}
         className="flex max-h-[92dvh] w-full max-w-sm flex-col items-center gap-4 overflow-y-auto rounded-2xl border border-line bg-surface p-5 shadow-xl"
       >
+        {errorJS && (
+          <p className="w-full rounded-lg border border-red-300 bg-red-50 p-2 text-[10px] text-red-700 break-words">
+            Error de JS: {errorJS}
+          </p>
+        )}
         <div className="flex w-full items-center gap-3">
           <div className="flex-1">
             <p className="text-sm font-semibold">{titulo}</p>
