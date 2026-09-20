@@ -90,24 +90,58 @@ export default function RecortarFoto({
   // `createImageBitmap` decodifica directo desde los bytes del File, sin
   // pasar por una blob: URL ni por la carga de un <img> — evita el fallo
   // silencioso (recorte en negro, sin ningún aviso) que daba esa vía con
-  // fotos en un formato que el <img> no sabía decodificar (típico de una
-  // foto de galería de iPhone) o, en una PWA instalada, con el propio bug
-  // de WebKit resolviendo blob: URLs.
+  // fotos en un formato que el <img> no sabía decodificar, o el bug de
+  // WebKit resolviendo blob: URLs en una PWA instalada.
+  //
+  // Pero `createImageBitmap` sobre un Blob/File tiene su propia historia de
+  // bugs en WebKit —justo al revés que lo anterior: casos donde falla ahí
+  // (con una foto que el propio sistema operativo sabe decodificar sin
+  // problema, típicamente HEIC de galería de iPhone) mientras que un <img>
+  // normal la carga bien, porque usa el decodificador de imágenes del
+  // sistema y no el de `createImageBitmap`. No hay forma de saber de
+  // antemano cuál de los dos falla en qué versión de iOS, así que
+  // se intenta primero el más robusto (`createImageBitmap`, sin blob: URL) y
+  // si falla —de cualquiera de las formas en que puede fallar, incluida una
+  // excepción SÍNCRONA que un simple .catch() no pilla— se cae al <img>
+  // clásico como reserva, esta vez con onerror de verdad (antes no lo
+  // tenía, que es como se quedaba en negro sin ningún aviso).
   useEffect(() => {
     let cancelado = false
+    let urlReserva = null
     setErrorCarga(null)
     setLienzo(null)
-    createImageBitmap(file).then(bitmap => {
-      if (cancelado) { bitmap.close(); return }
-      bitmapRef.current = bitmap
-      onImgLoad(bitmap.width, bitmap.height)
-    }).catch(() => {
-      if (!cancelado) setErrorCarga('No se ha podido leer esta foto. Prueba con otra.')
-    })
+
+    function conImgReserva() {
+      urlReserva = URL.createObjectURL(file)
+      const img = new Image()
+      img.onload = () => {
+        if (cancelado) return
+        bitmapRef.current = img
+        onImgLoad(img.naturalWidth, img.naturalHeight)
+      }
+      img.onerror = () => {
+        if (!cancelado) setErrorCarga('No se ha podido leer esta foto. Prueba con otra.')
+      }
+      img.src = urlReserva
+    }
+
+    try {
+      createImageBitmap(file).then(bitmap => {
+        if (cancelado) { bitmap.close(); return }
+        bitmapRef.current = bitmap
+        onImgLoad(bitmap.width, bitmap.height)
+      }).catch(() => {
+        if (!cancelado) conImgReserva()
+      })
+    } catch {
+      conImgReserva()
+    }
+
     return () => {
       cancelado = true
-      bitmapRef.current?.close()
+      bitmapRef.current?.close?.()
       bitmapRef.current = null
+      if (urlReserva) URL.revokeObjectURL(urlReserva)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [file])
