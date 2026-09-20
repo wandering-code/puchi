@@ -87,61 +87,73 @@ export default function RecortarFoto({
   const pinchRef = useRef(null)      // pellizco con dos dedos
   const [lupaEn, setLupaEn] = useState(null)  // {x,y} en coords del lienzo, mientras se arrastra una esquina
 
-  // `createImageBitmap` decodifica directo desde los bytes del File, sin
-  // pasar por una blob: URL ni por la carga de un <img> — evita el fallo
-  // silencioso (recorte en negro, sin ningún aviso) que daba esa vía con
-  // fotos en un formato que el <img> no sabía decodificar, o el bug de
-  // WebKit resolviendo blob: URLs en una PWA instalada.
+  // Dos intentos previos con `createImageBitmap` (y con <img>+blob: URL como
+  // reserva) seguían dejando el recorte en negro SIN ningún mensaje de error
+  // en una PWA instalada en iOS — ni siquiera el aviso que se añadió para
+  // cuando falla la lectura. Eso solo pasa si la promesa/carga se queda
+  // COLGADA para siempre, ni éxito ni error: es el comportamiento conocido
+  // de WebKit con blob: URLs dentro de una PWA instalada (`onload` y
+  // `onerror` de un <img> nunca llegan a dispararse). `createImageBitmap`
+  // sobre un Blob pasa internamente por el mismo mecanismo, así que se
+  // cuelga igual.
   //
-  // Pero `createImageBitmap` sobre un Blob/File tiene su propia historia de
-  // bugs en WebKit —justo al revés que lo anterior: casos donde falla ahí
-  // (con una foto que el propio sistema operativo sabe decodificar sin
-  // problema, típicamente HEIC de galería de iPhone) mientras que un <img>
-  // normal la carga bien, porque usa el decodificador de imágenes del
-  // sistema y no el de `createImageBitmap`. No hay forma de saber de
-  // antemano cuál de los dos falla en qué versión de iOS, así que
-  // se intenta primero el más robusto (`createImageBitmap`, sin blob: URL) y
-  // si falla —de cualquiera de las formas en que puede fallar, incluida una
-  // excepción SÍNCRONA que un simple .catch() no pilla— se cae al <img>
-  // clásico como reserva, esta vez con onerror de verdad (antes no lo
-  // tenía, que es como se quedaba en negro sin ningún aviso).
+  // Por eso aquí no se usa `URL.createObjectURL` en ningún punto: se lee el
+  // archivo con FileReader a un data: URI (base64 embebido en la propia
+  // cadena, sin ninguna URL que "resolver") y ESE es el único src que ve el
+  // <img> — evita el bug de raíz en vez de trabajar alrededor de él. Y por
+  // si algún otro paso se queda colgado igualmente sin avisar, un límite de
+  // tiempo fuerza el mensaje de error a los pocos segundos: mejor un aviso
+  // tarde que la pantalla en negro para siempre sin explicación.
   useEffect(() => {
     let cancelado = false
-    let urlReserva = null
+    let liquidado = false   // ya se resolvió con éxito o con error definitivo
     setErrorCarga(null)
     setLienzo(null)
 
-    function conImgReserva() {
-      urlReserva = URL.createObjectURL(file)
-      const img = new Image()
-      img.onload = () => {
-        if (cancelado) return
-        bitmapRef.current = img
-        onImgLoad(img.naturalWidth, img.naturalHeight)
+    function marcarError() {
+      if (cancelado || liquidado) return
+      liquidado = true
+      setErrorCarga('No se ha podido leer esta foto. Prueba con otra.')
+    }
+
+    function marcarExito(fuente, w, h) {
+      if (cancelado || liquidado) return
+      liquidado = true
+      bitmapRef.current = fuente
+      onImgLoad(w, h)
+    }
+
+    function conFileReader() {
+      const reader = new FileReader()
+      reader.onload = () => {
+        if (cancelado || liquidado) return
+        const img = new Image()
+        img.onload = () => marcarExito(img, img.naturalWidth, img.naturalHeight)
+        img.onerror = marcarError
+        img.src = reader.result
       }
-      img.onerror = () => {
-        if (!cancelado) setErrorCarga('No se ha podido leer esta foto. Prueba con otra.')
-      }
-      img.src = urlReserva
+      reader.onerror = marcarError
+      reader.readAsDataURL(file)
     }
 
     try {
       createImageBitmap(file).then(bitmap => {
-        if (cancelado) { bitmap.close(); return }
-        bitmapRef.current = bitmap
-        onImgLoad(bitmap.width, bitmap.height)
+        if (cancelado || liquidado) { bitmap.close(); return }
+        marcarExito(bitmap, bitmap.width, bitmap.height)
       }).catch(() => {
-        if (!cancelado) conImgReserva()
+        if (!cancelado && !liquidado) conFileReader()
       })
     } catch {
-      conImgReserva()
+      conFileReader()
     }
+
+    const limite = setTimeout(marcarError, 6000)
 
     return () => {
       cancelado = true
+      clearTimeout(limite)
       bitmapRef.current?.close?.()
       bitmapRef.current = null
-      if (urlReserva) URL.revokeObjectURL(urlReserva)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [file])
