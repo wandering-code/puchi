@@ -43,6 +43,31 @@ const ANCHO_MAX = 56         // un tocho
 export const ANCHO_FOTO_MIN = 14
 export const ANCHO_FOTO_MAX = 90
 
+// Lo ancho que se ve un lomo CON FOTO: sale de la forma real de esa foto
+// (ver proporcionLomo.js), no de las páginas. Se lee en cuanto se sabe, y
+// hasta entonces vale `anchoBase` (el de las páginas) como reserva. El ALTO
+// no cambia por esto — es lo que mantiene a todos los libros apoyados en la
+// misma balda; lo único que varía con una foto de verdad es lo ancho o fino
+// que se ve.
+//
+// Aquí y no en cada sitio porque son tres los que lo necesitan, con la misma
+// cuenta: la balda, la vista previa de la ficha al cambiar el lomo y la del
+// alta a mano. `activo` en false deja el hook quieto (la balda no lee la
+// proporción de los libros que todavía no se ven).
+export function usarAnchoLomo(url, anchoBase, alto, activo = true) {
+  const [anchoFoto, setAnchoFoto] = useState(null)
+  useEffect(() => {
+    if (!activo || !url) { setAnchoFoto(null); return }
+    let vigente = true
+    proporcionFoto(url).then(r => {
+      if (!vigente || !r) return
+      setAnchoFoto(Math.round(Math.min(ANCHO_FOTO_MAX, Math.max(ANCHO_FOTO_MIN, alto * r))))
+    })
+    return () => { vigente = false }
+  }, [url, alto, activo])
+  return (activo && url && anchoFoto) ? anchoFoto : anchoBase
+}
+
 // De milímetros de libro de verdad a píxeles de balda. Los dos extremos del
 // rango de alturas de arriba (134-180px) se corresponden con 17 y 25 cm, que
 // es de dónde a dónde van los libros normales: 18 cm un bolsillo, 21 una
@@ -740,23 +765,7 @@ const Lomo = memo(function Lomo({ entry, onAbrir, volando = false, sinPrisa = fa
   // la imagen (ver generarLomo.js).
   const tieneLomoPropio = !!libro.spine_url
   const esFoto = tieneLomoPropio && libro.spine_custom
-  // El ancho de un libro con foto sale de la forma real de esa foto, no de
-  // las páginas: se lee en cuanto se sabe (ver proporcionLomo.js) y hasta
-  // entonces se usa el de las páginas como reserva, igual que con el color.
-  // El ALTO no cambia por esto — se queda con el de siempre (ver medidas()),
-  // que es lo que mantiene a todos los libros apoyados en la misma balda; lo
-  // único que varía con una foto de verdad es lo ancho o fino que se ve.
-  const [anchoFoto, setAnchoFoto] = useState(null)
-  useEffect(() => {
-    if (!conContenido || !esFoto) return
-    let vigente = true
-    proporcionFoto(libro.spine_url).then(r => {
-      if (!vigente || !r) return
-      setAnchoFoto(Math.round(Math.min(ANCHO_FOTO_MAX, Math.max(ANCHO_FOTO_MIN, alto * r))))
-    })
-    return () => { vigente = false }
-  }, [libro.spine_url, conContenido, esFoto, alto])
-  const anchoEfectivo = (esFoto && anchoFoto) ? anchoFoto : ancho
+  const anchoEfectivo = usarAnchoLomo(libro.spine_url, ancho, alto, conContenido && esFoto)
   // El color de la portada llega después (hay que cargarla y leerla), así que
   // el lomo nace con su color de reserva y cambia al de verdad en cuanto está.
   // Con una foto de verdad no hace falta: no hay texto al que decidirle la

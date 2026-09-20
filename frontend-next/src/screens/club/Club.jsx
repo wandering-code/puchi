@@ -236,7 +236,7 @@ export default function Club() {
 
       <AnimatePresence>
         {hojaProponer.abierta && (
-          <AnadirLibro destino="club" onCerrar={hojaProponer.cerrar} onAnadido={propuesto} />
+          <AnadirLibro destino="club" onCerrar={hojaProponer.cerrar} onAnadido={propuesto} estanteria={entradas} />
         )}
       </AnimatePresence>
 

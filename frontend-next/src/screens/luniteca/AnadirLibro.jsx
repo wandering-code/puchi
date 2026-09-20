@@ -1,10 +1,9 @@
 import { useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { api } from '../../platform/api'
-import { STATUS_LABEL } from './shelf'
 import { Cover } from './piezas'
 import PantallaInferior from './PantallaInferior'
-import { CamposFecha } from './editores'
+import AltaManual from './AltaManual'
 import EscanerISBN from './EscanerISBN'
 import ImportarLibros from './ImportarLibros'
 import { IconCheck, IconPlus, IconSearch, IconX } from '../../ui/icons'
@@ -97,7 +96,7 @@ export default function AnadirLibro({ onCerrar, onAnadido, onImportado, estanter
             {modo === 'buscar' && <Buscador onAnadido={onAnadido} alClub={alClub} />}
             {modo === 'escanear' && <EscanerISBN estanteria={estanteria} onImportado={onImportado} />}
             {modo === 'importar' && <ImportarLibros estanteria={estanteria} onImportado={onImportado} />}
-            {modo === 'manual' && <AltaManual onAnadido={onAnadido} onHecho={onCerrar} alClub={alClub} />}
+            {modo === 'manual' && <AltaManual onAnadido={onAnadido} onHecho={onCerrar} alClub={alClub} estanteria={estanteria} />}
           </motion.div>
         </AnimatePresence>
       </div>
@@ -276,191 +275,5 @@ function BotonAnadir({ estado, onAnadir, etiqueta }) {
         ? <motion.span animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 0.8, ease: 'linear' }} className="flex"><IconPlus className="h-5 w-5" /></motion.span>
         : <IconPlus className="h-5 w-5" />}
     </motion.button>
-  )
-}
-
-// ─── A mano ────────────────────────────────────────────────────────────────
-// Para lo que la búsqueda no encuentra: ediciones raras, libros que no están en
-// Open Library, o cosas que no son libros al uso.
-function AltaManual({ onAnadido, onHecho, alClub }) {
-  const [datos, setDatos] = useState({
-    title: '', author: '', genre: '', year: '', num_pages: '',
-    status: 'want_to_read', started_at: '', finished_at: '',
-  })
-  const [guardando, setGuardando] = useState(false)
-  const [error, setError] = useState(null)
-  const primero = useRef(null)
-
-  const set = (clave) => (ev) => setDatos(d => ({ ...d, [clave]: ev.target.value }))
-  // Un libro propuesto al club no tiene estado ni fechas que elegir: entra
-  // siempre como propuesta, y cuándo se empieza y se termina lo pone el admin
-  // desde la ficha cuando toca. Así que en el club esas dos partes del
-  // formulario no existen.
-  const llevaInicio = !alClub && (datos.status === 'reading' || datos.status === 'read')
-  const llevaFin = !alClub && datos.status === 'read'
-
-  async function guardar(ev) {
-    ev.preventDefault()
-    if (!datos.title.trim()) { setError('El título es lo único imprescindible'); primero.current?.focus(); return }
-    setGuardando(true); setError(null)
-    const libro = {
-      title: datos.title.trim(),
-      author: datos.author.trim() || null,
-      genre: datos.genre.trim() || null,
-      year: datos.year ? Number(datos.year) : null,
-      num_pages: datos.num_pages ? Number(datos.num_pages) : null,
-    }
-    try {
-      if (alClub) {
-        onAnadido(await api('/shelf/club', { method: 'POST', body: libro }))
-        onHecho()
-        return
-      }
-      const entrada = await api('/shelf/personal', {
-        method: 'POST',
-        body: { ...libro, status: datos.status, origin: 'search' },
-      })
-      // El alta no admite fechas (el servidor solo las usa para registrar
-      // actividad), así que si se han puesto van en un segundo paso.
-      const fechas = {}
-      if (llevaInicio && datos.started_at) fechas.started_at = datos.started_at
-      if (llevaFin && datos.finished_at) fechas.finished_at = datos.finished_at
-      const conFechas = Object.keys(fechas).length
-        ? await api(`/shelf/personal/${entrada.id}`, { method: 'PATCH', body: fechas })
-        : entrada
-      onAnadido(conFechas)
-      onHecho()
-    } catch (err) {
-      setError(err.status === 409 && alClub
-        ? 'Ese libro ya está en la estantería del club'
-        : (err.message || 'No se ha podido añadir'))
-      setGuardando(false)
-    }
-  }
-
-  return (
-    <form onSubmit={guardar} className="pb-2">
-      <Campo etiqueta="Título">
-        <input ref={primero} value={datos.title} onChange={set('title')} className={ENTRADA} />
-      </Campo>
-      <Campo etiqueta="Autor">
-        <input value={datos.author} onChange={set('author')} className={ENTRADA} />
-      </Campo>
-      <Campo etiqueta="Género">
-        <input value={datos.genre} onChange={set('genre')} className={ENTRADA} />
-      </Campo>
-      <div className="flex gap-3">
-        <Campo etiqueta="Año" className="flex-1">
-          <input
-            value={datos.year}
-            onChange={ev => setDatos(d => ({ ...d, year: ev.target.value.replace(/\D/g, '').slice(0, 4) }))}
-            inputMode="numeric" placeholder="—" className={ENTRADA}
-          />
-        </Campo>
-        <Campo etiqueta="Páginas" className="flex-1">
-          <input
-            value={datos.num_pages}
-            onChange={ev => setDatos(d => ({ ...d, num_pages: ev.target.value.replace(/\D/g, '').slice(0, 5) }))}
-            inputMode="numeric" placeholder="—" className={ENTRADA}
-          />
-        </Campo>
-      </div>
-
-      {!alClub && (
-      <Campo etiqueta="Cómo entra en tu estantería">
-        <div className="flex flex-wrap gap-2">
-          {['want_to_read', 'reading', 'read'].map(id => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => setDatos(d => ({ ...d, status: id }))}
-              className={`relative rounded-full border px-3.5 py-2 text-sm transition-colors ${
-                datos.status === id ? 'border-accent-line text-accent' : 'border-line text-ink-dim'
-              }`}
-            >
-              {datos.status === id && (
-                <motion.span
-                  layoutId="alta-estado"
-                  className="absolute inset-0 rounded-full bg-accent-soft"
-                  transition={{ type: 'spring', stiffness: 420, damping: 34 }}
-                />
-              )}
-              <span className="relative">{STATUS_LABEL[id]}</span>
-            </button>
-          ))}
-        </div>
-      </Campo>
-      )}
-
-      {/* Las fechas que tienen sentido para el estado elegido, y solo esas:
-          un libro por leer no tiene ninguna, uno que estás leyendo tiene
-          cuándo lo empezaste, y uno leído tiene las dos. Se pueden dejar en
-          blanco — se guarda lo que pongas. */}
-      <Plegable abierta={llevaInicio}>
-        <Campo etiqueta="Empezado">
-          <CamposFecha value={datos.started_at} onChange={v => setDatos(d => ({ ...d, started_at: v }))} />
-        </Campo>
-      </Plegable>
-      <Plegable abierta={llevaFin}>
-        <Campo etiqueta="Terminado">
-          <CamposFecha value={datos.finished_at} onChange={v => setDatos(d => ({ ...d, finished_at: v }))} />
-        </Campo>
-      </Plegable>
-
-      <AnimatePresence>
-        {error && (
-          <motion.p
-            className="mt-3 text-sm text-danger"
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-          >
-            {error}
-          </motion.p>
-        )}
-      </AnimatePresence>
-
-      <motion.button
-        type="submit"
-        disabled={guardando}
-        whileTap={{ scale: 0.98 }}
-        className="mt-5 h-12 w-full rounded-xl2 bg-accent text-[15px] font-semibold text-on-accent disabled:opacity-60"
-      >
-        {guardando
-          ? (alClub ? 'Proponiendo…' : 'Añadiendo…')
-          : (alClub ? 'Proponer al club' : 'Añadir a mi estantería')}
-      </motion.button>
-    </form>
-  )
-}
-
-// Alto animado con height:auto, que motion sí sabe interpolar: los campos de
-// fecha entran y salen, no aparecen de golpe.
-function Plegable({ abierta, children }) {
-  return (
-    <AnimatePresence initial={false}>
-      {abierta && (
-        <motion.div
-          className="overflow-hidden"
-          initial={{ height: 0, opacity: 0 }}
-          animate={{ height: 'auto', opacity: 1 }}
-          exit={{ height: 0, opacity: 0 }}
-          transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
-        >
-          {children}
-        </motion.div>
-      )}
-    </AnimatePresence>
-  )
-}
-
-const ENTRADA = 'h-12 w-full rounded-xl2 border border-line bg-bg px-3.5 text-[15px] text-ink outline-none transition-colors placeholder:text-ink-mute focus:border-accent-line'
-
-function Campo({ etiqueta, className = '', children }) {
-  return (
-    <label className={`mt-4 block ${className}`}>
-      <span className="mb-1.5 block px-1 text-[13px] text-ink-dim">{etiqueta}</span>
-      {children}
-    </label>
   )
 }

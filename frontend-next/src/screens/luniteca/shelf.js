@@ -317,3 +317,27 @@ export function claveDeAutor(autor) {
   const partes = autor.trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').split(/\s+/)
   return partes[partes.length - 1]
 }
+
+// ─── Subir una foto de portada o de lomo ────────────────────────────────────
+//
+// Las dos suben a la GALERÍA del libro (compartida, con atribución) y
+// devuelven la URL; quién se queda con esa foto lo decide quien llama,
+// poniéndola en su propia entrada de la estantería. Aquí y no en la pantalla
+// que las usa porque son tres: la ficha de un libro, el alta a mano y lo que
+// venga después.
+export async function subirPortada(bookId, fichero) {
+  const datos = new FormData()
+  datos.append('file', fichero)
+  const r = await api(`/books/${bookId}/cover`, { method: 'POST', body: datos })
+  return r.url
+}
+
+// El blob llega YA RECORTADO (ver RecortarFoto). Sin `generado=true`: una
+// foto de verdad nunca pisa el lomo compartido del libro, cada uno pone la
+// suya en su propia copia.
+export async function subirLomo(bookId, blob) {
+  const datos = new FormData()
+  datos.append('file', blob, 'lomo.jpg')
+  const r = await api(`/books/${bookId}/spine`, { method: 'POST', body: datos })
+  return r.url
+}

@@ -5,7 +5,7 @@ import { useAuth } from '../../platform/auth'
 import { api } from '../../platform/api'
 import { useLiveUpdates } from '../../platform/live'
 import { usarPreferencia } from '../../platform/preferencias'
-import { EMPTY_FILTERS, FORMATO_LABEL, agruparEstanteria, generosDeAutores, opcionesDeFiltro, readingDatesLabel } from './shelf'
+import { EMPTY_FILTERS, FORMATO_LABEL, agruparEstanteria, generosDeAutores, opcionesDeFiltro, readingDatesLabel, subirLomo, subirPortada } from './shelf'
 import { Cover, NotaBadge, PagesLabel, ProgressBar, StarRating } from './piezas'
 import BookDetail from './BookDetail'
 import {
@@ -166,26 +166,6 @@ export default function Luniteca() {
       own_cover_url: borrador.cover_url,
     })
   }, [actualizarLibro, actualizarEntrada, regenerarLomoSiToca])
-
-  // Sube una foto a la galería del libro (compartida, con atribución) y
-  // devuelve su URL; quien la elige como portada es el formulario.
-  const subirPortada = useCallback(async (bookId, fichero) => {
-    const datos = new FormData()
-    datos.append('file', fichero)
-    const r = await api(`/books/${bookId}/cover`, { method: 'POST', body: datos })
-    return r.url
-  }, [])
-
-  // Sube una foto de lomo YA RECORTADA (ver RecortarFoto) a la galería del
-  // libro y devuelve su URL. Sin `generado=true`: una foto de verdad nunca
-  // pisa el lomo compartido sola, cada uno pone la suya en su propia entrada
-  // (ver guardarLibro, más arriba).
-  const subirLomo = useCallback(async (bookId, blob) => {
-    const datos = new FormData()
-    datos.append('file', blob, 'lomo.jpg')
-    const r = await api(`/books/${bookId}/spine`, { method: 'POST', body: datos })
-    return r.url
-  }, [])
 
   const eliminarEntrada = useCallback(async (id) => {
     const anterior = shelf

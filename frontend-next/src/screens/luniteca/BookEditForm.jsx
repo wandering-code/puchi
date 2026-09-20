@@ -1,12 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { api } from '../../platform/api'
 import { Cover } from './piezas'
 import { useHoja } from './HojaInferior'
 import SelectorPortada from './SelectorPortada'
 import SelectorLomo from './SelectorLomo'
-import { ANCHO_FOTO_MAX, ANCHO_FOTO_MIN, MM_MAX, MM_MIN, TAMANOS, medidas } from './Lomos'
-import { proporcionFoto } from './proporcionLomo'
+import { MM_MAX, MM_MIN, TAMANOS, medidas, usarAnchoLomo } from './Lomos'
 import { IconRefresh, IconX } from '../../ui/icons'
 import BotonPeligro from '../../ui/BotonPeligro'
 
@@ -42,23 +41,13 @@ export default function BookEditForm({ entry, generos, onGuardar, onCancelar, on
   const { ancho: anchoLomoBase, alto: altoLomo } = medidas({
     ...entry, book: { ...entry.book, height_mm: mmElegidos },
   })
-  // Con una foto de verdad puesta, el ancho de la vista previa tiene que
-  // salir de la proporción REAL de esa foto (igual que en la balda — ver el
-  // mismo mecanismo en Lomos.jsx) y no del ancho por páginas: si no, esta
-  // miniatura recorta la foto a una forma que no es la que se subió, y lo
-  // que se ve aquí no es lo que se ve luego en la balda (visto: un lomo fino
-  // de verdad, apretado aquí en un hueco mucho más ancho, se veía "cortado").
-  const esFotoLomo = !!borrador.spine_url
-  const [anchoLomoFoto, setAnchoLomoFoto] = useState(null)
-  useEffect(() => {
-    if (!esFotoLomo) { setAnchoLomoFoto(null); return }
-    let vigente = true
-    proporcionFoto(borrador.spine_url).then(r => {
-      if (vigente && r) setAnchoLomoFoto(Math.round(Math.min(ANCHO_FOTO_MAX, Math.max(ANCHO_FOTO_MIN, altoLomo * r))))
-    })
-    return () => { vigente = false }
-  }, [borrador.spine_url, esFotoLomo, altoLomo])
-  const anchoLomo = (esFotoLomo && anchoLomoFoto) ? anchoLomoFoto : anchoLomoBase
+  // Con una foto de verdad puesta, el ancho de la vista previa sale de la
+  // proporción REAL de esa foto (mismo hook que usa la balda) y no del ancho
+  // por páginas: si no, esta miniatura recorta la foto a una forma que no es
+  // la que se subió, y lo que se ve aquí no es lo que se ve luego en la balda
+  // (visto: un lomo fino de verdad, apretado aquí en un hueco mucho más
+  // ancho, se veía "cortado").
+  const anchoLomo = usarAnchoLomo(borrador.spine_url, anchoLomoBase, altoLomo)
 
   const set = (clave) => (ev) => setBorrador(b => ({ ...b, [clave]: ev.target.value }))
 
@@ -238,10 +227,6 @@ function Campo({ etiqueta, className = '', children }) {
   )
 }
 
-// Rellena de golpe autor, género, sinopsis, año y páginas preguntando a Open
-// Library y Google Books. Escribe en el borrador, no en el libro: se revisa
-// antes de guardar. El título nunca se toca — es lo que identifica al libro y
-// lo que se ha usado para buscarlo.
 // Cuánto mide el libro de alto. Sin esto, la vista de lomos se lo inventa a
 // partir de un hash del título (ver medidas() en Lomos.jsx), y entonces dos
 // tomos de la misma edición salen de alturas distintas solo porque se llaman
@@ -269,6 +254,7 @@ export function TamanoLibro({ mm, onElegir }) {
         {TAMANOS.map(t => (
           <button
             key={t.clave}
+            type="button"
             onClick={() => { setAMedida(false); onElegir(t.mm) }}
             className={`rounded-full border px-2.5 py-1 text-xs transition-colors ${
               !aMedida && preset?.clave === t.clave ? 'border-accent-line bg-accent-soft text-accent' : 'border-line text-ink-dim'
@@ -278,6 +264,7 @@ export function TamanoLibro({ mm, onElegir }) {
           </button>
         ))}
         <button
+          type="button"
           onClick={() => setAMedida(v => !v)}
           className={`rounded-full border px-2.5 py-1 text-xs transition-colors ${
             aMedida ? 'border-accent-line bg-accent-soft text-accent' : 'border-line text-ink-dim'
@@ -287,6 +274,7 @@ export function TamanoLibro({ mm, onElegir }) {
         </button>
         {mm != null && (
           <button
+            type="button"
             onClick={() => { setAMedida(false); onElegir(null) }}
             className="rounded-full border border-line px-2.5 py-1 text-xs text-ink-mute"
           >
@@ -315,7 +303,25 @@ export function TamanoLibro({ mm, onElegir }) {
   )
 }
 
-function RellenarDatos({ borrador, setBorrador }) {
+// Rellena de golpe los datos del libro preguntando a Open Library y Google
+// Books. Escribe en el borrador, no en el libro: se revisa antes de guardar.
+// El título nunca se toca — es lo que identifica al libro y lo que se ha
+// usado para buscarlo.
+//
+// `campos` dice qué se rellena, porque no es lo mismo según desde dónde se
+// llame: la ficha de un libro ya guardado edita lo que edita, y el alta a
+// mano puede además estrenar el ISBN y la portada, que ahí todavía no
+// existen. `soloHuecos` es la otra diferencia: refrescar los datos de un
+// libro guardado SUSTITUYE lo que hubiera (es lo que se le pide al botón),
+// mientras que en un alta a medio escribir lo que acabas de teclear manda
+// sobre lo que diga una API.
+const CAMPOS_ENRIQUECIBLES = ['author', 'genre', 'synopsis', 'year', 'num_pages']
+const NOMBRE_CAMPO = {
+  author: 'autor', genre: 'género', synopsis: 'sinopsis', year: 'año',
+  num_pages: 'páginas', isbn: 'ISBN', cover_url: 'portada',
+}
+
+export function RellenarDatos({ borrador, setBorrador, campos = CAMPOS_ENRIQUECIBLES, soloHuecos = false }) {
   const [estado, setEstado] = useState('quieto')   // quieto | buscando | ok | nada
 
   async function rellenar() {
@@ -323,13 +329,19 @@ function RellenarDatos({ borrador, setBorrador }) {
     try {
       const params = new URLSearchParams({ title: borrador.title })
       if (borrador.author) params.set('author', borrador.author)
+      // Con ISBN la respuesta es la de ESE libro y no la de un candidato
+      // parecido por título, así que se manda si se tiene.
+      if (borrador.isbn) params.set('isbn', borrador.isbn)
       const fresco = await api(`/books/enrich?${params}`)
       const nuevos = {}
-      if (fresco.author && !borrador.author) nuevos.author = fresco.author
-      if (fresco.genre) nuevos.genre = fresco.genre
-      if (fresco.synopsis) nuevos.synopsis = fresco.synopsis
-      if (fresco.year) nuevos.year = String(fresco.year)
-      if (fresco.num_pages) nuevos.num_pages = String(fresco.num_pages)
+      for (const campo of campos) {
+        if (!fresco[campo]) continue
+        // El autor no se pisa nunca, ni siquiera refrescando: es la mitad de
+        // lo que se ha usado para buscar, y una API que devuelva otro (la
+        // edición de otra editorial, un traductor) no sabe más que tú.
+        if ((soloHuecos || campo === 'author') && borrador[campo]) continue
+        nuevos[campo] = String(fresco[campo])
+      }
       const hay = Object.keys(nuevos).length > 0
       if (hay) setBorrador(b => ({ ...b, ...nuevos }))
       setEstado(hay ? 'ok' : 'nada')
@@ -339,8 +351,11 @@ function RellenarDatos({ borrador, setBorrador }) {
     setTimeout(() => setEstado('quieto'), 2500)
   }
 
+  const lista = campos.map(c => NOMBRE_CAMPO[c])
   const texto = {
-    quieto: 'Rellenar autor, género, sinopsis, año y páginas',
+    quieto: soloHuecos
+      ? 'Rellenar los datos que falten'
+      : `Rellenar ${lista.slice(0, -1).join(', ')} y ${lista[lista.length - 1]}`,
     buscando: 'Buscando…',
     ok: 'Datos actualizados',
     nada: 'Sin novedades',
@@ -348,6 +363,7 @@ function RellenarDatos({ borrador, setBorrador }) {
 
   return (
     <button
+      type="button"
       onClick={rellenar}
       disabled={estado === 'buscando' || !borrador.title}
       className="mt-5 flex items-center gap-2 text-sm font-semibold text-accent disabled:opacity-60"

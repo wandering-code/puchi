@@ -1962,6 +1962,13 @@ def change_pin(
 
 # ── Books — Open Library proxy ───────────────────────────────────────────────
 
+def _altura_valida(mm: Optional[int]) -> Optional[int]:
+    """El alto de un libro en mm, o None si lo que llega no puede serlo. Fuera
+    de rango se descarta en vez de guardarse: son milímetros, y un 24
+    (centímetros, mal convertidos) o un 2400 no son un libro."""
+    return mm if mm is not None and 80 <= mm <= 500 else None
+
+
 class BookUpdateRequest(BaseModel):
     title:     Optional[str] = None
     author:    Optional[str] = None
@@ -2003,9 +2010,7 @@ async def update_book(
     if body.isbn      is not None: book.isbn      = body.isbn.strip() or None
     if body.num_pages is not None: book.num_pages = body.num_pages
     if body.height_mm is not None:
-        # Fuera de rango se ignora en vez de guardarse: son milímetros, y un
-        # 24 (centímetros, mal convertidos) o un 2400 no son un libro.
-        book.height_mm = body.height_mm if 80 <= body.height_mm <= 500 else None
+        book.height_mm = _altura_valida(body.height_mm)
     db.commit()
     db.refresh(book)
     # El mismo Book es compartido entre estanterías personales y del club —
@@ -2779,6 +2784,10 @@ class ShelfAddRequest(BaseModel):
     synopsis:       Optional[str]   = None
     year:           Optional[int]   = None
     genre:          Optional[str]   = None
+    # Alto del libro en mm (ver Book.height_mm): se puede decir ya al darlo de
+    # alta a mano, igual que la importación masiva lo trae en su columna —
+    # antes solo se podía poner despues, editando la ficha.
+    height_mm:      Optional[int]   = None
     status:         str             = "want_to_read"   # reading | read | want_to_read
     origin:         Optional[str]   = None   # 'search' | 'copied' — ver PersonalShelf.origin
     # Club-specific (ignored by personal shelf)
@@ -3678,6 +3687,7 @@ async def _get_or_create_book(db, body: ShelfAddRequest) -> Book:
             if body.synopsis  and not book.synopsis:  book.synopsis  = body.synopsis
             if body.year      and not book.year:      book.year      = body.year
             if body.genre     and not book.genre:     book.genre     = body.genre
+            if body.height_mm and not book.height_mm: book.height_mm = _altura_valida(body.height_mm)
             db.commit()
             return book
     book = Book(
@@ -3686,6 +3696,7 @@ async def _get_or_create_book(db, body: ShelfAddRequest) -> Book:
         open_lib_key=body.open_lib_key,
         num_pages=body.num_pages, synopsis=body.synopsis,
         year=body.year, genre=body.genre,
+        height_mm=_altura_valida(body.height_mm),
     )
     db.add(book)
     db.commit()
