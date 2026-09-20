@@ -63,6 +63,11 @@ export default function RecortarFoto({
   // Foto que no se ha podido leer (formato no soportado, archivo corrupto…)
   // — antes esto dejaba el recorte en negro para siempre sin explicar nada.
   const [errorCarga, setErrorCarga] = useState(null)
+  // Nombre/tipo/tamaño del archivo tal cual lo dio el selector — visible en
+  // pantalla mientras carga y si falla, para poder diagnosticar sin acceso
+  // a las herramientas de desarrollador del móvil (no siempre hay un Mac a
+  // mano para el inspector remoto de Safari).
+  const [infoArchivo, setInfoArchivo] = useState(null)
   // El tamaño del LIENZO de trabajo — no el de la foto: algo mayor EN CADA
   // EJE por separado (no un cuadrado del lado mayor — eso malgastaba media
   // pantalla en bandas negras con una foto claramente vertical u horizontal,
@@ -109,11 +114,18 @@ export default function RecortarFoto({
     let liquidado = false   // ya se resolvió con éxito o con error definitivo
     setErrorCarga(null)
     setLienzo(null)
+    // Info del archivo tal cual lo entregó el selector — se ve en pantalla
+    // mientras carga (y se queda si falla) para poder diagnosticar sin
+    // acceso a las herramientas de desarrollador del móvil: qué tipo MIME
+    // manda iOS de verdad (HEIC, JPEG…), tamaño, si acaso llegó vacío.
+    const pesoMB = (file.size / 1024 / 1024).toFixed(2)
+    setInfoArchivo(`${file.name || 'sin nombre'} · ${file.type || 'sin tipo'} · ${pesoMB} MB`)
 
-    function marcarError() {
+    function marcarError(motivo) {
       if (cancelado || liquidado) return
       liquidado = true
-      setErrorCarga('No se ha podido leer esta foto. Prueba con otra.')
+      const detalle = motivo ? ` (${motivo})` : ''
+      setErrorCarga(`No se ha podido leer esta foto${detalle}. Prueba con otra.`)
     }
 
     function marcarExito(fuente, w, h) {
@@ -123,16 +135,16 @@ export default function RecortarFoto({
       onImgLoad(w, h)
     }
 
-    function conFileReader() {
+    function conFileReader(motivoAnterior) {
       const reader = new FileReader()
       reader.onload = () => {
         if (cancelado || liquidado) return
         const img = new Image()
         img.onload = () => marcarExito(img, img.naturalWidth, img.naturalHeight)
-        img.onerror = marcarError
+        img.onerror = () => marcarError(`img: ${motivoAnterior || 'reserva'}`)
         img.src = reader.result
       }
-      reader.onerror = marcarError
+      reader.onerror = () => marcarError(`FileReader: ${reader.error?.name || motivoAnterior || 'reserva'}`)
       reader.readAsDataURL(file)
     }
 
@@ -140,14 +152,14 @@ export default function RecortarFoto({
       createImageBitmap(file).then(bitmap => {
         if (cancelado || liquidado) { bitmap.close(); return }
         marcarExito(bitmap, bitmap.width, bitmap.height)
-      }).catch(() => {
-        if (!cancelado && !liquidado) conFileReader()
+      }).catch(err => {
+        if (!cancelado && !liquidado) conFileReader(`createImageBitmap: ${err?.name || err}`)
       })
-    } catch {
-      conFileReader()
+    } catch (err) {
+      conFileReader(`createImageBitmap síncrono: ${err?.name || err}`)
     }
 
-    const limite = setTimeout(marcarError, 6000)
+    const limite = setTimeout(() => marcarError('tiempo agotado'), 6000)
 
     return () => {
       cancelado = true
@@ -563,7 +575,12 @@ export default function RecortarFoto({
       // Sin onClick aquí a propósito: se cierra con la X o "Cancelar", nunca
       // tocando fuera sin querer — perder el encuadre a mitad de ajustarlo
       // (o la foto entera) por un toque de más es peor que un botón de más.
-      className="fixed inset-0 z-[80] flex items-center justify-center bg-velo p-4 backdrop-blur-[6px]"
+      //
+      // pt-safe/pb-safe: sin esto el título quedaba pegado contra el notch o
+      // la isla dinámica — el resto de overlays a pantalla completa de la
+      // app (HojaInferior, Shell, UpdatePrompt…) ya los llevan, a este se le
+      // había olvidado.
+      className="fixed inset-0 z-[80] flex items-center justify-center bg-velo p-4 pt-safe pb-safe backdrop-blur-[6px]"
     >
       <motion.div
         initial={{ scale: 0.94, opacity: 0, y: 8 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.94, opacity: 0, y: 8 }}
@@ -575,6 +592,9 @@ export default function RecortarFoto({
           <div className="flex-1">
             <p className="text-sm font-semibold">{titulo}</p>
             <p className="text-xs text-ink-mute">{instrucciones}</p>
+            {infoArchivo && !lienzo && (
+              <p className="mt-1 text-[10px] text-ink-mute/70">{infoArchivo}</p>
+            )}
           </div>
           <button onClick={onCancelar} aria-label="Cancelar" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-ink-mute transition-colors active:bg-surface-2">
             <IconX className="h-4 w-4" />
@@ -644,10 +664,14 @@ export default function RecortarFoto({
 
         <div className="flex w-full items-center gap-2.5">
           <IconZoom className="h-4 w-4 shrink-0 text-ink-mute" />
+          {/* min-w-0: un <input type="range"> dentro de un flex item con
+              flex-1 puede ignorar el encogimiento y desbordar el contenedor
+              por la derecha (min-width: auto por defecto en flexbox, muy
+              visible en iOS Safari) — sin esto la barra se salía del modal. */}
           <input
             type="range" min={ZOOM_MIN} max={ZOOM_MAX} step="0.01" value={zoomFactor}
             onChange={e => cambiarZoom(Number(e.target.value), { x: ESCENARIO_ANCHO / 2, y: ESCENARIO_ALTO / 2 })}
-            className="flex-1 accent-accent"
+            className="min-w-0 flex-1 accent-accent"
           />
         </div>
 
@@ -664,7 +688,7 @@ export default function RecortarFoto({
           <input
             type="range" min={-ROTACION_MAX} max={ROTACION_MAX} step="0.5" value={rotacion}
             onChange={e => setRotacion(Number(e.target.value))}
-            className="flex-1 accent-accent"
+            className="min-w-0 flex-1 accent-accent"
           />
           <span className="w-9 shrink-0 text-right text-[11px] tabular-nums text-ink-mute">{rotacion.toFixed(0)}°</span>
         </div>
