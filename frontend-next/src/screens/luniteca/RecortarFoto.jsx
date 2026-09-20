@@ -40,6 +40,16 @@ const ZOOM_MAX = 6
 // El lado más largo de la imagen que se sube, para no mandar fotos enormes
 // solo porque el recorte se hizo con mucho zoom.
 const SALIDA_MAX = 640
+// El lado más largo con el que se TRABAJA la foto dentro de este recorte.
+// No es una cuestión de gusto: iOS Safari no pinta un <canvas> de cualquier
+// tamaño —pasada un área de unos 16,7 megapíxeles deja de pintar, sin
+// lanzar ningún error, y el lienzo se queda transparente— y el lienzo de
+// aquí es aún mayor que la foto (lleva margen para poder girarla). Una foto
+// normal de la galería de un iPhone son 4032×3024 (12 MP), que exige un
+// lienzo de 4824×4222 ≈ 20 MP: por encima del límite. Bajar a 2048 de lado
+// deja el lienzo en unos 5 MP, con sitio de sobra, y no se pierde nada de
+// verdad porque lo que se sube no pasa de SALIDA_MAX de todos modos.
+const TRABAJO_MAX = 2048
 // Cuánto se puede inclinar la foto — un ajuste fino (la mano no sujetaba el
 // libro del todo a plomo), no un giro libre.
 const ROTACION_MAX = 20
@@ -113,15 +123,22 @@ export default function RecortarFoto({
   const gestoRef = useRef(null)      // el arrastre en curso: pan de la foto, mover el recorte, o una esquina
   const pinchRef = useRef(null)      // pellizco con dos dedos
   const [lupaEn, setLupaEn] = useState(null)  // {x,y} en coords del lienzo, mientras se arrastra una esquina
+  const lienzoComprobadoRef = useRef(null)  // el lienzo del que ya se comprobó que se pinta (ver el efecto de redibujar)
 
-  // Confirmado en un dispositivo real: la foto hecha con la cámara (siempre
-  // JPEG) se ve bien; la elegida de la galería (HEIC, el formato por
-  // defecto de las fotos de iPhone desde iOS 11) se queda en negro. Ni
-  // <img>, ni createImageBitmap, decodifican ese HEIC de fiar en esta
-  // combinación de iOS/WebKit — createImageBitmap incluso puede "tener
-  // éxito" con contenido en negro, sin ningún error que capturar.
+  // Confirmado en un dispositivo real: la foto hecha con la cámara se ve
+  // bien; la elegida de la galería se quedaba en negro. Durante mucho
+  // tiempo el sospechoso fue el formato (la cámara del selector entrega
+  // JPEG, la galería de un iPhone entrega HEIC), pero la diferencia que
+  // importaba era otra: el TAMAÑO. La foto de la galería viene a resolución
+  // completa (12 MP o más) y con ella el lienzo se pasaba del tamaño máximo
+  // que iOS Safari es capaz de pintar, que no da ningún error — simplemente
+  // deja el canvas transparente, o sea negro sobre el fondo del escenario.
+  // De ahí que ninguna de las rondas anteriores (createImageBitmap, blob:
+  // URL vs data: URI, heic2any) cambiara nada: la foto se decodificaba
+  // bien, lo que fallaba era pintarla. La foto se reduce ahora a
+  // TRABAJO_MAX antes de tocar ningún canvas (ver `reducirATrabajo`).
   //
-  // Por eso, si el archivo es HEIC/HEIF, se convierte antes a JPEG con
+  // Se mantiene aparte la conversión de HEIC/HEIF a JPEG con
   // heic2any (decodificador HEIC de verdad escrito en JS/WASM, no depende
   // de que el navegador sepa hacerlo) y solo entonces se muestra con <img>
   // a partir de un data: URI (vía FileReader, sin blob: URL — evita aparte
@@ -142,11 +159,37 @@ export default function RecortarFoto({
       setErrorCarga(`No se ha podido leer esta foto${detalle}. Prueba con otra.`)
     }
 
+    // Reduce la foto a TRABAJO_MAX de lado antes de que nada la dibuje, y
+    // devuelve la fuente ya reducida (un canvas pequeño) con su tamaño: a
+    // partir de aquí el resto del componente trabaja como si la foto
+    // siempre hubiera sido de ese tamaño, sin saber nada de esto.
+    function reducirATrabajo(img) {
+      const natW = img.naturalWidth, natH = img.naturalHeight
+      const factor = Math.min(1, TRABAJO_MAX / Math.max(natW, natH))
+      if (factor === 1) return { fuente: img, w: natW, h: natH }
+      const w = Math.max(1, Math.round(natW * factor))
+      const h = Math.max(1, Math.round(natH * factor))
+      const reducido = document.createElement('canvas')
+      reducido.width = w
+      reducido.height = h
+      const ctx = reducido.getContext('2d')
+      ctx.imageSmoothingQuality = 'high'
+      ctx.drawImage(img, 0, 0, w, h)
+      return { fuente: reducido, w, h }
+    }
+
     function marcarExito(img) {
       if (cancelado || liquidado) return
+      let foto
+      try {
+        foto = reducirATrabajo(img)
+      } catch (err) {
+        marcarError(`reducir: ${err?.message || err}`)
+        return
+      }
       liquidado = true
-      bitmapRef.current = img
-      onImgLoad(img.naturalWidth, img.naturalHeight)
+      bitmapRef.current = foto.fuente
+      onImgLoad(foto.w, foto.h)
     }
 
     function mostrar(blob) {
@@ -207,6 +250,14 @@ export default function RecortarFoto({
       cancelado = true
       clearTimeout(limite)
       bitmapRef.current?.close?.()
+      // Si la fuente es el canvas reducido, dejarlo en 0×0 suelta sus
+      // píxeles ya mismo en vez de esperar al recolector de basura —
+      // importa en un móvil, donde la memoria de canvas es justo lo que
+      // escasea al venir de una foto grande.
+      if (bitmapRef.current instanceof HTMLCanvasElement) {
+        bitmapRef.current.width = 0
+        bitmapRef.current.height = 0
+      }
       bitmapRef.current = null
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -267,6 +318,24 @@ export default function RecortarFoto({
     ctx.rotate((rotacion * Math.PI) / 180)
     ctx.drawImage(bitmapRef.current, -lienzo.natW / 2, -lienzo.natH / 2, lienzo.natW, lienzo.natH)
     ctx.restore()
+    // Un canvas que el navegador se niega a pintar (demasiado grande, sin
+    // memoria…) no lanza ningún error: se queda transparente, y sobre el
+    // fondo negro del escenario eso se ve exactamente como una foto en
+    // negro. Fue justo lo que costó rondas y rondas de diagnóstico. Un par
+    // de píxeles del centro —donde la foto siempre tapa el lienzo, tenga la
+    // forma que tenga— bastan para distinguir "no se ha pintado nada" de
+    // una foto oscura de verdad (esa sí trae alfa 255).
+    // Una sola vez por foto, no en cada redibujado: girar redibuja en cada
+    // paso del deslizador y leer píxeles del canvas es caro en un móvil.
+    if (lienzoComprobadoRef.current !== lienzo) {
+      lienzoComprobadoRef.current = lienzo
+      try {
+        const enBlanco = [[0.5, 0.5], [0.42, 0.42], [0.58, 0.58]].every(([fx, fy]) =>
+          ctx.getImageData(Math.floor(lienzo.w * fx), Math.floor(lienzo.h * fy), 1, 1).data[3] === 0
+        )
+        if (enBlanco) setErrorCarga(`El navegador no ha podido pintar esta foto (lienzo ${lienzo.w}×${lienzo.h}).`)
+      } catch { /* getImageData bloqueado: no es motivo para romper el recorte */ }
+    }
   }, [lienzo, rotacion])
 
   function aPantalla(nx, ny) {
@@ -639,7 +708,7 @@ export default function RecortarFoto({
           <div className="flex-1">
             <p className="text-sm font-semibold">{titulo}</p>
             <p className="text-xs text-ink-mute">{instrucciones}</p>
-            {infoArchivo && !lienzo && (
+            {infoArchivo && (!lienzo || errorCarga) && (
               <p className="mt-1 text-[10px] text-ink-mute/70">{infoArchivo}</p>
             )}
           </div>
@@ -654,11 +723,6 @@ export default function RecortarFoto({
           style={{ width: ESCENARIO_ANCHO, height: ESCENARIO_ALTO, touchAction: 'none' }}
           className="relative mx-auto select-none overflow-hidden rounded-xl bg-black"
         >
-          {errorCarga && (
-            <div className="absolute inset-0 flex items-center justify-center p-6 text-center text-sm text-white/90">
-              {errorCarga}
-            </div>
-          )}
           {lienzo && (
             <canvas
               ref={canvasRef}
@@ -690,6 +754,13 @@ export default function RecortarFoto({
               />
             ))}
           </>)}
+          {/* Después del lienzo y del recorte a propósito: si algo ha ido
+              mal, el mensaje tiene que quedar por encima de todo. */}
+          {errorCarga && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/70 p-6 text-center text-sm text-white/90">
+              {errorCarga}
+            </div>
+          )}
           {/* La lupa: aparece al agarrar una esquina, encima del dedo (que
               si no, tapa justo el punto que se está encuadrando) y topada
               para no salirse del escenario. */}
