@@ -60,7 +60,9 @@ export default function RecortarFoto({
   instrucciones = 'Ajusta las esquinas al encuadre · pellizca o usa la rueda para acercar',
   proporcionInicial = 0.28,
 }) {
-  const [imgUrl,    setImgUrl]    = useState(null)
+  // Foto que no se ha podido leer (formato no soportado, archivo corrupto…)
+  // — antes esto dejaba el recorte en negro para siempre sin explicar nada.
+  const [errorCarga, setErrorCarga] = useState(null)
   // El tamaño del LIENZO de trabajo — no el de la foto: algo mayor EN CADA
   // EJE por separado (no un cuadrado del lado mayor — eso malgastaba media
   // pantalla en bandas negras con una foto claramente vertical u horizontal,
@@ -78,17 +80,36 @@ export default function RecortarFoto({
   const [rect,      setRect]      = useState(null)  // {x,y,w,h}
   const [guardando, setGuardando] = useState(false)
   const escenarioRef = useRef(null)
-  const rawImgRef = useRef(null)     // la foto tal cual se cargó, sin girar — fuente para redibujar el lienzo
+  const bitmapRef = useRef(null)     // la foto tal cual se cargó, sin girar — fuente para redibujar el lienzo
   const canvasRef = useRef(null)     // el lienzo visible: la foto ya girada
   const lupaRef = useRef(null)       // el canvas pequeño de la lupa
   const gestoRef = useRef(null)      // el arrastre en curso: pan de la foto, mover el recorte, o una esquina
   const pinchRef = useRef(null)      // pellizco con dos dedos
   const [lupaEn, setLupaEn] = useState(null)  // {x,y} en coords del lienzo, mientras se arrastra una esquina
 
+  // `createImageBitmap` decodifica directo desde los bytes del File, sin
+  // pasar por una blob: URL ni por la carga de un <img> — evita el fallo
+  // silencioso (recorte en negro, sin ningún aviso) que daba esa vía con
+  // fotos en un formato que el <img> no sabía decodificar (típico de una
+  // foto de galería de iPhone) o, en una PWA instalada, con el propio bug
+  // de WebKit resolviendo blob: URLs.
   useEffect(() => {
-    const url = URL.createObjectURL(file)
-    setImgUrl(url)
-    return () => URL.revokeObjectURL(url)
+    let cancelado = false
+    setErrorCarga(null)
+    setLienzo(null)
+    createImageBitmap(file).then(bitmap => {
+      if (cancelado) { bitmap.close(); return }
+      bitmapRef.current = bitmap
+      onImgLoad(bitmap.width, bitmap.height)
+    }).catch(() => {
+      if (!cancelado) setErrorCarga('No se ha podido leer esta foto. Prueba con otra.')
+    })
+    return () => {
+      cancelado = true
+      bitmapRef.current?.close()
+      bitmapRef.current = null
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [file])
 
   // El zoom mínimo (zoomFactor 1) tiene que dejar la FOTO —no el lienzo
@@ -109,8 +130,7 @@ export default function RecortarFoto({
   const baseScale = lienzo ? ajusteBase(rotacion, lienzo.natW, lienzo.natH) : 1
   const scale = baseScale * zoomFactor
 
-  function onImgLoad(e) {
-    const w = e.target.naturalWidth, h = e.target.naturalHeight
+  function onImgLoad(w, h) {
     // El lienzo tiene que caber entera la foto girada hasta ROTACION_MAX a
     // cada lado — la caja que envuelve un rectángulo girado, con su ANCHO y
     // su ALTO calculados cada uno por separado (no un cuadrado del mayor de
@@ -136,7 +156,7 @@ export default function RecortarFoto({
   // El recorte y el resto de gestos no saben nada de esto — para ellos el
   // lienzo ES la foto.
   useEffect(() => {
-    if (!lienzo || !canvasRef.current || !rawImgRef.current) return
+    if (!lienzo || !canvasRef.current || !bitmapRef.current) return
     const canvas = canvasRef.current
     canvas.width = lienzo.w
     canvas.height = lienzo.h
@@ -145,7 +165,7 @@ export default function RecortarFoto({
     ctx.save()
     ctx.translate(lienzo.w / 2, lienzo.h / 2)
     ctx.rotate((rotacion * Math.PI) / 180)
-    ctx.drawImage(rawImgRef.current, -lienzo.natW / 2, -lienzo.natH / 2, lienzo.natW, lienzo.natH)
+    ctx.drawImage(bitmapRef.current, -lienzo.natW / 2, -lienzo.natH / 2, lienzo.natW, lienzo.natH)
     ctx.restore()
   }, [lienzo, rotacion])
 
@@ -521,9 +541,11 @@ export default function RecortarFoto({
           style={{ width: ESCENARIO_ANCHO, height: ESCENARIO_ALTO, touchAction: 'none' }}
           className="relative mx-auto select-none overflow-hidden rounded-xl bg-black"
         >
-          {/* La foto original, oculta: solo sirve de fuente para pintar el
-              lienzo (ver el efecto que redibuja al cargar o al girar). */}
-          {imgUrl && <img ref={rawImgRef} src={imgUrl} alt="" onLoad={onImgLoad} style={{ display: 'none' }} />}
+          {errorCarga && (
+            <div className="absolute inset-0 flex items-center justify-center p-6 text-center text-sm text-white/90">
+              {errorCarga}
+            </div>
+          )}
           {lienzo && (
             <canvas
               ref={canvasRef}
