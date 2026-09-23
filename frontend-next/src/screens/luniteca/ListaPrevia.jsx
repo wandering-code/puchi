@@ -355,7 +355,7 @@ function Resultados({ resultados, filas, onReiniciar, etiquetaReinicio }) {
 
 // ─── Piezas ─────────────────────────────────────────────────────────────────
 
-export const ENTRADA = 'h-11 w-full rounded-xl2 border border-line bg-bg px-3 text-sm text-ink outline-none transition-colors placeholder:text-ink-mute focus:border-accent-line'
+export const ENTRADA = 'h-11 w-full rounded-xl2 border border-line bg-surface px-3 text-sm text-ink outline-none transition-colors placeholder:text-ink-mute focus:border-accent-line'
 
 export function Campo({ etiqueta, className = '', children }) {
   return (

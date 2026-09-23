@@ -545,7 +545,7 @@ function Plegable({ abierta, children }) {
   )
 }
 
-const ENTRADA = 'h-12 w-full rounded-xl2 border border-line bg-bg px-3.5 text-[15px] text-ink outline-none transition-colors placeholder:text-ink-mute focus:border-accent-line'
+const ENTRADA = 'h-12 w-full rounded-xl2 border border-line bg-surface px-3.5 text-[15px] text-ink outline-none transition-colors placeholder:text-ink-mute focus:border-accent-line'
 
 function Campo({ etiqueta, className = '', children }) {
   return (

@@ -133,7 +133,7 @@ function Buscador({ onAnadido, alClub }) {
   return (
     <div>
       <form onSubmit={buscar} className="flex gap-2">
-        <div className="flex min-w-0 flex-1 items-center gap-2 rounded-xl2 border border-line bg-bg px-3">
+        <div className="flex min-w-0 flex-1 items-center gap-2 rounded-xl2 border border-line bg-surface px-3">
           <IconSearch className="h-4 w-4 shrink-0 text-ink-mute" />
           <input
             value={consulta}
