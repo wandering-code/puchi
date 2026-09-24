@@ -47,11 +47,17 @@ export default function BookDetail({
   // (aunque fuera de OTRO libro) aparecía ya en modo edición, con el
   // formulario todavía montado sobre los datos del libro anterior.
   useEffect(() => { setEditando(false) }, [entry.book.id, abierta])
+  // Al entrar en la edición o salir de ella se vuelve arriba del todo, como
+  // al abrir el libro: si no, el formulario (o la ficha, al volver) aparecía
+  // desplazado por donde se había quedado el otro.
+  const cuerpo = useRef(null)
+  useEffect(() => { if (cuerpo.current) cuerpo.current.scrollTop = 0 }, [editando])
 
   return (
     <PantallaInferior
       abierta={abierta}
       onCerrar={onCerrar}
+      refCuerpo={cuerpo}
       // Abierta desde la estantería, la ficha no sube: el libro vuela hasta
       // ella y la ficha se descubre cuando aterriza (ver VueloDelLibro).
       aparicion={vuelo ? 'fundido' : 'subir'}
