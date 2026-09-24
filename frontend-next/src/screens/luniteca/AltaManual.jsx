@@ -10,7 +10,8 @@ import { medidas, usarAnchoLomo } from './Lomos'
 import HojaInferior, { useHoja } from './HojaInferior'
 import RecortarFoto from './RecortarFoto'
 import CamaraGuiada, { pedirSensores, proporcionEsperada } from './CamaraGuiada'
-import { IconCamara, IconChevron, IconImagen } from '../../ui/icons'
+import { AccionesFoto } from './FotoLibro'
+import { IconChevron } from '../../ui/icons'
 
 // Dar de alta un libro a mano: para lo que la búsqueda no encuentra —
 // ediciones raras, libros que no están en Open Library, o cosas que no son
@@ -492,24 +493,7 @@ function HojaFoto({ hoja, tipo, libro, titulo, ayuda, hayFoto, onArchivo, onQuit
     <>
     <HojaInferior abierta={hoja.abierta} titulo={titulo} onCerrar={hoja.cerrar}>
       <p className="mb-4 text-sm leading-relaxed text-ink-mute">{ayuda}</p>
-      <div className="flex gap-2.5">
-        <button
-          type="button"
-          onClick={abrirCamara}
-          className="flex h-12 flex-1 items-center justify-center gap-2 rounded-xl2 bg-accent text-[14px] font-semibold text-on-accent"
-        >
-          <IconCamara className="h-4 w-4" />
-          Hacer una foto
-        </button>
-        <button
-          type="button"
-          onClick={() => galeria.current?.click()}
-          className="flex h-12 flex-1 items-center justify-center gap-2 rounded-xl2 border border-line text-[14px] font-semibold text-ink"
-        >
-          <IconImagen className="h-4 w-4" />
-          Galería
-        </button>
-      </div>
+      <AccionesFoto tipo={tipo} onCamara={abrirCamara} onGaleria={() => galeria.current?.click()} />
 
       {hayFoto && (
         <button

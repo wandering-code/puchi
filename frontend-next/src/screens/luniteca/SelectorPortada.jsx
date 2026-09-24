@@ -6,7 +6,7 @@ import { BotonBorrarEsquina, Cover } from './piezas'
 import HojaInferior from './HojaInferior'
 import RecortarFoto from './RecortarFoto'
 import CamaraGuiada, { pedirSensores, proporcionEsperada } from './CamaraGuiada'
-import { IconCamara, IconImagen } from '../../ui/icons'
+import { AccionesFoto, Actual, MarcaElegida, Tanda, aparecer } from './FotoLibro'
 
 // Elegir la portada de TU copia del libro. No cambia la del libro compartido:
 // cada jugador ve la que ha elegido (PersonalShelf.cover_url), y lo que se
@@ -81,74 +81,78 @@ export default function SelectorPortada({ abierta, libro, elegida, onCerrar, onE
 
   const subidas = datos?.user_uploads || []
   const automaticas = datos?.covers || []
+  // La portada que tiene puesta ahora tu copia y de dónde sale. La que te
+  // hayas elegido para tu copia puede estar guardada como copia local con
+  // otro nombre: el servidor dice a qué ruta local corresponde cada una.
+  const esLaElegida = url => elegida === url || elegida === datos?.cover_cache_map?.[url]
+  const subidaActual = elegida ? subidas.find(u => u.url === elegida) : null
+  const origen = !elegida
+    ? 'La portada del libro'
+    : subidaActual
+      ? (subidaActual.uploaded_by_id === player?.id ? 'Tu foto' : `Foto de ${subidaActual.uploaded_by || 'alguien del club'}`)
+      : automaticas.some(esLaElegida) ? 'De Open Library' : 'Una portada elegida'
 
   return (
     <>
     <HojaInferior abierta={abierta && !pendiente && !conCamara} titulo="Portada" onCerrar={onCerrar}>
-      <div className="mb-4 flex gap-2.5">
-        <button
-          onClick={abrirCamara}
-          disabled={subiendo}
-          className="flex h-12 flex-1 items-center justify-center gap-2 rounded-xl2 bg-accent text-[14px] font-semibold text-on-accent transition-transform active:scale-[0.98] disabled:opacity-60"
-        >
-          <IconCamara className="h-4 w-4" />
-          Hacer una foto
-        </button>
-        <button
-          onClick={() => archivo.current?.click()}
-          disabled={subiendo}
-          className="flex h-12 flex-1 items-center justify-center gap-2 rounded-xl2 border border-line text-[14px] font-semibold text-ink transition-transform active:scale-[0.98] disabled:opacity-60"
-        >
-          <IconImagen className="h-4 w-4" />
-          Galería
-        </button>
-      </div>
-      {subiendo && <p className="mb-3 text-sm text-ink-mute">Subiendo…</p>}
+      <Actual
+        muestra={<div className="w-16"><Cover url={elegida || libro.cover_url} title={libro.title} /></div>}
+        origen={origen}
+        nota={elegida ? 'Solo la ves tú: el resto del club sigue con la suya.' : null}
+      />
 
-      {error && <p className="mb-3 text-sm text-danger">{error}</p>}
+      <AccionesFoto tipo="portada" onCamara={abrirCamara} onGaleria={() => archivo.current?.click()} desactivado={subiendo} />
+
+      {subiendo && <p className="mt-3 text-sm text-ink-mute">Subiendo…</p>}
+      {error && <p className="mt-3 text-sm text-danger">{error}</p>}
 
       {datos === null && !error && (
-        <div className="grid grid-cols-3 gap-3">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="aspect-[2/3] animate-pulse rounded-md bg-surface-2" />
-          ))}
-        </div>
+        <Tanda titulo="Otras portadas">
+          <div className="grid grid-cols-3 gap-3.5">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="aspect-[2/3] animate-pulse rounded-md bg-surface-2" />
+            ))}
+          </div>
+        </Tanda>
       )}
 
       {subidas.length > 0 && (
-        <Grupo titulo="Subidas por el club">
-          {subidas.map(u => (
-            <Opcion
-              key={u.url}
-              url={u.url}
-              pie={u.uploaded_by ? `por ${u.uploaded_by}` : null}
-              elegida={elegida === u.url}
-              onElegir={() => onElegir(u.url)}
-              onBorrar={u.uploaded_by_id === player?.id ? () => borrarSubida(u.id) : null}
-            />
-          ))}
-        </Grupo>
+        <Tanda titulo="Fotos del club" cuantas={subidas.length}>
+          <div className="grid grid-cols-3 gap-3.5">
+            {subidas.map((u, i) => (
+              <Opcion
+                key={u.url}
+                indice={i}
+                url={u.url}
+                pie={u.uploaded_by_id === player?.id ? 'Tuya' : (u.uploaded_by || 'Del club')}
+                elegida={esLaElegida(u.url)}
+                onElegir={() => onElegir(u.url)}
+                onBorrar={u.uploaded_by_id === player?.id ? () => borrarSubida(u.id) : null}
+              />
+            ))}
+          </div>
+        </Tanda>
       )}
 
       {automaticas.length > 0 && (
-        <Grupo titulo="De Open Library">
-          {automaticas.map(url => (
-            <Opcion
-              key={url}
-              url={url}
-              // La portada que ya tienes puesta puede estar guardada como una
-              // copia local con otro nombre, así que no basta comparar la URL:
-              // el servidor manda a qué ruta local corresponde cada una.
-              elegida={elegida === url || elegida === datos?.cover_cache_map?.[url]}
-              onElegir={() => onElegir(url)}
-            />
-          ))}
-        </Grupo>
+        <Tanda titulo="De Open Library" cuantas={automaticas.length}>
+          <div className="grid grid-cols-3 gap-3.5">
+            {automaticas.map((url, i) => (
+              <Opcion
+                key={url}
+                indice={subidas.length + i}
+                url={url}
+                elegida={esLaElegida(url)}
+                onElegir={() => onElegir(url)}
+              />
+            ))}
+          </div>
+        </Tanda>
       )}
 
       {datos && subidas.length === 0 && automaticas.length === 0 && (
-        <p className="text-sm text-ink-mute">
-          Este libro no tiene portadas para elegir. Puedes subir una foto tú mismo.
+        <p className="mt-5 text-xs leading-relaxed text-ink-mute">
+          Este libro no tiene más portadas para elegir. La tuya, si haces una foto, aparecerá aquí para todo el club.
         </p>
       )}
     </HojaInferior>
@@ -182,30 +186,20 @@ export default function SelectorPortada({ abierta, libro, elegida, onCerrar, onE
   )
 }
 
-function Grupo({ titulo, children }) {
+function Opcion({ indice, url, pie, elegida, onElegir, onBorrar }) {
   return (
-    <section className="mb-5">
-      <h4 className="mb-2.5 text-[11px] uppercase tracking-[0.14em] text-ink-mute">{titulo}</h4>
-      <div className="grid grid-cols-3 gap-3">{children}</div>
-    </section>
-  )
-}
-
-function Opcion({ url, pie, elegida, onElegir, onBorrar }) {
-  return (
-    <div className="text-left">
+    <motion.div className="text-left" {...aparecer(indice)}>
       {/* El botón de borrar va FUERA de este, no dentro: dos <button>
           anidados es HTML inválido, y aquí además tocar la cruz no debe
           elegir también la portada. */}
       <div className="relative">
-        <motion.button onClick={onElegir} whileTap={{ scale: 0.95 }} className="block w-full">
-          <div className={`overflow-hidden rounded-md ring-offset-2 ring-offset-surface transition-[box-shadow] ${elegida ? 'ring-2 ring-accent' : ''}`}>
-            <Cover url={url} />
-          </div>
+        <motion.button onClick={onElegir} whileTap={{ scale: 0.95 }} className="relative block w-full" aria-pressed={elegida}>
+          <Cover url={url} />
+          {elegida && <MarcaElegida grupo="portada" redondeo={6} />}
         </motion.button>
         {onBorrar && <BotonBorrarEsquina etiqueta="Borrar esta portada" onConfirmar={onBorrar} />}
       </div>
-      {pie && <p className="mt-1 truncate text-[10px] text-ink-mute">{pie}</p>}
-    </div>
+      {pie && <p className={`mt-1.5 truncate text-[11px] ${elegida ? 'font-semibold text-accent' : 'text-ink-mute'}`}>{pie}</p>}
+    </motion.div>
   )
 }

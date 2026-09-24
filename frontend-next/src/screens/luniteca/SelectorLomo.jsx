@@ -6,7 +6,8 @@ import HojaInferior from './HojaInferior'
 import RecortarFoto from './RecortarFoto'
 import CamaraGuiada, { pedirSensores, proporcionEsperada } from './CamaraGuiada'
 import { BotonBorrarEsquina } from './piezas'
-import { IconCamara, IconImagen } from '../../ui/icons'
+import { usarAnchoLomo } from './Lomos'
+import { AccionesFoto, Actual, MarcaElegida, Tanda, aparecer } from './FotoLibro'
 
 // Elegir el lomo de TU copia del libro: igual que SelectorPortada, lo que se
 // pone aquí va a tu entrada de la estantería (PersonalShelf.spine_url), no al
@@ -79,71 +80,85 @@ export default function SelectorLomo({ abierta, libro, ancho, alto, elegida, onC
 
   const subidas = datos?.user_uploads || []
   const generado = datos?.default_url
+  // Lo que se ve ahora en la balda: la foto elegida o, si no hay, la
+  // generada. Y de dónde sale, dicho en una frase.
+  const actual = elegida || generado
+  const subidaActual = elegida ? subidas.find(u => u.url === elegida) : null
+  const origen = !elegida
+    ? (generado ? 'Generado a partir de la portada' : 'Todavía sin lomo')
+    : subidaActual?.uploaded_by_id === player?.id
+      ? 'Tu foto'
+      : subidaActual?.uploaded_by ? `Foto de ${subidaActual.uploaded_by}` : 'Una foto elegida'
+  // Las opciones, en una balda: primero la automática, luego las fotos.
+  const opciones = [
+    ...(generado ? [{ url: generado, valor: '', pie: 'Automático' }] : []),
+    ...subidas.map(u => ({
+      url: u.url,
+      valor: u.url,
+      pie: u.uploaded_by_id === player?.id ? 'Tuya' : (u.uploaded_by || 'Del club'),
+      foto: true,
+      onBorrar: u.uploaded_by_id === player?.id ? () => borrarSubida(u.id) : null,
+    })),
+  ]
 
   return (
     <>
       <HojaInferior abierta={abierta && !pendiente && !conCamara} titulo="Lomo" onCerrar={onCerrar}>
-        <div className="mb-4 flex gap-2.5">
-          <button
-            onClick={abrirCamara}
-            disabled={subiendo}
-            className="flex h-12 flex-1 items-center justify-center gap-2 rounded-xl2 bg-accent text-[14px] font-semibold text-on-accent disabled:opacity-60"
-          >
-            <IconCamara className="h-4 w-4" />
-            Hacer una foto
-          </button>
-          <button
-            onClick={() => galeria.current?.click()}
-            disabled={subiendo}
-            className="flex h-12 flex-1 items-center justify-center gap-2 rounded-xl2 border border-line text-[14px] font-semibold text-ink disabled:opacity-60"
-          >
-            <IconImagen className="h-4 w-4" />
-            Galería
-          </button>
-        </div>
+        <Actual
+          muestra={actual
+            ? <MiniLomo url={actual} ancho={ancho} alto={alto} altoVisto={96} foto={!!elegida} />
+            : <span className="block rounded-sm border border-dashed border-line" style={{ width: ancho * 96 / alto, height: 96 }} />}
+          origen={origen}
+          nota={!elegida && generado ? 'Se rehace solo si cambias la portada o el tamaño del libro.' : null}
+        />
 
-        {subiendo && <p className="mb-3 text-sm text-ink-mute">Subiendo…</p>}
-        {error && <p className="mb-3 text-sm text-danger">{error}</p>}
+        <AccionesFoto tipo="lomo" onCamara={abrirCamara} onGaleria={() => galeria.current?.click()} desactivado={subiendo} />
 
-        {generado && elegida && elegida !== generado && (
-          <button onClick={() => onElegir('')} className="mb-5 flex w-full items-center gap-3 rounded-xl2 border border-line p-2 text-left">
-            <MiniLomo url={generado} ancho={ancho} alto={alto} />
-            <span className="text-sm text-ink-dim">Volver al lomo de la estantería</span>
-          </button>
-        )}
+        {subiendo && <p className="mt-3 text-sm text-ink-mute">Subiendo…</p>}
+        {error && <p className="mt-3 text-sm text-danger">{error}</p>}
 
         {datos === null && !error && (
-          <div className="flex gap-3">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="animate-pulse rounded-md bg-surface-2" style={{ width: ancho, height: alto }} />
-            ))}
-          </div>
-        )}
-
-        {subidas.length > 0 && (
-          <section>
-            <h4 className="mb-2.5 text-[11px] uppercase tracking-[0.14em] text-ink-mute">Subidas por el club</h4>
-            <div className="flex flex-wrap gap-3">
-              {subidas.map(u => (
-                <Opcion
-                  key={u.url}
-                  url={u.url}
-                  ancho={ancho}
-                  alto={alto}
-                  pie={u.uploaded_by ? `por ${u.uploaded_by}` : null}
-                  elegida={elegida === u.url}
-                  onElegir={() => onElegir(u.url)}
-                  onBorrar={u.uploaded_by_id === player?.id ? () => borrarSubida(u.id) : null}
-                />
+          <Tanda titulo="Otros lomos">
+            <div className="flex items-end gap-4">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="animate-pulse rounded-sm bg-surface-2" style={{ width: ancho * ALTO_OPCION / alto, height: ALTO_OPCION }} />
               ))}
             </div>
-          </section>
+          </Tanda>
         )}
 
-        {datos && subidas.length === 0 && (
-          <p className="text-sm text-ink-mute">
-            Nadie ha subido todavía una foto del lomo de este libro. Puedes ser el primero.
-          </p>
+        {datos && (
+          <Tanda titulo="Otros lomos" cuantas={opciones.length || null}>
+            {/* Una balda de verdad: los lomos de pie sobre su estante. */}
+            <div className="-mx-5 overflow-x-auto px-5">
+              <div className="relative inline-flex min-w-full items-start gap-4 pb-1 pt-3">
+                {opciones.map((o, i) => (
+                  <Opcion
+                    key={o.url}
+                    indice={i}
+                    url={o.url}
+                    ancho={ancho}
+                    alto={alto}
+                    foto={o.foto}
+                    pie={o.pie}
+                    elegida={(elegida || '') === o.valor}
+                    onElegir={() => onElegir(o.valor)}
+                    onBorrar={o.onBorrar}
+                  />
+                ))}
+                <span
+                  className="pointer-events-none absolute inset-x-0 h-[7px] rounded-[2px]"
+                  style={{ top: ALTO_OPCION + 12, background: 'linear-gradient(var(--balda-luz), var(--balda-cara) 40%, var(--balda-sombra))' }}
+                  aria-hidden
+                />
+              </div>
+            </div>
+            {subidas.length === 0 && (
+              <p className="mt-3 text-xs leading-relaxed text-ink-mute">
+                Nadie del club ha subido todavía una foto de este lomo. La tuya, si haces una, aparecerá aquí para todos.
+              </p>
+            )}
+          </Tanda>
         )}
       </HojaInferior>
 
@@ -179,30 +194,38 @@ export default function SelectorLomo({ abierta, libro, ancho, alto, elegida, onC
   )
 }
 
-function MiniLomo({ url, ancho, alto }) {
+// El alto al que se ven los lomos entre los que elegir.
+const ALTO_OPCION = 118
+
+// Un lomo en pequeño, a `altoVisto` de alto. Si es una foto de verdad, con
+// su forma real (el mismo cálculo que la balda); si es el generado, con el
+// grosor que le da la balda.
+function MiniLomo({ url, ancho, alto, altoVisto, foto = false }) {
+  const anchoReal = usarAnchoLomo(url, ancho, alto, foto)
+  const k = altoVisto / alto
   return (
     <div
-      className="shrink-0 overflow-hidden rounded-sm bg-surface-2"
-      style={{ width: ancho, height: alto, backgroundImage: `url(${url})`, backgroundSize: 'cover' }}
+      className="shrink-0 overflow-hidden rounded-[3px] bg-surface-2 shadow-[2px_0_5px_-2px_rgb(var(--color-sombra)/.45)]"
+      style={{ width: anchoReal * k, height: altoVisto, backgroundImage: `url(${url})`, backgroundSize: 'cover', backgroundPosition: 'center' }}
     />
   )
 }
 
-function Opcion({ url, ancho, alto, pie, elegida, onElegir, onBorrar }) {
+function Opcion({ indice, url, ancho, alto, foto, pie, elegida, onElegir, onBorrar }) {
   return (
-    <div className="text-left">
+    <motion.div className="flex shrink-0 flex-col items-center" {...aparecer(indice)}>
       {/* El botón de borrar va FUERA de este, no dentro: dos <button>
           anidados es HTML inválido, y aquí además tocar la cruz no debe
           elegir también el lomo. */}
-      <div className="relative" style={{ width: ancho }}>
-        <motion.button onClick={onElegir} whileTap={{ scale: 0.95 }} className="block">
-          <div className={`overflow-hidden rounded-sm ring-offset-2 ring-offset-surface transition-[box-shadow] ${elegida ? 'ring-2 ring-accent' : ''}`}>
-            <MiniLomo url={url} ancho={ancho} alto={alto} />
-          </div>
+      <div className="relative">
+        <motion.button onClick={onElegir} whileTap={{ scale: 0.95 }} className="relative block" aria-label={`Elegir: ${pie}`} aria-pressed={elegida}>
+          <MiniLomo url={url} ancho={ancho} alto={alto} altoVisto={ALTO_OPCION} foto={foto} />
+          {elegida && <MarcaElegida grupo="lomo" redondeo={3} />}
         </motion.button>
         {onBorrar && <BotonBorrarEsquina etiqueta="Borrar este lomo" onConfirmar={onBorrar} />}
       </div>
-      {pie && <p className="mt-1 max-w-[--w] truncate text-[10px] text-ink-mute" style={{ '--w': `${ancho}px`, maxWidth: ancho }}>{pie}</p>}
-    </div>
+      {/* Debajo del estante. */}
+      <p className={`mt-4 max-w-[72px] truncate text-center text-[11px] ${elegida ? 'font-semibold text-accent' : 'text-ink-mute'}`}>{pie}</p>
+    </motion.div>
   )
 }
