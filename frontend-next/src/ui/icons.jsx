@@ -132,6 +132,28 @@ export const IconCamara = (p) => (
     <circle cx="12" cy="12.5" r="3.5" />
   </svg>
 )
+// Las guías de la cámara: un marco partido en tercios.
+export const IconRejilla = (p) => (
+  <svg {...base} {...p}>
+    <rect x="4" y="4" width="16" height="16" rx="1.5" />
+    <path d="M9.33 4v16M14.67 4v16M4 9.33h16M4 14.67h16" />
+  </svg>
+)
+// El nivel de burbuja: un tubo con su burbuja en medio.
+export const IconNivel = (p) => (
+  <svg {...base} {...p}>
+    <rect x="3" y="9" width="18" height="6" rx="3" />
+    <circle cx="12" cy="12" r="1.6" />
+    <path d="M9 9v6M15 9v6" />
+  </svg>
+)
+// La linterna del móvil, para fotos con poca luz.
+export const IconLinterna = (p) => (
+  <svg {...base} {...p}>
+    <path d="M8 3h8v3l-2 3v11a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1V9L8 6z" />
+    <path d="M8 6h8M12 12.5v2" />
+  </svg>
+)
 // Una imagen dentro de un marco: para "elegir de la galería".
 export const IconImagen = (p) => (
   <svg {...base} {...p}>

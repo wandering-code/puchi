@@ -9,6 +9,7 @@ import { Chip, usarSugerencias } from './ListaPrevia'
 import { medidas, usarAnchoLomo } from './Lomos'
 import HojaInferior, { useHoja } from './HojaInferior'
 import RecortarFoto from './RecortarFoto'
+import CamaraGuiada, { pedirSensores, proporcionEsperada } from './CamaraGuiada'
 import { IconCamara, IconChevron, IconImagen } from '../../ui/icons'
 
 // Dar de alta un libro a mano: para lo que la búsqueda no encuentra —
@@ -176,6 +177,8 @@ export default function AltaManual({ onAnadido, onHecho, alClub, estanteria }) {
   }
 
   const portada = fotoPortada?.url || datos.cover_url
+  // Lo que ya se sabe del libro, para dar forma al marco de la cámara.
+  const libroParaFoto = { num_pages: num(datos.num_pages), height_mm: mm, cover_url: portada }
 
   return (
     <>
@@ -417,18 +420,22 @@ export default function AltaManual({ onAnadido, onHecho, alClub, estanteria }) {
 
       <HojaFoto
         hoja={hojaPortada}
+        tipo="portada"
+        libro={libroParaFoto}
         titulo="Portada"
         ayuda="Una foto de la cubierta, como la tengas en la mano — al aceptar podrás encuadrarla."
         hayFoto={!!fotoPortada}
-        onArchivo={file => setRecorte({ file, cual: 'portada' })}
+        onArchivo={(file, deCamara) => setRecorte({ file, cual: 'portada', deCamara })}
         onQuitar={() => quitarFoto('portada')}
       />
       <HojaFoto
         hoja={hojaLomo}
+        tipo="lomo"
+        libro={libroParaFoto}
         titulo="Lomo"
         ayuda="Una foto del lomo, el canto que se ve en la balda. Si no pones ninguna se genera uno a partir de la portada."
         hayFoto={!!fotoLomo}
-        onArchivo={file => setRecorte({ file, cual: 'lomo' })}
+        onArchivo={(file, deCamara) => setRecorte({ file, cual: 'lomo', deCamara })}
         onQuitar={() => quitarFoto('lomo')}
       />
 
@@ -446,7 +453,9 @@ export default function AltaManual({ onAnadido, onHecho, alClub, estanteria }) {
           instrucciones={recorte.cual === 'portada'
             ? 'Ajusta las esquinas a la cubierta · pellizca o usa la rueda para acercar'
             : 'Ajusta las esquinas al lomo · pellizca o usa la rueda para acercar'}
-          proporcionInicial={recorte.cual === 'portada' ? 2 / 3 : 0.28}
+          proporcionInicial={recorte.deCamara
+            ? proporcionEsperada(recorte.cual, libroParaFoto)
+            : (recorte.cual === 'portada' ? 2 / 3 : 0.28)}
           onCancelar={() => setRecorte(null)}
           onConfirmar={blob => { ponerFoto(recorte.cual, blob); setRecorte(null) }}
         />
@@ -458,25 +467,35 @@ export default function AltaManual({ onAnadido, onHecho, alClub, estanteria }) {
 // Elegir de dónde sale la foto. Las mismas dos puertas que el selector de
 // lomos de la ficha —la cámara y la galería—, porque en el móvil no son lo
 // mismo: el libro está delante mientras lo das de alta.
-function HojaFoto({ hoja, titulo, ayuda, hayFoto, onArchivo, onQuitar }) {
+function HojaFoto({ hoja, tipo, libro, titulo, ayuda, hayFoto, onArchivo, onQuitar }) {
   const camara = useRef(null)
   const galeria = useRef(null)
+  const [conCamara, setConCamara] = useState(false)
 
   function alElegirArchivo(ev) {
     const fichero = ev.target.files?.[0]
     ev.target.value = ''   // permite volver a elegir el mismo archivo
     if (!fichero) return
     hoja.cerrar()
-    onArchivo(fichero)
+    onArchivo(fichero, false)
+  }
+
+  // La cámara con guías (ver CamaraGuiada). El permiso de los sensores del
+  // nivel solo se puede pedir dentro del toque.
+  function abrirCamara() {
+    pedirSensores()
+    hoja.cerrar()
+    setConCamara(true)
   }
 
   return (
+    <>
     <HojaInferior abierta={hoja.abierta} titulo={titulo} onCerrar={hoja.cerrar}>
       <p className="mb-4 text-sm leading-relaxed text-ink-mute">{ayuda}</p>
       <div className="flex gap-2.5">
         <button
           type="button"
-          onClick={() => camara.current?.click()}
+          onClick={abrirCamara}
           className="flex h-12 flex-1 items-center justify-center gap-2 rounded-xl2 bg-accent text-[14px] font-semibold text-on-accent"
         >
           <IconCamara className="h-4 w-4" />
@@ -491,8 +510,6 @@ function HojaFoto({ hoja, titulo, ayuda, hayFoto, onArchivo, onQuitar }) {
           Galería
         </button>
       </div>
-      <input ref={camara} type="file" accept="image/*" capture="environment" onChange={alElegirArchivo} className="hidden" />
-      <input ref={galeria} type="file" accept="image/*" onChange={alElegirArchivo} className="hidden" />
 
       {hayFoto && (
         <button
@@ -504,6 +521,22 @@ function HojaFoto({ hoja, titulo, ayuda, hayFoto, onArchivo, onQuitar }) {
         </button>
       )}
     </HojaInferior>
+
+    {/* Fuera de la hoja, que está cerrada (e `inert`) mientras se usa la
+        cámara: desde ella se puede saltar a la galería o a la del sistema. */}
+    <input ref={camara} type="file" accept="image/*" capture="environment" onChange={alElegirArchivo} className="hidden" />
+    <input ref={galeria} type="file" accept="image/*" onChange={alElegirArchivo} className="hidden" />
+
+    <CamaraGuiada
+      abierta={conCamara}
+      tipo={tipo}
+      libro={libro}
+      onCerrar={() => setConCamara(false)}
+      onFoto={file => { setConCamara(false); onArchivo(file, true) }}
+      onGaleria={() => { setConCamara(false); galeria.current?.click() }}
+      onCamaraSistema={() => { setConCamara(false); camara.current?.click() }}
+    />
+    </>
   )
 }
 

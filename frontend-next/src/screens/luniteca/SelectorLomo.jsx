@@ -4,6 +4,7 @@ import { api } from '../../platform/api'
 import { useAuth } from '../../platform/auth'
 import HojaInferior from './HojaInferior'
 import RecortarFoto from './RecortarFoto'
+import CamaraGuiada, { pedirSensores, proporcionEsperada } from './CamaraGuiada'
 import { BotonBorrarEsquina } from './piezas'
 import { IconCamara, IconImagen } from '../../ui/icons'
 
@@ -18,7 +19,8 @@ import { IconCamara, IconImagen } from '../../ui/icons'
 export default function SelectorLomo({ abierta, libro, ancho, alto, elegida, onCerrar, onElegir, onSubir }) {
   const { player } = useAuth()
   const [datos, setDatos] = useState(null)   // null = cargando
-  const [pendiente, setPendiente] = useState(null) // File esperando recorte
+  const [pendiente, setPendiente] = useState(null) // { file, deCamara } esperando recorte
+  const [conCamara, setConCamara] = useState(false)
   const [subiendo, setSubiendo] = useState(false)
   const [error, setError] = useState(null)
   const camara = useRef(null)
@@ -38,7 +40,15 @@ export default function SelectorLomo({ abierta, libro, ancho, alto, elegida, onC
   function alElegirArchivo(ev) {
     const fichero = ev.target.files?.[0]
     ev.target.value = ''   // permite volver a elegir el mismo archivo
-    if (fichero) setPendiente(fichero)
+    if (fichero) setPendiente({ file: fichero, deCamara: false })
+  }
+
+  // La cámara propia (ver CamaraGuiada), no la del sistema: con guías para
+  // que el lomo salga recto. El permiso de los sensores del nivel solo se
+  // puede pedir aquí, dentro del toque.
+  function abrirCamara() {
+    pedirSensores()
+    setConCamara(true)
   }
 
   async function alConfirmarRecorte(blob) {
@@ -72,10 +82,10 @@ export default function SelectorLomo({ abierta, libro, ancho, alto, elegida, onC
 
   return (
     <>
-      <HojaInferior abierta={abierta && !pendiente} titulo="Lomo" onCerrar={onCerrar}>
+      <HojaInferior abierta={abierta && !pendiente && !conCamara} titulo="Lomo" onCerrar={onCerrar}>
         <div className="mb-4 flex gap-2.5">
           <button
-            onClick={() => camara.current?.click()}
+            onClick={abrirCamara}
             disabled={subiendo}
             className="flex h-12 flex-1 items-center justify-center gap-2 rounded-xl2 bg-accent text-[14px] font-semibold text-on-accent disabled:opacity-60"
           >
@@ -91,8 +101,6 @@ export default function SelectorLomo({ abierta, libro, ancho, alto, elegida, onC
             Galería
           </button>
         </div>
-        <input ref={camara} type="file" accept="image/*" capture="environment" onChange={alElegirArchivo} className="hidden" />
-        <input ref={galeria} type="file" accept="image/*" onChange={alElegirArchivo} className="hidden" />
 
         {subiendo && <p className="mb-3 text-sm text-ink-mute">Subiendo…</p>}
         {error && <p className="mb-3 text-sm text-danger">{error}</p>}
@@ -139,12 +147,30 @@ export default function SelectorLomo({ abierta, libro, ancho, alto, elegida, onC
         )}
       </HojaInferior>
 
+      {/* Fuera de la hoja: mientras la cámara está abierta la hoja está
+          cerrada (e `inert`), y desde la cámara se puede pasar a la galería
+          o, si el navegador no deja usarla, a la cámara del sistema. */}
+      <input ref={camara} type="file" accept="image/*" capture="environment" onChange={alElegirArchivo} className="hidden" />
+      <input ref={galeria} type="file" accept="image/*" onChange={alElegirArchivo} className="hidden" />
+
+      <CamaraGuiada
+        abierta={conCamara}
+        tipo="lomo"
+        libro={libro}
+        onCerrar={() => setConCamara(false)}
+        onFoto={file => { setConCamara(false); setPendiente({ file, deCamara: true }) }}
+        onGaleria={() => { setConCamara(false); galeria.current?.click() }}
+        onCamaraSistema={() => { setConCamara(false); camara.current?.click() }}
+      />
+
       {pendiente && (
         <RecortarFoto
-          file={pendiente}
+          file={pendiente.file}
           titulo="Encuadra el lomo"
           instrucciones="Ajusta las esquinas al lomo · pellizca o usa la rueda para acercar"
-          proporcionInicial={0.28}
+          // De la cámara, el lomo llega centrado y con la forma del marco:
+          // el rectángulo arranca ya casi encajado.
+          proporcionInicial={pendiente.deCamara ? proporcionEsperada('lomo', libro) : 0.28}
           onCancelar={() => setPendiente(null)}
           onConfirmar={alConfirmarRecorte}
         />

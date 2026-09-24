@@ -5,6 +5,8 @@ import { useAuth } from '../../platform/auth'
 import { BotonBorrarEsquina, Cover } from './piezas'
 import HojaInferior from './HojaInferior'
 import RecortarFoto from './RecortarFoto'
+import CamaraGuiada, { pedirSensores, proporcionEsperada } from './CamaraGuiada'
+import { IconCamara, IconImagen } from '../../ui/icons'
 
 // Elegir la portada de TU copia del libro. No cambia la del libro compartido:
 // cada jugador ve la que ha elegido (PersonalShelf.cover_url), y lo que se
@@ -20,10 +22,12 @@ import RecortarFoto from './RecortarFoto'
 export default function SelectorPortada({ abierta, libro, elegida, onCerrar, onElegir, onSubir }) {
   const { player } = useAuth()
   const [datos, setDatos] = useState(null)   // null = cargando
-  const [pendiente, setPendiente] = useState(null) // File esperando recorte
+  const [pendiente, setPendiente] = useState(null) // { file, deCamara } esperando recorte
+  const [conCamara, setConCamara] = useState(false)
   const [subiendo, setSubiendo] = useState(false)
   const [error, setError] = useState(null)
   const archivo = useRef(null)
+  const camaraSistema = useRef(null)
 
   useEffect(() => {
     if (!abierta) return
@@ -39,7 +43,13 @@ export default function SelectorPortada({ abierta, libro, elegida, onCerrar, onE
   function alElegirArchivo(ev) {
     const fichero = ev.target.files?.[0]
     ev.target.value = ''   // permite volver a elegir el mismo archivo
-    if (fichero) setPendiente(fichero)
+    if (fichero) setPendiente({ file: fichero, deCamara: false })
+  }
+
+  // Misma cámara con guías que el lomo (ver CamaraGuiada).
+  function abrirCamara() {
+    pedirSensores()
+    setConCamara(true)
   }
 
   async function alConfirmarRecorte(blob) {
@@ -74,15 +84,26 @@ export default function SelectorPortada({ abierta, libro, elegida, onCerrar, onE
 
   return (
     <>
-    <HojaInferior abierta={abierta && !pendiente} titulo="Portada" onCerrar={onCerrar}>
-      <button
-        onClick={() => archivo.current?.click()}
-        disabled={subiendo}
-        className="mb-4 h-12 w-full rounded-xl2 bg-accent text-[15px] font-semibold text-on-accent transition-transform active:scale-[0.98] disabled:opacity-60"
-      >
-        {subiendo ? 'Subiendo…' : 'Subir una foto'}
-      </button>
-      <input ref={archivo} type="file" accept="image/*" onChange={alElegirArchivo} className="hidden" />
+    <HojaInferior abierta={abierta && !pendiente && !conCamara} titulo="Portada" onCerrar={onCerrar}>
+      <div className="mb-4 flex gap-2.5">
+        <button
+          onClick={abrirCamara}
+          disabled={subiendo}
+          className="flex h-12 flex-1 items-center justify-center gap-2 rounded-xl2 bg-accent text-[14px] font-semibold text-on-accent transition-transform active:scale-[0.98] disabled:opacity-60"
+        >
+          <IconCamara className="h-4 w-4" />
+          Hacer una foto
+        </button>
+        <button
+          onClick={() => archivo.current?.click()}
+          disabled={subiendo}
+          className="flex h-12 flex-1 items-center justify-center gap-2 rounded-xl2 border border-line text-[14px] font-semibold text-ink transition-transform active:scale-[0.98] disabled:opacity-60"
+        >
+          <IconImagen className="h-4 w-4" />
+          Galería
+        </button>
+      </div>
+      {subiendo && <p className="mb-3 text-sm text-ink-mute">Subiendo…</p>}
 
       {error && <p className="mb-3 text-sm text-danger">{error}</p>}
 
@@ -132,12 +153,27 @@ export default function SelectorPortada({ abierta, libro, elegida, onCerrar, onE
       )}
     </HojaInferior>
 
+    {/* Fuera de la hoja, que está cerrada (e `inert`) mientras se usa la
+        cámara: desde ella se puede saltar a la galería o a la del sistema. */}
+    <input ref={archivo} type="file" accept="image/*" onChange={alElegirArchivo} className="hidden" />
+    <input ref={camaraSistema} type="file" accept="image/*" capture="environment" onChange={alElegirArchivo} className="hidden" />
+
+    <CamaraGuiada
+      abierta={conCamara}
+      tipo="portada"
+      libro={libro}
+      onCerrar={() => setConCamara(false)}
+      onFoto={file => { setConCamara(false); setPendiente({ file, deCamara: true }) }}
+      onGaleria={() => { setConCamara(false); archivo.current?.click() }}
+      onCamaraSistema={() => { setConCamara(false); camaraSistema.current?.click() }}
+    />
+
     {pendiente && (
       <RecortarFoto
-        file={pendiente}
+        file={pendiente.file}
         titulo="Encuadra la portada"
         instrucciones="Ajusta las esquinas a la cubierta · pellizca o usa la rueda para acercar"
-        proporcionInicial={2 / 3}
+        proporcionInicial={pendiente.deCamara ? proporcionEsperada('portada', libro) : 2 / 3}
         onCancelar={() => setPendiente(null)}
         onConfirmar={alConfirmarRecorte}
       />
