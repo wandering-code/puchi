@@ -26,8 +26,20 @@ export default function BookEditForm({ entry, generos, onGuardar, onCancelar, on
     year: libro.year != null ? String(libro.year) : '',
     num_pages: libro.num_pages != null ? String(libro.num_pages) : '',
     synopsis: libro.synopsis || '',
-    cover_url: libro.cover_url || '',
-    spine_url: libro.spine_url || '',
+    // La portada/el lomo PROPIOS (lo que esta persona ha elegido para su
+    // copia), no los efectivos del libro. Si se sembrara con libro.cover_url
+    // / libro.spine_url —que ya vienen resueltos, con el propio si lo hay o
+    // si no el del libro— cualquier "Guardar" sin tocar ninguno de los dos
+    // los adoptaría como si se hubieran elegido a mano (ver guardarLibro en
+    // Luniteca.jsx, que compara esto contra own_cover_url/own_spine_url para
+    // decidir si hay que guardar algo). Con el lomo eso se notaba mucho: el
+    // generado se quedaba congelado en ESE jugador y, al tratarse ya como
+    // "foto de verdad" (spine_custom), perdía el título de encima; y en
+    // cuanto el libro se regeneraba a otro tamaño (regenerarLomoSiToca en
+    // Luniteca.jsx), el archivo al que seguía apuntando se borraba y el lomo
+    // se quedaba de un solo color.
+    cover_url: entry.own_cover_url || '',
+    spine_url: entry.own_spine_url || '',
     height_mm: libro.height_mm != null ? String(libro.height_mm) : '',
   }))
   const [guardando, setGuardando] = useState(false)
@@ -41,13 +53,19 @@ export default function BookEditForm({ entry, generos, onGuardar, onCancelar, on
   const { ancho: anchoLomoBase, alto: altoLomo } = medidas({
     ...entry, book: { ...entry.book, height_mm: mmElegidos },
   })
+  // Lo que se ENSEÑA arriba no es el borrador a secas: si no has tocado la
+  // portada/el lomo, borrador.cover_url/spine_url están vacíos (significan
+  // "sin elegir uno propio", ver arriba) y hay que enseñar el efectivo del
+  // libro — el mismo que ya se ve en la balda.
+  const coverMostrada = borrador.cover_url || libro.cover_url || ''
+  const spineMostrado = borrador.spine_url || libro.spine_url || ''
   // Con una foto de verdad puesta, el ancho de la vista previa sale de la
   // proporción REAL de esa foto (mismo hook que usa la balda) y no del ancho
   // por páginas: si no, esta miniatura recorta la foto a una forma que no es
   // la que se subió, y lo que se ve aquí no es lo que se ve luego en la balda
   // (visto: un lomo fino de verdad, apretado aquí en un hueco mucho más
   // ancho, se veía "cortado").
-  const anchoLomo = usarAnchoLomo(borrador.spine_url, anchoLomoBase, altoLomo)
+  const anchoLomo = usarAnchoLomo(spineMostrado, anchoLomoBase, altoLomo)
 
   const set = (clave) => (ev) => setBorrador(b => ({ ...b, [clave]: ev.target.value }))
 
@@ -86,7 +104,7 @@ export default function BookEditForm({ entry, generos, onGuardar, onCancelar, on
           className="w-24 shrink-0"
           aria-label="Cambiar la portada"
         >
-          <Cover url={borrador.cover_url} title={borrador.title} />
+          <Cover url={coverMostrada} title={borrador.title} />
         </motion.button>
         <motion.button
           onClick={lomo.abrir}
@@ -95,8 +113,8 @@ export default function BookEditForm({ entry, generos, onGuardar, onCancelar, on
           style={{ width: anchoLomo, height: altoLomo }}
           aria-label="Cambiar el lomo"
         >
-          {borrador.spine_url && (
-            <div className="h-full w-full" style={{ backgroundImage: `url(${borrador.spine_url})`, backgroundSize: 'cover' }} />
+          {spineMostrado && (
+            <div className="h-full w-full" style={{ backgroundImage: `url(${spineMostrado})`, backgroundSize: 'cover' }} />
           )}
         </motion.button>
       </div>
