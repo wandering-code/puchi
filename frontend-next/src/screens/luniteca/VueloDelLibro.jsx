@@ -44,6 +44,37 @@ const CURVA_GIRO = 'cubic-bezier(.5,.02,.3,1)'
 const GIRO = [0.12, 0.86]
 const PERSPECTIVA = 380
 
+// Los dos relevos —el lomo de la balda que pasa a volar, y el libro que se
+// posa en la ficha— tienen que ser invisibles: en ese instante lo que vuela
+// tiene que ser IDÉNTICO a lo que sustituye. El trayecto era suave, pero al
+// posarse la sombra, las esquinas y el alto cambiaban de golpe, y eso es lo
+// que se notaba como un final brusco (y lo mismo, al revés, al despegar de
+// vuelta). Por eso la tapa lleva todo el vuelo su propia sombra y, en el
+// último tramo (desde ATERRIZAJE), se va convirtiendo en la de la portada de
+// la ficha.
+const ATERRIZAJE = 0.8
+// [x, y, desenfoque, extensión, opacidad] de cada una de las dos sombras.
+const SOMBRA_VUELO = [[0, 2, 6, -2, 0.34], [0, 14, 34, -10, 0.45]]
+// La de la portada de la ficha: `sombra-portada` en index.css. Si se retoca
+// allí, hay que retocarla aquí o el relevo vuelve a notarse.
+const SOMBRA_FICHA = [[0, 6, 14, 0, 0.18], [0, 18, 34, -16, 0.4]]
+// Las esquinas de la portada de la ficha (Cover: rounded-md).
+const RADIO_FICHA = 6
+// Lo que tarda el lomo en soltar su sombra y sus esquinas de la balda al
+// despegar (y en recuperarlas al volver).
+const DESPEGUE = 0.08
+
+// Todas las medidas van divididas por la escala del paso: el vuelo escala el
+// contenedor entero, así que así quedan del mismo tamaño en pantalla todo el
+// rato (el mismo truco que el relieve de la tapa).
+function sombraTapa(k, s) {
+  const px = n => `${(n / s).toFixed(2)}px`
+  return SOMBRA_VUELO.map((a, i) => {
+    const m = j => a[j] + (SOMBRA_FICHA[i][j] - a[j]) * k
+    return `${px(m(0))} ${px(m(1))} ${px(m(2))} ${px(m(3))} rgb(var(--color-sombra) / ${m(4).toFixed(3)})`
+  }).join(', ')
+}
+
 // `sentido`: 'ida' saca el libro de la balda y lo abre en la ficha; 'vuelta'
 // hace el camino contrario, con las mismas animaciones puestas del revés.
 export default function VueloDelLibro({ lomo, portada, destino, alTerminar, sentido = 'ida' }) {
@@ -53,6 +84,7 @@ export default function VueloDelLibro({ lomo, portada, destino, alTerminar, sent
   const enderezar = useRef(null)
   const libro = useRef(null)
   const tapa = useRef(null)
+  const cara = useRef(null)
 
   useLayoutEffect(() => {
     if (!lomo || !destino) return
@@ -78,6 +110,16 @@ export default function VueloDelLibro({ lomo, portada, destino, alTerminar, sent
     const r = lomo.getBoundingClientRect()
     lomo.style.transform = giroPrevio
     lomo.style.transition = transicionPrevia
+    // Cómo se ve en la balda justo ahora, para que la cara que vuela arranque
+    // (y, de vuelta, acabe) exactamente igual: sus esquinas y su sombra.
+    const estilo = getComputedStyle(lomo)
+    const enLaBalda = {
+      borderTopLeftRadius: estilo.borderTopLeftRadius,
+      borderTopRightRadius: estilo.borderTopRightRadius,
+      borderBottomRightRadius: estilo.borderBottomRightRadius,
+      borderBottomLeftRadius: estilo.borderBottomLeftRadius,
+      boxShadow: estilo.boxShadow,
+    }
     const clon = lomo.cloneNode(true)
     // El clon va derecho: el giro de la balda lo pone (y lo quita) la capa que
     // endereza, con el mismo punto de apoyo que usa la estantería.
@@ -91,10 +133,10 @@ export default function VueloDelLibro({ lomo, portada, destino, alTerminar, sent
     // separa un lomo de su vecino, pero aquí cae justo en la unión con la tapa
     // y se ve como una rendija entre las dos caras. La sombra del vuelo la pone
     // la tapa.
+    // (Esa sombra, al despegar, no desaparece de golpe: la lleva un instante
+    // la cara del lomo y la suelta en cuanto la tapa empieza a verse — ver
+    // `cara` más abajo.)
     clon.style.boxShadow = 'none'
-    // El lomo de la balda se salta su propio pintado cuando no se ve
-    // (content-visibility); el que vuela tiene que verse siempre.
-    clon.style.contentVisibility = 'visible'
     // El lomo de la balda se marca como invisible en cuanto empieza el vuelo,
     // para que no se vea por duplicado, y el clon se hace DESPUÉS: hay que
     // quitarle esa marca o el clon nace invisible. Era el motivo de que en el
@@ -102,7 +144,7 @@ export default function VueloDelLibro({ lomo, portada, destino, alTerminar, sent
     // plana que crece.
     clon.classList.remove('invisible')
     clon.style.visibility = 'visible'
-    setCaja({ left: r.left, right: r.left + ancho, top: r.top, ancho, alto, torcido, clon })
+    setCaja({ left: r.left, right: r.left + ancho, top: r.top, ancho, alto, torcido, clon, enLaBalda })
   }, [lomo, destino])
 
   // La geometría del libro, que tiene su intríngulis y se ha llegado a ella
@@ -148,9 +190,17 @@ export default function VueloDelLibro({ lomo, portada, destino, alTerminar, sent
     // acerca se agranda— y con la cuenta teórica el libro seguía haciendo un
     // vaivén. Se mide poniendo el libro en cada ángulo un instante, antes de
     // empezar, dentro del mismo ciclo de layout.
+    //
+    // De canto (0°), lo único que se ve es el lomo: la tapa asoma en
+    // perspectiva como una franja de 3-4px a su derecha, pero en ese punto
+    // está transparente (ver `sombra`, más abajo). Si esa franja contara, el
+    // centro caía a su derecha y el libro arrancaba 3px a la izquierda del
+    // lomo de la balda —y al volver, se posaba 3px desplazado—: un saltito
+    // justo al tocarlo y otro justo al acabar.
     const medirCentro = (grados) => {
       libro.current.style.transform = `rotateY(-${grados}deg)`
-      const caras = [...libro.current.children].map(c => c.getBoundingClientRect())
+      const visibles = grados === 0 ? [cara.current] : [...libro.current.children]
+      const caras = visibles.map(c => c.getBoundingClientRect())
       const base = viaje.current.getBoundingClientRect()
       const izq = Math.min(...caras.map(c => c.left))
       const der = Math.max(...caras.map(c => c.right))
@@ -242,21 +292,50 @@ export default function VueloDelLibro({ lomo, portada, destino, alTerminar, sent
     // Dos sombras: la de contacto, corta y pegada, y la larga que separa el
     // libro de lo que tiene detrás. Sin la primera el libro flota; sin la
     // segunda parece pegado a la pantalla.
+    //
+    // En el último tramo (ATERRIZAJE) la sombra y las esquinas se convierten
+    // en las de la portada de la ficha, para que al posarse no cambie nada.
+    // Las esquinas del lado de la bisagra van casi a escuadra mientras se ve
+    // el lomo pegado a ellas; cuando llega ese tramo la tapa ya está de
+    // frente y el lomo de perfil, así que pueden redondearse como las otras.
     const sombra = tapa.current.animate(
       pasos.map(({ t, crece }) => {
         const s = 1 + (escala - 1) * crece
-        const px = n => `${(n / s).toFixed(2)}px`
+        const k = Math.max(0, (t - ATERRIZAJE) / (1 - ATERRIZAJE))
+        const bisagra = `${((2 + (RADIO_FICHA - 2) * k) / s).toFixed(2)}px`
+        const fuera = `${(RADIO_FICHA / s).toFixed(2)}px`
         return {
           offset: t,
-          boxShadow: `0 ${px(2)} ${px(6)} ${px(-2)} rgb(var(--color-sombra) / .34),`
-            + ` 0 ${px(14)} ${px(34)} ${px(-10)} rgb(var(--color-sombra) / .45)`,
+          boxShadow: sombraTapa(k, s),
+          borderRadius: `${bisagra} ${fuera} ${fuera} ${bisagra}`,
+          // En la balda no se ve la tapa. De canto, la perspectiva la dejaba
+          // asomar como una franja junto al lomo que aparecía de golpe al
+          // tocarlo (y desaparecía de golpe al volver): llega fundiéndose en
+          // lo que el lomo tarda en soltar su sombra.
+          opacity: t === 0 ? 0 : 1,
         }
       }),
       { duration: DURACION, easing: CURVA_GIRO, fill: 'forwards', direction: volviendo ? 'reverse' : 'normal' },
     )
 
+    // La cara del lomo arranca con las esquinas y la sombra que tenía en la
+    // balda y las suelta en cuanto la tapa empieza a asomar (al volver,
+    // al revés: las recupera justo antes de posarse). Sin esto, al tocar el
+    // lomo su sombra desaparecía de golpe y sus esquinas cambiaban.
+    const b = caja.enLaBalda
+    const enVuelo = {
+      borderTopLeftRadius: '4px', borderBottomLeftRadius: '4px',
+      borderTopRightRadius: '0px', borderBottomRightRadius: '0px',
+      boxShadow: 'none',
+    }
+    const soltar = cara.current.animate([
+      { ...b, offset: 0 },
+      { ...enVuelo, offset: DESPEGUE },
+      { ...enVuelo, offset: 1 },
+    ], { duration: DURACION, easing: CURVA_GIRO, fill: 'forwards', direction: volviendo ? 'reverse' : 'normal' })
+
     vuelo.onfinish = () => alTerminar?.()
-    return () => { vuelo.cancel(); derecho.cancel(); giro.cancel(); sombra.cancel() }
+    return () => { vuelo.cancel(); derecho.cancel(); giro.cancel(); sombra.cancel(); soltar.cancel() }
   }, [caja, x, y, escala])
 
   if (!caja || !destino) return null
@@ -319,6 +398,7 @@ export default function VueloDelLibro({ lomo, portada, destino, alTerminar, sent
             {/* El lomo, clonado del de la balda: es la cara que mira al frente
                 cuando el libro está en la estantería. */}
             <div
+              ref={cara}
               className="absolute top-0 overflow-hidden"
               style={{
                 left: 0, width: grosorLomo, height: '100%',

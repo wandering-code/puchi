@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { motion } from 'motion/react'
 import { STATUS_COLOR, STATUS_LABEL, progressPct, totalPages } from './shelf'
 import { IconX } from '../../ui/icons'
+import { proporcionConocida, recordarProporcion } from './proporcionLomo'
 
 // ─── Portada ───────────────────────────────────────────────────────────────
 // Proporción de libro fija (2/3) para que la cuadrícula sea una rejilla de
@@ -48,12 +49,16 @@ export const RELIEVE_LIBRO = relieveLibro()
 export function Cover({ url, title, className = '', priority = false, relieve = false, realce = true, ajustar = false }) {
   const [roto, setRoto] = useState(false)
   const [cargada, setCargada] = useState(false)
-  const [ratioNatural, setRatioNatural] = useState(null)
+  // Con `ajustar`, la proporción real se toma de la caché si ya se conoce, en
+  // vez de nacer en 2/3 y cambiar al cargar la imagen: el libro que vuela
+  // desde la balda mide dónde aterrizar en cuanto se abre la ficha, y si la
+  // caja cambia de alto después, al posarse se veía la portada estirarse.
+  const [ratioNatural, setRatioNatural] = useState(() => (ajustar ? proporcionConocida(url) : null))
   const [urlPrevia, setUrlPrevia] = useState(url)
   // Al cambiar de portada (se puede elegir otra) se reinicia el estado sin
   // esperar a un efecto, que dejaría un frame con la imagen anterior ya
   // marcada como cargada.
-  if (urlPrevia !== url) { setUrlPrevia(url); setRoto(false); setCargada(false); setRatioNatural(null) }
+  if (urlPrevia !== url) { setUrlPrevia(url); setRoto(false); setCargada(false); setRatioNatural(ajustar ? proporcionConocida(url) : null) }
   const hayImagen = !!url && !roto
 
   return (
@@ -81,7 +86,13 @@ export function Cover({ url, title, className = '', priority = false, relieve = 
             loading={priority ? 'eager' : 'lazy'}
             decoding="async"
             onError={() => setRoto(true)}
-            onLoad={e => { setCargada(true); if (ajustar) setRatioNatural(e.target.naturalWidth / e.target.naturalHeight) }}
+            onLoad={e => {
+              setCargada(true)
+              if (!ajustar) return
+              const ratio = e.target.naturalWidth / e.target.naturalHeight
+              setRatioNatural(ratio)
+              recordarProporcion(url, ratio)
+            }}
             initial={false}
             animate={{ opacity: cargada ? 1 : 0 }}
             transition={{ duration: 0.25 }}

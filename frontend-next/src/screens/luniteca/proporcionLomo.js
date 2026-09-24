@@ -29,6 +29,28 @@ function guardarEnDisco(url, ratio) {
   } catch { /* modo privado o almacenamiento lleno: se queda en memoria */ }
 }
 
+// Sirve igual para portadas: la ficha de un libro enseña la portada con su
+// proporción real (Cover con `ajustar`), y el libro que vuela hasta ella
+// necesita saberla ANTES de despegar para aterrizar con su tamaño exacto.
+
+// Sin esperar: la proporción si ya se conoce, o null.
+export function proporcionConocida(url) {
+  if (!url) return null
+  if (CACHE_MEMORIA.has(url)) return CACHE_MEMORIA.get(url)
+  const enDisco = cacheDisco()[url]
+  if (enDisco === undefined) return null
+  CACHE_MEMORIA.set(url, enDisco)
+  return enDisco
+}
+
+// Para quien ya tiene la imagen cargada y sabe su forma: que no haya que
+// volver a pedirla.
+export function recordarProporcion(url, ratio) {
+  if (!url || !ratio || CACHE_MEMORIA.get(url) === ratio) return
+  CACHE_MEMORIA.set(url, ratio)
+  guardarEnDisco(url, ratio)
+}
+
 export function proporcionFoto(url) {
   if (!url) return Promise.resolve(null)
   if (CACHE_MEMORIA.has(url)) return Promise.resolve(CACHE_MEMORIA.get(url))

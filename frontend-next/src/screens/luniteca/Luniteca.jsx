@@ -235,6 +235,15 @@ export default function Luniteca() {
     )
   }, [shelf])
 
+  // Y la de las portadas: el libro que vuela desde la balda a la ficha tiene
+  // que saber la forma de su portada antes de despegar para aterrizar con su
+  // tamaño exacto (ver usarVuelo). Queda guardada, así que solo cuesta la
+  // primera visita.
+  useEffect(() => {
+    if (!shelf?.length) return
+    return precargarProporciones(shelf.map(e => e.book?.cover_url))
+  }, [shelf])
+
 
   function cambiarVista(modo) {
     // En transición, y no a secas: dibujar la estantería de lomos con muchos
