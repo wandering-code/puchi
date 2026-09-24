@@ -55,8 +55,14 @@ export function useCapa(valorCerrado = false) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Depende de SI está abierta, no de con qué: la ficha guarda aquí la
+  // entrada del libro, y cada vez que esa entrada se refresca (un cambio en
+  // el servidor, borrar una foto…) el efecto volvía a correr y la ficha se
+  // apilaba otra vez ENCIMA de la hoja que tuviera abierta — y entonces
+  // "atrás" o Escape cerraban la ficha entera en vez de la hoja.
+  const estaAbierta = !!abierta
   useEffect(() => {
-    if (!abierta) return
+    if (!estaAbierta) return
     asegurarListener()
     const capa = { cerrar }
     pila.push(capa)
@@ -68,7 +74,7 @@ export function useCapa(valorCerrado = false) {
       const i = pila.indexOf(capa)
       if (i >= 0) pila.splice(i, 1)
     }
-  }, [abierta, cerrar])
+  }, [estaAbierta, cerrar])
 
   // Refrescar el contenido de una capa ya abierta (la ficha se resincroniza
   // con la entrada fresca cuando cambia en el servidor) sin tocar el
