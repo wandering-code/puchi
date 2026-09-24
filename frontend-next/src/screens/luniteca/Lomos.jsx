@@ -832,12 +832,17 @@ const Lomo = memo(function Lomo({ entry, onAbrir, volando = false, sinPrisa = fa
         style={{
           width: anchoEfectivo,
           height: alto,
-          // El navegador se salta el pintado de los lomos que no se ven, pero
-          // el lomo SIGUE en el DOM: al desplazarse no hay que montar nada, así
-          // que el scroll no da tirones. El tamaño va declarado para que no
-          // haga falta mirar dentro para saber cuánto ocupa.
-          contentVisibility: 'auto',
-          containIntrinsicSize: `${anchoEfectivo}px ${alto}px`,
+          // NO content-visibility: 'auto' aquí, a propósito. Se probó (y con
+          // los lomos de siempre, dibujados en vivo a base de capas de
+          // gradientes, tenía sentido: ahorraba pintar trescientos degradados
+          // a la vez). Pero desde que el lomo con portada es una sola imagen
+          // ya generada (ver generarLomo.js), lo que "auto" ahorra al abrir la
+          // balda lo cobra luego, de golpe, en cuanto ese lomo entra en
+          // pantalla por primera vez — que es exactamente lo que se notaba
+          // como tirón al hacer scroll rápido. Mejor pagar ese coste una vez,
+          // de fondo, cuando se montan los lomos (Lomos, más abajo, ya lo
+          // reparte en tandas por requestAnimationFrame), que on demand cada
+          // vez que aparece uno nuevo por abajo.
           // Sin llenar todavía: un hueco del color del papel, no un libro. Con
           // el color de reserva se veía un lomo morado que un instante después
           // se volvía azul marino al llegar su portada, y ese cambio de color

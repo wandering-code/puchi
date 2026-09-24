@@ -752,7 +752,14 @@ const PortadaLibro = memo(function PortadaLibro({ entry, onAbrir, fuera = false 
       className={`transition-transform duration-150 active:scale-[0.96] ${fuera ? 'invisible' : ''}`}
     >
       <div className="relative">
-        <Cover url={entry.book.cover_url} title={entry.book.title} />
+        {/* `priority`: sin ella cada portada es un <img loading="lazy">, que el
+            navegador no empieza a pedir hasta que está cerca del viewport —
+            aunque ya esté cacheada en local, sigue habiendo que disparar el
+            fetch-desde-caché y decodificarla, y en un scroll rápido eso se ve
+            llegar. Con una biblioteca personal (cientos de libros, no miles) y
+            la portada ya en /uploads local, pedirlas todas de una vez al abrir
+            la vista es barato, y así el scroll nunca las pilla a medias. */}
+        <Cover url={entry.book.cover_url} title={entry.book.title} priority />
         <NotaBadge rating={entry.rating} />
       </div>
     </button>
@@ -773,7 +780,7 @@ const FilaLibro = memo(function FilaLibro({ entry, onAbrir, fuera = false }) {
       className={`flex w-full items-center gap-3 py-2.5 text-left transition-transform duration-150 active:scale-[0.99] ${fuera ? 'invisible' : ''}`}
     >
       <div className="w-10 shrink-0">
-        <Cover url={entry.book.cover_url} />
+        <Cover url={entry.book.cover_url} priority />
       </div>
       <div className="min-w-0 flex-1">
         <p className="truncate text-[15px] leading-tight">{entry.book.title}</p>
