@@ -73,7 +73,10 @@ export default function SelectorPortada({ abierta, libro, elegida, onCerrar, onE
   async function borrarSubida(id) {
     try {
       await api(`/books/${libro.id}/covers/${id}`, { method: 'DELETE' })
+      const borrada = datos?.user_uploads.find(u => u.id === id)
       setDatos(d => (d ? { ...d, user_uploads: d.user_uploads.filter(u => u.id !== id) } : d))
+      // Si era la elegida, se vuelve a la del libro (sin cerrar la hoja).
+      if (borrada && borrada.url === elegida) onElegir('', { cerrar: false })
     } catch {
       setError('No se ha podido borrar la portada.')
     }

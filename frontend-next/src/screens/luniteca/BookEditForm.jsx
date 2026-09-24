@@ -217,7 +217,7 @@ export default function BookEditForm({ entry, generos, onGuardar, onCancelar, on
         elegida={borrador.cover_url}
         onCerrar={portada.cerrar}
         onSubir={onSubirPortada}
-        onElegir={(url) => { setBorrador(b => ({ ...b, cover_url: url })); portada.cerrar() }}
+        onElegir={(url, { cerrar = true } = {}) => { setBorrador(b => ({ ...b, cover_url: url })); if (cerrar) portada.cerrar() }}
       />
 
       <SelectorLomo
@@ -228,7 +228,7 @@ export default function BookEditForm({ entry, generos, onGuardar, onCancelar, on
         elegida={borrador.spine_url}
         onCerrar={lomo.cerrar}
         onSubir={onSubirLomo}
-        onElegir={(url) => { setBorrador(b => ({ ...b, spine_url: url })); lomo.cerrar() }}
+        onElegir={(url, { cerrar = true } = {}) => { setBorrador(b => ({ ...b, spine_url: url })); if (cerrar) lomo.cerrar() }}
       />
     </div>
   )

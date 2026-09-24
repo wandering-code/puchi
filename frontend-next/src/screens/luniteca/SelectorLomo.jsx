@@ -72,7 +72,11 @@ export default function SelectorLomo({ abierta, libro, ancho, alto, elegida, onC
   async function borrarSubida(id) {
     try {
       await api(`/books/${libro.id}/spines/${id}`, { method: 'DELETE' })
+      const borrada = datos?.user_uploads.find(u => u.id === id)
       setDatos(d => (d ? { ...d, user_uploads: d.user_uploads.filter(u => u.id !== id) } : d))
+      // Si era la elegida, se vuelve al automático (sin cerrar la hoja: se
+      // ve la marca pasar a él).
+      if (borrada && borrada.url === elegida) onElegir('', { cerrar: false })
     } catch {
       setError('No se ha podido borrar el lomo.')
     }
