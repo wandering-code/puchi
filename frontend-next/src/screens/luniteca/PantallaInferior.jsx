@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { usarNodoQuieto, usarPantallaOcupada, usarPantallaQuieta } from '../../ui/quieto'
 import { LLEGADA, SALIDA } from '../../ui/curvas'
 import { createPortal } from 'react-dom'
@@ -64,6 +64,21 @@ export default function PantallaInferior({
   // en el momento de abrirse, y con initial={false} aparecía plantada en su
   // sitio, sin subir. Cada una necesita un arranque distinto.
   const nacioAbierta = useRef(abierta)
+  // Y el arranque de la que nace abierta no se confía a `initial`: las
+  // pantallas van dentro de un <AnimatePresence initial={false}> (App.jsx,
+  // Shell.jsx), y Motion arrastra ese `false` a TODO lo que se monte después
+  // dentro de la pantalla con la que arrancó la app. Si arrancabas en la
+  // Luniteca, la primera ficha de la sesión aparecía de golpe, opaca, en vez
+  // de fundirse mientras el libro vuela (medido: opacidad 1 desde el primer
+  // fotograma; entrando desde otra pantalla, se fundía bien). Así que la que
+  // nace abierta pinta su primer fotograma en el punto de partida —abajo, o
+  // transparente— y arranca hacia su sitio en el siguiente, llegue como llegue.
+  const [estreno, setEstreno] = useState(nacioAbierta.current)
+  useEffect(() => {
+    if (!estreno) return
+    const id = requestAnimationFrame(() => setEstreno(false))
+    return () => cancelAnimationFrame(id)
+  }, [estreno])
   // ¿Sigue montada, o quien la usa la está quitando? La ficha vive premontada
   // y esto vale siempre true; "añadir libro" sí se monta y se desmonta, y es
   // lo que avisa de que se está yendo para que baje en vez de desaparecer.
@@ -113,8 +128,8 @@ export default function PantallaInferior({
           pero no compite con lo que hay delante. */}
       <motion.div
         className="fixed inset-0 z-50 bg-velo backdrop-blur-[6px]"
-        initial={nacioAbierta.current ? { opacity: 0 } : false}
-        animate={{ opacity: abierta ? 1 : 0 }}
+        initial={false}
+        animate={{ opacity: abierta && !estreno ? 1 : 0 }}
         exit={{ opacity: 0 }}
         transition={{ duration: 0.25 }}
         style={{ pointerEvents: abierta ? 'auto' : 'none' }}
@@ -127,13 +142,16 @@ export default function PantallaInferior({
         className="fixed inset-x-0 bottom-0 z-50 flex flex-col rounded-t-[28px] border-t border-line bg-bg sombra-panel"
         style={{ y: arrastre.y, top: HUECO, pointerEvents: abierta ? 'auto' : 'none', willChange: 'transform' }}
         inert={!abierta}
-        initial={nacioAbierta.current ? (subiendo ? { y: '100%' } : { opacity: 0 }) : false}
+        initial={false}
         // Las dos propiedades se animan SIEMPRE, cada una con su regla. Antes
         // se animaba solo una según el modo, y como el modo cambia al cerrarse
         // (el vuelo acaba y se vuelve a 'subir'), la ficha se aparcaba abajo
         // recuperando la opacidad, y la siguiente que llegaba con vuelo se veía
         // un fotograma abajo del todo antes de plantarse en su sitio.
-        animate={{ y: abierta ? 0 : '100%', opacity: aVista ? 1 : 0 }}
+        animate={{
+          y: abierta && !(estreno && subiendo) ? 0 : '100%',
+          opacity: aVista && !(estreno && !subiendo) ? 1 : 0,
+        }}
         // Al desmontarse hay que decirlo aparte: `animate` no llega a correr
         // porque para entonces el elemento ya no está. Sin esto, "añadir
         // libro" no bajaba, desaparecía de golpe (la ficha no lo notaba
