@@ -64,6 +64,78 @@ const RADIO_FICHA = 6
 // despegar (y en recuperarlas al volver).
 const DESPEGUE = 0.08
 
+// Cuántos fotogramas clave se generan a partir de la tabla de pasos (ver
+// curvaSuave).
+const MUESTRAS = 50
+
+// Una curva que pasa EXACTAMENTE por los puntos dados, pero sin cambios
+// bruscos de velocidad en ellos (interpolación cúbica monótona, la de
+// Fritsch-Carlson: nunca se pasa de largo ni hace ondas entre dos puntos).
+//
+// Es lo que hace falta porque los pasos del vuelo, unidos en línea recta
+// —que es lo que hace el navegador entre fotogramas clave—, cambian de
+// velocidad de golpe en cada punto. Medido: el giro pasaba de 1,2 a 2°
+// por fotograma de un paso al siguiente al arrancar, y al ponerse de frente
+// (a los 90°) se paraba en seco a casi 3° por fotograma, justo cuando el
+// trayecto y el crecimiento frenaban a la mitad también de golpe. Eso era
+// lo "brusco" de los principios y los finales. Con la curva, los mismos
+// puntos se alcanzan en los mismos instantes, pero llegando y saliendo de
+// ellos con suavidad; y donde un valor se queda quieto (el giro a 90°, el
+// punto más alto de la subida) llega con velocidad cero.
+function curvaSuave(puntos) {
+  const n = puntos.length
+  const xs = puntos.map(p => p[0])
+  const ys = puntos.map(p => p[1])
+  const h = []
+  const d = []
+  for (let i = 0; i < n - 1; i++) {
+    h[i] = xs[i + 1] - xs[i]
+    d[i] = (ys[i + 1] - ys[i]) / h[i]
+  }
+  const m = new Array(n)
+  m[0] = d[0]
+  m[n - 1] = d[n - 2]
+  for (let i = 1; i < n - 1; i++) {
+    if (d[i - 1] * d[i] <= 0) { m[i] = 0; continue }
+    const w1 = 2 * h[i] + h[i - 1]
+    const w2 = h[i] + 2 * h[i - 1]
+    m[i] = (w1 + w2) / (w1 / d[i - 1] + w2 / d[i])
+  }
+  return (x) => {
+    let i = 0
+    while (i < n - 2 && x > xs[i + 1]) i++
+    const u = (x - xs[i]) / h[i]
+    const u2 = u * u
+    const u3 = u2 * u
+    return (2 * u3 - 3 * u2 + 1) * ys[i] + (u3 - 2 * u2 + u) * h[i] * m[i]
+      + (-2 * u3 + 3 * u2) * ys[i + 1] + (u3 - u2) * h[i] * m[i + 1]
+  }
+}
+
+// Dónde está el libro DERECHO, a partir de la caja que envuelve al libro
+// torcido (`caja`, la de getBoundingClientRect). La balda lo gira `grados`
+// sobre su esquina de abajo a la izquierda: se giran las cuatro esquinas del
+// libro derecho igual, y lo que sobresalen hacia arriba y a la izquierda es
+// lo que hay que descontarle a la caja.
+function cajaDerecha(caja, ancho, alto, grados) {
+  if (!grados) return { left: caja.left, top: caja.top }
+  const a = grados * Math.PI / 180
+  const cos = Math.cos(a)
+  const sin = Math.sin(a)
+  const esquinas = [[0, 0], [ancho, 0], [ancho, alto], [0, alto]]
+    .map(([x, y]) => [x * cos - (y - alto) * sin, x * sin + (y - alto) * cos + alto])
+  return {
+    left: caja.left - Math.min(...esquinas.map(e => e[0])),
+    top: caja.top - Math.min(...esquinas.map(e => e[1])),
+  }
+}
+
+// De 0 a 1 entre dos puntos, arrancando y llegando con suavidad.
+function rampa(x) {
+  const c = Math.min(1, Math.max(0, x))
+  return c * c * (3 - 2 * c)
+}
+
 // Todas las medidas van divididas por la escala del paso: el vuelo escala el
 // contenedor entero, así que así quedan del mismo tamaño en pantalla todo el
 // rato (el mismo truco que el relieve de la tapa).
@@ -91,25 +163,20 @@ export default function VueloDelLibro({ lomo, portada, destino, alTerminar, sent
     // Uno de cada siete libros está torcido en la balda. Para que el vuelo
     // arranque justo donde está ese libro hay que medirlo DERECHO —si no, el
     // rectángulo que devuelve el navegador es el que envuelve al torcido, que
-    // es más ancho y está desplazado— y luego enderezarlo por el camino. Se
-    // quita el giro un instante, se mide y se devuelve: pasa dentro del mismo
-    // ciclo de layout, así que no se ve.
-    const giroPrevio = lomo.style.transform
-    const transicionPrevia = lomo.style.transition
-    const torcido = Number(/rotate\((-?[\d.]+)deg\)/.exec(giroPrevio)?.[1] || 0)
-    // La transición hay que apagarla ANTES de quitar el giro: el lomo de la
-    // balda anima su transform (300ms), así que al quitárselo no se endereza al
-    // instante y lo que se medía era el libro todavía torcido. De ahí salía una
-    // caja más ancha que el lomo —hasta 10px en uno de 29— y ese sobrante se
-    // veía como un hueco entre el lomo y la tapa.
-    lomo.style.transition = 'none'
-    lomo.style.transform = 'none'
+    // es más ancho y está desplazado— y luego enderezarlo por el camino.
+    //
+    // No se le quita el giro para medirlo (se hacía, apagando antes su
+    // transición): tocar el transform del lomo hacía que el navegador
+    // recolocara el scroll de la balda —toda ella bajaba 1,5px al tocar un
+    // libro torcido, y el vuelo salía de esa posición ya movida—. En su lugar
+    // se deshace el giro con la cuenta: se sabe el ángulo, el tamaño y el
+    // punto de apoyo (la esquina de abajo a la izquierda), así que de la caja
+    // que envuelve al libro torcido sale exacta la del libro derecho.
+    const torcido = Number(/rotate\((-?[\d.]+)deg\)/.exec(lomo.style.transform)?.[1] || 0)
     // El tamaño, mejor de offsetWidth/Height: no lo tocan las transformaciones.
     const ancho = lomo.offsetWidth
     const alto = lomo.offsetHeight
-    const r = lomo.getBoundingClientRect()
-    lomo.style.transform = giroPrevio
-    lomo.style.transition = transicionPrevia
+    const r = cajaDerecha(lomo.getBoundingClientRect(), ancho, alto, torcido)
     // Cómo se ve en la balda justo ahora, para que la cara que vuela arranque
     // (y, de vuelta, acabe) exactamente igual: sus esquinas y su sombra.
     const estilo = getComputedStyle(lomo)
@@ -191,16 +258,9 @@ export default function VueloDelLibro({ lomo, portada, destino, alTerminar, sent
     // vaivén. Se mide poniendo el libro en cada ángulo un instante, antes de
     // empezar, dentro del mismo ciclo de layout.
     //
-    // De canto (0°), lo único que se ve es el lomo: la tapa asoma en
-    // perspectiva como una franja de 3-4px a su derecha, pero en ese punto
-    // está transparente (ver `sombra`, más abajo). Si esa franja contara, el
-    // centro caía a su derecha y el libro arrancaba 3px a la izquierda del
-    // lomo de la balda —y al volver, se posaba 3px desplazado—: un saltito
-    // justo al tocarlo y otro justo al acabar.
     const medirCentro = (grados) => {
       libro.current.style.transform = `rotateY(-${grados}deg)`
-      const visibles = grados === 0 ? [cara.current] : [...libro.current.children]
-      const caras = visibles.map(c => c.getBoundingClientRect())
+      const caras = [...libro.current.children].map(c => c.getBoundingClientRect())
       const base = viaje.current.getBoundingClientRect()
       const izq = Math.min(...caras.map(c => c.left))
       const der = Math.max(...caras.map(c => c.right))
@@ -208,7 +268,15 @@ export default function VueloDelLibro({ lomo, portada, destino, alTerminar, sent
     }
     // Los puntos del trayecto van con los mismos tiempos que el giro, y para
     // cada uno se sabe el ángulo: así la compensación es exacta en cada paso.
-    const centroSalida = { x: caja.left + grosorLomo / 2, y: caja.top + caja.alto / 2 }
+    //
+    // La salida se toma del centro MEDIDO a 0°, no del centro del lomo: de
+    // canto, la tapa asoma en perspectiva como una franja de 3-4px a la
+    // derecha del lomo (transparente al despegar, ver `sombra`), así que el
+    // centro medido cae un poco a la derecha del lomo. Salir del centro del
+    // lomo hacía que la compensación colocara el libro 3px a la izquierda del
+    // de la balda: un saltito al tocarlo y otro al posarse de vuelta.
+    // (Se asigna en cuanto están medidos los centros, más abajo.)
+    const centroSalida = { x: 0, y: caja.top + caja.alto / 2 }
     const centroLlegada = { x: destino.left + destino.width / 2, y: destino.top + destino.height / 2 }
     // Los pasos del vuelo. Giro y trayecto comparten esta tabla, los mismos
     // tiempos y la misma curva: si cada uno va por su lado, entre un paso y el
@@ -227,6 +295,22 @@ export default function VueloDelLibro({ lomo, portada, destino, alTerminar, sent
       { t: 0.9,  grados: 90, crece: 0.94, avance: 0.94, alto: 0 },
       { t: 1,    grados: 90, crece: 1,    avance: 1,    alto: 0 },
     ]
+    // La tabla de arriba son los puntos por los que pasa el vuelo; los
+    // fotogramas clave que se le dan al navegador salen de unirlos con una
+    // curva suave (ver curvaSuave), muchos y seguidos, para que entre uno y
+    // otro no haya cambios de velocidad que se noten.
+    const curva = clave => curvaSuave(pasos.map(p => [p.t, p[clave]]))
+    const [grados, crece, avance, alto] = ['grados', 'crece', 'avance', 'alto'].map(curva)
+    // La inclinación hacia ti (rotateX) mientras gira. Antes entraba y salía
+    // entera en un suspiro (de 0 a -9° entre los 3° y los 6° de giro, y de
+    // vuelta a 0 en el último tramo antes de ponerse de frente); ahora entra
+    // y sale con su propia rampa suave, y se va del todo justo cuando el
+    // libro queda de cara.
+    const inclinacion = curvaSuave([[0, 0], [DESPEGUE, 0], [0.2, -9], [0.66, -9], [0.8, 0], [1, 0]])
+    const fotogramas = Array.from({ length: MUESTRAS + 1 }, (_, i) => {
+      const t = i / MUESTRAS
+      return { t, grados: grados(t), crece: crece(t), avance: avance(t), alto: alto(t), inclinacion: inclinacion(t) }
+    })
     // Los centros se miden con el libro DERECHO, aunque salga de la balda
     // torcido. El contenedor que endereza arrastra su giro al rectángulo que
     // devuelve el navegador —que es el que envuelve a lo torcido: más ancho y
@@ -236,10 +320,11 @@ export default function VueloDelLibro({ lomo, portada, destino, alTerminar, sent
     // canto se recolocaba y parecía un cambio de luz.
     const giroDeLaBalda = enderezar.current.style.transform
     enderezar.current.style.transform = 'none'
-    const centros = pasos.map(paso => medirCentro(paso.grados))
+    const centros = fotogramas.map(f => medirCentro(f.grados))
+    centroSalida.x = izquierda + centros[0]
     enderezar.current.style.transform = giroDeLaBalda
     libro.current.style.transform = ''
-    const vuelo = viaje.current.animate(pasos.map(({ t, crece, avance, alto }, i) => {
+    const vuelo = viaje.current.animate(fotogramas.map(({ t, crece, avance, alto }, i) => {
       const s = 1 + (escala - 1) * crece
       const cx = centroSalida.x + (centroLlegada.x - centroSalida.x) * avance
       const cy = centroSalida.y + (centroLlegada.y - centroSalida.y) * avance + alto
@@ -250,13 +335,14 @@ export default function VueloDelLibro({ lomo, portada, destino, alTerminar, sent
     }), { duration: DURACION, easing: CURVA_GIRO, fill: 'forwards', direction: volviendo ? 'reverse' : 'normal' })
 
     // El libro se endereza mientras se despega, con el mismo punto de apoyo
-    // que usa la balda para torcerlo (su esquina de abajo).
-    const derecho = enderezar.current.animate([
-      { transform: `rotate(${caja.torcido}deg)` },
-      { transform: `rotate(${caja.torcido * 0.35}deg)`, offset: 0.12 },
-      { transform: 'rotate(0deg)', offset: 0.3 },
-      { transform: 'rotate(0deg)' },
-    ], { duration: DURACION, easing: CURVA, fill: 'forwards', direction: volviendo ? 'reverse' : 'normal' })
+    // que usa la balda para torcerlo (su esquina de abajo). Los mismos puntos
+    // de siempre (35% del giro a 0,12 y derecho del todo a 0,3), unidos con
+    // la misma curva suave que el resto.
+    const torcer = curvaSuave([[0, 1], [0.12, 0.35], [0.3, 0], [1, 0]])
+    const derecho = enderezar.current.animate(
+      fotogramas.map(({ t }) => ({ offset: t, transform: `rotate(${caja.torcido * torcer(t)}deg)` })),
+      { duration: DURACION, easing: CURVA, fill: 'forwards', direction: volviendo ? 'reverse' : 'normal' },
+    )
 
     // El cuerpo entero gira sobre la bisagra: el lomo se va de perfil y la tapa
     // viene de canto a ponerse de frente, sin que ninguna cara se mueva por su
@@ -272,9 +358,9 @@ export default function VueloDelLibro({ lomo, portada, destino, alTerminar, sent
     // acerca—, y eso era parte del vaivén. La sensación de que viene hacia ti
     // ya la da el tamaño.
     const giro = libro.current.animate(
-      pasos.map(({ t, grados }) => ({
+      fotogramas.map(({ t, grados, inclinacion }) => ({
         offset: t,
-        transform: `rotateX(${grados > 3 && grados < 90 ? -9 : 0}deg) rotateY(-${grados}deg)`,
+        transform: `rotateX(${inclinacion.toFixed(3)}deg) rotateY(-${grados.toFixed(3)}deg)`,
       })),
       { duration: DURACION, easing: CURVA_GIRO, fill: 'forwards', direction: volviendo ? 'reverse' : 'normal' },
     )
@@ -299,9 +385,9 @@ export default function VueloDelLibro({ lomo, portada, destino, alTerminar, sent
     // el lomo pegado a ellas; cuando llega ese tramo la tapa ya está de
     // frente y el lomo de perfil, así que pueden redondearse como las otras.
     const sombra = tapa.current.animate(
-      pasos.map(({ t, crece }) => {
+      fotogramas.map(({ t, crece }) => {
         const s = 1 + (escala - 1) * crece
-        const k = Math.max(0, (t - ATERRIZAJE) / (1 - ATERRIZAJE))
+        const k = rampa((t - ATERRIZAJE) / (1 - ATERRIZAJE))
         const bisagra = `${((2 + (RADIO_FICHA - 2) * k) / s).toFixed(2)}px`
         const fuera = `${(RADIO_FICHA / s).toFixed(2)}px`
         return {
@@ -312,7 +398,7 @@ export default function VueloDelLibro({ lomo, portada, destino, alTerminar, sent
           // asomar como una franja junto al lomo que aparecía de golpe al
           // tocarlo (y desaparecía de golpe al volver): llega fundiéndose en
           // lo que el lomo tarda en soltar su sombra.
-          opacity: t === 0 ? 0 : 1,
+          opacity: rampa(t / DESPEGUE),
         }
       }),
       { duration: DURACION, easing: CURVA_GIRO, fill: 'forwards', direction: volviendo ? 'reverse' : 'normal' },
