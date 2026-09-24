@@ -17,7 +17,7 @@ import { AccionesFoto, Actual, MarcaElegida, Tanda, aparecer } from './FotoLibro
 // en la foto (sin una proporción impuesta). `ancho`/`alto` aquí son solo
 // para las miniaturas de la galería, del tamaño de ESTE libro para hacerse
 // una idea de cómo quedaría.
-export default function SelectorLomo({ abierta, libro, ancho, alto, elegida, onCerrar, onElegir, onSubir }) {
+export default function SelectorLomo({ abierta, libro, ancho, alto, elegida, onCerrar, onElegir, onSubir, onPorDefecto }) {
   const { player } = useAuth()
   const [datos, setDatos] = useState(null)   // null = cargando
   const [pendiente, setPendiente] = useState(null) // { file, deCamara } esperando recorte
@@ -33,7 +33,9 @@ export default function SelectorLomo({ abierta, libro, ancho, alto, elegida, onC
     setDatos(null)
     setError(null)
     api(`/books/${libro.id}/spines`)
-      .then(d => { if (!cancelado) setDatos(d) })
+      // Quien la usa quiere saber cuál es el lomo del libro (el que se ve sin
+      // uno propio), para enseñarlo si se vuelve a él antes de guardar.
+      .then(d => { if (!cancelado) { setDatos(d); onPorDefecto?.(d.default_url || '') } })
       .catch(() => { if (!cancelado) setError('No se han podido cargar los lomos.') })
     return () => { cancelado = true }
   }, [abierta, libro.id])

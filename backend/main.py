@@ -2134,7 +2134,11 @@ async def get_book_covers(
     # así que no afecta a quien ya lo lea así (LunitecaV2.jsx).
     cover_cache_map = {url: _cover_cache_path(url)[1] for url in covers}
 
-    return {"covers": covers, "user_uploads": user_uploads, "cover_cache_map": cover_cache_map}
+    # `default_url`: la portada del libro compartido, la que ve quien no ha
+    # elegido una propia. El cliente no la tiene: en la estantería le llega
+    # ya sustituida por la propia (ver _shelf_entry_out), y al quitar la
+    # propia en el editor hace falta saber cuál vuelve a verse.
+    return {"covers": covers, "user_uploads": user_uploads, "cover_cache_map": cover_cache_map, "default_url": book.cover_url}
 
 
 def _borrar_archivo_local_si_huerfano(db: Session, url: Optional[str]) -> None:

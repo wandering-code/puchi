@@ -57,8 +57,18 @@ export default function BookEditForm({ entry, generos, onGuardar, onCancelar, on
   // portada/el lomo, borrador.cover_url/spine_url están vacíos (significan
   // "sin elegir uno propio", ver arriba) y hay que enseñar el efectivo del
   // libro — el mismo que ya se ve en la balda.
-  const coverMostrada = borrador.cover_url || libro.cover_url || ''
-  const spineMostrado = borrador.spine_url || libro.spine_url || ''
+  //
+  // Y "el del libro" tampoco es libro.cover_url / libro.spine_url si tienes
+  // uno propio: te llegan ya sustituidos por el tuyo (ver _shelf_entry_out),
+  // así que al quitar el tuyo aquí seguía viéndose hasta guardar. El del
+  // libro de verdad lo cuentan los selectores en cuanto lo cargan
+  // (`porDefecto`); hasta entonces, sin propio, vale el que llega.
+  const [porDefecto, setPorDefecto] = useState(() => ({
+    cover: entry.own_cover_url ? null : (libro.cover_url || ''),
+    spine: entry.own_spine_url ? null : (libro.spine_url || ''),
+  }))
+  const coverMostrada = borrador.cover_url || (porDefecto.cover ?? libro.cover_url) || ''
+  const spineMostrado = borrador.spine_url || (porDefecto.spine ?? '') || ''
   // Con una foto de verdad puesta, el ancho de la vista previa sale de la
   // proporción REAL de esa foto (mismo hook que usa la balda) y no del ancho
   // por páginas: si no, esta miniatura recorta la foto a una forma que no es
@@ -218,6 +228,7 @@ export default function BookEditForm({ entry, generos, onGuardar, onCancelar, on
         onCerrar={portada.cerrar}
         onSubir={onSubirPortada}
         onElegir={(url, { cerrar = true } = {}) => { setBorrador(b => ({ ...b, cover_url: url })); if (cerrar) portada.cerrar() }}
+        onPorDefecto={url => setPorDefecto(p => ({ ...p, cover: url }))}
       />
 
       <SelectorLomo
@@ -229,6 +240,7 @@ export default function BookEditForm({ entry, generos, onGuardar, onCancelar, on
         onCerrar={lomo.cerrar}
         onSubir={onSubirLomo}
         onElegir={(url, { cerrar = true } = {}) => { setBorrador(b => ({ ...b, spine_url: url })); if (cerrar) lomo.cerrar() }}
+        onPorDefecto={url => setPorDefecto(p => ({ ...p, spine: url }))}
       />
     </div>
   )

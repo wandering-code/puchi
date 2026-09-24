@@ -19,7 +19,7 @@ import { AccionesFoto, Actual, MarcaElegida, Tanda, aparecer } from './FotoLibro
 // subirla pasa por RecortarFoto: mismo mecanismo, cuatro esquinas libres,
 // solo que aquí el rectángulo de partida ya tiene forma de libro (2/3) en
 // vez de una franja fina.
-export default function SelectorPortada({ abierta, libro, elegida, onCerrar, onElegir, onSubir }) {
+export default function SelectorPortada({ abierta, libro, elegida, onCerrar, onElegir, onSubir, onPorDefecto }) {
   const { player } = useAuth()
   const [datos, setDatos] = useState(null)   // null = cargando
   const [pendiente, setPendiente] = useState(null) // { file, deCamara } esperando recorte
@@ -35,7 +35,9 @@ export default function SelectorPortada({ abierta, libro, elegida, onCerrar, onE
     setDatos(null)
     setError(null)
     api(`/books/${libro.id}/covers`)
-      .then(d => { if (!cancelado) setDatos(d) })
+      // Quien la usa quiere saber cuál es la portada del libro (la que se ve
+      // sin una propia), para enseñarla si se vuelve a ella antes de guardar.
+      .then(d => { if (!cancelado) { setDatos(d); if (d.default_url !== undefined) onPorDefecto?.(d.default_url || '') } })
       .catch(() => { if (!cancelado) setError('No se han podido cargar las portadas.') })
     return () => { cancelado = true }
   }, [abierta, libro.id])
@@ -99,7 +101,7 @@ export default function SelectorPortada({ abierta, libro, elegida, onCerrar, onE
     <>
     <HojaInferior abierta={abierta && !pendiente && !conCamara} titulo="Portada" onCerrar={onCerrar}>
       <Actual
-        muestra={<div className="w-16"><Cover url={elegida || libro.cover_url} title={libro.title} /></div>}
+        muestra={<div className="w-16"><Cover url={elegida || (datos?.default_url ?? libro.cover_url)} title={libro.title} /></div>}
         origen={origen}
         nota={elegida ? 'Solo la ves tú: el resto del club sigue con la suya.' : null}
       />
