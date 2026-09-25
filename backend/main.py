@@ -2879,19 +2879,21 @@ async def _compute_related_raw(book_id: int) -> Optional[dict]:
             )
             try:
                 lookup_isbn = await _open_library_isbn_for_book(client, book.isbn, book.open_lib_key)
-                current_work_key, series_groups_raw = (
-                    await asyncio.gather(
-                        _open_library_work_key_for_isbn(client, lookup_isbn),
-                        _open_library_series_groups(client, lookup_isbn, lang),
-                    ) if lookup_isbn else (None, [])
-                )
 
                 # Wikidata siempre se consulta también, no solo cuando Open
                 # Library se queda sin nada: Open Library puede devolver una
                 # saga incompleta (Stormlight Archive: solo 2 de 5 tomos) y,
                 # al "haber encontrado algo", Wikidata nunca llegaba a
                 # probarse. Se usa el grupo más completo para ESTE libro.
-                wikidata_group = await _wikidata_series_group(client, db, book.title, book.author, lang)
+                # Va a la vez que Open Library, no detrás: no depende de él, y
+                # la consulta de la obra de Open Library llegó a tardar 7 s.
+                async def _nada(valor):
+                    return valor
+                current_work_key, series_groups_raw, wikidata_group = await asyncio.gather(
+                    _open_library_work_key_for_isbn(client, lookup_isbn) if lookup_isbn else _nada(None),
+                    _open_library_series_groups(client, lookup_isbn, lang) if lookup_isbn else _nada([]),
+                    _wikidata_series_group(client, db, book.title, book.author, lang),
+                )
                 if not wikidata_group:
                     # El título traducido puede no tener alias en Wikidata
                     # (frecuente en libros menos mainstream) — se prueba con

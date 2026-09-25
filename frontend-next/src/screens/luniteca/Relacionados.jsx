@@ -16,8 +16,10 @@ import HojaInferior from './HojaInferior'
 // - Lo ya visto en la sesión se guarda aquí y se enseña al momento.
 // - El backend guarda lo que calcula (RelatedCache), así que solo la primera
 //   ficha de cada libro espera a las fuentes de fuera.
-// - Mientras carga no se reserva ningún hueco: las secciones aparecen
-//   desplegándose cuando llegan, y si no hay nada, no aparece nada.
+// - Mientras carga, cada sección reserva su hueco con portadas en blanco que
+//   laten: quien no sabe que aquí salen sugerencias ve que algo viene, en vez
+//   de encontrárselo de golpe. Si al final no hay nada (un libro sin saga),
+//   el hueco se pliega suave. Lo ya recordado sale directo, sin ese paso.
 
 const recordadas = new Map()   // book_id → respuesta de /related, durante la sesión
 
@@ -27,12 +29,14 @@ const ESPERA_APERTURA_MS = 380
 
 export function useRelacionados(libroId, lista) {
   const [datos, setDatos] = useState(() => recordadas.get(libroId) || null)
+  const [fallo, setFallo] = useState(false)
   const [pedidoPara, setPedidoPara] = useState(libroId)
   // La ficha no se desmonta al cambiar de libro: sin esto, un instante se
   // verían los relacionados del libro anterior.
   if (pedidoPara !== libroId) {
     setPedidoPara(libroId)
     setDatos(recordadas.get(libroId) || null)
+    setFallo(false)
   }
 
   // Aunque ya estén recordadas, tampoco se pintan en cuanto la ficha está
@@ -56,9 +60,9 @@ export function useRelacionados(libroId, lista) {
           recordadas.set(libroId, r)
           if (vigente) setDatos(r)
         })
-        // Sin sugerencias la ficha sigue siendo la de siempre: ni error ni
-        // hueco, sencillamente no aparecen.
-        .catch(() => {})
+        // Sin sugerencias la ficha sigue siendo la de siempre: ni mensaje de
+        // error ni hueco, el reservado se pliega y ya.
+        .catch(() => { if (vigente) setFallo(true) })
     }, ESPERA_APERTURA_MS)
     return () => { vigente = false; clearTimeout(espera) }
   }, [libroId, lista])
@@ -80,14 +84,18 @@ export function useRelacionados(libroId, lista) {
     })
   }
 
-  return { datos: aTiempo ? datos : null, marcarAnadido }
+  return {
+    datos: aTiempo ? datos : null,
+    cargando: aTiempo && !datos && !fallo,
+    marcarAnadido,
+  }
 }
 
 // Las dos secciones van en sitios distintos de la ficha (la saga pegada a la
 // sinopsis, el autor al final), pero comparten datos y hoja: por eso las
 // monta un mismo componente y BookDetail le dice cuál pintar en cada hueco.
 export function Relacionados({ libro, lista, parte, relacionados, onElegir }) {
-  const { datos } = relacionados
+  const { datos, cargando } = relacionados
   // "Más del autor" se monta un poco después que la saga: son unas 30-40
   // portadas, y montarlo todo en el mismo fotograma se notaba (medido en
   // WebKit). Por separado, ninguno de los dos pesa.
@@ -113,29 +121,86 @@ export function Relacionados({ libro, lista, parte, relacionados, onElegir }) {
       }))
     : []
   const delAutor = mostrar ? datos.same_author : []
+  // Mientras llegan (y, en el autor, durante su pequeño retraso) se reserva
+  // el hueco. La primera saga usa la MISMA key que su reserva: así el hueco
+  // no se pliega y se vuelve a abrir, solo cambia lo de dentro.
+  const reservaSaga = parte === 'saga' && lista && cargando
+  const reservaAutor = parte === 'autor' && lista && !!libro.author && (cargando || (!!datos && !autorAHora && datos.same_author.length > 0))
 
   return (
     <AnimatePresence initial={false}>
-      {parte === 'saga' && sagas.map(g => (
-        <Desplegable key={`saga-${libro.id}-${g.label}`}>
-          <Saga grupo={g} onElegir={onElegir} />
+      {(parte !== 'saga' ? [] : reservaSaga ? [null] : sagas).map((g, i) => (
+        <Desplegable key={`saga-${libro.id}-${i}`}>
+          {g
+            ? <Relevo key="contenido"><Saga grupo={g} onElegir={onElegir} /></Relevo>
+            : <Relevo key="reserva"><ReservaSaga /></Relevo>}
         </Desplegable>
       ))}
-      {parte === 'autor' && delAutor.length > 0 && (
+      {(reservaAutor || (parte === 'autor' && delAutor.length > 0)) && (
         <Desplegable key={`autor-${libro.id}`}>
           <section className="mb-8">
             <h3 className="mb-3 text-[11px] uppercase tracking-[0.14em] text-ink-mute">
               Más de {libro.author}
             </h3>
-            <Tira>
-              {delAutor.map((s, i) => (
-                <Sugerencia key={`${s.title}-${i}`} s={s} onElegir={onElegir} />
-              ))}
-            </Tira>
+            {reservaAutor ? (
+              <Relevo key="reserva"><ReservaTira /></Relevo>
+            ) : (
+              <Relevo key="contenido">
+                <Tira>
+                  {delAutor.map((s, i) => (
+                    <Sugerencia key={`${s.title}-${i}`} s={s} onElegir={onElegir} />
+                  ))}
+                </Tira>
+              </Relevo>
+            )}
           </section>
         </Desplegable>
       )}
     </AnimatePresence>
+  )
+}
+
+// El cambio de la reserva a las portadas de verdad, en el mismo sitio: un
+// fundido corto, sin que se mueva nada.
+function Relevo({ children }) {
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.25 }}>
+      {children}
+    </motion.div>
+  )
+}
+
+// Portadas en blanco que laten, con las mismas medidas que las de verdad
+// (Sugerencia): al llegar los datos el hueco no crece ni encoge.
+function ReservaTira({ conLinea = false }) {
+  return (
+    <div className="-mx-6 flex gap-3 overflow-hidden px-6 pb-1" aria-hidden>
+      {Array.from({ length: 5 }).map((_, i) => (
+        <div key={i} className={`${ANCHO_PORTADA} shrink-0`}>
+          <div className="aspect-[2/3] animate-pulse rounded-md bg-surface-2" />
+          {conLinea ? <div className="my-2 h-3" /> : <div className="h-2.5" />}
+          {conLinea && <div className="h-[15px] py-[3px]"><div className="h-full w-12 animate-pulse rounded bg-surface-2" /></div>}
+          <div className="mt-0.5 h-[33px] space-y-[4.5px] pt-[2px]">
+            <div className="h-3 w-full animate-pulse rounded bg-surface-2" />
+            <div className="h-3 w-2/3 animate-pulse rounded bg-surface-2" />
+          </div>
+          <div className="mt-0.5 h-[16px]" />
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// La saga todavía no se sabe si existe, así que su título tampoco: una barra
+// que late en su lugar, y la misma línea de tiempo en blanco.
+function ReservaSaga() {
+  return (
+    <section className="mb-8" aria-label="Buscando la saga">
+      <div className="mb-3 flex h-[16.5px] items-center">
+        <div className="h-2.5 w-36 animate-pulse rounded bg-surface-2" />
+      </div>
+      <ReservaTira conLinea />
+    </section>
   )
 }
 
@@ -302,17 +367,23 @@ function Sugerencia({ s, onElegir, etiqueta, linea, refNodo }) {
 
         {linea ? <PuntoDeLinea {...linea} /> : <div className="h-2.5" />}
 
+        {/* Alto fijo en cada renglón (la etiqueta, dos de título y el de
+            "Ya lo tienes" aunque vaya vacío): todas las portadas de la tira
+            miden lo mismo y la reserva de mientras carga (ReservaTira) ocupa
+            exactamente lo que ocuparán ellas. */}
         {etiqueta && (
-          <span className={`block text-[10px] uppercase tracking-[0.1em] ${actual ? 'font-semibold text-accent' : 'text-ink-mute'}`}>
+          <span className={`block h-[15px] text-[10px] leading-[15px] uppercase tracking-[0.1em] ${actual ? 'font-semibold text-accent' : 'text-ink-mute'}`}>
             {etiqueta}
           </span>
         )}
-        <span className={`mt-0.5 line-clamp-2 block text-[12px] leading-snug ${tuyo ? 'text-ink-dim' : 'text-ink'}`}>
-          {s.title}
+        <span className="mt-0.5 block h-[33px]">
+          <span className={`line-clamp-2 text-[12px] leading-[16.5px] ${tuyo ? 'text-ink-dim' : 'text-ink'}`}>
+            {s.title}
+          </span>
         </span>
-        {tuyo && (
-          <span className="mt-0.5 block text-[11px] text-ink-mute">Ya lo tienes</span>
-        )}
+        <span className="mt-0.5 block h-[16px] text-[11px] leading-[16px] text-ink-mute">
+          {tuyo ? 'Ya lo tienes' : ''}
+        </span>
       </motion.button>
     </div>
   )
