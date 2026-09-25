@@ -1,5 +1,6 @@
 import { memo, useEffect, useRef, useState } from 'react'
 import { claveDeAutor, totalPages } from './shelf'
+import { usarPreferencia } from '../../platform/preferencias'
 import { colorConocido, colorDePortada } from './colorPortada'
 import { proporcionConocida, proporcionFoto } from './proporcionLomo'
 import { imagenLista as imagenYaLista, imagenRota, precargarImagen, precargarImagenes, usarImagenLista } from './imagenesListas'
@@ -594,7 +595,15 @@ const TANDA = 60
 const PRIMEROS_JUNTOS = 24
 const ESPERA_MAX = 1500
 
+// ¿Algunos libros torcidos (uno de cada siete, ver medidas) o todos rectos?
+// Lo elige cada uno en Ajustes y va con su cuenta.
+export function usarLomosTorcidos() {
+  const [torcidos, poner] = usarPreferencia('lomosTorcidos', true)
+  return [torcidos !== false, poner]
+}
+
 export default function Lomos({ entries, onAbrir, fueraId = null, generosDeAutor = null }) {
+  const [torcidos] = usarLomosTorcidos()
   // Las medidas del texto dependen de la fuente, y las fuentes propias llegan
   // un momento después. Al llegar, se repinta con las medidas buenas.
   //
@@ -679,6 +688,7 @@ export default function Lomos({ entries, onAbrir, fueraId = null, generosDeAutor
           // (1.421px de 9.401 con 300 libros) e iba creciendo a saltos: si
           // bajabas deprisa te topabas con el fondo y el fondo se alejaba.
           conContenido={arrancada && i < pintados}
+          torcidos={torcidos}
         />
       ))}
     </div>
@@ -788,11 +798,14 @@ function capasDeFondo({ libro, paleta, claro, alto, conNervios, tapaDura }) {
   }
 }
 
-const Lomo = memo(function Lomo({ entry, onAbrir, volando = false, sinPrisa = false, generoDelAutor = null, conContenido = true }) {
+const Lomo = memo(function Lomo({ entry, onAbrir, volando = false, sinPrisa = false, generoDelAutor = null, conContenido = true, torcidos = true }) {
   // Una sola vez: antes se medía aquí y otra vez dentro de argumentosDeTexto,
   // y con la balda entera montada eso era el doble de trabajo por lomo.
   const medido = medidas(entry, generoDelAutor)
-  const { ancho, alto, color, tamano, tipografia, torcido, tapaDura } = medido
+  const { ancho, alto, color, tamano, tipografia, tapaDura } = medido
+  // Todos rectos si así se ha elegido en Ajustes. Al cambiarlo se enderezan
+  // (o se tuercen) con la transición de siempre del transform.
+  const torcido = torcidos ? medido.torcido : 0
   const conLetra = sinPrisa || fuenteLista(tipografia)
   const libro = entry.book
   // Con lomo propio (generado o subido) ya no hay nada que dibujar en vivo:

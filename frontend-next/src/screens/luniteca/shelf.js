@@ -128,13 +128,32 @@ export const SORT_FIELDS = [
   { field: 'author', label: 'Autor' },
   { field: 'genre',  label: 'Género' },
   { field: 'date',   label: 'Fecha' },
+  { field: 'size',   label: 'Tamaño' },
 ]
+
+// El tamaño de un libro para ordenar: su alto de verdad (el campo Tamaño de
+// la ficha) y, entre dos del mismo alto, su grosor, que sale de las páginas.
+// Los que no tienen alto van al final en los dos sentidos: el que se les ve
+// en la balda es inventado (sale del título), y colocarlos por él sería
+// ordenar por azar.
+function compararTamano(a, b, dir) {
+  const ha = a.book.height_mm || null
+  const hb = b.book.height_mm || null
+  if ((ha == null) !== (hb == null)) return ha == null ? 1 : -1
+  const signo = dir === 'asc' ? 1 : -1
+  if (ha !== hb) return (ha - hb) * signo
+  const pa = totalPages(a) || 0
+  const pb = totalPages(b) || 0
+  if (pa !== pb) return (pa - pb) * signo
+  return (a.book.title || '').localeCompare(b.book.title || '', 'es')
+}
 
 // Cuando hay un orden elegido sustituye al de por defecto DENTRO de cada
 // sección o año; nunca cambia qué libro cae en qué sección, que eso lo decide
 // el estado.
 export function compareEntries(a, b, sort) {
   if (!sort.field) return 0
+  if (sort.field === 'size') return compararTamano(a, b, sort.dir)
   let va, vb
   if (sort.field === 'title')  { va = a.book.title?.toLowerCase()  || ''; vb = b.book.title?.toLowerCase()  || '' }
   if (sort.field === 'author') { va = a.book.author?.toLowerCase() || ''; vb = b.book.author?.toLowerCase() || '' }

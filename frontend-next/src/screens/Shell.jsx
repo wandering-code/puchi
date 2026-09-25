@@ -15,7 +15,9 @@ import Actividad from './actividad/Actividad'
 import Perfil from './perfil/Perfil'
 import Admin from './admin/Admin'
 import Avatar from '../ui/Avatar'
+import Interruptor from '../ui/Interruptor'
 import { SelectorSeparacion, usarSeparacion } from './luniteca/separacion'
+import { usarLomosTorcidos } from './luniteca/Lomos'
 import { usarPreferencia, usarTema } from '../platform/preferencias'
 import { cambiarDeTema } from '../platform/tema'
 import { IconExit, IconLuna, IconMenu, IconPaw, IconSol } from '../ui/icons'
@@ -344,6 +346,8 @@ function Ajustes() {
 
       <SeparacionDeSecciones />
 
+      <VistaDeLomos />
+
       <div className="mt-6 overflow-hidden rounded-xl2 border border-line bg-surface">
         <p className="border-b border-line px-4 py-2 text-xs uppercase tracking-wider text-ink-mute">Diagnóstico</p>
         <dl className="divide-y divide-[color:var(--color-line)] text-sm">
@@ -497,6 +501,26 @@ function SeparacionDeSecciones() {
       <p className="border-t border-line px-4 py-2.5 text-xs text-ink-mute">
         Vuelve a Luniteca para verlo. Cuando decidas, quito las otras tres.
       </p>
+    </div>
+  )
+}
+
+// Cómo se ve la estantería de lomos. Va con la cuenta, como el resto.
+function VistaDeLomos() {
+  const [torcidos, setTorcidos] = usarLomosTorcidos()
+  return (
+    <div className="mt-6 overflow-hidden rounded-xl2 border border-line bg-surface">
+      <p className="border-b border-line px-4 py-2 text-xs uppercase tracking-wider text-ink-mute">
+        Vista de lomos
+      </p>
+      <div className="px-4 py-3">
+        <Interruptor
+          puesto={torcidos}
+          onCambiar={setTorcidos}
+          etiqueta="Algunos libros torcidos"
+          nota="Uno de cada siete se apoya un poco, como en una balda de verdad. Apágalo para verlos todos rectos."
+        />
+      </div>
     </div>
   )
 }
