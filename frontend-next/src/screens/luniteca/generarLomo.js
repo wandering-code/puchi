@@ -150,11 +150,15 @@ export async function generarYSubirLomo(bookId, entry, generoDelAutor = null) {
 
   await dibujar(ctx, { libro, paleta, claro, color, ancho, alto, conNervios: tapaDura, tapaDura })
 
-  const blob = await new Promise(res => lienzo.toBlob(res, 'image/png'))
+  // JPEG y no PNG: la textura de grano es ruido, que el PNG comprime fatal
+  // (unos 60 KB por lomo, 4 MB una balda de 90). En JPEG al 90% son unos
+  // 10 KB y no se distingue ni ampliado. No lleva transparencia: el lienzo
+  // se pinta entero y las esquinas redondas las pone el CSS.
+  const blob = await new Promise(res => lienzo.toBlob(res, 'image/jpeg', 0.9))
   if (!blob) return null
 
   const datos = new FormData()
-  datos.append('file', blob, 'lomo.png')
+  datos.append('file', blob, 'lomo.jpg')
   try {
     const { url } = await api(`/books/${bookId}/spine?generado=true`, { method: 'POST', body: datos })
     return { spine_url: url, spine_custom: false }

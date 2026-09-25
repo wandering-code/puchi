@@ -272,8 +272,10 @@ def main():
 
         img = dibujar_lomo(medida, cover_path, paleta_color, claro)
         buf = io.BytesIO()
-        img.save(buf, format="PNG")
-        filename = f"{uuid.uuid4().hex}.png"
+        # JPEG al 90%, igual que generarLomo.js: el grano de textura hace que
+        # el PNG pese seis veces más sin verse mejor.
+        img.convert("RGB").save(buf, format="JPEG", quality=90)
+        filename = f"{uuid.uuid4().hex}.jpg"
         with open(os.path.join(SPINE_DIR, filename), "wb") as f:
             f.write(buf.getvalue())
         url = f"/uploads/spines/{filename}"
