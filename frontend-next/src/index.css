@@ -402,3 +402,8 @@
    borde de la pantalla (y en Safari, pegada a su barra de herramientas). Se
    veía apretado en una captura del iPhone. */
 @utility pb-escritura { padding-bottom: calc(var(--kb, 0px) + env(safe-area-inset-bottom, 0px) + 0.625rem); }
+
+/* Tiras de portadas que se deslizan de lado (ver Relacionados.jsx): sin barra
+   de desplazamiento, que en escritorio se pintaba debajo de las portadas. */
+.tira-sin-barra { scrollbar-width: none; }
+.tira-sin-barra::-webkit-scrollbar { display: none; }

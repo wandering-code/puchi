@@ -183,7 +183,7 @@ export default function Luniteca() {
   // La animación de abrir un libro desde la vista de lomos vive en su propio
   // hook, porque la comparten esta estantería y la de cualquiera (ver
   // luniteca/usarVuelo).
-  const { vuelo, abrirLibro, abrirSinVuelo, cerrarFicha, enVuelo, fueraId } = usarVuelo(ficha)
+  const { vuelo, abrirLibro, abrirSinVuelo, cambiarSinVuelo, cerrarFicha, enVuelo, fueraId } = usarVuelo(ficha)
 
   // ?libro=ID abre esa ficha al entrar: es como la actividad te trae a "tu
   // registro" de un libro.
@@ -431,6 +431,11 @@ export default function Luniteca() {
           onCerrar={cerrarFicha}
           onActualizar={patch => actualizarEntrada(enFicha.id, patch)}
           vuelo={vuelo}
+          onLibroAnadido={libroAnadido}
+          onAbrirLibro={(bookId) => {
+            const entrada = shelf?.find(e => e.book?.id === bookId)
+            if (entrada) cambiarSinVuelo(entrada)
+          }}
         />
       )}
 

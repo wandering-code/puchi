@@ -90,6 +90,12 @@ export function usarVuelo(ficha) {
   // que no tiene ningún lomo del que salir).
   const abrirSinVuelo = useCallback(entrada => { setVuelo(null); ficha.abrir(entrada) }, [ficha.abrir])
 
+  // Pasar a otro libro con la ficha ya abierta (desde sus sugerencias, ver
+  // Relacionados.jsx): no es abrir otra capa, es la misma con otro libro. El
+  // vuelo se descarta: al cerrar, el libro volaría al lomo del que salió el
+  // ANTERIOR, así que esta ficha se cierra bajando, como las que no volaron.
+  const cambiarSinVuelo = useCallback(entrada => { setVuelo(null); ficha.reemplazar(entrada) }, [ficha.reemplazar])
+
   // Mientras el libro está en el aire, la pantalla no se mueve: el vuelo sale
   // de un lomo concreto y vuelve a él, así que un scroll a media animación lo
   // deja aterrizando donde ya no hay nada. Lo mismo que hace la ficha al
@@ -119,5 +125,5 @@ export function usarVuelo(ficha) {
   // ha hecho una copia, y el hueco tiene que notarse.
   const fueraId = vuelo?.id ?? ficha.abierta?.id ?? null
 
-  return { vuelo, abrirLibro, abrirSinVuelo, cerrarFicha, enVuelo, fueraId }
+  return { vuelo, abrirLibro, abrirSinVuelo, cambiarSinVuelo, cerrarFicha, enVuelo, fueraId }
 }

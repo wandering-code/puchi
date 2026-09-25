@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { AnimatePresence, motion } from 'motion/react'
+import { AnimatePresence, motion, useAnimate } from 'motion/react'
 import { api } from '../../platform/api'
 import { useAuth } from '../../platform/auth'
 import {
@@ -13,6 +13,8 @@ import { IconArrowLeft, IconCheck, IconPencil } from '../../ui/icons'
 import Avatar from '../../ui/Avatar'
 import BookEditForm from './BookEditForm'
 import PantallaInferior from './PantallaInferior'
+import { useHoja } from './HojaInferior'
+import { HojaSugerencia, Relacionados, useRelacionados } from './Relacionados'
 
 // Distribución tomada de la Luniteca nueva de la Puchi actual: portada grande
 // centrada, título y autor debajo, la ficha técnica en una línea y los datos
@@ -26,6 +28,7 @@ import PantallaInferior from './PantallaInferior'
 export default function BookDetail({
   entry, abierta = true, carpetas, generos, onCerrar, onActualizar, onGuardarLibro, onSubirPortada, onSubirLomo, onEliminar,
   vuelo = null, soloLectura = false, deQuien = null, onGuardarEnMiEstanteria,
+  onLibroAnadido, onAbrirLibro,
 }) {
   const libro = entry.book
   const paginas = totalPages(entry)
@@ -52,6 +55,27 @@ export default function BookDetail({
   // desplazado por donde se había quedado el otro.
   const cuerpo = useRef(null)
   useEffect(() => { if (cuerpo.current) cuerpo.current.scrollTop = 0 }, [editando])
+
+  // Libros de la saga y del mismo autor (ver Relacionados.jsx). Solo cuando
+  // la ficha ya está abierta del todo y el libro ha aterrizado: hasta
+  // entonces, nada que compita con la animación de abrir.
+  const relacionadosListos = abierta && !editando && (!vuelo || vuelo.aterrizado)
+  const relacionados = useRelacionados(libro.id, relacionadosListos)
+  const hojaSugerencia = useHoja(null)
+
+  // Saltar a la ficha de otro libro tuyo desde una sugerencia cambia el libro
+  // sin cerrar la ficha: se vuelve arriba y el contenido entra con un fundido,
+  // en vez de cambiar de golpe debajo del dedo.
+  const [contenido, animarContenido] = useAnimate()
+  const idAbierto = useRef(abierta ? libro.id : null)
+  useEffect(() => {
+    const cambioEnSitio = abierta && idAbierto.current != null && idAbierto.current !== libro.id
+    idAbierto.current = abierta ? libro.id : null
+    if (!cambioEnSitio) return
+    if (cuerpo.current) cuerpo.current.scrollTop = 0
+    if (contenido.current) animarContenido(contenido.current, { opacity: [0, 1] }, { duration: 0.28, ease: [0.22, 1, 0.36, 1] })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [libro.id, abierta])
 
   return (
     <PantallaInferior
@@ -106,7 +130,7 @@ export default function BookDetail({
           onGuardar={async (borrador) => { await onGuardarLibro(borrador); setEditando(false) }}
         />
       ) : (
-      <div className="mx-auto w-full max-w-md px-6 pb-kb">
+      <div ref={contenido} className="mx-auto w-full max-w-md px-6 pb-kb">
         <div className="flex flex-col items-center text-center">
           {/* La marca es para la animación de abrir desde la estantería: ahí
               es donde tiene que aterrizar el libro que sale volando. */}
@@ -213,6 +237,8 @@ export default function BookDetail({
             <Sinopsis texto={libro.synopsis} />
           </Apartado>
 
+          <Relacionados parte="saga" libro={libro} lista={relacionadosListos} relacionados={relacionados} onElegir={hojaSugerencia.abrir} />
+
           {!soloLectura && (
             <Apartado titulo="Tus notas">
               <EditorNotas notes={entry.notes} onGuardar={notes => onActualizar({ notes })} />
@@ -220,9 +246,20 @@ export default function BookDetail({
           )}
 
           <OtrasLecturas libroId={libro.id} exceptoId={deQuien?.id} />
+
+          <Relacionados parte="autor" libro={libro} lista={relacionadosListos} relacionados={relacionados} onElegir={hojaSugerencia.abrir} />
         </div>
         </div>
       )}
+
+      <HojaSugerencia
+        hoja={hojaSugerencia}
+        onAnadido={(sugerencia, entrada) => {
+          relacionados.marcarAnadido(sugerencia, entrada)
+          if (entrada) onLibroAnadido?.(entrada)
+        }}
+        onAbrirLibro={onAbrirLibro}
+      />
     </PantallaInferior>
   )
 }
