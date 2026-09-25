@@ -186,6 +186,21 @@ export default defineConfig({
         // index.html de esta — se detectó recién desplegado, con /v1/
         // devolviendo el login de la app nueva en vez del de la anterior.
         navigateFallbackDenylist: [/^\/api/, /^\/uploads/, /^\/ws/, /^\/v1/],
+        // Lo que SÍ se guarda de /uploads: las imágenes de lomos y portadas.
+        // No son datos vivos como la estantería: cada nombre es siempre el
+        // mismo archivo (uuid al subir, hash de la URL al cachear una
+        // portada externa; ver _SubidasEstaticas en main.py), así que una
+        // copia guardada nunca queda vieja. Con ellas en caché, abrir la
+        // estantería no espera a la red para pintar los lomos.
+        runtimeCaching: [{
+          urlPattern: ({ url, sameOrigin }) => sameOrigin && /^\/uploads\/(spines|covers)\//.test(url.pathname),
+          handler: 'CacheFirst',
+          options: {
+            cacheName: 'puchi-imagenes',
+            expiration: { maxEntries: 2000, maxAgeSeconds: 60 * 60 * 24 * 365 },
+            cacheableResponse: { statuses: [200] },
+          },
+        }],
       },
       devOptions: { enabled: false },
     }),
