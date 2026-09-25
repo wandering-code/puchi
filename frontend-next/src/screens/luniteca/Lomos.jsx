@@ -1,7 +1,8 @@
-import { memo, useEffect, useState } from 'react'
+import { memo, useEffect, useRef, useState } from 'react'
 import { claveDeAutor, totalPages } from './shelf'
-import { colorDePortada } from './colorPortada'
-import { proporcionFoto } from './proporcionLomo'
+import { colorConocido, colorDePortada } from './colorPortada'
+import { proporcionConocida, proporcionFoto } from './proporcionLomo'
+import { imagenLista as imagenYaLista, imagenRota, precargarImagen, precargarImagenes, usarImagenLista } from './imagenesListas'
 import { alCargarFuentes, anchoDeRenglonPorPunto, anchoPorPunto, fuenteLista } from './medirTexto'
 
 // Vista de estantería: los libros de canto, como en una balda de verdad.
@@ -578,6 +579,10 @@ export function medidas(entry, generoDelAutor) {
 // animar. Repartido en tandas, el navegador respira entre una y otra.
 const PRIMERA_TANDA = 40
 const TANDA = 60
+// Los primeros lomos de cada balda, que al abrir esperan juntos a tenerlo
+// todo (ver `arrancada` en Lomos), y cuánto como mucho.
+const PRIMEROS_JUNTOS = 24
+const ESPERA_MAX = 1500
 
 export default function Lomos({ entries, onAbrir, fueraId = null, generosDeAutor = null }) {
   // Las medidas del texto dependen de la fuente, y las fuentes propias llegan
@@ -592,6 +597,28 @@ export default function Lomos({ entries, onAbrir, fueraId = null, generosDeAutor
     const id = requestAnimationFrame(() => setPintados(n => Math.min(entries.length, n + TANDA)))
     return () => cancelAnimationFrame(id)
   }, [pintados, entries.length])
+
+  // Las imágenes de sus lomos, pedidas ya, en el orden de la balda.
+  useEffect(() => { precargarImagenes(entries.map(e => e.book?.spine_url)) }, [entries])
+
+  // Al abrir, la primera tanda de lomos espera a tener sus imágenes (y el
+  // color de su portada) para salir TODA A LA VEZ, en vez de ir apareciendo
+  // uno a uno. Con un tope: si la red va lenta, más vale ir enseñando que
+  // dejar la balda vacía.
+  const [arrancada, setArrancada] = useState(() =>
+    entries.slice(0, PRIMEROS_JUNTOS).every(e => imagenYaLista(e.book?.spine_url) && (e.book?.spine_custom || !e.book?.cover_url || colorConocido(e.book.cover_url) !== undefined)))
+  useEffect(() => {
+    if (arrancada) return
+    let vivo = true
+    const tope = setTimeout(() => { if (vivo) setArrancada(true) }, ESPERA_MAX)
+    const primeros = entries.slice(0, PRIMEROS_JUNTOS)
+    Promise.all([
+      ...primeros.map(e => precargarImagen(e.book?.spine_url, { urgente: true })),
+      ...primeros.filter(e => !e.book?.spine_custom).map(e => colorDePortada(e.book?.cover_url, { urgente: true })),
+    ]).then(() => { if (vivo) setArrancada(true) })
+    return () => { vivo = false; clearTimeout(tope) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const [revision, repintar] = useState(0)
   useEffect(() => alCargarFuentes(() => repintar(n => n + 1)), [])
@@ -641,7 +668,7 @@ export default function Lomos({ entries, onAbrir, fueraId = null, generosDeAutor
           // balda entraba midiendo una séptima parte de lo que iba a medir
           // (1.421px de 9.401 con 300 libros) e iba creciendo a saltos: si
           // bajabas deprisa te topabas con el fondo y el fondo se alejaba.
-          conContenido={i < pintados}
+          conContenido={arrancada && i < pintados}
         />
       ))}
     </div>
@@ -770,15 +797,39 @@ const Lomo = memo(function Lomo({ entry, onAbrir, volando = false, sinPrisa = fa
   // el lomo nace con su color de reserva y cambia al de verdad en cuanto está.
   // Con una foto de verdad no hace falta: no hay texto al que decidirle la
   // tinta ni relieve al que teñir.
-  const [paleta, setPaleta] = useState(null)
+  // Si ya se sabe (guardado de otra vez), se toma al montar, sin esperar.
+  const conocido = esFoto ? null : colorConocido(libro.cover_url)
+  const [paleta, setPaleta] = useState(conocido || null)
+  const [paletaLista, setPaletaLista] = useState(esFoto || !libro.cover_url || conocido !== undefined)
   useEffect(() => {
     // Solo el que se va a llenar: leer la portada cuesta cargarla y mirarla
     // píxel a píxel, y con la balda entera montada eran trescientas a la vez.
     if (!conContenido || esFoto) return
     let vigente = true
-    colorDePortada(libro.cover_url).then(p => { if (vigente && p) setPaleta(p) })
+    colorDePortada(libro.cover_url, { urgente: true }).then(p => {
+      if (!vigente) return
+      if (p) setPaleta(p)
+      setPaletaLista(true)
+    })
     return () => { vigente = false }
   }, [libro.cover_url, conContenido, esFoto])
+
+  // ¿Tiene ya todo lo que va a llevar? Su imagen (entera y decodificada, ver
+  // imagenesListas.js), el color de su portada —del que salen el fondo y la
+  // tinta del título— y la letra del título. Hasta entonces es un hueco del
+  // color del papel, y aparece de una vez. Antes se veía llegar por partes:
+  // el color de reserva (aquel verde), luego la imagen de arriba abajo y el
+  // título cambiando de tinta.
+  const imagenLista = usarImagenLista(conContenido && tieneLomoPropio ? libro.spine_url : null)
+  // Una foto de verdad, además, con su forma ya sabida: si no, el lomo
+  // aparecía con el ancho de reserva y se estrechaba o ensanchaba después.
+  const formaLista = !esFoto || proporcionConocida(libro.spine_url) != null || imagenRota(libro.spine_url)
+  const lleno = conContenido && imagenLista && paletaLista && formaLista && (esFoto || conLetra)
+  // Si llega después de montarse (no estaba lista), entra con un fundido
+  // corto; si ya lo estaba, sale tal cual.
+  const nacioLleno = useRef(lleno)
+  const [llegando, setLlegando] = useState(false)
+  useEffect(() => { if (lleno && !nacioLleno.current) setLlegando(true) }, [lleno])
 
   // Un lomo de fondo claro pide tinta oscura, como cualquier libro con la
   // cubierta clara. Solo se sabe cuando la portada se ha podido leer; con el
@@ -828,7 +879,8 @@ const Lomo = memo(function Lomo({ entry, onAbrir, volando = false, sinPrisa = fa
         onClick={ev => onAbrir(entry, ev.currentTarget)}
         aria-label={libro.title}
         title={`${libro.title}${libro.author ? ` — ${libro.author}` : ''}`}
-        className={`relative overflow-hidden transition-[background-color,transform] duration-300 active:translate-y-[-4px] ${volando ? 'invisible' : ''}`}
+        className={`relative overflow-hidden transition-[background-color,transform] duration-300 active:translate-y-[-4px] ${volando ? 'invisible' : ''} ${llegando ? 'lomo-llega' : ''}`}
+        onAnimationEnd={() => setLlegando(false)}
         style={{
           width: anchoEfectivo,
           height: alto,
@@ -847,7 +899,7 @@ const Lomo = memo(function Lomo({ entry, onAbrir, volando = false, sinPrisa = fa
           // el color de reserva se veía un lomo morado que un instante después
           // se volvía azul marino al llegar su portada, y ese cambio de color
           // cantaba más que el propio hueco.
-          backgroundColor: conContenido ? (paleta?.color || color) : 'color-mix(in srgb, var(--color-line) 55%, transparent)',
+          backgroundColor: lleno ? (paleta?.color || color) : 'color-mix(in srgb, var(--color-line) 55%, transparent)',
           // Tapa dura: lomo redondeado. Rústica: plano.
           borderRadius: tapaDura ? '4px / 6px' : '2px',
           // Se apoya en su esquina de abajo, que es donde tocaría la balda.
@@ -856,7 +908,7 @@ const Lomo = memo(function Lomo({ entry, onAbrir, volando = false, sinPrisa = fa
           // Dos sombras: la que un libro proyecta sobre el de su derecha, y la
           // de contacto con la balda. Es lo que hace que la fila parezca tener
           // fondo en vez de ser un montón de rectángulos pegados.
-          boxShadow: conContenido
+          boxShadow: lleno
             ? '3px 0 6px -2px rgb(var(--color-sombra) / .45), 0 2px 3px -1px rgb(var(--color-sombra) / .35)'
             : 'none',
           // Con lomo propio, la imagen ES el fondo entero — una sola capa,
@@ -869,7 +921,7 @@ const Lomo = memo(function Lomo({ entry, onAbrir, volando = false, sinPrisa = fa
           // propio, se sigue dibujando en vivo exactamente como hasta ahora,
           // para no dejar coja a la balda mientras se van generando los que
           // faltan.
-          ...(conContenido && (tieneLomoPropio
+          ...(lleno && (tieneLomoPropio
             ? { backgroundImage: `url(${libro.spine_url})`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat' }
             : capasDeFondo({ libro, paleta, claro, alto, conNervios, tapaDura }))),
         }}
@@ -882,7 +934,7 @@ const Lomo = memo(function Lomo({ entry, onAbrir, volando = false, sinPrisa = fa
             libro ya tiene lomo propio. Aquí solo queda lo que de verdad
             necesita ser un elemento: el texto (si no es una foto) y el
             punto de nota. */}
-        {conContenido && (<>
+        {lleno && (<>
         {!esFoto && <span
           className="absolute inset-0 flex items-center text-center"
           // De arriba abajo, que es como se leen los lomos aquí: se inclina la

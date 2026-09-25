@@ -112,21 +112,68 @@ function colorDelTitulo(ctx, ancho, alto) {
   }
 }
 
-export function colorDePortada(url) {
-  if (!url) return Promise.resolve(null)
-  if (CACHE_MEMORIA.has(url)) return Promise.resolve(CACHE_MEMORIA.get(url))
-  const enDisco = cacheDisco()[url]
-  if (enDisco !== undefined) {
-    CACHE_MEMORIA.set(url, enDisco)
-    return Promise.resolve(enDisco)
-  }
+// Sin esperar: el color si ya se sabe (también si se sabe que no hay:
+// null), o undefined si todavía hay que leer la portada. Lo usa el lomo para
+// no pasar ni un fotograma por su color de reserva cuando el bueno ya está
+// guardado. La copia del disco se lee UNA vez: con trescientos lomos
+// montándose a la vez, parsear el localStorage en cada uno era carísimo.
+let discoLeido = null
+export function colorConocido(url) {
+  if (!url) return null
+  if (CACHE_MEMORIA.has(url)) return CACHE_MEMORIA.get(url)
+  if (!discoLeido) discoLeido = cacheDisco()
+  if (discoLeido[url] === undefined) return undefined
+  CACHE_MEMORIA.set(url, discoLeido[url])
+  return discoLeido[url]
+}
 
+// Las portadas que se están leyendo, para no leer la misma dos veces a la
+// vez (la pedían a la vez la espera de la balda, el propio lomo y la
+// precarga de la estantería), y dos filas por orden de llegada —lo que se
+// va a ver ya, y lo demás— de pocas en pocas: con la estantería entera
+// pidiendo a la vez, las portadas de los lomos de arriba llegaban tan tarde
+// como las del fondo.
+const leyendo = new Map()   // url → pedido
+const urgentes = []
+const normales = []
+let enMarcha = 0
+const A_LA_VEZ = 4
+
+function siguiente() {
+  while (enMarcha < A_LA_VEZ && (urgentes.length || normales.length)) {
+    const pedido = urgentes.length ? urgentes.shift() : normales.shift()
+    enMarcha++
+    leerColor(pedido.url).then(color => {
+      CACHE_MEMORIA.set(pedido.url, color)
+      guardarEnDisco(pedido.url, color)
+      pedido.listo(color)
+    }).finally(() => { leyendo.delete(pedido.url); enMarcha--; siguiente() })
+  }
+}
+
+// `urgente`: es de un lomo que se va a enseñar ya.
+export function colorDePortada(url, { urgente = false } = {}) {
+  if (!url) return Promise.resolve(null)
+  const sabido = colorConocido(url)
+  if (sabido !== undefined) return Promise.resolve(sabido)
+  const yaPedido = leyendo.get(url)
+  if (yaPedido) {
+    const i = normales.indexOf(yaPedido)
+    if (urgente && i >= 0) urgentes.push(...normales.splice(i, 1))
+    return yaPedido.promesa
+  }
+  const pedido = { url }
+  pedido.promesa = new Promise(listo => { pedido.listo = listo })
+  leyendo.set(url, pedido)
+  if (urgente) urgentes.push(pedido)
+  else normales.push(pedido)
+  siguiente()
+  return pedido.promesa
+}
+
+function leerColor(url) {
   return new Promise(resolve => {
-    const terminar = (color) => {
-      CACHE_MEMORIA.set(url, color)
-      guardarEnDisco(url, color)
-      resolve(color)
-    }
+    const terminar = resolve
     const img = new Image()
     img.crossOrigin = 'anonymous'
     img.onerror = () => terminar(null)
@@ -200,20 +247,10 @@ export function colorDePortada(url) {
 // en cuanto se sabe qué libros hay, para cuando se abre la estantería ya están
 // casi todos, y a la siguiente visita todos (quedan guardados).
 //
-// De seis en seis: de golpe son trescientas imágenes a la vez, y en un móvil
-// eso compite con lo que de verdad se está mirando.
+// De pocas en pocas (la fila normal de colorDePortada): de golpe son
+// trescientas imágenes a la vez, y en un móvil eso compite con lo que de
+// verdad se está mirando.
 export function precargarColores(urls) {
-  const cola = [...new Set((urls || []).filter(Boolean))]
-  let vivo = true
-  let enMarcha = 0
-  function siguiente() {
-    if (!vivo) return
-    while (enMarcha < 6 && cola.length) {
-      const url = cola.shift()
-      enMarcha++
-      colorDePortada(url).finally(() => { enMarcha--; siguiente() })
-    }
-  }
-  siguiente()
-  return () => { vivo = false }
+  for (const url of new Set((urls || []).filter(Boolean))) colorDePortada(url)
+  return () => {}
 }

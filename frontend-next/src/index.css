@@ -350,6 +350,14 @@
               0 18px 34px -16px rgb(var(--color-sombra) / .4);
 }
 
+/* Un lomo que llega cuando ya se estaba viendo su hueco (ver Lomos.jsx):
+   entra con un fundido corto, entero de una vez. */
+@keyframes lomo-llega {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.lomo-llega { animation: lomo-llega 240ms ease-out; }
+
 /* ── Safe areas ──────────────────────────────────────────────────────────
    Solo valen algo con viewport-fit=cover en el meta viewport (index.html).
    Instalada en el iPhone no hay barra de Safari debajo: sin esto, la barra de

@@ -210,6 +210,9 @@ export default function VueloDelLibro({ lomo, portada, destino, alTerminar, sent
     // vuelo no se viera nunca el lomo, y de que todo pareciera una portada
     // plana que crece.
     clon.classList.remove('invisible')
+    // Y sin el fundido de "acaba de llegar" (ver Lomos.jsx): en el clon se
+    // repetiría desde cero justo al despegar.
+    clon.classList.remove('lomo-llega')
     clon.style.visibility = 'visible'
     setCaja({ left: r.left, right: r.left + ancho, top: r.top, ancho, alto, torcido, clon, enLaBalda })
   }, [lomo, destino])
