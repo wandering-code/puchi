@@ -45,7 +45,7 @@ export default function App() {
             className="h-full w-full"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            exit={{ opacity: 0, scale: 0.98 }}
+            exit={{ opacity: 0, transform: 'scale(0.98)' }}
             transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
           >
             <LoginScreen />
@@ -53,9 +53,11 @@ export default function App() {
         ) : (
           <motion.div
             key="shell"
-            className="h-full w-full"
-            initial={{ opacity: 0, scale: 1.02 }}
-            animate={{ opacity: 1, scale: 1 }}
+            // La entrada, en CSS (.entra en index.css): con scale Motion la
+            // movía desde JavaScript, y con `transform` dejaría uno puesto en
+            // el contenedor de toda la app al acabar.
+            className="entra h-full w-full"
+            style={{ '--entra-desde': 'scale(1.02)', '--entra-dura': '400ms' }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
           >
@@ -103,7 +105,7 @@ function Splash() {
       transition={{ duration: 0.25 }}
     >
       <motion.div
-        animate={{ scale: [1, 1.08, 1], opacity: [0.5, 1, 0.5] }}
+        animate={{ transform: ['scale(1)', 'scale(1.08)', 'scale(1)'], opacity: [0.5, 1, 0.5] }}
         transition={{ duration: 1.6, repeat: Infinity, ease: 'easeInOut' }}
       >
         <PawMark className="h-10 w-10 text-accent" />

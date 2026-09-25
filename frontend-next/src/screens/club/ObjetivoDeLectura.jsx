@@ -101,9 +101,9 @@ export default function ObjetivoDeLectura({ club, libro, esAdmin, onCambiado, va
                 <motion.span
                   key={pagina || 'sin'}
                   className="[grid-area:1/1]"
-                  initial={{ opacity: 0, y: 5 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -5 }}
+                  initial={{ opacity: 0, transform: 'translateY(5px)' }}
+                  animate={{ opacity: 1, transform: 'translateY(0px)' }}
+                  exit={{ opacity: 0, transform: 'translateY(-5px)' }}
                   transition={{ duration: 0.2, ease: [0.32, 0.72, 0, 1] }}
                 >
                   {pagina

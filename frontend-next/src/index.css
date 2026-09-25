@@ -358,6 +358,24 @@
 }
 .lomo-llega { animation: lomo-llega 240ms ease-out; }
 
+/* La entrada de un contenedor grande (una sección, la app entera, una
+   pestaña): se funde desde `--entra-desde` (un transform) hasta su sitio.
+
+   En CSS y no con initial/animate de Motion por dos motivos. Motion mueve
+   x/y/scale desde JavaScript, y Safari deja eso a 60 fotogramas por segundo
+   aunque la pantalla vaya a 120; esto lo hace el navegador en la GPU. Y si se
+   le pide a Motion `transform` para que lo acelere, al acabar deja escrito
+   `translateY(0px)` en vez de nada, y un transform en un contenedor convierte
+   en relativo a él todo lo `fixed` que haya dentro. La animación CSS, al
+   acabar, no deja nada. La salida sí puede ir por Motion: el elemento se
+   quita justo después. */
+@keyframes entra {
+  from { opacity: 0; transform: var(--entra-desde, none); }
+}
+.entra {
+  animation: entra var(--entra-dura, 240ms) var(--entra-curva, cubic-bezier(0.22, 1, 0.36, 1)) var(--entra-espera, 0ms) backwards;
+}
+
 /* ── Safe areas ──────────────────────────────────────────────────────────
    Solo valen algo con viewport-fit=cover en el meta viewport (index.html).
    Instalada en el iPhone no hay barra de Safari debajo: sin esto, la barra de

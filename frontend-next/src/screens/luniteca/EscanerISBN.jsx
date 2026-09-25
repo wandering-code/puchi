@@ -113,8 +113,8 @@ export default function EscanerISBN({ estanteria, onImportado }) {
             {aviso && (
               <motion.p
                 key={aviso.texto}
-                initial={{ opacity: 0, y: -4 }}
-                animate={{ opacity: 1, y: 0 }}
+                initial={{ opacity: 0, transform: 'translateY(-4px)' }}
+                animate={{ opacity: 1, transform: 'translateY(0px)' }}
                 exit={{ opacity: 0 }}
                 className={`mt-3 text-sm ${aviso.tono === 'aviso' ? 'text-danger' : aviso.tono === 'bien' ? 'text-read' : 'text-ink-mute'}`}
               >

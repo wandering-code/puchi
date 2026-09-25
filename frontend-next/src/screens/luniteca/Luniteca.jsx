@@ -20,10 +20,11 @@ import { precargarProporciones } from './proporcionLomo'
 import { generarYSubirLomo } from './generarLomo'
 import { usarVuelo } from './usarVuelo'
 import { CajaSeccion, TituloSeccion, huecoEntreSecciones, usarSeparacion } from './separacion'
-import { LLEGADA } from '../../ui/curvas'
+import { LLEGADA, enCss } from '../../ui/curvas'
 import { useHoja } from './HojaInferior'
 import { useCapa } from '../../platform/capas'
 
+const VISTAS = [['grid', IconGrid, 'Cuadrícula'], ['list', IconList, 'Lista'], ['lomos', IconLomos, 'Estantería']]
 
 export default function Luniteca() {
   const { player } = useAuth()
@@ -580,9 +581,9 @@ export function Herramientas({
                   onClick={() => onQuery('')}
                   aria-label="Limpiar"
                   className="shrink-0 p-1 text-ink-mute"
-                  initial={{ opacity: 0, scale: 0.6 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.6 }}
+                  initial={{ opacity: 0, transform: 'scale(0.6)' }}
+                  animate={{ opacity: 1, transform: 'scale(1)' }}
+                  exit={{ opacity: 0, transform: 'scale(0.6)' }}
                   transition={{ duration: 0.15 }}
                 >
                   <IconX className="h-4 w-4" />
@@ -600,14 +601,28 @@ export function Herramientas({
               propio se quedaba del color de la página y no destacaba al lado
               de los botones de la izquierda, que sí llevan el suyo. */}
           <motion.div
-            className="flex shrink-0 items-center rounded-full border border-line bg-surface p-1 sombra-pastilla"
+            className="relative flex shrink-0 items-center rounded-full border border-line bg-surface p-1 sombra-pastilla"
           initial={false}
           animate={{ opacity: buscando ? 0 : 1 }}
           transition={{ duration: 0.14, ease: [0.32, 0.72, 0, 1] }}
           style={{ pointerEvents: buscando ? 'none' : 'auto' }}
           inert={buscando}
         >
-          {[['grid', IconGrid, 'Cuadrícula'], ['list', IconList, 'Lista'], ['lomos', IconLomos, 'Estantería']].map(([modo, Icono, etiqueta]) => (
+          {/* La pastilla de la vista elegida es una sola y se desliza con una
+              transición CSS, en la GPU. Con layoutId Motion la movía desde
+              JavaScript, a 60 fotogramas en Safari. Los tres botones miden lo
+              mismo, así que basta con correrla un ancho por posición.
+              Más naranja que el accent-soft de siempre: sobre la superficie
+              clara se quedaba en un beige que apenas se distinguía. */}
+          <span
+            aria-hidden
+            className="absolute left-1 top-1 h-8 w-9 rounded-full bg-accent/25"
+            style={{
+              transform: `translateX(${Math.max(0, VISTAS.findIndex(([m]) => m === vista)) * 100}%)`,
+              transition: `transform ${enCss(LLEGADA)}`,
+            }}
+          />
+          {VISTAS.map(([modo, Icono, etiqueta]) => (
             <button
               key={modo}
               onClick={() => onVista(modo)}
@@ -615,16 +630,6 @@ export function Herramientas({
               aria-pressed={vista === modo}
               className="relative flex h-8 w-9 items-center justify-center"
             >
-              {vista === modo && (
-                <motion.span
-                  layoutId="luni-vista"
-                  // Más naranja que el accent-soft de siempre: sobre la
-                  // superficie clara se quedaba en un beige que apenas se
-                  // distinguía.
-                  className="absolute inset-0 rounded-full bg-accent/25"
-                  transition={{ type: 'spring', stiffness: 420, damping: 34 }}
-                />
-              )}
               <Icono className={`relative h-[15px] w-[15px] ${vista === modo ? 'text-accent' : 'text-ink-dim'}`} />
             </button>
           ))}

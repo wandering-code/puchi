@@ -399,7 +399,7 @@ export function RellenarDatos({ borrador, setBorrador, campos = CAMPOS_ENRIQUECI
       className="mt-5 flex items-center gap-2 text-sm font-semibold text-accent disabled:opacity-60"
     >
       <motion.span
-        animate={{ rotate: estado === 'buscando' ? 360 : 0 }}
+        animate={{ transform: `rotate(${estado === 'buscando' ? 360 : 0}deg)` }}
         transition={estado === 'buscando' ? { repeat: Infinity, duration: 0.8, ease: 'linear' } : { duration: 0 }}
         className="flex"
       >

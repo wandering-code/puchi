@@ -131,8 +131,8 @@ function Burbuja({ mensaje, mio, primera, ultima, nuevo }) {
     <motion.div
       // Solo el que acaba de llegar se anima. Sin esto, abrir una conversación
       // con doscientos mensajes los anima todos a la vez y entra a tirones.
-      initial={nuevo ? { opacity: 0, y: 8, scale: 0.96 } : false}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
+      initial={nuevo ? { opacity: 0, transform: 'translateY(8px) scale(0.96)' } : false}
+      animate={{ opacity: 1, transform: 'translateY(0px) scale(1)' }}
       transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
       // Tope doble: un porcentaje para el móvil y un ancho fijo para cuando hay
       // panel de sobra. Solo con el porcentaje, en una pantalla de ordenador un

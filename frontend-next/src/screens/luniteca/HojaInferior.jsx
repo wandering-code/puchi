@@ -4,7 +4,7 @@ import { motion } from 'motion/react'
 import { IconX } from '../../ui/icons'
 import { useCapa } from '../../platform/capas'
 import { useArrastreParaCerrar } from '../../ui/arrastre'
-import { LLEGADA, SALIDA } from '../../ui/curvas'
+import { LLEGADA, SALIDA, enCss } from '../../ui/curvas'
 
 // La hoja que sube desde abajo, una sola para toda la app: filtros, estado,
 // fechas, carpeta… Todo lo que hay que elegir se pide igual, en el mismo sitio
@@ -35,9 +35,13 @@ export default function HojaInferior({ abierta, titulo, onCerrar, children, pie 
   useLayoutEffect(() => {
     if (!abierta) return
     if (cuerpo.current) cuerpo.current.scrollTop = 0
+    // Si se cerró arrastrando, la capa de dentro se quedó donde se soltó
+    // (ver abajo): se devuelve a su sitio ahora, que la hoja aún está fuera
+    // de la pantalla y no se ve.
+    arrastre.y.set(0)
     setColocandose(true)
     // Red de seguridad, y no un adorno: si el panel ya está donde tiene que
-    // estar, Motion no anima nada y no avisa de que haya terminado, así que
+    // estar, no hay transición y nada avisa de que haya terminado, así que
     // sin esto el gesto se quedaba cortado PARA SIEMPRE. Pasaba justo en la
     // primera ficha que se abría en cada sesión, que es la que se monta ya
     // colocada; las siguientes sí animan y se desbloqueaban solas.
@@ -61,16 +65,29 @@ export default function HojaInferior({ abierta, titulo, onCerrar, children, pie 
             aria-hidden
           />
 
-          <motion.div
+          {/* Dos capas, cada una con un movimiento. La de fuera sube y baja
+              la hoja con una transición CSS: la hace el navegador en la GPU,
+              a la frecuencia de la pantalla —120 Hz en un iPhone Pro—, como
+              el cambio de tema (ver enCss en ui/curvas.js). La de dentro
+              sigue al dedo al arrastrar el asa. Antes eran la misma y Motion
+              la movía desde JavaScript, fotograma a fotograma, que Safari
+              deja a 60. */}
+          <div
             role="dialog"
             aria-label={titulo}
-            className="fixed inset-x-0 bottom-0 z-[60] flex max-h-[85dvh] flex-col rounded-t-[28px] border-t border-line bg-surface pb-safe"
+            className="fixed inset-x-0 bottom-0 z-[60]"
             inert={!abierta}
-            style={{ y: arrastre.y, pointerEvents: abierta ? 'auto' : 'none', willChange: 'transform' }}
-            initial={false}
-            animate={{ y: abierta ? 0 : '100%' }}
-            transition={abierta ? LLEGADA : SALIDA}
-            onAnimationComplete={() => setColocandose(false)}
+            style={{
+              transform: abierta ? 'translateY(0%)' : 'translateY(100%)',
+              transition: `transform ${enCss(abierta ? LLEGADA : SALIDA)}`,
+              pointerEvents: abierta ? 'auto' : 'none',
+              willChange: 'transform',
+            }}
+            onTransitionEnd={ev => { if (ev.target === ev.currentTarget) setColocandose(false) }}
+          >
+          <motion.div
+            className="flex max-h-[85dvh] flex-col rounded-t-[28px] border-t border-line bg-surface pb-safe"
+            style={{ y: arrastre.y }}
           >
             {/* El asa: indica que se puede arrastrar y es, además, el único
                 sitio desde el que se arrastra. El gesto NO puede vivir en el
@@ -107,6 +124,7 @@ export default function HojaInferior({ abierta, titulo, onCerrar, children, pie 
               <div className="flex shrink-0 gap-2 border-t border-line px-5 pb-2 pt-3">{pie}</div>
             )}
           </motion.div>
+          </div>
     </>,
     document.body,
   )

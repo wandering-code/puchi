@@ -1,12 +1,12 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
-import { AnimatePresence, motion } from 'motion/react'
+import { AnimatePresence, animate, motion, useMotionValue } from 'motion/react'
 import { useAuth } from '../platform/auth'
 import { useVersion } from '../platform/version'
 import { isIOS, isStandalone, safeInsets } from '../platform/pwa'
 import { useCapa } from '../platform/capas'
-import { LLEGADA, SALIDA } from '../ui/curvas'
+import { LLEGADA, SALIDA, enCss } from '../ui/curvas'
 import Inicio from './inicio/Inicio'
 import Luniteca from './luniteca/Luniteca'
 import Club from './club/Club'
@@ -49,6 +49,9 @@ export default function Shell() {
   }
 
   const seccion = SECCIONES.find(s => s.to === location.pathname)
+  const primeraRuta = useRef(location.pathname)
+  const navegado = useRef(false)
+  if (location.pathname !== primeraRuta.current) navegado.current = true
 
   // Las rutas van en un useMemo con la ubicación como única dependencia, y no
   // sueltas dentro del return, por una razón medible: que el menú esté abierto
@@ -64,10 +67,13 @@ export default function Shell() {
       <motion.div
         key={location.pathname}
         data-scroll="pantalla"
-        className="absolute inset-0 overflow-y-auto overscroll-contain px-5 pb-kb"
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: -6 }}
+        // La entrada va por CSS (.entra, en index.css) y la salida por Motion
+        // con `transform` entero, las dos en la GPU. Con y: 10 / y: -6 Motion
+        // la movía desde JavaScript, y en Safari eso va a 60 fotogramas.
+        // La primera sección de la sesión no entra: llega con la app.
+        className={`absolute inset-0 overflow-y-auto overscroll-contain px-5 pb-kb ${navegado.current ? 'entra' : ''}`}
+        style={{ '--entra-desde': 'translateY(10px)' }}
+        exit={{ opacity: 0, transform: 'translateY(-6px)' }}
         transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
       >
         <Routes location={location}>
@@ -156,9 +162,9 @@ function TopBar({ titulo, onAbrirMenu }) {
             <motion.p
               key={titulo}
               className="truncate text-sm text-ink-dim"
-              initial={{ opacity: 0, y: 4 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -4 }}
+              initial={{ opacity: 0, transform: 'translateY(4px)' }}
+              animate={{ opacity: 1, transform: 'translateY(0px)' }}
+              exit={{ opacity: 0, transform: 'translateY(-4px)' }}
               transition={{ duration: 0.18 }}
             >
               {titulo}
@@ -190,6 +196,10 @@ function MenuLateral({ abierto, onCerrar, onNavegar }) {
   const { sinLeer } = useChat() || {}
   const { cuantas: pendientes } = usePendientes()
   const cuantosEsperan = { '/diskordkito': sinLeer, '/admin': pendientes }
+  // Lo que se ha arrastrado el panel. Si se cerró arrastrando, se quedó donde
+  // se soltó: vuelve a su sitio al abrirse, con el panel aún fuera.
+  const arrastreX = useMotionValue(0)
+  useLayoutEffect(() => { if (abierto) arrastreX.set(0) }, [abierto, arrastreX])
   // El panel se queda SIEMPRE montado y solo se mueve. Montarlo y desmontarlo
   // con AnimatePresence salía medido: la primera apertura de cada sesión
   // metía un frame de 50-67ms (33ms hasta en WebKit sin frenar la CPU) porque
@@ -214,18 +224,29 @@ function MenuLateral({ abierto, onCerrar, onNavegar }) {
         aria-hidden
       />
 
-      <motion.aside
+      {/* Dos capas, cada una con un movimiento: la de fuera entra y sale con
+          una transición CSS (ver enCss en ui/curvas.js: la hace el navegador
+          en la GPU, a la frecuencia de la pantalla, como el cambio de tema);
+          la de dentro sigue al dedo al arrastrar. Antes eran la misma y
+          Motion la movía desde JavaScript, que Safari deja a 60 fps. */}
+      <aside
         role="dialog"
         aria-label="Menú"
         inert={!abierto}
-        className="fixed inset-y-0 left-0 z-50 flex w-[78%] max-w-[320px] flex-col border-r border-line bg-surface pt-safe pb-safe pl-safe"
-        initial={false}
-        animate={{ x: abierto ? 0 : '-100%' }}
-        transition={abierto ? LLEGADA : SALIDA}
+        className="fixed inset-y-0 left-0 z-50 w-[78%] max-w-[320px]"
         // will-change fijo, no solo durante la animación: con el panel siempre
         // montado es una capa propia y pequeña, y en la traza bajó el pintado
         // de 92ms a 13ms por tanda de aperturas.
-        style={{ pointerEvents: abierto ? 'auto' : 'none', willChange: 'transform' }}
+        style={{
+          transform: abierto ? 'translateX(0%)' : 'translateX(-100%)',
+          transition: `transform ${enCss(abierto ? LLEGADA : SALIDA)}`,
+          pointerEvents: abierto ? 'auto' : 'none',
+          willChange: 'transform',
+        }}
+      >
+      <motion.div
+        className="flex h-full flex-col border-r border-line bg-surface pt-safe pb-safe pl-safe"
+        style={{ x: arrastreX }}
         // Arrastrar hacia la izquierda para cerrarlo: es como se cierra un
         // panel así en cualquier app del móvil, y sin ello hay que apuntar
         // al velo con el pulgar. Solo hacia la izquierda (right: 0), para
@@ -234,13 +255,14 @@ function MenuLateral({ abierto, onCerrar, onNavegar }) {
         dragConstraints={{ left: -360, right: 0 }}
         dragElastic={0.08}
         dragMomentum={false}
-        // Si el arrastre se queda corto, el panel vuelve solo a su sitio.
-        dragSnapToOrigin
         onDragEnd={(_, info) => {
           // O se ha arrastrado lo bastante, o se ha lanzado con fuerza: lo
           // segundo es lo que hace que un gesto rápido y corto también
-          // cierre, que es como se maneja esto con el pulgar.
+          // cierre, que es como se maneja esto con el pulgar. Al cerrar, esta
+          // capa se queda donde se soltó y es la de fuera la que se lleva el
+          // panel desde ahí (sin salto); si no, vuelve a su sitio.
           if (info.offset.x < -70 || info.velocity.x < -420) onCerrar()
+          else animate(arrastreX, 0, { type: 'spring', stiffness: 500, damping: 40 })
         }}
       >
       <div className="flex items-center gap-3 px-5 py-5">
@@ -309,7 +331,8 @@ function MenuLateral({ abierto, onCerrar, onNavegar }) {
             eligen una vez y se quedan, así que siguen en Ajustes. */}
         <BotonDeTema />
       </div>
-      </motion.aside>
+      </motion.div>
+      </aside>
     </>
   )
 }
@@ -419,9 +442,11 @@ function BotonDeTema() {
       <AnimatePresence mode="popLayout" initial={false}>
         <motion.span
           key={tema}
-          initial={{ opacity: 0, rotate: -60, scale: 0.6 }}
-          animate={{ opacity: 1, rotate: 0, scale: 1 }}
-          exit={{ opacity: 0, rotate: 60, scale: 0.6 }}
+          // `transform` entero y no rotate/scale sueltos: así Motion se lo
+          // deja al navegador (en la GPU) en vez de moverlo desde JavaScript.
+          initial={{ opacity: 0, transform: 'rotate(-60deg) scale(0.6)' }}
+          animate={{ opacity: 1, transform: 'rotate(0deg) scale(1)' }}
+          exit={{ opacity: 0, transform: 'rotate(60deg) scale(0.6)' }}
           transition={{ duration: 0.22, ease: [0.32, 0.72, 0, 1] }}
         >
           <Icon className="h-[18px] w-[18px]" />

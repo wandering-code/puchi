@@ -1,8 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { usarNodoQuieto, usarPantallaOcupada, usarPantallaQuieta } from '../../ui/quieto'
-import { LLEGADA, SALIDA } from '../../ui/curvas'
+import { LLEGADA, SALIDA, enCss } from '../../ui/curvas'
 import { createPortal } from 'react-dom'
-import { motion, useIsPresent } from 'motion/react'
+import { motion, usePresence } from 'motion/react'
 import { useArrastreParaCerrar } from '../../ui/arrastre'
 
 // Una pantalla completa que sube desde abajo: la ficha de un libro y añadir
@@ -82,7 +82,29 @@ export default function PantallaInferior({
   // ¿Sigue montada, o quien la usa la está quitando? La ficha vive premontada
   // y esto vale siempre true; "añadir libro" sí se monta y se desmonta, y es
   // lo que avisa de que se está yendo para que baje en vez de desaparecer.
-  const presente = useIsPresent()
+  //
+  // Al quitarla, AnimatePresence espera a que se llame a `quitar`: la bajada
+  // es una transición CSS y Motion no sabe cuándo acaba (ver el panel).
+  const [presente, quitar] = usePresence()
+  useEffect(() => {
+    if (presente || !quitar) return
+    // Red de seguridad por si la transición no llega a correr (ya estaba abajo).
+    const id = setTimeout(quitar, SALIDA.duration * 1000 + 150)
+    return () => clearTimeout(id)
+  }, [presente, quitar])
+  const arriba = presente && abierta && !(estreno && subiendo)
+  // Subiendo, el panel llega con su curva y se ve entero todo el rato: aparece
+  // al abrir y se apaga cuando ya ha salido de la pantalla. Con el libro
+  // volando no se mueve: se planta donde toca de un fotograma para otro,
+  // todavía transparente, y lo que se ve es el fundido, que es largo y empieza
+  // algo después de arrancar el vuelo, para que la ficha vaya apareciendo
+  // mientras el libro sube. Al cerrarse así, se espera a que el fundido acabe
+  // antes de aparcarla abajo. Y al quitarla del todo, baja.
+  const transicion = !presente
+    ? `transform ${enCss(SALIDA)}`
+    : subiendo
+      ? `transform ${enCss(abierta ? LLEGADA : SALIDA)}, opacity 0s linear ${abierta ? 0 : 0.32}s`
+      : `transform 0s linear ${abierta ? 0 : 0.34}s, opacity 0.34s ease-out ${aVista ? 0.14 : 0}s`
 
   const [moviendose, setMoviendose] = useState(false)
   const estrenada = useRef(false)
@@ -103,10 +125,13 @@ export default function PantallaInferior({
     if (abierta && cuerpo.current) {
       cuerpo.current.scrollTop = desdeAbajo ? cuerpo.current.scrollHeight : 0
     }
+    // Si se cerró arrastrando, la capa de dentro se quedó donde se soltó (ver
+    // el panel, abajo): vuelve a su sitio ahora, con la pantalla aún fuera.
+    if (abierta) arrastre.y.set(0)
     clearTimeout(colchon.current)
     setMoviendose(true)
     // Red de seguridad, y no un adorno: si el panel ya está donde tiene que
-    // estar, Motion no anima nada y no avisa de que haya terminado, así que
+    // estar, no hay transición y nada avisa de que haya terminado, así que
     // sin esto el gesto se quedaba cortado PARA SIEMPRE. Pasaba justo en la
     // primera ficha que se abría en cada sesión, que es la que se monta ya
     // colocada; las siguientes sí animan y se soltaban solas.
@@ -137,44 +162,39 @@ export default function PantallaInferior({
         aria-hidden
       />
 
-      <motion.div
+      {/* Dos capas, cada una con un movimiento (lo mismo que HojaInferior).
+          La de fuera sube, baja y se funde con transiciones CSS, que hace el
+          navegador en la GPU a la frecuencia de la pantalla —120 Hz en un
+          iPhone Pro—, como el cambio de tema (ver enCss en ui/curvas.js). La
+          de dentro sigue al dedo al arrastrar el asa. Con Motion se movía
+          desde JavaScript, fotograma a fotograma, y Safari deja eso a 60.
+
+          Las dos propiedades llevan SIEMPRE su regla. Antes se animaba solo
+          una según el modo, y como el modo cambia al cerrarse (el vuelo acaba
+          y se vuelve a 'subir'), la ficha se aparcaba abajo recuperando la
+          opacidad, y la siguiente que llegaba con vuelo se veía un fotograma
+          abajo del todo antes de plantarse en su sitio. */}
+      <div
         data-panel="pantalla"
-        className="fixed inset-x-0 bottom-0 z-50 flex flex-col rounded-t-[28px] border-t border-line bg-bg sombra-panel"
-        style={{ y: arrastre.y, top: HUECO, pointerEvents: abierta ? 'auto' : 'none', willChange: 'transform' }}
-        inert={!abierta}
-        initial={false}
-        // Las dos propiedades se animan SIEMPRE, cada una con su regla. Antes
-        // se animaba solo una según el modo, y como el modo cambia al cerrarse
-        // (el vuelo acaba y se vuelve a 'subir'), la ficha se aparcaba abajo
-        // recuperando la opacidad, y la siguiente que llegaba con vuelo se veía
-        // un fotograma abajo del todo antes de plantarse en su sitio.
-        animate={{
-          y: abierta && !(estreno && subiendo) ? 0 : '100%',
+        className="fixed inset-x-0 bottom-0 z-50"
+        style={{
+          top: HUECO,
+          pointerEvents: abierta && presente ? 'auto' : 'none',
+          willChange: 'transform',
+          transform: arriba ? 'translateY(0%)' : 'translateY(100%)',
           opacity: aVista && !(estreno && !subiendo) ? 1 : 0,
+          transition: transicion,
         }}
-        // Al desmontarse hay que decirlo aparte: `animate` no llega a correr
-        // porque para entonces el elemento ya no está. Sin esto, "añadir
-        // libro" no bajaba, desaparecía de golpe (la ficha no lo notaba
-        // porque vive premontada y nunca se desmonta).
-        exit={{ y: '100%', transition: SALIDA }}
-        onAnimationComplete={soltarConCalma}
-        transition={{
-          // Subiendo, el panel llega con su muelle. Con el libro volando no se
-          // mueve: se planta donde toca de un fotograma para otro, todavía
-          // transparente, y lo que se ve es el fundido. Al cerrarse así, se
-          // espera a que el fundido acabe antes de aparcarlo abajo.
-          y: subiendo
-            ? (abierta ? LLEGADA : SALIDA)
-            : { duration: 0, delay: abierta ? 0 : 0.34 },
-          opacity: subiendo
-            // Subiendo se ve entero todo el rato: aparece al abrir y se apaga
-            // cuando ya ha salido de la pantalla.
-            ? { duration: 0, delay: abierta ? 0 : 0.32 }
-            // El fundido es largo y empieza algo después de arrancar el vuelo:
-            // la ficha va apareciendo mientras el libro sube, en vez de salir
-            // de golpe cuando aterriza.
-            : { duration: 0.34, delay: aVista ? 0.14 : 0 },
+        inert={!abierta || !presente}
+        onTransitionEnd={ev => {
+          if (ev.target !== ev.currentTarget) return
+          if (!presente) quitar?.()
+          else soltarConCalma()
         }}
+      >
+      <motion.div
+        className="flex h-full flex-col rounded-t-[28px] border-t border-line bg-bg sombra-panel"
+        style={{ y: arrastre.y }}
       >
         {/* El asa ya no necesita apartarse de la zona segura: el panel entero
             empieza por debajo de ella. */}
@@ -193,6 +213,7 @@ export default function PantallaInferior({
             justo lo que no se quiere de un campo de escribir. */}
         {pie && <div className="shrink-0">{pie}</div>}
       </motion.div>
+      </div>
     </>,
     document.body,
   )

@@ -16,3 +16,15 @@ export const LLEGADA = { duration: 0.3, ease: [0.32, 0.72, 0, 1] }
 // Irse puede ser algo más rápido que llegar: al cerrar ya sabes lo que va a
 // pasar y esperar la misma ceremonia cansa.
 export const SALIDA = { duration: 0.24, ease: [0.4, 0, 0.6, 1] }
+
+// Las mismas curvas escritas para una transición CSS ("0.3s cubic-bezier(…)").
+//
+// El movimiento de abrir y cerrar las capas va por CSS y no por Motion: Motion
+// lo hacía él, desde JavaScript, fotograma a fotograma (medido: ninguna
+// animación nativa en el panel y su transform reescrito en cada fotograma),
+// y Safari deja lo que se mueve desde JavaScript a 60 fotogramas por segundo
+// aunque la pantalla vaya a 120, como en los iPhone Pro. Una transición CSS
+// de `transform` la hace el propio navegador en la GPU, a la frecuencia de la
+// pantalla — como el cambio de tema, que va por View Transitions.
+export const enCss = (t, delay = 0) =>
+  `${t.duration}s cubic-bezier(${t.ease.join(', ')})${delay ? ` ${delay}s` : ''}`

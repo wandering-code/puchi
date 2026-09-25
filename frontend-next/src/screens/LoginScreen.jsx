@@ -50,9 +50,9 @@ export default function LoginScreen() {
           {modo === 'registro' ? (
             <motion.div
               key="registro"
-              initial={{ opacity: 0, x: 24 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -24 }}
+              initial={{ opacity: 0, transform: 'translateX(24px)' }}
+              animate={{ opacity: 1, transform: 'translateX(0px)' }}
+              exit={{ opacity: 0, transform: 'translateX(-24px)' }}
               transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
               className="w-full"
             >
@@ -62,9 +62,9 @@ export default function LoginScreen() {
           <motion.div
             key="entrar"
             className="w-full"
-            initial={{ opacity: 0, x: -24 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: 24 }}
+            initial={{ opacity: 0, transform: 'translateX(-24px)' }}
+            animate={{ opacity: 1, transform: 'translateX(0px)' }}
+            exit={{ opacity: 0, transform: 'translateX(24px)' }}
             transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
           >
         <motion.div
@@ -168,8 +168,8 @@ function Fade({ children, className }) {
     <motion.div
       className={className}
       variants={{
-        hidden: { opacity: 0, y: 14 },
-        show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: [0.22, 1, 0.36, 1] } },
+        hidden: { opacity: 0, transform: 'translateY(14px)' },
+        show: { opacity: 1, transform: 'translateY(0px)', transition: { duration: 0.5, ease: [0.22, 1, 0.36, 1] } },
       }}
     >
       {children}
@@ -187,7 +187,7 @@ function Field({ label, value, onChange, adornment, ...rest }) {
     <label className="relative flex items-center rounded-xl2 border border-line bg-surface/70 backdrop-blur-xl transition-colors focus-within:border-accent/60 focus-within:bg-surface">
       <motion.span
         className="pointer-events-none absolute left-4 origin-left text-ink-mute"
-        animate={{ y: raised ? -12 : 0, scale: raised ? 0.78 : 1, opacity: raised ? 0.8 : 1 }}
+        animate={{ transform: raised ? 'translateY(-12px) scale(0.78)' : 'translateY(0px) scale(1)', opacity: raised ? 0.8 : 1 }}
         transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
       >
         {label}
@@ -212,9 +212,9 @@ function AvatarPreview({ player }) {
         {player && (
           <motion.div
             key={player.id}
-            initial={{ scale: 0.5, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0.5, opacity: 0 }}
+            initial={{ transform: 'scale(0.5)', opacity: 0 }}
+            animate={{ transform: 'scale(1)', opacity: 1 }}
+            exit={{ transform: 'scale(0.5)', opacity: 0 }}
             transition={{ type: 'spring', stiffness: 380, damping: 22 }}
             className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-line"
             style={{ background: player.color || '#333' }}
@@ -240,13 +240,13 @@ function Aurora() {
       <motion.div
         className="absolute -left-24 -top-24 h-80 w-80 rounded-full blur-3xl"
         style={{ background: 'radial-gradient(circle, var(--color-accent) 0%, transparent 70%)' }}
-        animate={{ scale: [1, 1.15, 1], opacity: [0.1, 0.16, 0.1] }}
+        animate={{ transform: ['scale(1)', 'scale(1.15)', 'scale(1)'], opacity: [0.1, 0.16, 0.1] }}
         transition={{ duration: 14, repeat: Infinity, ease: 'easeInOut' }}
       />
       <motion.div
         className="absolute -bottom-32 -right-20 h-96 w-96 rounded-full blur-3xl"
         style={{ background: 'radial-gradient(circle, var(--color-accent-2) 0%, transparent 70%)' }}
-        animate={{ scale: [1.1, 1, 1.1], opacity: [0.08, 0.14, 0.08] }}
+        animate={{ transform: ['scale(1.1)', 'scale(1)', 'scale(1.1)'], opacity: [0.08, 0.14, 0.08] }}
         transition={{ duration: 18, repeat: Infinity, ease: 'easeInOut' }}
       />
     </div>

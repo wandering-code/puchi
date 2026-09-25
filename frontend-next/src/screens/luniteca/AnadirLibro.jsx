@@ -7,6 +7,7 @@ import AltaManual from './AltaManual'
 import EscanerISBN from './EscanerISBN'
 import ImportarLibros from './ImportarLibros'
 import { IconCheck, IconPlus, IconSearch, IconX } from '../../ui/icons'
+import { LLEGADA, enCss } from '../../ui/curvas'
 
 // Añadir un libro: buscándolo (en lo que ya tiene el club y en Open Library) o
 // escribiéndolo a mano cuando la búsqueda no lo encuentra.
@@ -38,6 +39,9 @@ export default function AnadirLibro({ onCerrar, onAnadido, onImportado, estanter
   const indice = modos.findIndex(([id]) => id === modo)
   const previo = useRef(indice)
   const sentido = indice >= previo.current ? 1 : -1
+  // La primera pestaña no entra de lado: llega con la pantalla.
+  const cambiada = useRef(false)
+  if (indice !== previo.current) cambiada.current = true
   previo.current = indice
 
   return (
@@ -58,7 +62,20 @@ export default function AnadirLibro({ onCerrar, onAnadido, onImportado, estanter
             </button>
           </div>
 
-          <div className="mb-4 flex gap-1">
+          <div className="relative mb-4 flex gap-1">
+            {/* Una sola pastilla que se desliza con una transición CSS, en la
+                GPU (con layoutId Motion la movía desde JavaScript, a 60
+                fotogramas en Safari). Las pestañas miden lo mismo (flex-1), así
+                que se corre un ancho más el hueco de 4px por posición. */}
+            <span
+              aria-hidden
+              className="absolute inset-y-0 left-0 rounded-xl2 bg-accent-soft"
+              style={{
+                width: `calc((100% - ${(modos.length - 1) * 4}px) / ${modos.length})`,
+                transform: `translateX(calc(${indice} * (100% + 4px)))`,
+                transition: `transform ${enCss(LLEGADA)}`,
+              }}
+            />
             {modos.map(([id, texto]) => (
               <button
                 key={id}
@@ -67,13 +84,6 @@ export default function AnadirLibro({ onCerrar, onAnadido, onImportado, estanter
                   modo === id ? 'text-accent' : 'text-ink-dim'
                 }`}
               >
-                {modo === id && (
-                  <motion.span
-                    layoutId="anadir-modo"
-                    className="absolute inset-0 rounded-xl2 bg-accent-soft"
-                    transition={{ type: 'spring', stiffness: 420, damping: 34 }}
-                  />
-                )}
                 <span className="relative">{texto}</span>
               </button>
             ))}
@@ -86,11 +96,14 @@ export default function AnadirLibro({ onCerrar, onAnadido, onImportado, estanter
           encogía según lo que hubiera dentro, y ese salto se notaba. */}
       <div className="mx-auto w-full max-w-md px-6 pb-kb">
         <AnimatePresence mode="wait" initial={false}>
+          {/* Entra por CSS (.entra, en index.css) y sale por Motion con
+              `transform` entero: las dos en la GPU. Con x Motion la movía
+              desde JavaScript, a 60 fotogramas en Safari. */}
           <motion.div
             key={modo}
-            initial={{ opacity: 0, x: 16 * sentido }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -16 * sentido }}
+            className={cambiada.current ? 'entra' : undefined}
+            style={{ '--entra-desde': `translateX(${16 * sentido}px)`, '--entra-dura': '200ms' }}
+            exit={{ opacity: 0, transform: `translateX(${-16 * sentido}px)` }}
             transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
           >
             {modo === 'buscar' && <Buscador onAnadido={onAnadido} alClub={alClub} />}
@@ -249,8 +262,8 @@ function BotonAnadir({ estado, onAnadir, etiqueta }) {
   if (estado === 'hecho' || estado === 'ya') {
     return (
       <motion.span
-        initial={{ scale: 0.6, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
+        initial={{ transform: 'scale(0.6)', opacity: 0 }}
+        animate={{ transform: 'scale(1)', opacity: 1 }}
         transition={{ type: 'spring', stiffness: 480, damping: 26 }}
         title={estado === 'ya' ? 'Ya estaba' : 'Hecho'}
         className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${
@@ -272,7 +285,7 @@ function BotonAnadir({ estado, onAnadir, etiqueta }) {
       }`}
     >
       {estado === 'anadiendo'
-        ? <motion.span animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 0.8, ease: 'linear' }} className="flex"><IconPlus className="h-5 w-5" /></motion.span>
+        ? <motion.span initial={{ transform: 'rotate(0deg)' }} animate={{ transform: 'rotate(360deg)' }} transition={{ repeat: Infinity, duration: 0.8, ease: 'linear' }} className="flex"><IconPlus className="h-5 w-5" /></motion.span>
         : <IconPlus className="h-5 w-5" />}
     </motion.button>
   )

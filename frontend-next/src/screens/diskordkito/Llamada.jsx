@@ -93,13 +93,13 @@ function Escena({ estado, conQuien, conVideo, suVideo, suCamaraApagada }) {
               llamada se lee como que va mal. */}
           <motion.div
             className="relative"
-            animate={estado === 'llamando' ? { scale: [1, 1.04, 1] } : { scale: 1 }}
+            animate={estado === 'llamando' ? { transform: ['scale(1)', 'scale(1.04)', 'scale(1)'] } : { transform: 'scale(1)' }}
             transition={{ duration: 2, repeat: estado === 'llamando' ? Infinity : 0, ease: 'easeInOut' }}
           >
             {estado === 'llamando' && (
               <motion.span
                 className="absolute -inset-4 rounded-full border border-white/25"
-                animate={{ scale: [1, 1.25], opacity: [0.5, 0] }}
+                animate={{ transform: ['scale(1)', 'scale(1.25)'], opacity: [0.5, 0] }}
                 transition={{ duration: 2, repeat: Infinity, ease: 'easeOut' }}
               />
             )}

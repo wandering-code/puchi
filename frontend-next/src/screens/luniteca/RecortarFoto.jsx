@@ -725,7 +725,7 @@ export default function RecortarFoto({
       className="fixed inset-0 z-[80] flex items-center justify-center bg-velo p-4 pt-safe pb-safe backdrop-blur-[6px]"
     >
       <motion.div
-        initial={{ scale: 0.94, opacity: 0, y: 8 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.94, opacity: 0, y: 8 }}
+        initial={{ transform: 'translateY(8px) scale(0.94)', opacity: 0 }} animate={{ transform: 'translateY(0px) scale(1)', opacity: 1 }} exit={{ transform: 'translateY(8px) scale(0.94)', opacity: 0 }}
         transition={{ type: 'spring', damping: 24, stiffness: 340 }}
         onClick={e => e.stopPropagation()}
         className="flex max-h-[92dvh] w-full max-w-sm flex-col items-center gap-4 overflow-y-auto rounded-2xl border border-line bg-surface p-5 shadow-xl"

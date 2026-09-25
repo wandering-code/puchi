@@ -18,9 +18,9 @@ export default function UpdatePrompt() {
       {needRefresh && (
         <motion.div
           className="pointer-events-none fixed inset-x-0 top-0 z-50 flex justify-center pt-safe"
-          initial={{ y: -80, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          exit={{ y: -80, opacity: 0 }}
+          initial={{ transform: 'translateY(-80px)', opacity: 0 }}
+          animate={{ transform: 'translateY(0px)', opacity: 1 }}
+          exit={{ transform: 'translateY(-80px)', opacity: 0 }}
           transition={{ type: 'spring', stiffness: 420, damping: 34 }}
         >
           <div className="pointer-events-auto m-3 flex items-center gap-3 rounded-xl2 border border-line bg-surface-2/95 px-4 py-3 shadow-lg backdrop-blur">

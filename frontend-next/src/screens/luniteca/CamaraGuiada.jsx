@@ -303,8 +303,8 @@ function Visor({ tipo = 'lomo', libro, onFoto, onCerrar, onGaleria, onCamaraSist
             <motion.div
               ref={marco}
               className="relative"
-              initial={{ opacity: 0, scale: 1.04 }}
-              animate={{ opacity: 1, scale: 1 }}
+              initial={{ opacity: 0, transform: 'scale(1.04)' }}
+              animate={{ opacity: 1, transform: 'scale(1)' }}
               transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
               style={{
                 width: tamano.ancho,
@@ -412,8 +412,8 @@ function Visor({ tipo = 'lomo', libro, onFoto, onCerrar, onGaleria, onCamaraSist
       {error && (
         <motion.div
           className="absolute inset-0 flex items-center justify-center p-8"
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
+          initial={{ opacity: 0, transform: 'translateY(8px)' }}
+          animate={{ opacity: 1, transform: 'translateY(0px)' }}
         >
           <div className="w-full max-w-xs text-center">
             <span className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-white/10"><IconCamara className="h-6 w-6" /></span>

@@ -277,7 +277,7 @@ export function EditableRating({ rating, onChange, size = 26 }) {
       onPointerUp={() => terminar(true)}
       onPointerCancel={() => terminar(false)}
       onContextMenu={(ev) => { if (editando) ev.preventDefault() }}
-      animate={{ scale: editando ? ZOOM_PUNTUACION : 1 }}
+      animate={{ transform: `scale(${editando ? ZOOM_PUNTUACION : 1})` }}
       transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
       title="Mantén pulsado para puntuar"
       // touch-action fijo, no solo mientras se edita: si el scroll de la

@@ -242,14 +242,14 @@ function Pendiente({ nombre, onVolver }) {
   return (
     <motion.div
       className="mx-auto w-full max-w-sm text-center"
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
+      initial={{ opacity: 0, transform: 'translateY(12px)' }}
+      animate={{ opacity: 1, transform: 'translateY(0px)' }}
       transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
     >
       <motion.span
         className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-read/15 text-read"
-        initial={{ scale: 0.5 }}
-        animate={{ scale: 1 }}
+        initial={{ transform: 'scale(0.5)' }}
+        animate={{ transform: 'scale(1)' }}
         transition={{ type: 'spring', stiffness: 380, damping: 20, delay: 0.1 }}
       >
         <IconCheck className="h-8 w-8" />
@@ -284,7 +284,7 @@ function Campo({ etiqueta, valor, onCambiar, mal = false, ...resto }) {
     }`}>
       <motion.span
         className="pointer-events-none absolute left-4 origin-left text-ink-mute"
-        animate={{ y: arriba ? -12 : 0, scale: arriba ? 0.78 : 1, opacity: arriba ? 0.8 : 1 }}
+        animate={{ transform: arriba ? 'translateY(-12px) scale(0.78)' : 'translateY(0px) scale(1)', opacity: arriba ? 0.8 : 1 }}
         transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
       >
         {etiqueta}

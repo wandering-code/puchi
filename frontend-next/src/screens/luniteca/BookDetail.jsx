@@ -496,7 +496,7 @@ function EditorProgreso({ entry, onActualizar }) {
         onPointerUp={() => terminar(true)}
         onPointerCancel={() => terminar(false)}
         onContextMenu={(ev) => { if (editando) ev.preventDefault() }}
-        animate={{ scale: editando ? ZOOM_PROGRESO : 1 }}
+        animate={{ transform: `scale(${editando ? ZOOM_PROGRESO : 1})` }}
         transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
         title="Mantén pulsado para ajustar el progreso"
         // Mismo motivo que en la puntuación: la página se ajusta de lado y el
@@ -550,8 +550,8 @@ function EditorNotas({ notes, onGuardar }) {
         {guardado && (
           <motion.p
             className="mt-1 text-xs text-read"
-            initial={{ opacity: 0, y: -4 }}
-            animate={{ opacity: 1, y: 0 }}
+            initial={{ opacity: 0, transform: 'translateY(-4px)' }}
+            animate={{ opacity: 1, transform: 'translateY(0px)' }}
             exit={{ opacity: 0 }}
           >
             Guardado

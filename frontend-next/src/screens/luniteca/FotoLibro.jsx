@@ -88,8 +88,8 @@ export function MarcaElegida({ grupo, redondeo = 6 }) {
       />
       <motion.span
         className="pointer-events-none absolute -right-2 -top-2 flex h-5 w-5 items-center justify-center rounded-full bg-accent text-on-accent shadow"
-        initial={{ scale: 0 }}
-        animate={{ scale: 1 }}
+        initial={{ transform: 'scale(0)' }}
+        animate={{ transform: 'scale(1)' }}
         transition={{ type: 'spring', stiffness: 600, damping: 30 }}
       >
         <IconCheck className="h-3 w-3" strokeWidth={2.4} />
