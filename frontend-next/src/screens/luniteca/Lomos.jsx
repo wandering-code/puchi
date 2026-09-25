@@ -41,8 +41,18 @@ const ANCHO_MAX = 56         // un tocho
 // foto se sabe la forma real (ver proporcionLomo.js) y se respeta, con un
 // mínimo solo para que siga siendo un botón que se pueda tocar y un máximo
 // para que un libro no se coma media balda por un recorte casi cuadrado.
-export const ANCHO_FOTO_MIN = 14
+//
+// El mínimo es solo para que un lomo nunca desaparezca: antes eran 14px,
+// para que se pudiera tocar, y con un libro de verdad más fino que eso (visto:
+// "La sombra fuera del tiempo", 128 páginas, 9px a su alto) la caja salía más
+// ancha que la foto y `cover` la agrandaba para llenarla — se comía 39px por
+// arriba y otros tantos por abajo. Ahora el lomo se ve con su ancho real y lo
+// que se agranda hasta TOQUE_MIN es la zona que se puede tocar (ver Lomo).
+export const ANCHO_FOTO_MIN = 6
 export const ANCHO_FOTO_MAX = 90
+// Lo mínimo que mide de ancho la zona donde se puede tocar un lomo, aunque el
+// libro sea más fino: con menos, en el móvil se falla el toque.
+const TOQUE_MIN = 14
 
 // Lo ancho que se ve un lomo CON FOTO: sale de la forma real de esa foto
 // (ver proporcionLomo.js), no de las páginas. Se lee en cuanto se sabe, y
@@ -862,6 +872,14 @@ const Lomo = memo(function Lomo({ entry, onAbrir, volando = false, sinPrisa = fa
   // Sin esto, los torcidos se solapaban con el de al lado.
   const desplazamiento = torcido ? Math.ceil(alto * Math.sin(Math.abs(torcido) * Math.PI / 180)) : 0
 
+  // Un libro más fino que TOQUE_MIN se ve con su ancho de verdad, pero se
+  // puede tocar en TOQUE_MIN: lo que falta se añade a los lados como relleno
+  // de este contenedor, y se le quita con un margen negativo para que la
+  // balda no se mueva — la zona de toque se mete en el hueco que ya hay
+  // entre libros, sin tapar a los vecinos.
+  const boton = useRef(null)
+  const holgura = Math.max(0, (TOQUE_MIN - anchoEfectivo) / 2)
+
   return (
     // Cada lomo ocupa una fila de alto fijo y se apoya abajo, para que todos
     // descansen sobre la misma balda aunque midan distinto.
@@ -869,11 +887,15 @@ const Lomo = memo(function Lomo({ entry, onAbrir, volando = false, sinPrisa = fa
       className="flex items-end"
       style={{
         height: ALTO_FILA,
-        paddingRight: torcido > 0 ? desplazamiento : undefined,
-        paddingLeft: torcido < 0 ? desplazamiento : undefined,
+        paddingRight: (torcido > 0 ? desplazamiento : 0) + holgura || undefined,
+        paddingLeft: (torcido < 0 ? desplazamiento : 0) + holgura || undefined,
+        marginLeft: holgura ? -holgura : undefined,
+        marginRight: holgura ? -holgura : undefined,
       }}
+      onClick={holgura ? (ev => { if (!boton.current?.contains(ev.target)) onAbrir(entry, boton.current) }) : undefined}
     >
       <button
+        ref={boton}
         // Se pasa el nodo: la animación de abrir clona este mismo lomo para
         // que el que sale volando sea idéntico al que estaba en la balda.
         onClick={ev => onAbrir(entry, ev.currentTarget)}
