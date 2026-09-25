@@ -108,6 +108,26 @@ class BookSpine(Base):
     uploader = relationship("Player")
 
 
+class RelatedCache(Base):
+    """Sugerencias en bruto de la ficha de un libro (saga y más del autor,
+    ver related_books en main.py), tal como salen de Open Library/Wikidata/
+    Google Books — issue #7. Antes vivían solo en memoria y cada despliegue
+    o reinicio obligaba a repetir la cadena externa entera (2-4 s por ficha
+    y cuota de APIs). Son iguales para cualquier jugador; lo que depende de
+    quién mira (qué tiene en su estantería) se calcula aparte, al momento.
+
+    Sin clave foránea a propósito: una fila huérfana de un libro borrado no
+    molesta a nadie, y así borrar un libro no tiene que saber que esto existe.
+    `signature` (título|autor|idioma) invalida la fila si alguien edita el
+    libro: con otro título o autor, la saga y la bibliografía son otras."""
+    __tablename__ = "related_cache"
+
+    book_id    = Column(Integer, primary_key=True)
+    signature  = Column(String, nullable=False)
+    payload    = Column(JSON, nullable=False)
+    fetched_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+
+
 class BookCover(Base):
     """Galería de portadas subidas a mano para un libro — no sustituyen la
     portada del libro, se ofrecen como opción adicional en el selector, con
