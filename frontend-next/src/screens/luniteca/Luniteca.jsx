@@ -595,9 +595,12 @@ export function Herramientas({
 
           {/* Píldora dentro de píldora: las dos redondeadas del todo, que con
               radios distintos la selección se salía por las esquinas. Se apaga
-              al buscar, que entonces manda el campo. */}
+              al buscar, que entonces manda el campo.
+              Con la superficie clara de las tarjetas y su sombrita: sin fondo
+              propio se quedaba del color de la página y no destacaba al lado
+              de los botones de la izquierda, que sí llevan el suyo. */}
           <motion.div
-            className="flex shrink-0 items-center rounded-full border border-line p-1"
+            className="flex shrink-0 items-center rounded-full border border-line bg-surface p-1 sombra-pastilla"
           initial={false}
           animate={{ opacity: buscando ? 0 : 1 }}
           transition={{ duration: 0.14, ease: [0.32, 0.72, 0, 1] }}
@@ -615,11 +618,14 @@ export function Herramientas({
               {vista === modo && (
                 <motion.span
                   layoutId="luni-vista"
-                  className="absolute inset-0 rounded-full bg-accent-soft"
+                  // Más naranja que el accent-soft de siempre: sobre la
+                  // superficie clara se quedaba en un beige que apenas se
+                  // distinguía.
+                  className="absolute inset-0 rounded-full bg-accent/25"
                   transition={{ type: 'spring', stiffness: 420, damping: 34 }}
                 />
               )}
-              <Icono className={`relative h-[15px] w-[15px] ${vista === modo ? 'text-accent' : 'text-ink-mute'}`} />
+              <Icono className={`relative h-[15px] w-[15px] ${vista === modo ? 'text-accent' : 'text-ink-dim'}`} />
             </button>
           ))}
           </motion.div>
