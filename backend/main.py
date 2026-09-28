@@ -3285,6 +3285,7 @@ async def bulk_add_personal_shelf(
             db.flush()
 
             progress = 1.0 if status == "read" else 0.0
+            custom_total_pages = _total_propio(custom_total_pages, book)
             total_propio = custom_total_pages or num_pages or book.num_pages
             if current_page and total_propio:
                 progress = min(current_page / total_propio, 1.0)
@@ -3341,10 +3342,14 @@ async def update_personal_shelf(
     if body.sort_order         is not None: entry.sort_order         = body.sort_order
     if body.times_read         is not None: entry.times_read         = body.times_read
     if body.current_page       is not None: entry.current_page       = body.current_page
-    if body.custom_total_pages is not None: entry.custom_total_pages = body.custom_total_pages
+    # Con model_fields_set y no "is not None": vaciar el campo en la ficha
+    # manda null, y antes se ignoraba, así que un total propio no se podía
+    # quitar nunca desde la app (Vástago se quedó con 800 páginas).
+    if "custom_total_pages" in body.model_fields_set:
+        entry.custom_total_pages = _total_propio(body.custom_total_pages, entry.book)
     if body.folder             is not None: entry.folder             = body.folder or None
     if body.reading_format      is not None: entry.reading_format      = body.reading_format or None
-    if body.ereader_total_pages is not None: entry.ereader_total_pages = body.ereader_total_pages
+    if "ereader_total_pages" in body.model_fields_set: entry.ereader_total_pages = body.ereader_total_pages or None
     if body.price               is not None: entry.price               = body.price
     if body.cover_url          is not None:
         entry.cover_url = await _cache_cover_url(body.cover_url.strip() or None)
@@ -3994,6 +3999,21 @@ async def _get_or_create_book(db, body: ShelfAddRequest) -> Book:
     db.commit()
     db.refresh(book)
     return book
+
+def _total_propio(valor: Optional[int], book: Optional[Book]) -> Optional[int]:
+    """Las páginas de TU edición solo se guardan si de verdad son otras que
+    las del catálogo. Igual que las del catálogo son "no tener total propio":
+    la Puchi anterior rellenaba su campo con las del catálogo y las guardaba
+    al salir de él aunque no se tocara nada, así que un simple toque las
+    copiaba a tu copia; y si luego alguien corregía el catálogo, tu copia se
+    quedaba con el número viejo (Vástago: 800 guardadas a mano "sin querer",
+    274 de verdad). Sin total propio, manda siempre el del catálogo."""
+    if not valor or valor <= 0:
+        return None
+    if book is not None and book.num_pages and valor == book.num_pages:
+        return None
+    return valor
+
 
 def _book_out(b: Book) -> dict:
     return {
