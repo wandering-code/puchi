@@ -1458,6 +1458,7 @@ def _migrate():
         # siguen viéndose exactamente igual.
         "ALTER TABLE club_shelf ADD COLUMN IF NOT EXISTS cover_url VARCHAR",
         "ALTER TABLE club_shelf ADD COLUMN IF NOT EXISTS spine_url VARCHAR",
+        "ALTER TABLE club_shelf ADD COLUMN IF NOT EXISTS height_mm INTEGER",
         # Renombrar added_by → proposed_by (ADD + UPDATE + DROP es seguro y repetible)
         "ALTER TABLE club_shelf ADD COLUMN IF NOT EXISTS proposed_by INTEGER REFERENCES players(id)",
         """DO $$ BEGIN
@@ -3630,6 +3631,7 @@ class ClubEntryUpdateRequest(BaseModel):
     next_page:    Optional[int] = None   # el objetivo vigente
     cover_url:    Optional[str] = None   # "" → volver a la portada del libro
     spine_url:    Optional[str] = None   # "" → volver al lomo del libro
+    height_mm:    Optional[int] = None   # 0 → volver al alto del libro
 
 @app.patch("/shelf/club/{entry_id}")
 async def update_club_entry(
@@ -3638,7 +3640,7 @@ async def update_club_entry(
     db: Session = Depends(get_db),
     current: Player = Depends(require_club_member),
 ):
-    """Admin puede editar fechas, notas, proposer, portada y lomo de un libro del club."""
+    """Admin puede editar fechas, notas, proposer, portada, lomo y alto de un libro del club."""
     if current.name.lower() != "wander":
         raise HTTPException(403, "Solo el admin puede editar entradas del club")
     entry = db.query(ClubShelf).filter(ClubShelf.id == entry_id).first()
@@ -3672,6 +3674,8 @@ async def update_club_entry(
         entry.spine_url = body.spine_url.strip() or None
         if entry.spine_url and not db.query(BookSpine).filter_by(book_id=entry.book_id, url=entry.spine_url).first():
             db.add(BookSpine(book_id=entry.book_id, uploaded_by=current.id, url=entry.spine_url))
+    if body.height_mm is not None:
+        entry.height_mm = _altura_valida(body.height_mm)
     db.commit()
     db.refresh(entry)
     await _notify_luni("club")
@@ -4107,8 +4111,8 @@ def _shelf_entry_out(e: PersonalShelf, hide_notes=False) -> dict:
     }
 
 def _club_book_out(e: ClubShelf) -> dict:
-    """El libro tal como se ve en el club: con la portada y el lomo que haya
-    puesto el admin para el club si los hay, si no los del libro. Mismo
+    """El libro tal como se ve en el club: con la portada, el lomo y el alto
+    que haya puesto el admin para el club si los hay, si no los del libro. Mismo
     mecanismo (y mismo spine_custom forzado) que _shelf_entry_out con una
     copia personal."""
     book_out = _book_out(e.book)
@@ -4117,6 +4121,16 @@ def _club_book_out(e: ClubShelf) -> dict:
     if e.spine_url:
         book_out["spine_url"] = e.spine_url
         book_out["spine_custom"] = True
+    elif (e.cover_url or e.height_mm) and not e.book.spine_custom:
+        # Sin foto de lomo elegida para el club, pero con portada o tamaño
+        # propios: el lomo GENERADO del libro sale de la portada y el tamaño
+        # del libro, no de los del club. Se quita, y la balda lo dibuja en
+        # vivo con los del club (lo que Lomos.jsx hace con cualquier libro
+        # sin lomo generado). Una foto de verdad del libro (spine_custom) sí
+        # se queda: esa no sale de ninguna portada.
+        book_out["spine_url"] = None
+    if e.height_mm:
+        book_out["height_mm"] = e.height_mm
     return book_out
 
 def _club_entry_out(e: ClubShelf, current_player_id: int = None) -> dict:
@@ -4128,6 +4142,7 @@ def _club_entry_out(e: ClubShelf, current_player_id: int = None) -> dict:
         "book":         _club_book_out(e),
         "own_cover_url": e.cover_url,
         "own_spine_url": e.spine_url,
+        "own_height_mm": e.height_mm,
         "status":       e.status,
         "proposed_by":  _player_out(e.proposer) if e.proposer else None,
         "activated_at": e.activated_at.isoformat() if e.activated_at else None,

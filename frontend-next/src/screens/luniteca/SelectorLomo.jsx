@@ -8,6 +8,7 @@ import CamaraGuiada, { pedirSensores, proporcionEsperada } from './CamaraGuiada'
 import { BotonBorrarEsquina } from './piezas'
 import { usarAnchoLomo } from './Lomos'
 import { AccionesFoto, Actual, MarcaElegida, Tanda, aparecer } from './FotoLibro'
+import { generarLomoImagen } from './generarLomo'
 
 // Elegir el lomo de TU copia del libro: igual que SelectorPortada, lo que se
 // pone aquí va a tu entrada de la estantería (PersonalShelf.spine_url), no al
@@ -18,7 +19,11 @@ import { AccionesFoto, Actual, MarcaElegida, Tanda, aparecer } from './FotoLibro
 // para las miniaturas de la galería, del tamaño de ESTE libro para hacerse
 // una idea de cómo quedaría.
 // `enClub`: igual que en SelectorPortada, lo elige el admin para el club.
-export default function SelectorLomo({ abierta, libro, ancho, alto, elegida, onCerrar, onElegir, onSubir, onPorDefecto, enClub = false }) {
+// `automatico`: la entrada con la que dibujar aquí mismo el lomo automático,
+// en vez de enseñar el generado guardado del libro. Lo pasa el club, donde el
+// automático sale de la portada y el tamaño del CLUB, y ese no está guardado
+// en ningún sitio (en la balda se dibuja en vivo, ver _club_book_out).
+export default function SelectorLomo({ abierta, libro, ancho, alto, elegida, onCerrar, onElegir, onSubir, onPorDefecto, enClub = false, automatico = null }) {
   const { player } = useAuth()
   const [datos, setDatos] = useState(null)   // null = cargando
   const [pendiente, setPendiente] = useState(null) // { file, deCamara } esperando recorte
@@ -86,7 +91,8 @@ export default function SelectorLomo({ abierta, libro, ancho, alto, elegida, onC
   }
 
   const subidas = datos?.user_uploads || []
-  const generado = datos?.default_url
+  const dibujado = usarLomoDibujado(abierta ? automatico : null)
+  const generado = automatico ? dibujado : datos?.default_url
   // Lo que se ve ahora en la balda: la foto elegida o, si no hay, la
   // generada. Y de dónde sale, dicho en una frase.
   const actual = elegida || generado
@@ -117,10 +123,8 @@ export default function SelectorLomo({ abierta, libro, ancho, alto, elegida, onC
             : <span className="block rounded-sm border border-dashed border-line" style={{ width: ancho * 96 / alto, height: 96 }} />}
           origen={origen}
           donde={enClub ? 'en el club' : undefined}
-          // En el club el automático sale de la portada del LIBRO, no de la
-          // que haya puesto el admin para el club: se genera uno por libro.
           nota={!elegida && generado
-            ? (enClub ? 'Sale de la portada del libro, no de la del club.' : 'Se rehace solo si cambias la portada o el tamaño del libro.')
+            ? (enClub ? 'Sale de la portada y el tamaño que tiene en el club.' : 'Se rehace solo si cambias la portada o el tamaño del libro.')
             : null}
         />
 
@@ -204,6 +208,28 @@ export default function SelectorLomo({ abierta, libro, ancho, alto, elegida, onC
       )}
     </>
   )
+}
+
+// El automático dibujado en el momento para `entrada` (ver `automatico`
+// arriba), como URL de un Blob que se suelta al dejar de usarse. Se vuelve a
+// dibujar si cambia algo que se ve en él: la portada o el tamaño.
+function usarLomoDibujado(entrada) {
+  const [url, setUrl] = useState(null)
+  const b = entrada?.book
+  const clave = b ? [b.cover_url, b.height_mm, b.num_pages, b.title].join('|') : null
+  useEffect(() => {
+    if (!clave) return
+    let vigente = true
+    let creada = null
+    generarLomoImagen(entrada).then(blob => {
+      if (!vigente || !blob) return
+      creada = URL.createObjectURL(blob)
+      setUrl(creada)
+    })
+    return () => { vigente = false; if (creada) URL.revokeObjectURL(creada) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clave])
+  return url
 }
 
 // El alto al que se ven los lomos entre los que elegir.

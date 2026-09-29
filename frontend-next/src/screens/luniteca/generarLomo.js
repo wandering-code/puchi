@@ -129,11 +129,11 @@ async function dibujar(ctx, { libro, paleta, claro, color, ancho, alto, conNervi
   }
 }
 
-// Sube el PNG generado y devuelve { spine_url, spine_custom }, o null si no
-// se ha podido generar (sin portada, imagen no legible, fallo de red) — en
-// ese caso simplemente no se manda nada y el libro se queda dibujándose en
-// vivo, como hasta ahora.
-export async function generarYSubirLomo(bookId, entry, generoDelAutor = null) {
+// Dibuja el lomo y lo devuelve como imagen (un Blob JPEG), sin subirlo, o
+// null si no se ha podido. Suelto porque el club lo usa para enseñar cómo
+// quedaría el automático con SU portada (ver SelectorLomo), que no se guarda:
+// en la balda del club ese lomo se dibuja en vivo.
+export async function generarLomoImagen(entry, generoDelAutor = null) {
   const libro = entry.book
   const { ancho, alto, color, tapaDura } = medidas(entry, generoDelAutor)
   const paleta = libro.cover_url ? await colorDePortada(libro.cover_url) : null
@@ -154,7 +154,15 @@ export async function generarYSubirLomo(bookId, entry, generoDelAutor = null) {
   // (unos 60 KB por lomo, 4 MB una balda de 90). En JPEG al 90% son unos
   // 10 KB y no se distingue ni ampliado. No lleva transparencia: el lienzo
   // se pinta entero y las esquinas redondas las pone el CSS.
-  const blob = await new Promise(res => lienzo.toBlob(res, 'image/jpeg', 0.9))
+  return new Promise(res => lienzo.toBlob(res, 'image/jpeg', 0.9))
+}
+
+// Sube el lomo generado y devuelve { spine_url, spine_custom }, o null si no
+// se ha podido generar (sin portada, imagen no legible, fallo de red) — en
+// ese caso simplemente no se manda nada y el libro se queda dibujándose en
+// vivo, como hasta ahora.
+export async function generarYSubirLomo(bookId, entry, generoDelAutor = null) {
+  const blob = await generarLomoImagen(entry, generoDelAutor)
   if (!blob) return null
 
   const datos = new FormData()

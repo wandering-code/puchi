@@ -220,6 +220,8 @@ class ClubShelf(Base):
     # su estantería.
     cover_url    = Column(String, nullable=True)
     spine_url    = Column(String, nullable=True)
+    # Y el alto en mm, por lo mismo: NULL usa el del libro (books.height_mm).
+    height_mm    = Column(Integer, nullable=True)
     added_at     = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     book             = relationship("Book")

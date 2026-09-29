@@ -11,6 +11,7 @@ import PantallaInferior from '../luniteca/PantallaInferior'
 import SelectorPortada from '../luniteca/SelectorPortada'
 import SelectorLomo from '../luniteca/SelectorLomo'
 import { medidas, usarAnchoLomo } from '../luniteca/Lomos'
+import { TamanoLibro } from '../luniteca/BookEditForm'
 import Avatar, { NombreJugador } from '../../ui/Avatar'
 import BotonPeligro from '../../ui/BotonPeligro'
 import { IconArrowLeft } from '../../ui/icons'
@@ -236,6 +237,7 @@ function AspectoDelClub({ entrada, portada, onActualizar }) {
   const club = entrada.club
   const libro = entrada.book
   const lomo = useHoja()
+  const tamano = useHoja()
 
   const { ancho: anchoBase, alto } = medidas(entrada)
   const ancho = usarAnchoLomo(libro.spine_url, anchoBase, alto)
@@ -250,6 +252,7 @@ function AspectoDelClub({ entrada, portada, onActualizar }) {
       <div className="mt-3 flex gap-2">
         <Pastilla onClick={portada.abrir}>Portada</Pastilla>
         <Pastilla onClick={lomo.abrir}>Lomo</Pastilla>
+        <Pastilla onClick={tamano.abrir}>Tamaño</Pastilla>
       </div>
       <p className="mt-2 max-w-[260px] text-[11px] leading-snug text-ink-mute">
         Lo que elijas se ve así en el club, para todos. En la estantería de cada uno el libro no cambia.
@@ -274,8 +277,51 @@ function AspectoDelClub({ entrada, portada, onActualizar }) {
         onSubir={blob => subirLomo(libro.id, blob)}
         onElegir={elegir('spine_url', lomo)}
         enClub
+        automatico={entrada}
+      />
+      <TamanoDelClub
+        abierta={tamano.abierta}
+        mm={entrada.book.height_mm ?? null}
+        onCerrar={tamano.cerrar}
+        onGuardar={mm => { onActualizar({ height_mm: mm ?? 0 }); tamano.cerrar() }}
       />
     </>
+  )
+}
+
+// El alto del libro en el club, con el mismo selector que "Editar libro" en tu
+// estantería. Aquí sí hay borrador y botón de guardar, a diferencia de la
+// portada: "a medida" se escribe tecla a tecla, y no se va a guardar cada una.
+// Sin elegir nada (null) vuelve al alto del libro; el servidor lo recibe como
+// 0, que un null no se distingue de "no tocar este campo".
+function TamanoDelClub({ abierta, mm, onCerrar, onGuardar }) {
+  const [borrador, setBorrador] = useState(mm)
+  // Cada vez que se abre, se parte de lo que hay guardado.
+  const [abiertaAntes, setAbiertaAntes] = useState(abierta)
+  if (abierta !== abiertaAntes) {
+    setAbiertaAntes(abierta)
+    if (abierta) setBorrador(mm)
+  }
+
+  return (
+    <HojaInferior
+      abierta={abierta}
+      titulo="Tamaño en el club"
+      onCerrar={onCerrar}
+      pie={
+        <motion.button
+          onClick={() => onGuardar(borrador)}
+          whileTap={{ scale: 0.98 }}
+          className="h-12 flex-1 rounded-xl2 bg-accent text-[15px] font-semibold text-on-accent"
+        >
+          Guardar
+        </motion.button>
+      }
+    >
+      <div className="pb-2">
+        <TamanoLibro mm={borrador} onElegir={setBorrador} />
+      </div>
+    </HojaInferior>
   )
 }
 
