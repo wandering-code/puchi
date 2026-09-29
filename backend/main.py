@@ -1321,14 +1321,16 @@ async def _fetch_book_metadata(title: Optional[str] = None, author: Optional[str
 
 
 class _SubidasEstaticas(StaticFiles):
-    """Lomos y portadas se guardan para siempre en el navegador: sus nombres
+    """Lomos, portadas y avatares se guardan para siempre en el navegador: sus nombres
     no se reutilizan nunca (uuid al subir, hash de la URL de origen al
     cachear una portada externa), así que el mismo nombre es siempre el mismo
     archivo. Sin esto Cloudflare les ponía 4 horas y, pasadas, cada apertura
-    de la estantería volvía a pedir todos los lomos y se veían llegar."""
+    de la estantería volvía a pedir todos los lomos y se veían llegar. Los
+    avatares entraron después: con esas 4 horas, la foto de la barra de
+    arriba se volvía a descargar y a veces se quedaba pintada a medias."""
     async def get_response(self, path, scope):
         respuesta = await super().get_response(path, scope)
-        if respuesta.status_code == 200 and path.startswith(('spines/', 'covers/')):
+        if respuesta.status_code == 200 and path.startswith(('spines/', 'covers/', 'avatars/')):
             respuesta.headers['Cache-Control'] = 'public, max-age=31536000, immutable'
         return respuesta
 

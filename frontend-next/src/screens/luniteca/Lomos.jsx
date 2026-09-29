@@ -617,8 +617,17 @@ export default function Lomos({ entries, onAbrir, fueraId = null, generosDeAutor
     return () => cancelAnimationFrame(id)
   }, [pintados, entries.length])
 
-  // Las imágenes de sus lomos, pedidas ya, en el orden de la balda.
-  useEffect(() => { precargarImagenes(entries.map(e => e.book?.spine_url)) }, [entries])
+  // Las imágenes de sus lomos, pedidas ya, en el orden de la balda. Y detrás,
+  // en la misma cola (así nunca le quitan la red a un lomo), las portadas: en
+  // esta vista no se pinta ninguna, y como el color de cada una se recuerda
+  // en localStorage (ver colorPortada.js), tampoco se descargaban para leerlo.
+  // Medido: con la balda entera cargada, 92 lomos pedidos y 3 portadas. Al
+  // abrir un libro, su portada (la que vuela y la de la ficha) se pedía en ese
+  // momento, y por el túnel eso era "el lomo ya está, la portada tarda".
+  useEffect(() => {
+    precargarImagenes(entries.map(e => e.book?.spine_url))
+    precargarImagenes(entries.map(e => e.book?.cover_url))
+  }, [entries])
 
   // Al abrir, la primera tanda de lomos espera a tener sus imágenes (y el
   // color de su portada) para salir TODA A LA VEZ, en vez de ir apareciendo
@@ -912,6 +921,9 @@ const Lomo = memo(function Lomo({ entry, onAbrir, volando = false, sinPrisa = fa
         // Se pasa el nodo: la animación de abrir clona este mismo lomo para
         // que el que sale volando sea idéntico al que estaba en la balda.
         onClick={ev => onAbrir(entry, ev.currentTarget)}
+        // Al posar el dedo, su portada pasa delante de la cola: entre esto y
+        // el click hay unas decenas de ms que, si aún no estaba, ya cuentan.
+        onPointerDown={() => precargarImagen(libro.cover_url, { urgente: true })}
         aria-label={libro.title}
         title={`${libro.title}${libro.author ? ` — ${libro.author}` : ''}`}
         className={`relative overflow-hidden transition-[background-color,transform] duration-300 active:translate-y-[-4px] ${volando ? 'invisible' : ''} ${llegando ? 'lomo-llega' : ''}`}
