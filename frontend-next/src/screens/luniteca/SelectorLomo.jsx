@@ -17,7 +17,8 @@ import { AccionesFoto, Actual, MarcaElegida, Tanda, aparecer } from './FotoLibro
 // en la foto (sin una proporción impuesta). `ancho`/`alto` aquí son solo
 // para las miniaturas de la galería, del tamaño de ESTE libro para hacerse
 // una idea de cómo quedaría.
-export default function SelectorLomo({ abierta, libro, ancho, alto, elegida, onCerrar, onElegir, onSubir, onPorDefecto }) {
+// `enClub`: igual que en SelectorPortada, lo elige el admin para el club.
+export default function SelectorLomo({ abierta, libro, ancho, alto, elegida, onCerrar, onElegir, onSubir, onPorDefecto, enClub = false }) {
   const { player } = useAuth()
   const [datos, setDatos] = useState(null)   // null = cargando
   const [pendiente, setPendiente] = useState(null) // { file, deCamara } esperando recorte
@@ -115,7 +116,12 @@ export default function SelectorLomo({ abierta, libro, ancho, alto, elegida, onC
             ? <MiniLomo url={actual} ancho={ancho} alto={alto} altoVisto={96} foto={!!elegida} />
             : <span className="block rounded-sm border border-dashed border-line" style={{ width: ancho * 96 / alto, height: 96 }} />}
           origen={origen}
-          nota={!elegida && generado ? 'Se rehace solo si cambias la portada o el tamaño del libro.' : null}
+          donde={enClub ? 'en el club' : undefined}
+          // En el club el automático sale de la portada del LIBRO, no de la
+          // que haya puesto el admin para el club: se genera uno por libro.
+          nota={!elegida && generado
+            ? (enClub ? 'Sale de la portada del libro, no de la del club.' : 'Se rehace solo si cambias la portada o el tamaño del libro.')
+            : null}
         />
 
         <AccionesFoto tipo="lomo" onCamara={abrirCamara} onGaleria={() => galeria.current?.click()} desactivado={subiendo} />

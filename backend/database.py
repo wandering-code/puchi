@@ -214,6 +214,12 @@ class ClubShelf(Base):
     # suyo, que es el registro de lo que se acordó aquel día — el histórico, no
     # el valor vigente.
     next_page    = Column(Integer, nullable=True)
+    # Portada y lomo que el admin elige para el libro EN EL CLUB. NULL usa los
+    # del libro (books.cover_url / spine_url), igual que PersonalShelf: así el
+    # club puede verse como el club quiera sin cambiarle el libro a nadie en
+    # su estantería.
+    cover_url    = Column(String, nullable=True)
+    spine_url    = Column(String, nullable=True)
     added_at     = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     book             = relationship("Book")

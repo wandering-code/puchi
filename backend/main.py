@@ -1453,6 +1453,11 @@ def _migrate():
         # vigente del libro. Nullable y sin default: un libro sin objetivo
         # puesto no debe empezar diciendo "hasta la página 0".
         "ALTER TABLE club_shelf ADD COLUMN IF NOT EXISTS next_page INTEGER",
+        # Portada y lomo propios del club (ver ClubShelf.cover_url en
+        # database.py). NULL = los del libro, así que las filas que ya hay
+        # siguen viéndose exactamente igual.
+        "ALTER TABLE club_shelf ADD COLUMN IF NOT EXISTS cover_url VARCHAR",
+        "ALTER TABLE club_shelf ADD COLUMN IF NOT EXISTS spine_url VARCHAR",
         # Renombrar added_by → proposed_by (ADD + UPDATE + DROP es seguro y repetible)
         "ALTER TABLE club_shelf ADD COLUMN IF NOT EXISTS proposed_by INTEGER REFERENCES players(id)",
         """DO $$ BEGIN
@@ -2215,8 +2220,8 @@ async def upload_cover(
     """Sube una portada nueva a la galería del libro (con atribución a quien la
     sube) — NO sustituye la portada del libro para nadie más; cada jugador
     elige de la galería la que quiere ver en su propia estantería (ver
-    PersonalShelf.cover_url). El admin del club sí puede fijar la portada del
-    libro compartido desde la ficha del club (PATCH /books/{id})."""
+    PersonalShelf.cover_url). El admin del club elige igual la que se ve en
+    el club (ClubShelf.cover_url, PATCH /shelf/club/{id})."""
     book = db.query(Book).filter(Book.id == book_id).first()
     if not book:
         raise HTTPException(404, "Libro no encontrado")
@@ -2329,7 +2334,8 @@ async def get_book_covers(
 def _borrar_archivo_local_si_huerfano(db: Session, url: Optional[str]) -> None:
     """Borra del disco el archivo de `url` (una ruta local /uploads/...) solo
     si ya no lo usa nadie: ni el libro compartido (cover_url/spine_url) ni la
-    copia personal de ningún jugador (PersonalShelf.cover_url/spine_url). Si
+    copia personal de ningún jugador (PersonalShelf.cover_url/spine_url) ni
+    el club (ClubShelf.cover_url/spine_url). Si
     alguien lo sigue teniendo puesto, se deja — borrarlo le rompería la
     portada o el lomo sin avisar. Se llama al borrar una fila de la galería
     (BookCover/BookSpine); la fila desaparece siempre, el archivo solo si
@@ -2339,6 +2345,7 @@ def _borrar_archivo_local_si_huerfano(db: Session, url: Optional[str]) -> None:
     en_uso = (
         db.query(Book).filter(or_(Book.cover_url == url, Book.spine_url == url)).first()
         or db.query(PersonalShelf).filter(or_(PersonalShelf.cover_url == url, PersonalShelf.spine_url == url)).first()
+        or db.query(ClubShelf).filter(or_(ClubShelf.cover_url == url, ClubShelf.spine_url == url)).first()
     )
     if en_uso:
         return
@@ -3621,6 +3628,8 @@ class ClubEntryUpdateRequest(BaseModel):
     club_notes:   Optional[str] = None
     proposed_by:  Optional[int] = None
     next_page:    Optional[int] = None   # el objetivo vigente
+    cover_url:    Optional[str] = None   # "" → volver a la portada del libro
+    spine_url:    Optional[str] = None   # "" → volver al lomo del libro
 
 @app.patch("/shelf/club/{entry_id}")
 async def update_club_entry(
@@ -3629,7 +3638,7 @@ async def update_club_entry(
     db: Session = Depends(get_db),
     current: Player = Depends(require_club_member),
 ):
-    """Admin puede editar fechas, notas y proposer de un libro del club."""
+    """Admin puede editar fechas, notas, proposer, portada y lomo de un libro del club."""
     if current.name.lower() != "wander":
         raise HTTPException(403, "Solo el admin puede editar entradas del club")
     entry = db.query(ClubShelf).filter(ClubShelf.id == entry_id).first()
@@ -3652,6 +3661,17 @@ async def update_club_entry(
     if "next_page" in body.model_fields_set:
         # 0 o negativo es lo mismo que no tener objetivo: no existe la página 0.
         entry.next_page = body.next_page if (body.next_page or 0) > 0 else None
+    # Mismo tratamiento que la portada/el lomo de una copia personal (ver
+    # update_personal_entry): lo elegido queda en la galería del libro con
+    # atribución, pero solo cambia cómo se ve el libro EN EL CLUB.
+    if body.cover_url is not None:
+        entry.cover_url = await _cache_cover_url(body.cover_url.strip() or None)
+        if entry.cover_url and not db.query(BookCover).filter_by(book_id=entry.book_id, url=entry.cover_url).first():
+            db.add(BookCover(book_id=entry.book_id, uploaded_by=current.id, url=entry.cover_url))
+    if body.spine_url is not None:
+        entry.spine_url = body.spine_url.strip() or None
+        if entry.spine_url and not db.query(BookSpine).filter_by(book_id=entry.book_id, url=entry.spine_url).first():
+            db.add(BookSpine(book_id=entry.book_id, uploaded_by=current.id, url=entry.spine_url))
     db.commit()
     db.refresh(entry)
     await _notify_luni("club")
@@ -3829,7 +3849,7 @@ def _session_out(s: ClubSession) -> dict:
         "part_to_discuss": s.part_to_discuss,
         "notes":           s.notes,
         "next_page":       s.next_page,
-        "book":            _book_out(s.club_entry.book) if s.club_shelf_id and s.club_entry else None,
+        "book":            _club_book_out(s.club_entry) if s.club_shelf_id and s.club_entry else None,
     }
 
 class SessionCreateRequest(BaseModel):
@@ -4086,13 +4106,28 @@ def _shelf_entry_out(e: PersonalShelf, hide_notes=False) -> dict:
         "origin":      e.origin,
     }
 
+def _club_book_out(e: ClubShelf) -> dict:
+    """El libro tal como se ve en el club: con la portada y el lomo que haya
+    puesto el admin para el club si los hay, si no los del libro. Mismo
+    mecanismo (y mismo spine_custom forzado) que _shelf_entry_out con una
+    copia personal."""
+    book_out = _book_out(e.book)
+    if e.cover_url:
+        book_out["cover_url"] = e.cover_url
+    if e.spine_url:
+        book_out["spine_url"] = e.spine_url
+        book_out["spine_custom"] = True
+    return book_out
+
 def _club_entry_out(e: ClubShelf, current_player_id: int = None) -> dict:
     revealed_votes = [v for v in e.votes if v.revealed]
     avg_votes = round(sum(v.rating for v in revealed_votes) / len(revealed_votes), 2) if revealed_votes else None
     my_log = next((l for l in e.reading_logs if l.player_id == current_player_id), None) if current_player_id else None
     return {
         "id":           e.id,
-        "book":         _book_out(e.book),
+        "book":         _club_book_out(e),
+        "own_cover_url": e.cover_url,
+        "own_spine_url": e.spine_url,
         "status":       e.status,
         "proposed_by":  _player_out(e.proposer) if e.proposer else None,
         "activated_at": e.activated_at.isoformat() if e.activated_at else None,

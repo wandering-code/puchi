@@ -2,12 +2,15 @@ import { useCallback, useEffect, useState } from 'react'
 import { motion } from 'motion/react'
 import { api } from '../../platform/api'
 import { useLiveUpdates } from '../../platform/live'
-import { copiarAMiEstanteria, totalPages } from '../luniteca/shelf'
+import { copiarAMiEstanteria, subirLomo, subirPortada, totalPages } from '../luniteca/shelf'
 import { Chip, Cover, StarRating } from '../luniteca/piezas'
 import { BotonGuardarlo } from '../luniteca/BookDetail'
 import { Pastilla, CamposFecha, Sinopsis } from '../luniteca/editores'
 import HojaInferior, { useHoja } from '../luniteca/HojaInferior'
 import PantallaInferior from '../luniteca/PantallaInferior'
+import SelectorPortada from '../luniteca/SelectorPortada'
+import SelectorLomo from '../luniteca/SelectorLomo'
+import { medidas, usarAnchoLomo } from '../luniteca/Lomos'
 import Avatar, { NombreJugador } from '../../ui/Avatar'
 import BotonPeligro from '../../ui/BotonPeligro'
 import { IconArrowLeft } from '../../ui/icons'
@@ -26,6 +29,12 @@ import Sesiones from './Sesiones'
 // fechas, las notas del club, las sesiones y el borrado son solo del admin
 // (devuelve 403 a cualquier otro). Aquí solo se decide qué se enseña, para no
 // ofrecer botones que van a fallar.
+//
+// La portada y el lomo también los elige el admin, y son del CLUB: se guardan
+// en la entrada del club (ClubShelf.cover_url/spine_url), no en el libro, así
+// que nadie ve cambiar el libro en su propia estantería. Los demás datos del
+// libro (título, páginas…) no se tocan desde aquí: las páginas, en concreto,
+// son de cada uno, que cada cual lee su edición.
 
 const COLOR_DE_ESTADO = {
   proposed: 'var(--color-want)',
@@ -41,6 +50,9 @@ export default function ClubBookDetail({
   const libro = entrada.book
   const paginas = totalPages(entrada)
   const [sesiones, setSesiones] = useState(null)
+  // La hoja de la portada vive aquí y no en AspectoDelClub porque la abre
+  // también tocar la portada grande, que está fuera de él.
+  const hojaPortada = useHoja()
 
   const cargarSesiones = useCallback(() => {
     api(`/sessions?club_shelf_id=${club.id}`)
@@ -102,8 +114,9 @@ export default function ClubBookDetail({
             data-portada-ficha
             style={{ opacity: vuelo && !vuelo.aterrizado ? 0 : 1 }}
           >
-            <Cover url={libro.cover_url} title={libro.title} priority relieve realce={false} className="sombra-portada" />
+            <PortadaDelClub libro={libro} esAdmin={esAdmin} onAbrir={hojaPortada.abrir} />
           </div>
+          {esAdmin && <AspectoDelClub entrada={entrada} portada={hojaPortada} onActualizar={actualizar} />}
 
           <h2 className="mt-5 font-display text-[1.6rem] font-bold leading-tight tracking-[-0.02em]">
             {libro.title}
@@ -202,6 +215,67 @@ export default function ClubBookDetail({
         </div>
       </div>
     </PantallaInferior>
+  )
+}
+
+// ─── Portada y lomo del club ───────────────────────────────────────────────
+// Para el admin la portada se toca, como en "Editar libro" de tu estantería.
+function PortadaDelClub({ libro, esAdmin, onAbrir }) {
+  const portada = <Cover url={libro.cover_url} title={libro.title} priority relieve realce={false} className="sombra-portada" />
+  if (!esAdmin) return portada
+  return (
+    <motion.button onClick={onAbrir} whileTap={{ scale: 0.97 }} className="block w-full" aria-label="Cambiar la portada del club">
+      {portada}
+    </motion.button>
+  )
+}
+
+// Lo que se elige se guarda al momento, sin formulario de por medio: aquí no
+// hay nada más que editar con lo que agruparlo. "" vuelve a la del libro.
+function AspectoDelClub({ entrada, portada, onActualizar }) {
+  const club = entrada.club
+  const libro = entrada.book
+  const lomo = useHoja()
+
+  const { ancho: anchoBase, alto } = medidas(entrada)
+  const ancho = usarAnchoLomo(libro.spine_url, anchoBase, alto)
+
+  const elegir = (campo, hoja) => (url, { cerrar = true } = {}) => {
+    onActualizar({ [campo]: url })
+    if (cerrar) hoja.cerrar()
+  }
+
+  return (
+    <>
+      <div className="mt-3 flex gap-2">
+        <Pastilla onClick={portada.abrir}>Portada</Pastilla>
+        <Pastilla onClick={lomo.abrir}>Lomo</Pastilla>
+      </div>
+      <p className="mt-2 max-w-[260px] text-[11px] leading-snug text-ink-mute">
+        Lo que elijas se ve así en el club, para todos. En la estantería de cada uno el libro no cambia.
+      </p>
+
+      <SelectorPortada
+        abierta={portada.abierta}
+        libro={libro}
+        elegida={club.own_cover_url || ''}
+        onCerrar={portada.cerrar}
+        onSubir={fichero => subirPortada(libro.id, fichero)}
+        onElegir={elegir('cover_url', portada)}
+        enClub
+      />
+      <SelectorLomo
+        abierta={lomo.abierta}
+        libro={libro}
+        ancho={ancho}
+        alto={alto}
+        elegida={club.own_spine_url || ''}
+        onCerrar={lomo.cerrar}
+        onSubir={blob => subirLomo(libro.id, blob)}
+        onElegir={elegir('spine_url', lomo)}
+        enClub
+      />
+    </>
   )
 }
 

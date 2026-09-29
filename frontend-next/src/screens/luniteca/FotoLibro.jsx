@@ -8,13 +8,14 @@ import { IconCamara, IconCheck, IconImagen } from '../../ui/icons'
 // marca de la elegida. Así las tres hojas se leen igual.
 
 // Lo que hay puesto ahora. `muestra` es el lomo o la portada en pequeño;
-// `origen`, de dónde sale en una frase.
-export function Actual({ muestra, origen, nota = null }) {
+// `origen`, de dónde sale en una frase. `donde`, dónde se ve así: tu
+// estantería, o el club si lo está eligiendo el admin para el club.
+export function Actual({ muestra, origen, nota = null, donde = 'en tu estantería' }) {
   return (
     <div className="mb-5 flex items-center gap-4 rounded-2xl bg-surface-2/60 p-3.5">
       <div className="flex shrink-0 items-end">{muestra}</div>
       <div className="min-w-0 flex-1">
-        <p className="text-[11px] uppercase tracking-[0.14em] text-ink-mute">Ahora en tu estantería</p>
+        <p className="text-[11px] uppercase tracking-[0.14em] text-ink-mute">Ahora {donde}</p>
         <p className="mt-1 text-[15px] font-semibold leading-snug">{origen}</p>
         {nota && <p className="mt-1 text-xs leading-relaxed text-ink-mute">{nota}</p>}
       </div>

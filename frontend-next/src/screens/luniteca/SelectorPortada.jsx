@@ -19,7 +19,10 @@ import { AccionesFoto, Actual, MarcaElegida, Tanda, aparecer } from './FotoLibro
 // subirla pasa por RecortarFoto: mismo mecanismo, cuatro esquinas libres,
 // solo que aquí el rectángulo de partida ya tiene forma de libro (2/3) en
 // vez de una franja fina.
-export default function SelectorPortada({ abierta, libro, elegida, onCerrar, onElegir, onSubir, onPorDefecto }) {
+// `enClub`: la está eligiendo el admin para el libro en el club (ver
+// ClubBookDetail), no alguien para su copia — lo que cambia es a quién se
+// le dice que se le va a ver.
+export default function SelectorPortada({ abierta, libro, elegida, onCerrar, onElegir, onSubir, onPorDefecto, enClub = false }) {
   const { player } = useAuth()
   const [datos, setDatos] = useState(null)   // null = cargando
   const [pendiente, setPendiente] = useState(null) // { file, deCamara } esperando recorte
@@ -103,7 +106,10 @@ export default function SelectorPortada({ abierta, libro, elegida, onCerrar, onE
       <Actual
         muestra={<div className="w-16"><Cover url={elegida || (datos?.default_url ?? libro.cover_url)} title={libro.title} /></div>}
         origen={origen}
-        nota={elegida ? 'Solo la ves tú: el resto del club sigue con la suya.' : null}
+        donde={enClub ? 'en el club' : undefined}
+        nota={!elegida ? null : enClub
+          ? 'La ve así todo el club. En la estantería de cada uno sigue la suya.'
+          : 'Solo la ves tú: el resto del club sigue con la suya.'}
       />
 
       <AccionesFoto tipo="portada" onCamara={abrirCamara} onGaleria={() => archivo.current?.click()} desactivado={subiendo} />
