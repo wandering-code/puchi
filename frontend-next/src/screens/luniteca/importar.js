@@ -531,13 +531,45 @@ export async function descargarPlantilla() {
   XLSX.writeFile(libro, 'plantilla-puchi.xlsx')
 }
 
+// El texto de un archivo, sea cual sea su codificación. Un CSV no dice en qué
+// está escrito: el que sale de Excel en Windows va en Windows-1252, el de un
+// Mac o de Google Sheets en UTF-8, con o sin BOM. Se prueba UTF-8 estricto
+// (falla si los bytes no lo son) y, si no, Windows-1252. Al revés no serviría:
+// cualquier secuencia de bytes es Windows-1252 válido, y un UTF-8 leído así es
+// justo el "TÃtulo" que salía (issue #52). El BOM, si lo hay, lo quita solo
+// TextDecoder.
+export function textoDeBytes(bytes) {
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes)
+  } catch {
+    return new TextDecoder('windows-1252').decode(bytes)
+  }
+}
+
+export async function leerTexto(fichero) {
+  return textoDeBytes(new Uint8Array(await fichero.arrayBuffer()))
+}
+
+// ¿Es una hoja de cálculo binaria? .xlsx es un zip (empieza por "PK") y .xls
+// un documento OLE (D0 CF 11 E0). Todo lo demás es texto: CSV, TSV…
+function esBinario(bytes) {
+  return (bytes[0] === 0x50 && bytes[1] === 0x4b)
+    || (bytes[0] === 0xd0 && bytes[1] === 0xcf && bytes[2] === 0x11 && bytes[3] === 0xe0)
+}
+
 // Lee un .xlsx/.xls/.csv y devuelve el libro de SheetJS. La librería pesa
 // bastante y solo hace falta aquí, así que se carga bajo demanda (import
 // dinámico) en vez de ir en el bundle principal: la mayoría de sesiones en
 // Puchi son de móvil y no pasan por una importación nunca.
 export async function leerLibroDeExcel(fichero) {
   const [XLSX, buffer] = await Promise.all([import('xlsx'), fichero.arrayBuffer()])
-  const libro = XLSX.read(new Uint8Array(buffer), { type: 'array', cellDates: true })
+  const bytes = new Uint8Array(buffer)
+  // Un CSV se decodifica aquí y se le pasa ya como texto: dándole los bytes,
+  // SheetJS da por hecho Windows-1252 si no hay BOM, y las tildes de un CSV
+  // en UTF-8 salían rotas.
+  const libro = esBinario(bytes)
+    ? XLSX.read(bytes, { type: 'array', cellDates: true })
+    : XLSX.read(textoDeBytes(bytes), { type: 'string', cellDates: true })
   if (!libro.SheetNames.length) throw new Error('El archivo no tiene ninguna hoja.')
   return libro
 }

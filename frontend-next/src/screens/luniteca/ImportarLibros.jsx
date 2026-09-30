@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'motion/react'
 import ListaPrevia, { Campo, ENTRADA, usarSugerencias } from './ListaPrevia'
 import {
   AVISOS_MAPEO, CAMPOS, adivinarMapeo, completarFilas, descargarPlantilla,
-  entradasImportadas, filasDeGoodreads, filasDeTabla, importarFilas, leerHoja, leerLibroDeExcel,
+  entradasImportadas, filasDeGoodreads, filasDeTabla, importarFilas, leerHoja, leerLibroDeExcel, leerTexto,
   marcarDuplicados, valorDeCampo,
 } from './importar'
 import { IconArrowLeft, IconBooks, IconTabla } from '../../ui/icons'
@@ -67,7 +67,8 @@ export default function ImportarLibros({ estanteria, onImportado }) {
     setError(''); setLeyendo(true)
     try {
       if (fuente === 'goodreads') {
-        const texto = await fichero.text()
+        // No fichero.text(): da por hecho UTF-8 (ver leerTexto).
+        const texto = await leerTexto(fichero)
         aRevisar(filasDeGoodreads(texto))
       } else {
         const libro = await leerLibroDeExcel(fichero)
