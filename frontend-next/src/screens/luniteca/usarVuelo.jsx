@@ -86,6 +86,24 @@ export function usarVuelo(ficha) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ficha.cerrar])
 
+  // La ficha también se cierra sin pasar por cerrarFicha: el gesto de volver y
+  // Escape los atiende useCapa (platform/capas.js) directamente. Sin esto el
+  // vuelo se quedaba aterrizado y fueraId seguía apuntando al libro, que no
+  // volvía a la balda: quedaba su hueco hasta abrir otro (issue #46). Aquí se
+  // ve que se ha cerrado y se hace lo mismo que cerrarFicha: si el libro está
+  // posado, vuelve volando; si todavía iba de camino, se descarta el vuelo.
+  // Si ya lo ha lanzado cerrarFicha (sentido 'vuelta'), no se toca.
+  const fichaAbierta = !!ficha.abierta
+  useLayoutEffect(() => {
+    if (fichaAbierta) return
+    setVuelo(v => {
+      if (!v || v.sentido === 'vuelta') return v
+      if (!v.aterrizado) return null
+      const aqui = document.querySelector('[data-portada-ficha]')?.getBoundingClientRect()
+      return { ...v, sentido: 'vuelta', aterrizado: false, destino: aqui?.height ? aqui : v.destino }
+    })
+  }, [fichaAbierta])
+
   // Para abrir una ficha sin animación (por ejemplo la que llega en la URL,
   // que no tiene ningún lomo del que salir).
   const abrirSinVuelo = useCallback(entrada => { setVuelo(null); ficha.abrir(entrada) }, [ficha.abrir])
