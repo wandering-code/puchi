@@ -38,15 +38,23 @@ export function AvisosProvider({ children }) {
 
   // `clave` sirve para reemplazar en vez de apilar: dos mensajes seguidos de
   // la misma conversación son un aviso que se actualiza, no dos tarjetas.
+  //
+  // `progreso`: enseña una barrita que se vacía en lo que tarda en irse, para
+  // los avisos en los que el tiempo importa (el "Deshacer" de un alta: pasado
+  // ese tiempo, el botón ya no está).
   const mostrar = useCallback((aviso) => {
     const id = aviso.clave || `aviso-${++contador.current}`
+    const duracion = aviso.duracion ?? DURACION_MS
+    // `vez` cambia en cada llamada: si el aviso reemplaza a otro con la misma
+    // clave, su barrita tiene que volver a empezar, no seguir la del anterior.
+    const vez = ++contador.current
     setAvisos(prev => {
       const sinRepetir = prev.filter(a => a.id !== id)
-      return [...sinRepetir, { ...aviso, id }].slice(-MAX_A_LA_VEZ)
+      return [...sinRepetir, { ...aviso, id, duracion, vez }].slice(-MAX_A_LA_VEZ)
     })
     clearTimeout(relojes.current.get(id))
     if (!aviso.espera) {
-      relojes.current.set(id, setTimeout(() => cerrar(id), aviso.duracion ?? DURACION_MS))
+      relojes.current.set(id, setTimeout(() => cerrar(id), duracion))
     }
     return id
   }, [cerrar])
@@ -86,7 +94,7 @@ function Pila({ avisos, onCerrar }) {
 }
 
 function Tarjeta({ aviso, onCerrar }) {
-  const { titulo, texto, color, icono, acciones, onTocar, espera } = aviso
+  const { titulo, texto, color, icono, acciones, onTocar, espera, progreso, duracion, vez } = aviso
 
   return (
     <motion.div
@@ -102,7 +110,7 @@ function Tarjeta({ aviso, onCerrar }) {
       dragConstraints={{ top: 0, bottom: 0 }}
       dragElastic={{ top: 0.5, bottom: 0 }}
       onDragEnd={(_, info) => { if (info.offset.y < -40 || info.velocity.y < -400) onCerrar() }}
-      className="pointer-events-auto mt-2 w-full max-w-md overflow-hidden rounded-xl3 border border-line bg-surface/95 sombra-panel backdrop-blur-xl"
+      className="pointer-events-auto relative mt-2 w-full max-w-md overflow-hidden rounded-xl3 border border-line bg-surface/95 sombra-panel backdrop-blur-xl"
       style={{
         // Teñida del color de quien la manda: reconocer de quién es un aviso
         // sin leer el nombre es la mitad de para qué sirve.
@@ -124,6 +132,15 @@ function Tarjeta({ aviso, onCerrar }) {
       </button>
 
       {acciones && <div className="flex gap-2 border-t border-line px-3.5 py-2.5">{acciones}</div>}
+
+      {progreso && !espera && (
+        <span
+          key={vez}
+          aria-hidden
+          className="aviso-progreso pointer-events-none absolute inset-x-0 bottom-0 h-[3px] origin-left bg-accent/70"
+          style={{ '--aviso-dura': `${duracion}ms` }}
+        />
+      )}
     </motion.div>
   )
 }

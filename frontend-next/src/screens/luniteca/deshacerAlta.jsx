@@ -44,6 +44,7 @@ export function useDeshacerAlta() {
     mostrar({
       clave,
       duracion: DURACION_MS,
+      progreso: true,
       titulo: una ? 'Añadido a tu estantería' : `Añadidos ${lista.length} libros a tu estantería`,
       texto: una ? libro.title : lista.slice(0, 3).map(e => e.book?.title).filter(Boolean).join(', ') + (lista.length > 3 ? '…' : ''),
       icono: <div className="w-8 shrink-0"><Cover url={libro.cover_url} title={libro.title} realce={false} /></div>,

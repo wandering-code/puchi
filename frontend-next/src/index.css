@@ -358,6 +358,16 @@
 }
 .lomo-llega { animation: lomo-llega 240ms ease-out; }
 
+/* La barrita de un aviso con tiempo (ver `progreso` en platform/avisos.jsx):
+   se vacía hacia la izquierda en lo que tarda el aviso en irse. Con scaleX y
+   no con width, para que la mueva la GPU sin recalcular el diseño en cada
+   fotograma. La duración la pone quien la usa (`--aviso-dura`). */
+@keyframes aviso-progreso {
+  from { transform: scaleX(1); }
+  to   { transform: scaleX(0); }
+}
+.aviso-progreso { animation: aviso-progreso var(--aviso-dura, 5200ms) linear forwards; }
+
 /* La entrada de un contenedor grande (una sección, la app entera, una
    pestaña): se funde desde `--entra-desde` (un transform) hasta su sitio.
 
