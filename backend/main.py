@@ -2842,8 +2842,9 @@ def _related_candidate_out(candidate: dict, current_book_id: int, my_shelf: dict
 # Una saga o una bibliografía no cambian de un día para otro, y cada consulta
 # gasta cuota compartida de APIs (Open Library ya nos bloqueó una vez de
 # tanto repetirla). Pasado el plazo se sigue enseñando lo guardado y se
-# refresca por detrás: nadie espera por ello. Un resultado vacío caduca antes,
-# por si fue un fallo pasajero de las fuentes y no que de verdad no haya nada.
+# refresca por detrás: nadie espera por ello. Un resultado sin saga caduca
+# antes, por si fue un fallo pasajero de las fuentes y no que de verdad no la
+# tenga (ver related_books).
 RELATED_FRESH_SECONDS = 7 * 24 * 3600
 RELATED_EMPTY_FRESH_SECONDS = 24 * 3600
 
@@ -2957,9 +2958,17 @@ async def _compute_related_raw(book_id: int) -> Optional[dict]:
                 if c.get("cover_url") in cache_map:
                     c["cover_url"] = cache_map[c["cover_url"]]
 
+        row = db.query(RelatedCache).filter(RelatedCache.book_id == book_id).first()
+        # Una saga no desaparece de un día para otro: si ahora no sale ninguna
+        # pero lo guardado para este mismo libro (misma firma: título, autor e
+        # idioma) sí tenía, es que ha fallado una fuente (Wikidata corta si
+        # recibe muchas seguidas), no que el libro haya dejado de pertenecer a
+        # su saga. Se conserva la guardada en vez de pisarla con nada (#54).
+        if not series_groups_raw and row and row.signature == signature and (row.payload or {}).get("series"):
+            series_groups_raw = row.payload["series"]
+
         raw = {"series": series_groups_raw, "same_author": same_author_raw, "current_work_key": current_work_key}
         now = datetime.now(timezone.utc).replace(tzinfo=None)
-        row = db.query(RelatedCache).filter(RelatedCache.book_id == book_id).first()
         if row:
             row.signature, row.payload, row.fetched_at = signature, raw, now
         else:
@@ -3059,9 +3068,14 @@ async def related_books(
     row = db.query(RelatedCache).filter(RelatedCache.book_id == book_id).first()
     if row and row.signature == signature:
         raw = row.payload
-        empty = not raw.get("series") and not raw.get("same_author")
+        # Sin saga cuenta como "vacío" aunque haya "Más del autor": puede ser
+        # que de verdad no la tenga, o que la fuente fallara aquel día — y así
+        # se quedaron sin saga La mejor venganza y otros ocho una semana (#54).
+        # Un libro sin saga de verdad se vuelve a preguntar como mucho una vez
+        # al día, por detrás y solo si alguien lo abre.
+        sin_saga = not raw.get("series")
         age = (datetime.now(timezone.utc).replace(tzinfo=None) - row.fetched_at).total_seconds()
-        if age > (RELATED_EMPTY_FRESH_SECONDS if empty else RELATED_FRESH_SECONDS):
+        if age > (RELATED_EMPTY_FRESH_SECONDS if sin_saga else RELATED_FRESH_SECONDS):
             _related_task(book_id)   # se refresca por detrás; esta vez sirve lo guardado
     else:
         # shield: si el jugador se va de la ficha, se cancela la espera de
