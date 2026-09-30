@@ -351,6 +351,11 @@ function PuntoDeLinea({ primero, ultimo, momento, tramoRelleno }) {
 function Sugerencia({ s, onElegir, etiqueta, linea, refNodo }) {
   const tuyo = s.in_shelf && !s.is_current
   const actual = s.is_current
+  // La marca de estado también va en el libro que se está viendo, si es tuyo:
+  // en la saga se lee de un vistazo por dónde vas (leídos en verde, el resto
+  // en su color) y el actual es justo el que más interesa. Su portada no se
+  // apaga, eso sí: es el protagonista de la tira.
+  const conMarca = s.in_shelf
   return (
     <div ref={refNodo} className={`${ANCHO_PORTADA} shrink-0 snap-start`}>
       <motion.button
@@ -366,7 +371,7 @@ function Sugerencia({ s, onElegir, etiqueta, linea, refNodo }) {
           <div style={{ opacity: tuyo ? 0.55 : 1 }} className="transition-opacity">
             <Cover url={s.cover_url} title={s.title} />
           </div>
-          {tuyo && (
+          {conMarca && (
             <span
               className="absolute -bottom-1.5 -right-1.5 flex h-6 w-6 items-center justify-center rounded-full border-2 border-[color:var(--color-bg)] text-on-accent"
               style={{ background: STATUS_COLOR[s.shelf_status] || 'var(--color-read)' }}
