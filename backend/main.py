@@ -3147,6 +3147,12 @@ async def add_to_personal_shelf(
     db: Session = Depends(get_db),
     current: Player = Depends(get_current_player),
 ):
+    # Antes de crear nada: otra edición del mismo libro (otro ISBN, sin clave
+    # de Open Library, como las de Google Books) no se reconoce en
+    # _get_or_create_book y se creaba como un libro nuevo, y con él una
+    # segunda entrada y un segundo "añadió" en la actividad (issue #53).
+    if _igual_en_estanteria(db, current.id, body.title, body.author):
+        raise HTTPException(status_code=409, detail="El libro ya está en tu estantería")
     book = await _get_or_create_book(db, body)
     existing = db.query(PersonalShelf).filter_by(
         player_id=current.id, book_id=book.id
@@ -4054,6 +4060,28 @@ async def delete_session(
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
+
+def _igual_en_estanteria(db, player_id: int, title: Optional[str], author: Optional[str]) -> Optional[PersonalShelf]:
+    """La entrada de la estantería de este jugador con el MISMO libro que
+    title/author, aunque sea otra edición: mismo título pelado (sin saga ni
+    edición entre paréntesis, ver _core_title_key) y algún autor en común. Si
+    solo uno de los dos tiene autor no se da por el mismo — con títulos
+    genéricos ("Poesía completa") sería bloquear libros distintos."""
+    clave = _core_title_key(title)
+    if not clave:
+        return None
+    filas = (
+        db.query(PersonalShelf, Book)
+        .join(Book, Book.id == PersonalShelf.book_id)
+        .filter(PersonalShelf.player_id == player_id)
+        .all()
+    )
+    for entrada, libro in filas:
+        if _core_title_key(libro.title) != clave:
+            continue
+        if (author and libro.author and _authors_overlap(author, libro.author)) or (not author and not libro.author):
+            return entrada
+    return None
 
 async def _get_or_create_book(db, body: ShelfAddRequest) -> Book:
     if body.book_id:

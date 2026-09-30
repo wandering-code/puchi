@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { api } from '../../platform/api'
+import { useLiveUpdates } from '../../platform/live'
 import { STATUS_COLOR, STATUS_LABEL } from './shelf'
 import { Cover } from './piezas'
 import { IconCheck } from '../../ui/icons'
@@ -23,6 +24,11 @@ import { useDeshacerAlta } from './deshacerAlta'
 //   el hueco se pliega suave. Lo ya recordado sale directo, sin ese paso.
 
 const recordadas = new Map()   // book_id → respuesta de /related, durante la sesión
+// Lo recordado dice qué tenías EN AQUEL MOMENTO. Si la estantería cambia por
+// otro camino (añadir buscando, desde otra ficha, otro dispositivo), deja de
+// valer: una sugerencia seguía ofreciendo "Añadir" un libro que ya tenías, y
+// así se añadió dos veces (issue #53). Se olvida todo y la ficha abierta lo
+// vuelve a pedir — sale al momento, el backend lo tiene guardado.
 
 // Lo que tarda la ficha en abrirse del todo (ver LLEGADA en ui/curvas.js),
 // con margen: hasta entonces no se pide ni se pinta nada.
@@ -32,6 +38,8 @@ export function useRelacionados(libroId, lista) {
   const [datos, setDatos] = useState(() => recordadas.get(libroId) || null)
   const [fallo, setFallo] = useState(false)
   const [pedidoPara, setPedidoPara] = useState(libroId)
+  const [vuelta, setVuelta] = useState(0)
+  useLiveUpdates(['shelf'], useCallback(() => { recordadas.clear(); setVuelta(v => v + 1) }, []))
   // La ficha no se desmonta al cambiar de libro: sin esto, un instante se
   // verían los relacionados del libro anterior.
   if (pedidoPara !== libroId) {
@@ -66,7 +74,9 @@ export function useRelacionados(libroId, lista) {
         .catch(() => { if (vigente) setFallo(true) })
     }, ESPERA_APERTURA_MS)
     return () => { vigente = false; clearTimeout(espera) }
-  }, [libroId, lista])
+    // `vuelta`: la estantería ha cambiado y lo recordado ya no vale (arriba).
+    // Mientras llega lo nuevo se sigue enseñando lo de antes, sin parpadeo.
+  }, [libroId, lista, vuelta])
 
   // Al añadir uno, se marca en el sitio (y en lo recordado, para que siga
   // marcado al volver a abrir la ficha) sin volver a pedir nada.
