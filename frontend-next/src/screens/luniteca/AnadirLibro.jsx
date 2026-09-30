@@ -6,6 +6,7 @@ import PantallaInferior from './PantallaInferior'
 import AltaManual from './AltaManual'
 import EscanerISBN from './EscanerISBN'
 import ImportarLibros from './ImportarLibros'
+import { useDeshacerAlta } from './deshacerAlta'
 import { IconCheck, IconPlus, IconSearch, IconX } from '../../ui/icons'
 import { LLEGADA, enCss } from '../../ui/curvas'
 
@@ -211,6 +212,7 @@ function Resultado({ libro, onAnadido, alClub }) {
   // importa ahí es si el libro ya está propuesto, y eso no lo trae la búsqueda
   // — lo contesta el servidor con un 409 al intentarlo.
   const [estado, setEstado] = useState(!alClub && libro.added_by_me ? 'hecho' : 'quieto')
+  const avisarAlta = useDeshacerAlta()
 
   async function anadir() {
     setEstado('anadiendo')
@@ -220,6 +222,7 @@ function Resultado({ libro, onAnadido, alClub }) {
         : await api('/shelf/personal', { method: 'POST', body: { ...libro, status: 'want_to_read', origin: 'search' } })
       onAnadido(entrada)
       setEstado('hecho')
+      if (!alClub) avisarAlta(entrada, { onDeshecho: () => setEstado('quieto') })
     } catch (err) {
       // 409 no es un fallo, es la respuesta: el libro ya estaba. Se queda
       // dicho en el sitio en vez de parpadear en rojo y volver a ofrecerse.

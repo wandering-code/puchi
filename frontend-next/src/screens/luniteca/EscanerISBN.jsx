@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { api } from '../../platform/api'
 import ListaPrevia, { ENTRADA, usarSugerencias } from './ListaPrevia'
-import { filaDeLibro, importarFilas, marcarDuplicados } from './importar'
+import { entradasImportadas, filaDeLibro, importarFilas, marcarDuplicados } from './importar'
+import { useDeshacerAlta } from './deshacerAlta'
 import { IconCamara } from '../../ui/icons'
 
 const NODO_CAMARA = 'puchi-escaner-isbn'
@@ -18,6 +19,7 @@ const NODO_CAMARA = 'puchi-escaner-isbn'
 // lo que se hizo en la Puchi anterior.
 
 export default function EscanerISBN({ estanteria, onImportado }) {
+  const avisarAlta = useDeshacerAlta()
   const [camara, setCamara] = useState(false)
   const [filas, setFilas] = useState([])
   const [incluidas, setIncluidas] = useState({})
@@ -69,6 +71,7 @@ export default function EscanerISBN({ estanteria, onImportado }) {
       setFilas(aMandar)
       setResultados(r)
       onImportado?.()
+      avisarAlta(entradasImportadas(r, aMandar), { onDeshecho: () => setResultados(null) })
     } catch (e) {
       setAviso({ texto: e.message || 'No se han podido añadir.', tono: 'aviso' })
     } finally {

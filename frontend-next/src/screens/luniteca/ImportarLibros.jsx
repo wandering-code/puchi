@@ -3,10 +3,11 @@ import { AnimatePresence, motion } from 'motion/react'
 import ListaPrevia, { Campo, ENTRADA, usarSugerencias } from './ListaPrevia'
 import {
   AVISOS_MAPEO, CAMPOS, adivinarMapeo, completarFilas, descargarPlantilla,
-  filasDeGoodreads, filasDeTabla, importarFilas, leerHoja, leerLibroDeExcel,
+  entradasImportadas, filasDeGoodreads, filasDeTabla, importarFilas, leerHoja, leerLibroDeExcel,
   marcarDuplicados, valorDeCampo,
 } from './importar'
 import { IconArrowLeft, IconBooks, IconTabla } from '../../ui/icons'
+import { useDeshacerAlta } from './deshacerAlta'
 
 // Traer la biblioteca de golpe, desde un archivo: el export de Goodreads o una
 // hoja de cálculo propia. Las dos formas que tenía la Puchi anterior, aquí en
@@ -20,6 +21,7 @@ import { IconArrowLeft, IconBooks, IconTabla } from '../../ui/icons'
 // manda. Nada de subir el archivo entero a ningún sitio.
 
 export default function ImportarLibros({ estanteria, onImportado }) {
+  const avisarAlta = useDeshacerAlta()
   const [fuente, setFuente] = useState(null)     // null | 'goodreads' | 'excel'
   const [paso, setPaso] = useState('subir')      // subir | mapeo | previa
   const [error, setError] = useState('')
@@ -127,6 +129,9 @@ export default function ImportarLibros({ estanteria, onImportado }) {
       setFilas(aMandar)
       setResultados(r)
       onImportado?.()
+      // Deshacer vuelve a la revisión con los mismos libros, por si solo
+      // había que corregir algo antes de volver a importarlos.
+      avisarAlta(entradasImportadas(r, aMandar), { onDeshecho: () => setResultados(null) })
     } catch (e) {
       setError(e.message || 'No se han podido añadir. Inténtalo otra vez.')
     } finally {

@@ -15,6 +15,7 @@ import BookEditForm from './BookEditForm'
 import PantallaInferior from './PantallaInferior'
 import { useHoja } from './HojaInferior'
 import { HojaSugerencia, Relacionados, useRelacionados } from './Relacionados'
+import { useDeshacerAlta } from './deshacerAlta'
 
 // Distribución tomada de la Luniteca nueva de la Puchi actual: portada grande
 // centrada, título y autor debajo, la ficha técnica en una línea y los datos
@@ -276,6 +277,7 @@ export default function BookDetail({
 // mismo significado.
 export function BotonGuardarlo({ onGuardar }) {
   const [estado, setEstado] = useState('nada')   // nada | guardando | hecho | ya | error
+  const avisarAlta = useDeshacerAlta()
 
   const texto = {
     nada: 'Añadir a mi estantería',
@@ -292,8 +294,9 @@ export function BotonGuardarlo({ onGuardar }) {
       onClick={async () => {
         setEstado('guardando')
         try {
-          await onGuardar()
+          const entrada = await onGuardar()
           setEstado('hecho')
+          avisarAlta(entrada, { onDeshecho: () => setEstado('nada') })
         } catch (e) {
           setEstado(e?.status === 409 ? 'ya' : 'error')
         }

@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from fastapi import FastAPI, Depends, HTTPException, Response, WebSocket, WebSocketDisconnect, Query, File, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -3323,7 +3323,7 @@ async def bulk_add_personal_shelf(
                 _log_activity(db, current.id, book.id, "finished", rating=rating, times_read=entry.times_read)
 
             db.commit()
-            results.append({"index": i, "ok": True, "title": title})
+            results.append({"index": i, "ok": True, "title": title, "entry_id": entry.id})
         except Exception as e:
             db.rollback()
             results.append({"index": i, "ok": False, "title": title or f"(libro {i + 1})", "error": str(e)})
@@ -3428,10 +3428,68 @@ async def delete_personal_shelf(
     entry = db.query(PersonalShelf).filter(PersonalShelf.id == entry_id).first()
     if not entry or entry.player_id != current.id:
         raise HTTPException(status_code=404, detail="Entrada no encontrada")
-    db.delete(entry)
+    por_error = _borrar_entrada(db, entry)
     db.commit()
     await _notify_luni("shelf")
+    if por_error:
+        await _notify_luni("activity")
     return {"ok": True}
+
+
+class BulkDeleteRequest(BaseModel):
+    ids: list[int]
+
+@app.post("/shelf/personal/bulk-delete")
+async def bulk_delete_personal_shelf(
+    body: BulkDeleteRequest,
+    db: Session = Depends(get_db),
+    current: Player = Depends(get_current_player),
+):
+    """Borra varias entradas tuyas de una vez: el "Deshacer" de una importación
+    o de una tanda del escáner, que si no serían cientos de DELETE sueltos.
+    Mismas reglas que borrar una (ver _borrar_entrada)."""
+    entradas = db.query(PersonalShelf).filter(
+        PersonalShelf.id.in_(body.ids), PersonalShelf.player_id == current.id,
+    ).all()
+    por_error = False
+    for entry in entradas:
+        por_error = _borrar_entrada(db, entry) or por_error
+    db.commit()
+    if entradas:
+        await _notify_luni("shelf")
+    if por_error:
+        await _notify_luni("activity")
+    return {"borradas": len(entradas)}
+
+
+# Cuánto tiempo después de añadir un libro se entiende que borrarlo es
+# deshacer un error (ver _borrar_entrada).
+_MARGEN_ALTA_POR_ERROR = timedelta(minutes=15)
+
+def _borrar_entrada(db: Session, entry: PersonalShelf) -> bool:
+    """Borra una entrada de la estantería (sin commit). Si se borra al poco de
+    añadirla (el "Deshacer" del aviso de alta, o darse cuenta enseguida), fue
+    un error, y lo que generó en la actividad no debe quedarse contándoselo a
+    todo el mundo: se borra también. Solo lo de ESTA alta (desde added_at) y
+    solo de su jugador: si tuvo el libro antes, lo de entonces se queda.
+    Pasado el margen, borrar un libro no toca la actividad, que es historial.
+    Devuelve si se ha tocado la actividad."""
+    anadido = entry.added_at
+    if anadido and anadido.tzinfo is None:
+        anadido = anadido.replace(tzinfo=timezone.utc)
+    por_error = bool(anadido) and datetime.now(timezone.utc) - anadido < _MARGEN_ALTA_POR_ERROR
+    if por_error:
+        db.query(Activity).filter(
+            Activity.player_id == entry.player_id,
+            Activity.book_id == entry.book_id,
+            Activity.event_type.in_(("added", "started", "finished")),
+            # Con unos segundos de holgura: la entrada y su actividad se
+            # fechan por separado en la misma petición, y la actividad puede
+            # quedar unos microsegundos por delante de added_at.
+            Activity.created_at >= entry.added_at - timedelta(seconds=5),
+        ).delete(synchronize_session=False)
+    db.delete(entry)
+    return por_error
 
 
 # ── Activity feed ─────────────────────────────────────────────────────────────

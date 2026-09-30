@@ -11,6 +11,7 @@ import HojaInferior, { useHoja } from './HojaInferior'
 import RecortarFoto from './RecortarFoto'
 import CamaraGuiada, { pedirSensores, proporcionEsperada } from './CamaraGuiada'
 import { AccionesFoto } from './FotoLibro'
+import { useDeshacerAlta } from './deshacerAlta'
 import { IconChevron } from '../../ui/icons'
 
 // Dar de alta un libro a mano: para lo que la búsqueda no encuentra —
@@ -47,6 +48,7 @@ const A_RELLENAR = ['author', 'genre', 'synopsis', 'year', 'num_pages', 'isbn', 
 const num = (v) => (v === '' || v == null ? null : Number(v))
 
 export default function AltaManual({ onAnadido, onHecho, alClub, estanteria }) {
+  const avisarAlta = useDeshacerAlta()
   const [datos, setDatos] = useState(VACIO)
   // Las fotos no se suben hasta que el libro existe (la galería de portadas y
   // lomos cuelga de /books/{id}), así que hasta entonces se quedan aquí: el
@@ -167,7 +169,9 @@ export default function AltaManual({ onAnadido, onHecho, alClub, estanteria }) {
         method: 'POST',
         body: { ...libro, status: datos.status, origin: 'search' },
       })
-      onAnadido(await completarCopia(entrada))
+      const completa = await completarCopia(entrada)
+      onAnadido(completa)
+      avisarAlta(completa)
       onHecho()
     } catch (err) {
       setError(err.status === 409 && alClub

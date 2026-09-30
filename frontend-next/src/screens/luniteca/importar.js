@@ -480,6 +480,14 @@ function cuerpoDeFila(f) {
 // avance se va contando entre tanda y tanda.
 const POR_TANDA = 40
 
+// Lo que ha entrado de verdad, con la forma que espera el aviso de "Deshacer"
+// (ver deshacerAlta.jsx): el id de cada entrada nueva y su libro.
+export function entradasImportadas(resultados, filas) {
+  return (resultados || [])
+    .filter(r => r.ok && r.entry_id)
+    .map(r => ({ id: r.entry_id, book: { title: r.title, cover_url: filas[r.index]?.cover_url } }))
+}
+
 export async function importarFilas(filas, origin, avance) {
   const resultados = []
   for (let i = 0; i < filas.length; i += POR_TANDA) {

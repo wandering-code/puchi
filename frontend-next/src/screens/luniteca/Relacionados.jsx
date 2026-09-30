@@ -5,6 +5,7 @@ import { STATUS_COLOR, STATUS_LABEL } from './shelf'
 import { Cover } from './piezas'
 import { IconCheck } from '../../ui/icons'
 import HojaInferior from './HojaInferior'
+import { useDeshacerAlta } from './deshacerAlta'
 
 // Libros relacionados con el de la ficha (issue #7): la saga entera, en
 // orden y con este libro señalado, y más libros del mismo autor. Sirven
@@ -457,6 +458,7 @@ function textoPlano(html) {
 
 function PieSugerencia({ s, onAnadido, onAbrirLibro, onCerrar }) {
   const [estado, setEstado] = useState('nada')   // nada | guardando | hecho | ya | error
+  const avisarAlta = useDeshacerAlta()
 
   // Ya lo tienes: no hay nada que añadir. Si quien abre la ficha sabe llevarte
   // a la tuya (tu estantería), se ofrece; si no, la hoja solo informa.
@@ -511,6 +513,7 @@ function PieSugerencia({ s, onAnadido, onAbrirLibro, onCerrar }) {
           })
           setEstado('hecho')
           onAnadido(s, entrada)
+          avisarAlta(entrada, { onDeshecho: () => setEstado('nada') })
         } catch (e) {
           if (e?.status === 409) {
             setEstado('ya')
