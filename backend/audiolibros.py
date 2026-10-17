@@ -239,7 +239,7 @@ def _enlaces(db: Session, ids: list[int]) -> dict[int, list[dict]]:
 def _duenos(db: Session, ids: list[int]) -> dict[int, list[dict]]:
     """Quién tiene cada libro en su estantería (solo cuentas aprobadas) y en
     qué estado: es a quien le sirve el audiolibro y, más adelante, a quien
-    se avisará cuando esté listo (#68)."""
+    se avisará cuando esté listo (fase 7, #69)."""
     if not ids:
         return {}
     out: dict[int, list[dict]] = {}
