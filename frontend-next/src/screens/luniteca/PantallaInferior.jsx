@@ -26,6 +26,10 @@ const HUECO = 'max(2rem, env(safe-area-inset-top))'
 export default function PantallaInferior({
   abierta = true, onCerrar, cabecera, children, pie = null,
   aparicion = 'subir', visible = true, refCuerpo = null, desdeAbajo = false,
+  // Por defecto 50. El reproductor de audiolibros va a 55: se abre desde la
+  // ficha de un libro, que también es una PantallaInferior, y tiene que
+  // quedar encima aunque esté montado antes en la página.
+  nivel = 50,
 }) {
   // `aparicion`: 'subir' es la de siempre. 'fundido' es para cuando el libro ya
   // ha volado hasta aquí desde la estantería: la pantalla no puede subir
@@ -152,12 +156,12 @@ export default function PantallaInferior({
       {/* La franja que queda a la vista, difuminada: lo de detrás se reconoce
           pero no compite con lo que hay delante. */}
       <motion.div
-        className="fixed inset-0 z-50 bg-velo backdrop-blur-[6px]"
+        className="fixed inset-0 bg-velo backdrop-blur-[6px]"
         initial={false}
         animate={{ opacity: abierta && !estreno ? 1 : 0 }}
         exit={{ opacity: 0 }}
         transition={{ duration: 0.25 }}
-        style={{ pointerEvents: abierta ? 'auto' : 'none' }}
+        style={{ pointerEvents: abierta ? 'auto' : 'none', zIndex: nivel }}
         onClick={() => onCerrar()}
         aria-hidden
       />
@@ -176,8 +180,9 @@ export default function PantallaInferior({
           abajo del todo antes de plantarse en su sitio. */}
       <div
         data-panel="pantalla"
-        className="fixed inset-x-0 bottom-0 z-50"
+        className="fixed inset-x-0 bottom-0"
         style={{
+          zIndex: nivel,
           top: HUECO,
           pointerEvents: abierta && presente ? 'auto' : 'none',
           willChange: 'transform',

@@ -449,6 +449,23 @@ class AudiobookBook(Base):
     linked_at    = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
+class AudiobookProgress(Base):
+    """Por dónde va cada uno escuchando cada audiolibro (fase 3, #65): el
+    capítulo y el segundo. En el servidor, no en el dispositivo, para seguir
+    en el móvil donde se dejó en el ordenador."""
+    __tablename__ = "audiobook_progress"
+    __table_args__ = (UniqueConstraint("player_id", "audiobook_id"),)
+
+    id           = Column(Integer, primary_key=True, index=True)
+    player_id    = Column(Integer, ForeignKey("players.id", ondelete="CASCADE"), nullable=False)
+    audiobook_id = Column(Integer, ForeignKey("audiobooks.id", ondelete="CASCADE"), nullable=False)
+    # SET NULL: volver a leer el EPUB rehace los capítulos, y entonces se
+    # empieza por el principio en vez de romper.
+    chapter_id   = Column(Integer, ForeignKey("audiobook_chapters.id", ondelete="SET NULL"), nullable=True)
+    position_s   = Column(Float, nullable=False, default=0.0)
+    updated_at   = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
 def crear_tablas():
     Base.metadata.create_all(bind=engine)
 

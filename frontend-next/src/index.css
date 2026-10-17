@@ -417,3 +417,42 @@
    de desplazamiento, que en escritorio se pintaba debajo de las portadas. */
 .tira-sin-barra { scrollbar-width: none; }
 .tira-sin-barra::-webkit-scrollbar { display: none; }
+
+/* La barra de avance del reproductor de audiolibros (screens/kokito/escuchar).
+   Un <input type="range"> de verdad, para que se arrastre con el dedo, pero
+   pintado a mano: el nativo de iOS no se deja teñir. --avance lo pone el
+   componente (0%–100%). */
+.barra-audio {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 22px;
+  background: transparent;
+  cursor: pointer;
+}
+.barra-audio::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(to right, var(--color-accent) var(--avance, 0%), var(--color-surface-2) var(--avance, 0%));
+}
+.barra-audio::-moz-range-track {
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(to right, var(--color-accent) var(--avance, 0%), var(--color-surface-2) var(--avance, 0%));
+}
+.barra-audio::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  margin-top: -6px;
+  border-radius: 999px;
+  background: var(--color-accent);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.25);
+}
+.barra-audio::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--color-accent);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.25);
+}

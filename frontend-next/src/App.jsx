@@ -16,6 +16,9 @@ import PastillaLlamada from './screens/diskordkito/PastillaLlamada'
 import LoginScreen from './screens/LoginScreen'
 import Shell from './screens/Shell'
 import UpdatePrompt from './ui/UpdatePrompt'
+import { ES_KOKITO } from './platform/variante'
+import { ReproductorProvider } from './platform/reproductor'
+import PantallaReproductor from './screens/kokito/escuchar/PantallaReproductor'
 
 export default function App() {
   const { player, checking } = useAuth()
@@ -80,7 +83,15 @@ export default function App() {
                     <Llamada />
                     <LlamadaGrupo />
                     <PastillaLlamada />
-                    <Shell />
+                    {/* El reproductor de audiolibros, por fuera del Shell por lo
+                        mismo que la llamada: sigue sonando al cambiar de
+                        pantalla. De momento solo en /kokito. */}
+                    {ES_KOKITO ? (
+                      <ReproductorProvider>
+                        <Shell />
+                        <PantallaReproductor />
+                      </ReproductorProvider>
+                    ) : <Shell />}
                   </PendientesProvider>
                 </LlamadasProvider>
               </ChatProvider>

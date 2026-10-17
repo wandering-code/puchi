@@ -16,6 +16,8 @@ import PantallaInferior from './PantallaInferior'
 import { useHoja } from './HojaInferior'
 import { HojaSugerencia, Relacionados, useRelacionados } from './Relacionados'
 import { useDeshacerAlta } from './deshacerAlta'
+import { ES_KOKITO } from '../../platform/variante'
+import BloqueAudiolibro from '../kokito/escuchar/BloqueAudiolibro'
 
 // Distribución tomada de la Luniteca nueva de la Puchi actual: portada grande
 // centrada, título y autor debajo, la ficha técnica en una línea y los datos
@@ -223,6 +225,10 @@ export default function BookDetail({
                 : <EditorProgreso entry={entry} onActualizar={onActualizar} />}
             </div>
           )}
+
+          {/* El audiolibro, si lo hay: solo en tu propia ficha (escucharlo
+              depende de tenerlo en tu estantería) y de momento solo en /kokito. */}
+          {ES_KOKITO && !soloLectura && <BloqueAudiolibro bookId={libro.id} abierta={abierta} />}
 
           {/* Lo que se puede hacer con el libro de otro: quedárselo. */}
           {/* La key ata el botón al libro: la ficha ya no se desmonta al

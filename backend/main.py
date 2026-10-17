@@ -23,6 +23,7 @@ from database import (
 from auth import hash_pin, verify_pin, create_token, get_current_player, require_admin, SECRET_KEY, ALGORITHM
 from ws_manager import manager
 import audiolibros
+import audiolibros_escuchar
 
 
 # Caché en memoria (vive mientras el proceso esté arriba, se pierde al
@@ -1341,6 +1342,7 @@ app.mount("/uploads", _SubidasEstaticas(directory=os.path.join(os.path.dirname(_
 # Audiolibros (#58-#71): su propio módulo, para no engordar más este archivo.
 app.include_router(audiolibros.router)
 app.include_router(audiolibros.worker_router)
+app.include_router(audiolibros_escuchar.router)
 
 app.add_middleware(
     CORSMiddleware,
