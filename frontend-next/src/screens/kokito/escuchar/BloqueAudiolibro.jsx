@@ -42,14 +42,20 @@ export default function BloqueAudiolibro({ bookId, abierta }) {
     detalle = `${datos.chapters_total} capítulos · ${duracion(datos.audio_minutes)}`
   }
 
-  function tocar() {
-    if (esteSuena) {
-      r.pantalla.abrir()
-      return
-    }
-    // Lo último de la ficha manda: incluye capítulos recién generados y la
-    // posición guardada desde otro dispositivo.
-    r.abrir(datos, { reproducir: hayAlgo })
+  // Dos gestos distintos, a petición del usuario:
+  // - el bloque entero abre la vista del reproductor (sin arrancar nada que no
+  //   estuviera sonando),
+  // - el play solo pone a sonar, donde se dejó o desde el principio, y deja
+  //   el mini de abajo: no saca de la ficha del libro.
+  // En los dos casos manda lo último que ha llegado aquí, que incluye los
+  // capítulos recién generados y la posición guardada en otro dispositivo.
+  function abrirVista() {
+    if (esteSuena) r.pantalla.abrir()
+    else r.abrir(datos, { reproducir: false })
+  }
+  function play() {
+    if (esteSuena) r.alternar()
+    else r.abrir(datos, { reproducir: true, mostrar: false })
   }
 
   return (
@@ -60,7 +66,7 @@ export default function BloqueAudiolibro({ bookId, abierta }) {
       className="mt-6 w-full"
     >
       <div className="flex items-center gap-3 rounded-xl3 border border-accent-line bg-accent-soft/50 p-3 text-left">
-        <button onClick={tocar} className="flex min-w-0 flex-1 items-center gap-3 text-left">
+        <button onClick={abrirVista} className="flex min-w-0 flex-1 items-center gap-3 text-left">
           <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-surface text-accent shadow-sm">
             {sonando ? <Ecualizador activo /> : <IconAuriculares className="h-5 w-5" />}
           </span>
@@ -74,7 +80,7 @@ export default function BloqueAudiolibro({ bookId, abierta }) {
         {hayAlgo && (
           <motion.button
             whileTap={{ scale: 0.9 }}
-            onClick={() => (esteSuena ? r.alternar() : tocar())}
+            onClick={play}
             aria-label={sonando ? 'Pausa' : guardado ? 'Seguir escuchando' : 'Escuchar'}
             className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent text-on-accent shadow-sm"
           >

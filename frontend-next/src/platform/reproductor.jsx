@@ -74,20 +74,31 @@ export function ReproductorProvider({ children }) {
     if (reproducir) a.play().catch(() => setCargando(false))
   }, [])
 
-  // Abre un audiolibro (datos de /listen) donde se dejó, o por el primer
-  // capítulo que se pueda escuchar.
-  const abrir = useCallback((l, { reproducir = true } = {}) => {
+  // Pone un audiolibro (datos de /listen) donde se dejó, o por el primer
+  // capítulo que se pueda escuchar. `mostrar`: abrir también la pantalla del
+  // reproductor; sin ella, solo aparece el mini de abajo (el play de la ficha
+  // del libro, que el usuario quiere que no le saque de donde está).
+  const abrir = useCallback((l, { reproducir = true, mostrar = true } = {}) => {
     const mismo = actual.current.libro?.id === l.id && actual.current.capId
     if (mismo) {
       setLibro(l)
       if (reproducir && audio.current?.paused) audio.current.play().catch(() => {})
     } else {
       const guardado = l.progress && l.chapters.find(c => c.id === l.progress.chapter_id && c.ready)
-      const c = guardado || l.chapters.find(c => c.ready)
-      if (c) cargar(l, c, guardado ? l.progress.position_s : 0, reproducir)
+      let c = guardado || l.chapters.find(c => c.ready)
+      let pos = guardado ? l.progress.position_s : 0
+      // Se dejó al final de un capítulo: se sigue por el siguiente que esté
+      // listo, o por el principio de este si todavía no hay otro. Si no, el
+      // play terminaba al instante y parecía que no hacía nada.
+      if (c && c.duration_s && pos > c.duration_s - 3) {
+        const i = l.chapters.findIndex(x => x.id === c.id)
+        c = l.chapters.slice(i + 1).find(x => x.ready) || c
+        pos = 0
+      }
+      if (c) cargar(l, c, pos, reproducir)
       else setLibro(l)
     }
-    pantalla.abrir()
+    if (mostrar) pantalla.abrir()
   }, [cargar, pantalla])
 
   const elegir = useCallback((c) => {

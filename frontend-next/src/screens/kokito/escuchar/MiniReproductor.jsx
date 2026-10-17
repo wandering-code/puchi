@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { AnimatePresence, motion, useMotionValue, useTransform } from 'motion/react'
 import { useReproductor } from '../../../platform/reproductor'
 import { Cover } from '../../luniteca/piezas'
@@ -33,12 +34,18 @@ export default function MiniReproductor() {
   const { libro, cap, sonando, cargando, t, dur } = r
   const pct = dur ? Math.min(100, (t / dur) * 100) : 0
 
-  return (
+  // En portal a <body>, como las fichas: dentro del contenedor de la app su
+  // z-index no se mide con el de ellas, y se quedaba debajo de la ficha del
+  // libro justo cuando se le da al play desde ahí.
+  return createPortal(
     <AnimatePresence>
       {visible && (
         <motion.div
           key="mini"
-          className="pointer-events-none fixed inset-x-0 bottom-0 z-40 px-2.5"
+          // z-[52]: por encima de las fichas (PantallaInferior, 50), para que
+          // al dar al play en la ficha de un libro se vea aparecer aquí; por
+          // debajo del reproductor entero (55) y de las hojas (60).
+          className="pointer-events-none fixed inset-x-0 bottom-0 z-[52] px-2.5"
           style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.5rem)' }}
           initial={{ y: 100, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
@@ -51,7 +58,7 @@ export default function MiniReproductor() {
             dragElastic={{ top: 0.05, bottom: 0.9 }}
             onDragEnd={(_, info) => { if (info.offset.y > 50 || info.velocity.y > 500) r.cerrar() }}
             style={{ y, opacity: opacidad }}
-            className="pointer-events-auto relative mx-auto flex h-16 max-w-md items-center gap-3 overflow-hidden rounded-[20px] border border-line bg-surface/95 pl-2 pr-1.5 shadow-[0_8px_28px_rgb(var(--color-sombra)/0.22)] backdrop-blur-xl"
+            className="mini-reproductor pointer-events-auto relative mx-auto flex h-16 max-w-md items-center gap-3 overflow-hidden rounded-[20px] pl-2 pr-1.5"
           >
             <button
               onClick={r.pantalla.abrir}
@@ -90,7 +97,8 @@ export default function MiniReproductor() {
           </motion.div>
         </motion.div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   )
 }
 
