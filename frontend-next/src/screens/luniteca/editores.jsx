@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
-import { FORMATO_LABEL, STATUS_COLOR, STATUS_LABEL, STATUS_ORDER, formatoPrecio, readingDatesLabel, statusPatch } from './shelf'
+import { ES_KOKITO } from '../../platform/variante'
+import Interruptor from '../../ui/Interruptor'
+import { FORMATO_LABEL, etiquetaFormato, STATUS_COLOR, STATUS_LABEL, STATUS_ORDER, formatoPrecio, readingDatesLabel, statusPatch } from './shelf'
 import { IconChevron } from '../../ui/icons'
 import HojaInferior, { useHoja } from './HojaInferior'
 
@@ -302,7 +304,7 @@ export function EditorFormato({ entry, onActualizar }) {
   return (
     <>
       <Pastilla onClick={hoja.abrir}>
-        {formato ? FORMATO_LABEL[formato] : 'Dónde lees'}
+        {etiquetaFormato(entry, ES_KOKITO) || 'Dónde lees'}
       </Pastilla>
       <HojaInferior abierta={hoja.abierta} titulo="Dónde lees este libro" onCerrar={hoja.cerrar}>
         <div className="flex flex-col gap-2 pb-2">
@@ -318,6 +320,20 @@ export function EditorFormato({ entry, onActualizar }) {
             </button>
           ))}
         </div>
+
+        {/* El audio se suma a cualquiera de los tres: se puede leer en papel
+            y escuchar a la vez. Solo en /kokito mientras los audiolibros
+            sean de prueba. */}
+        {ES_KOKITO && (
+          <div className="mt-3 rounded-xl2 border border-line px-4 py-3">
+            <Interruptor
+              puesto={!!entry.listening}
+              onCambiar={v => onActualizar({ listening: v })}
+              etiqueta="También en audiolibro"
+              nota="Lo que escuches avanza tu página, nunca hacia atrás."
+            />
+          </div>
+        )}
 
         {(muestraFisico || muestraEreader) && (
           <div className="mt-4 flex flex-col gap-3 border-t border-line pt-4">

@@ -1415,6 +1415,8 @@ def _migrate():
         # paginación propia del eReader
         "ALTER TABLE personal_shelf ADD COLUMN IF NOT EXISTS reading_format VARCHAR",
         "ALTER TABLE personal_shelf ADD COLUMN IF NOT EXISTS ereader_total_pages INTEGER",
+        # personal_shelf: además se escucha en audiolibro (audiolibros, #67)
+        "ALTER TABLE personal_shelf ADD COLUMN IF NOT EXISTS listening BOOLEAN NOT NULL DEFAULT false",
 
         # personal_shelf: lo que costó esta copia (dato personal, base para
         # estadísticas futuras)
@@ -3132,6 +3134,7 @@ class ShelfUpdateRequest(BaseModel):
     ereader_total_pages: Optional[int]   = None
     price:               Optional[float] = None   # lo que costó esta copia
     spine_url:           Optional[str]   = None   # "" o null → volver al lomo del libro
+    listening:           Optional[bool]  = None   # además en audiolibro (#67); la Puchi anterior no lo manda
 
 @app.get("/shelf/personal")
 def get_personal_shelf(
@@ -3385,6 +3388,7 @@ async def update_personal_shelf(
     if body.reading_format      is not None: entry.reading_format      = body.reading_format or None
     if "ereader_total_pages" in body.model_fields_set: entry.ereader_total_pages = body.ereader_total_pages or None
     if body.price               is not None: entry.price               = body.price
+    if body.listening           is not None: entry.listening           = body.listening
     if body.cover_url          is not None:
         entry.cover_url = await _cache_cover_url(body.cover_url.strip() or None)
         # Misma constancia de autoría que PATCH /books/{id} — elegir una
@@ -3523,6 +3527,9 @@ def get_activity_feed(
     limit: int = 50,
     offset: int = 0,
     player_id: Optional[int] = None,
+    # Solo /kokito lo pide (audiolibros, #67): incluye "empezó a escuchar". La
+    # Puchi de la raíz no sabe pintarlo, así que sin esto no le llega.
+    con_escucha: bool = False,
     db: Session = Depends(get_db),
     current: Player = Depends(get_current_player),
 ):
@@ -3536,6 +3543,8 @@ def get_activity_feed(
         base_query = base_query.filter(Activity.event_type.notin_(CLUB_ACTIVITY_EVENT_TYPES))
     if player_id is not None:
         base_query = base_query.filter(Activity.player_id == player_id)
+    if not con_escucha:
+        base_query = base_query.filter(Activity.event_type != 'listening')
     activities = (
         base_query
         .order_by(Activity.created_at.desc(), Activity.id.desc())
@@ -4203,6 +4212,7 @@ def _shelf_entry_out(e: PersonalShelf, hide_notes=False) -> dict:
         "custom_total_pages": e.custom_total_pages,
         "reading_format":      e.reading_format,
         "ereader_total_pages": e.ereader_total_pages,
+        "listening":           bool(e.listening),
         "folder":             e.folder,
         "rating":             e.rating,
         # Mismo trato que las notas: lo que costó tu copia no es asunto de

@@ -33,7 +33,8 @@ export default function BloqueAudiolibro({ bookId, abierta }) {
   if (esteSuena) {
     detalle = `${r.cap.title} · ${reloj(r.t)} de ${reloj(r.dur)}`
   } else if (guardado) {
-    detalle = `Vas por «${guardado.title}» · ${reloj(datos.progress.position_s)}`
+    const pct = datos.progress.percent != null ? ` · ${Math.round(datos.progress.percent * 100)} % del libro` : ''
+    detalle = `Vas por «${guardado.title}»${pct}`
   } else if (!hayAlgo) {
     detalle = 'Se está preparando: todavía no hay ningún capítulo'
   } else if (datos.chapters_ready < datos.chapters_total) {

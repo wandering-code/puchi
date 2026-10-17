@@ -4,7 +4,7 @@ import { AnimatePresence, motion, useAnimate } from 'motion/react'
 import { api } from '../../platform/api'
 import { useAuth } from '../../platform/auth'
 import {
-  FORMATO_LABEL, paginaDesdeLado, paginaEnLado, readingDatesLabel, statusPatch,
+  FORMATO_LABEL, etiquetaFormato, paginaDesdeLado, paginaEnLado, readingDatesLabel, statusPatch,
   totalEreader, totalFisico, totalPages,
 } from './shelf'
 import { Chip, Cover, EditableRating, MANTENER_MS, ProgressBar, StarRating, StatusChip } from './piezas'
@@ -192,7 +192,7 @@ export default function BookDetail({
                 <StatusChip status={entry.status} />
                 {readingDatesLabel(entry) && <Chip>{readingDatesLabel(entry)}</Chip>}
                 {entry.folder && <Chip>{entry.folder}</Chip>}
-                {entry.reading_format && <Chip>{FORMATO_LABEL[entry.reading_format]}</Chip>}
+                {etiquetaFormato(entry, ES_KOKITO) && <Chip>{etiquetaFormato(entry, ES_KOKITO)}</Chip>}
                 {llevaLecturas && entry.times_read > 1 && <Chip>{entry.times_read} lecturas</Chip>}
               </>
             ) : (

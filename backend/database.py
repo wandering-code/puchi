@@ -166,6 +166,10 @@ class PersonalShelf(Base):
     # de tres a partir de los dos totales (ver shelf.js, paginaEnLado).
     reading_format      = Column(String, nullable=True)
     ereader_total_pages = Column(Integer, nullable=True)
+    # Además se escucha en audiolibro (fase 5 de audiolibros, #67). Aparte de
+    # reading_format a propósito: ese lo usa tal cual la Puchi anterior
+    # (fisico | ereader | ambos), y el audio se suma a cualquiera de los tres.
+    listening           = Column(Boolean, nullable=False, default=False)
     folder             = Column(String, nullable=True)
     rating             = Column(Float, nullable=True) # 0.5-5.0 con medios puntos
     # Lo que costó esta copia. Dato personal (como las notas): no se enseña

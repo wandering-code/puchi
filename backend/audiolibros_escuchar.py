@@ -4,6 +4,11 @@ Esto ya no es solo del admin: puede escuchar un audiolibro quien tenga en su
 estantería alguno de los libros enlazados con él (#60). Solo se enseñan los
 capítulos que se leen, y de cada uno si ya está o si sigue en camino.
 
+Fase 5 (#67): escuchar mueve el progreso de lectura del libro en tu
+estantería, solo hacia delante (nunca deshace lo leído en papel o eReader), y
+empezar a escuchar un libro "Por leer" lo pasa a "Leyendo". Lo eligió el
+usuario.
+
 El audio se pide con la sesión de siempre (la cookie): es el mismo origen, así
 que el <audio> de la app la manda sola, también en iOS. No hace falta un enlace
 firmado aparte, que era lo que se había previsto en el plan.
@@ -18,7 +23,9 @@ from sqlalchemy.orm import Session
 
 from auth import get_current_player
 from audiolibros import _ahora, _estado, _iso, _minutos
+from ws_manager import manager
 from database import (
+    Activity,
     Audiobook, AudiobookBook, AudiobookChapter, AudiobookProgress, Book, PersonalShelf, Player, get_db,
 )
 
@@ -41,6 +48,19 @@ def _con_acceso(db: Session, ab_id: int, p: Player) -> Audiobook:
     if not tiene:
         raise HTTPException(status_code=403, detail="Para escucharlo tienes que tener el libro en tu estantería")
     return ab
+
+
+def _porcentaje(caps: list, cap_id: Optional[int], segundo: float) -> Optional[float]:
+    """Qué parte del libro va escuchada, por palabras: las de los capítulos
+    de antes, más lo que va del actual (por tiempo). Por palabras y no por
+    minutos porque los capítulos aún sin generar no tienen duración."""
+    total = sum(c.words for c in caps)
+    i = next((n for n, c in enumerate(caps) if c.id == cap_id), None)
+    if not total or i is None:
+        return None
+    actual = caps[i]
+    fraccion = min(1.0, segundo / actual.duration_s) if actual.duration_s else 0.0
+    return min(1.0, (sum(c.words for c in caps[:i]) + fraccion * actual.words) / total)
 
 
 def _para_escuchar(db: Session, ab: Audiobook, p: Player) -> dict:
@@ -70,6 +90,7 @@ def _para_escuchar(db: Session, ab: Audiobook, p: Player) -> dict:
         } for i, c in enumerate(caps)],
         "progress": {
             "chapter_id": prog.chapter_id, "position_s": prog.position_s, "updated_at": _iso(prog.updated_at),
+            "percent": _porcentaje(caps, prog.chapter_id, prog.position_s),
         } if prog and prog.chapter_id else None,
     }
 
@@ -116,17 +137,67 @@ class Posicion(BaseModel):
 
 
 @router.put("/{ab_id}/progress")
-def guardar_posicion(ab_id: int, cuerpo: Posicion, db: Session = Depends(get_db),
-                     p: Player = Depends(get_current_player)):
-    _con_acceso(db, ab_id, p)
-    if not db.query(AudiobookChapter.id).filter(AudiobookChapter.id == cuerpo.chapter_id,
-                                                 AudiobookChapter.audiobook_id == ab_id).first():
+async def guardar_posicion(ab_id: int, cuerpo: Posicion, db: Session = Depends(get_db),
+                           p: Player = Depends(get_current_player)):
+    ab = _con_acceso(db, ab_id, p)
+    caps = (db.query(AudiobookChapter)
+            .filter(AudiobookChapter.audiobook_id == ab.id, AudiobookChapter.included.is_(True))
+            .order_by(AudiobookChapter.position).all())
+    if not any(c.id == cuerpo.chapter_id for c in caps):
         raise HTTPException(status_code=404, detail="Ese capítulo no es de este audiolibro")
     prog = (db.query(AudiobookProgress)
-            .filter(AudiobookProgress.player_id == p.id, AudiobookProgress.audiobook_id == ab_id).first())
+            .filter(AudiobookProgress.player_id == p.id, AudiobookProgress.audiobook_id == ab.id).first())
+    primera_vez = prog is None
     if not prog:
-        prog = AudiobookProgress(player_id=p.id, audiobook_id=ab_id)
+        prog = AudiobookProgress(player_id=p.id, audiobook_id=ab.id)
         db.add(prog)
     prog.chapter_id, prog.position_s, prog.updated_at = cuerpo.chapter_id, max(0.0, cuerpo.position_s), _ahora()
+
+    pct = _porcentaje(caps, cuerpo.chapter_id, prog.position_s)
+    estanteria, actividad = _llevar_a_la_estanteria(db, ab, p, pct, primera_vez)
     db.commit()
-    return {"ok": True}
+    # Solo si ha cambiado algo de verdad: esto llega cada 15 s mientras suena,
+    # y cada aviso hace que las Lunitecas abiertas vuelvan a pedir la estantería.
+    if estanteria:
+        await manager.broadcast({"type": "luni_update", "scope": "shelf"})
+    if actividad:
+        await manager.broadcast({"type": "luni_update", "scope": "activity"})
+    return {"ok": True, "percent": pct}
+
+
+def _llevar_a_la_estanteria(db: Session, ab: Audiobook, p: Player, pct: Optional[float],
+                            primera_vez: bool) -> tuple[bool, bool]:
+    """Lo escuchado, en tu copia del libro (la que esté enlazada con este
+    audiolibro; normalmente una). Devuelve si cambió la estantería y si hubo
+    actividad nueva."""
+    libros = [b for (b,) in db.query(AudiobookBook.book_id).filter(AudiobookBook.audiobook_id == ab.id).all()]
+    copias = (db.query(PersonalShelf)
+              .filter(PersonalShelf.player_id == p.id, PersonalShelf.book_id.in_(libros)).all()) if libros else []
+    cambio, actividad = False, False
+    for e in copias:
+        if e.status == "want_to_read":
+            # Empezar a escuchar es empezarlo: pasa a Leyendo como si se
+            # hubiera tocado a mano, con fecha de hoy y el audio marcado.
+            e.status = "reading"
+            e.started_at = e.started_at or _ahora()
+            e.listening = True
+            db.add(Activity(player_id=p.id, book_id=e.book_id, event_type="started"))
+            cambio = actividad = True
+        if primera_vez:
+            if not e.listening:
+                e.listening, cambio = True, True
+            # "Empezó a escuchar", solo en /kokito (ver /activity/feed).
+            db.add(Activity(player_id=p.id, book_id=e.book_id, event_type="listening"))
+            actividad = True
+        # Solo hacia delante, y solo mientras se está leyendo: lo terminado o
+        # dejado no se toca.
+        if pct is None or e.status not in ("reading", "rereading"):
+            continue
+        total = e.custom_total_pages or (e.book.num_pages if e.book else None)
+        if total:
+            pagina = int(pct * total)
+            if pagina > (e.current_page or 0):
+                e.current_page, e.progress, cambio = pagina, min(pagina / total, 1.0), True
+        elif pct > (e.progress or 0) + 0.005:
+            e.progress, cambio = pct, True
+    return cambio, actividad

@@ -9,6 +9,7 @@ import HojaInferior, { useHoja } from '../luniteca/HojaInferior'
 import BookDetail from '../luniteca/BookDetail'
 import { copiarAMiEstanteria } from '../luniteca/shelf'
 import { IconBooks, IconFilter } from '../../ui/icons'
+import { ES_KOKITO } from '../../platform/variante'
 
 // Lo que va pasando en las estanterías de todos: quién añade, empieza o
 // termina un libro.
@@ -32,11 +33,22 @@ function frase({ event_type, book, times_read }) {
   switch (event_type) {
     case 'added':    return <>añadió {titulo} a su estantería</>
     case 'started':  return <>empezó a leer {titulo}</>
+    case 'listening': return <>empezó a escuchar {titulo}</>
     case 'finished': return <>terminó {titulo}{times_read >= 2 && <> por {ORDINALES[times_read] || `${times_read}ª`} vez</>}</>
     case 'proposed': return <>propuso {titulo} al club</>
     case 'voted':    return <>puntuó {titulo} del club</>
     default:         return <>{event_type}</>
   }
+}
+
+// Empezar a escuchar un libro "Por leer" lo pasa a Leyendo, y eso deja dos
+// avisos a la vez: "empezó a leer" (que es lo que ve la Puchi normal) y
+// "empezó a escuchar". En /kokito sobra el primero.
+function sinInicioRepetido(items) {
+  const escuchas = items.filter(a => a.event_type === 'listening')
+  return items.filter(a => a.event_type !== 'started' || !escuchas.some(l =>
+    l.player?.id === a.player?.id && l.book?.id === a.book?.id &&
+    Math.abs(new Date(l.created_at) - new Date(a.created_at)) < 2 * 60000))
 }
 
 function haceCuanto(iso) {
@@ -106,9 +118,12 @@ export default function Actividad() {
   const cargar = useCallback(async (desde = 0, filtrarPor = filtro) => {
     const params = new URLSearchParams({ limit: String(POR_PAGINA), offset: String(desde) })
     if (filtrarPor) params.set('player_id', String(filtrarPor.id))
+    // Solo /kokito pide "empezó a escuchar": la Puchi normal no lo recibe.
+    if (ES_KOKITO) params.set('con_escucha', 'true')
     const datos = await api(`/activity/feed?${params}`)
     setHayMas(datos.has_more)
-    setItems(previos => (desde === 0 ? datos.items : [...(previos || []), ...datos.items]))
+    const nuevos = ES_KOKITO ? sinInicioRepetido(datos.items) : datos.items
+    setItems(previos => (desde === 0 ? nuevos : [...(previos || []), ...nuevos]))
   }, [filtro])
 
   // Cambiar algo de tu propio registro sin salir de aquí. Mismo patrón que en

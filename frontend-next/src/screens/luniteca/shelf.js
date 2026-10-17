@@ -45,6 +45,14 @@ export function totalPages(e) {
 // formato se nota en el otro sin guardar nada aparte.
 export const FORMATO_LABEL = { fisico: 'Físico', ereader: 'eReader', ambos: 'Físico + eReader' }
 
+// El formato con el audiolibro sumado (/kokito, audiolibros #67): "eReader +
+// audio", o "Audiolibro" si solo se escucha. Null si no hay nada.
+export function etiquetaFormato(e, conAudio) {
+  const base = e.reading_format ? FORMATO_LABEL[e.reading_format] : null
+  if (!conAudio || !e.listening) return base
+  return base ? `${base} + audio` : 'Audiolibro'
+}
+
 export function totalFisico(e) {
   return e.custom_total_pages || e.book.num_pages || null
 }
