@@ -14,7 +14,11 @@ function medirDestino(ratio) {
   const marca = document.querySelector('[data-portada-ficha]')
   if (!marca) return null
   const caja = marca.getBoundingClientRect()
-  const panel = document.querySelector('[data-panel="pantalla"]')
+  // El panel DE LA FICHA, el que contiene la marca, y no el primero que haya
+  // en la página: el reproductor de audiolibros (/kokito) también es una
+  // PantallaInferior, vive montado y aparcado abajo desde que arranca la app,
+  // y medirlo a él mandaba el libro volando por encima de la pantalla.
+  const panel = marca.closest('[data-panel="pantalla"]')
   const enReposo = panel ? parseFloat(getComputedStyle(panel).top) || 0 : 0
   const falta = panel ? panel.getBoundingClientRect().top - enReposo : 0
   const alto = ratio ? caja.width / ratio : caja.height
