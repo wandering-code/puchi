@@ -169,27 +169,42 @@ def _crear_capitulos(db: Session, ab: Audiobook, datos: bytes) -> None:
 # ─── Respuestas ──────────────────────────────────────────────────────────────
 
 def _enlaces(db: Session, ids: list[int]) -> dict[int, list[dict]]:
-    """Libros enlazados de cada audiolibro, con en cuántas estanterías están."""
+    """Libros enlazados de cada audiolibro, con quién los tiene."""
     if not ids:
         return {}
-    filas = (
-        db.query(AudiobookBook.audiobook_id, Book, func.count(PersonalShelf.id))
-        .join(Book, Book.id == AudiobookBook.book_id)
-        .outerjoin(PersonalShelf, PersonalShelf.book_id == Book.id)
-        .filter(AudiobookBook.audiobook_id.in_(ids))
-        .group_by(AudiobookBook.audiobook_id, Book.id)
-        .order_by(Book.title)
-        .all()
-    )
+    filas = (db.query(AudiobookBook.audiobook_id, Book)
+             .join(Book, Book.id == AudiobookBook.book_id)
+             .filter(AudiobookBook.audiobook_id.in_(ids))
+             .order_by(Book.title).all())
+    duenos = _duenos(db, [b.id for _, b in filas])
     out: dict[int, list[dict]] = {}
-    for ab_id, b, estanterias in filas:
-        out.setdefault(ab_id, []).append(_libro_out(b, estanterias))
+    for ab_id, b in filas:
+        out.setdefault(ab_id, []).append(_libro_out(b, duenos.get(b.id, [])))
     return out
 
 
-def _libro_out(b: Book, estanterias: int) -> dict:
+def _duenos(db: Session, ids: list[int]) -> dict[int, list[dict]]:
+    """Quién tiene cada libro en su estantería (solo cuentas aprobadas) y en
+    qué estado: es a quien le sirve el audiolibro y, más adelante, a quien
+    se avisará cuando esté listo (#68)."""
+    if not ids:
+        return {}
+    out: dict[int, list[dict]] = {}
+    filas = (db.query(PersonalShelf.book_id, PersonalShelf.status, Player)
+             .join(Player, Player.id == PersonalShelf.player_id)
+             .filter(PersonalShelf.book_id.in_(ids), Player.status == "approved")
+             .order_by(Player.name).all())
+    for book_id, estado, p in filas:
+        out.setdefault(book_id, []).append({
+            "id": p.id, "name": p.name, "color": p.color, "avatar_url": p.avatar_url,
+            "avatar_emoji": p.avatar_emoji, "shelf_status": estado,
+        })
+    return out
+
+
+def _libro_out(b: Book, duenos: list[dict]) -> dict:
     return {"id": b.id, "title": b.title, "author": b.author, "cover_url": b.cover_url,
-            "year": b.year, "shelves": estanterias}
+            "year": b.year, "shelves": len(duenos), "owners": duenos}
 
 
 def _resumen(ab: Audiobook, caps: list[AudiobookChapter], enlaces: list[dict]) -> dict:
@@ -211,6 +226,13 @@ def _detalle(db: Session, ab: Audiobook) -> dict:
             .order_by(AudiobookChapter.position).all())
     out = _resumen(ab, caps, _enlaces(db, [ab.id]).get(ab.id, []))
     out["voices"] = list(VOCES)
+    # Quién podrá escucharlo: todos los que tienen alguno de los libros
+    # enlazados, una vez cada uno aunque tenga dos ediciones.
+    oyentes: dict[int, dict] = {}
+    for libro in out["books"]:
+        for d in libro["owners"]:
+            oyentes.setdefault(d["id"], {**d, "book_title": libro["title"]})
+    out["listeners"] = sorted(oyentes.values(), key=lambda d: d["name"].lower())
     out["chapters"] = [{
         "id": c.id, "position": c.position, "title": c.title, "words": c.words,
         "minutes": _minutos(c.words), "included": c.included,
@@ -412,13 +434,6 @@ def unir_con_siguiente(ab_id: int, cap_id: int, db: Session = Depends(get_db),
 
 # ─── Enlaces con libros del catálogo ─────────────────────────────────────────
 
-def _estanterias(db: Session, ids: list[int]) -> dict[int, int]:
-    if not ids:
-        return {}
-    return dict(db.query(PersonalShelf.book_id, func.count(PersonalShelf.id))
-                .filter(PersonalShelf.book_id.in_(ids)).group_by(PersonalShelf.book_id).all())
-
-
 def _enlazados(db: Session) -> dict[int, tuple[int, str]]:
     """book_id → (audiolibro, título) de todo lo ya enlazado."""
     return {b: (a, t) for b, a, t in
@@ -427,11 +442,11 @@ def _enlazados(db: Session) -> dict[int, tuple[int, str]]:
 
 
 def _con_enlace(db: Session, libros: list[tuple[Book, float]], ab_id: int) -> list[dict]:
-    estanterias = _estanterias(db, [b.id for b, _ in libros])
+    duenos = _duenos(db, [b.id for b, _ in libros])
     enlazados = _enlazados(db)
     out = []
     for b, puntos in libros:
-        d = _libro_out(b, estanterias.get(b.id, 0))
+        d = _libro_out(b, duenos.get(b.id, []))
         d["score"] = round(puntos, 2)
         otro = enlazados.get(b.id)
         d["linked_to"] = {"id": otro[0], "title": otro[1]} if otro and otro[0] != ab_id else None
@@ -479,12 +494,19 @@ def buscar_en_catalogo(ab_id: int, q: str, db: Session = Depends(get_db),
                        _: Player = Depends(require_admin)):
     """Búsqueda en los libros que ya tiene alguien, sin salir a Open Library:
     solo se puede enlazar lo que está en el catálogo."""
-    palabras = [p for p in q.strip().split() if len(p) >= 2]
+    # Sin tildes ni mayúsculas: "aleacion" tiene que encontrar "Aleación de
+    # ley". El catálogo es de unos cientos de libros, así que se compara aquí
+    # en vez de pedirle a Postgres la extensión unaccent.
+    palabras = [p for p in _normal(q).split() if len(p) >= 2]
     if not palabras:
         return []
-    libros = (db.query(Book)
-              .filter(*[or_(Book.title.ilike(f"%{p}%"), Book.author.ilike(f"%{p}%")) for p in palabras])
-              .order_by(Book.title).limit(25).all())
+    libros = []
+    for b in db.query(Book).order_by(Book.title).all():
+        donde = f"{_normal(b.title)} {_normal(b.original_title)} {_normal(b.author)}"
+        if all(p in donde for p in palabras):
+            libros.append(b)
+            if len(libros) == 25:
+                break
     return _con_enlace(db, [(b, 0.0) for b in libros], ab_id)
 
 

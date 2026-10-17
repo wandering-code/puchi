@@ -7,6 +7,7 @@ import HojaInferior from '../../luniteca/HojaInferior'
 import { Cover } from '../../luniteca/piezas'
 import BotonPeligro from '../../../ui/BotonPeligro'
 import Interruptor from '../../../ui/Interruptor'
+import Avatar from '../../../ui/Avatar'
 import {
   IconArrowLeft, IconCheck, IconEnlace, IconPencil, IconSearch, IconUnir, IconX,
 } from '../../../ui/icons'
@@ -189,6 +190,8 @@ export default function FichaAudiolibro({ id, onCerrar, onCambiar, onBorrar }) {
               </motion.button>
             </Seccion>
 
+            <Oyentes oyentes={ab.listeners} />
+
             <Seccion
               titulo="Capítulos"
               nota={`Toca uno para leerlo, renombrarlo o unirlo con el siguiente. ${
@@ -338,8 +341,6 @@ function Seccion({ titulo, nota, children }) {
 }
 
 function FilaLibro({ libro, enlazado = false, children }) {
-  const quien = libro.shelves === 0 ? 'en ninguna estantería'
-    : libro.shelves === 1 ? 'en 1 estantería' : `en ${libro.shelves} estanterías`
   return (
     <div className={`flex items-center gap-3 rounded-xl2 border p-2.5 ${enlazado ? 'border-accent-line bg-accent-soft/50' : 'border-line bg-surface'}`}>
       <Cover url={libro.cover_url} title={libro.title} className="w-10 shrink-0" />
@@ -348,12 +349,71 @@ function FilaLibro({ libro, enlazado = false, children }) {
         <p className="mt-0.5 truncate text-xs text-ink-dim">
           {[libro.author, libro.year].filter(Boolean).join(' · ')}
         </p>
-        <p className="mt-0.5 text-[11px] text-ink-mute">
-          {libro.linked_to ? `Ahora va con «${libro.linked_to.title}»` : quien}
-        </p>
+        {libro.linked_to
+          ? <p className="mt-1 text-[11px] text-ink-mute">Ahora va con «{libro.linked_to.title}»</p>
+          : <Duenos duenos={libro.owners} />}
       </div>
       {children}
     </div>
+  )
+}
+
+// Las caras de quien tiene el libro, solapadas, y sus nombres al lado:
+// "wander y Haig", "Ana, Luis y 3 más".
+function Duenos({ duenos }) {
+  if (!duenos?.length) return <p className="mt-1 text-[11px] text-ink-mute">En ninguna estantería</p>
+  const nombres = duenos.map(d => d.name)
+  const texto = nombres.length <= 2 ? nombres.join(' y ') : `${nombres.slice(0, 2).join(', ')} y ${nombres.length - 2} más`
+  return (
+    <div className="mt-1 flex min-w-0 items-center gap-1.5">
+      <span className="flex shrink-0 -space-x-1.5">
+        {duenos.slice(0, 4).map(d => (
+          <span key={d.id} className="rounded-full ring-2 ring-surface"><Avatar jugador={d} size={18} /></span>
+        ))}
+      </span>
+      <span className="truncate text-[11px] text-ink-mute">{texto}</span>
+    </div>
+  )
+}
+
+// Lo que tiene cada uno en su estantería, de más a menos interesado en
+// escucharlo ahora.
+const ESTADOS = {
+  reading:      { orden: 0, texto: 'Lo está leyendo' },
+  rereading:    { orden: 1, texto: 'Lo está releyendo' },
+  want_to_read: { orden: 2, texto: 'Quiere leerlo' },
+  read:         { orden: 3, texto: 'Ya lo ha leído' },
+  dropped:      { orden: 4, texto: 'Lo dejó a medias' },
+}
+
+function Oyentes({ oyentes }) {
+  const lista = [...(oyentes || [])].sort((a, b) =>
+    (ESTADOS[a.shelf_status]?.orden ?? 9) - (ESTADOS[b.shelf_status]?.orden ?? 9) || a.name.localeCompare(b.name))
+  return (
+    <Seccion
+      titulo="Quién podrá escucharlo"
+      nota="Quien tiene alguno de esos libros en su estantería. Cuando haya avisos, serán para ellos."
+    >
+      {lista.length === 0 ? (
+        <p className="rounded-xl2 border border-dashed border-line px-4 py-3 text-sm text-ink-dim">
+          Nadie todavía: enlaza un libro que tenga alguien.
+        </p>
+      ) : (
+        <div className="overflow-hidden rounded-xl2 border border-line bg-surface">
+          {lista.map((o, i) => (
+            <div key={o.id} className={`flex items-center gap-3 px-3.5 py-2.5 ${i ? 'border-t border-line/70' : ''}`}>
+              <Avatar jugador={o} size={32} />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold leading-tight" style={{ color: o.color || undefined }}>{o.name}</p>
+                <p className="mt-0.5 truncate text-[11px] text-ink-mute">
+                  {ESTADOS[o.shelf_status]?.texto || 'En su estantería'}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </Seccion>
   )
 }
 
