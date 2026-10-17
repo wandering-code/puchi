@@ -24,6 +24,9 @@ frontend/certs/
 backend/uploads/*
 !backend/uploads/.gitkeep
 
+# EPUB de los audiolibros: libros con derechos, nunca al repo (ver audiolibros.py)
+backend/datos/
+
 # Backups de BBDD (datos personales reales de producción) — nunca al repo
 backend/backups/
 

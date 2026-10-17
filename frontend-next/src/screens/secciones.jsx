@@ -1,6 +1,6 @@
 import { esAdmin } from '../platform/auth'
 import { ES_KOKITO } from '../platform/variante'
-import { IconActividad, IconAuriculares, IconBooks, IconChat, IconClub, IconEscudo, IconHome, IconSettings } from '../ui/icons'
+import { IconActividad, IconAudiolibro, IconAuriculares, IconBooks, IconChat, IconClub, IconEscudo, IconHome, IconSettings } from '../ui/icons'
 
 // Las secciones de la app, en un solo sitio.
 //
@@ -92,6 +92,19 @@ export const SECCIONES = [
       'Claro y oscuro. También está a un toque en el pie del menú lateral.',
       'Cómo se separan las secciones de la estantería.',
       'Con qué pantalla quieres que arranque Puchi.',
+    ],
+  },
+  {
+    to: '/audiolibros',
+    label: 'Audiolibros',
+    Icon: IconAudiolibro,
+    soloAdmin: true,
+    soloKokito: true,
+    resumen: 'Preparar audiolibros: el EPUB, sus capítulos y con qué libros van.',
+    puntos: [
+      'Sube el EPUB y salen solos el título, el autor, la portada y los capítulos.',
+      'Lo que no es la historia (cubierta, mapas, créditos…) sale ya apartado; repásalo y decide.',
+      'Enlázalo con los libros del catálogo: quien tenga uno de ellos en su estantería podrá escucharlo.',
     ],
   },
   {

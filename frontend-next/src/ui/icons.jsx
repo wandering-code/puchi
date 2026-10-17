@@ -338,3 +338,26 @@ export const IconAdelante30 = (p) => (
     <text x="11.5" y="15.5" textAnchor="middle" fontSize="7" fill="currentColor" stroke="none" fontFamily="Inter, sans-serif" fontWeight="600">30</text>
   </svg>
 )
+// Audiolibro: un libro abierto con el sonido saliendo de él. La sección del
+// admin donde se preparan.
+export const IconAudiolibro = (p) => (
+  <svg {...base} {...p}>
+    <path d="M12 9.5c-2-1.4-4.8-1.6-8-.8v10c3.2-.8 6-.6 8 .8 2-1.4 4.8-1.6 8-.8v-10c-3.2-.8-6-.6-8 .8z" />
+    <path d="M12 9.5v10" />
+    <path d="M9.5 5.2a3.6 3.6 0 0 1 5 0M7.6 3.2a6.4 6.4 0 0 1 8.8 0" />
+  </svg>
+)
+// Subir un archivo: flecha hacia arriba saliendo de una bandeja.
+export const IconSubir = (p) => (
+  <svg {...base} {...p}><path d="M12 15V4M7.5 8.5 12 4l4.5 4.5" /><path d="M4.5 14v4.5a1.5 1.5 0 0 0 1.5 1.5h12a1.5 1.5 0 0 0 1.5-1.5V14" /></svg>
+)
+// Unir dos capítulos: dos caminos que se juntan en uno, hacia abajo.
+export const IconUnir = (p) => (
+  <svg {...base} {...p}><path d="M6.5 3.5v3.5c0 2.5 5.5 4 5.5 7v6" /><path d="M17.5 3.5v3.5c0 2.5-5.5 4-5.5 7" /><path d="m8.5 17 3.5 3.5 3.5-3.5" /></svg>
+)
+export const IconEnlace = (p) => (
+  <svg {...base} {...p}>
+    <path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1" />
+    <path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" />
+  </svg>
+)

@@ -356,6 +356,70 @@ class ShopItem(Base):
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
+# ─── Audiolibros (issues #58-#71) ─────────────────────────────────────────────
+# Tres tablas nuevas y ninguna columna nueva en las de siempre: la Puchi de
+# producción no se entera de que existen. Las claves foráneas borran en
+# cascada en la propia base de datos (ondelete), para que borrar un libro o un
+# jugador desde el código de siempre no tropiece con un enlace de audiolibro.
+
+class Audiobook(Base):
+    """Un audiolibro: el EPUB que sube el admin, sus capítulos y la voz con la
+    que se va a generar. Es una ficha propia y no una columna de `books`
+    porque un mismo audio sirve a varios libros del catálogo (#60): la misma
+    novela dada de alta con otro título o en otra edición por otra cuenta."""
+    __tablename__ = "audiobooks"
+
+    id          = Column(Integer, primary_key=True, index=True)
+    title       = Column(String, nullable=False)
+    author      = Column(String, nullable=True)
+    # Lo que trae el EPUB como identificador, si es un ISBN: sirve para
+    # proponer enlaces con libros del catálogo que tengan el mismo.
+    isbn        = Column(String, nullable=True)
+    cover_url   = Column(String, nullable=True)
+    # Ruta del EPUB en disco, fuera de uploads/: lo que hay en uploads/ se
+    # sirve a cualquiera, y el EPUB no debe salir de la máquina.
+    epub_path   = Column(String, nullable=False)
+    # sha256 del archivo: subir dos veces el mismo EPUB no crea dos fichas.
+    epub_hash   = Column(String, nullable=False, unique=True)
+    epub_size   = Column(Integer, nullable=True)
+    voice       = Column(String, nullable=False, default="voz_femenina_suave")
+    # borrador → (fase 2) en_cola / generando / listo
+    status      = Column(String, nullable=False, default="borrador")
+    created_by  = Column(Integer, ForeignKey("players.id", ondelete="SET NULL"), nullable=True)
+    created_at  = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class AudiobookChapter(Base):
+    """Un capítulo tal como se va a leer. Se guarda el texto, no solo dónde
+    está en el EPUB: el admin puede renombrar, unir y dejar fuera capítulos, y
+    eso tiene que sobrevivir a que el extractor cambie algún día."""
+    __tablename__ = "audiobook_chapters"
+
+    id           = Column(Integer, primary_key=True, index=True)
+    audiobook_id = Column(Integer, ForeignKey("audiobooks.id", ondelete="CASCADE"), nullable=False, index=True)
+    position     = Column(Integer, nullable=False)   # orden de lectura, desde 0
+    title        = Column(String, nullable=False, default="")
+    text         = Column(Text, nullable=False, default="")
+    words        = Column(Integer, nullable=False, default=0)
+    # Fuera = no se genera ni se escucha (cubierta, índice, créditos…).
+    included     = Column(Boolean, nullable=False, default=True)
+
+
+class AudiobookBook(Base):
+    """Qué libros del catálogo se escuchan con qué audiolibro. Un libro va con
+    un solo audiolibro (si no, no se sabría cuál poner al darle a Escuchar);
+    un audiolibro, con tantos libros como haga falta. Los enlaces los confirma
+    siempre el admin: nunca se crean solos."""
+    __tablename__ = "audiobook_books"
+    __table_args__ = (UniqueConstraint("book_id"),)
+
+    id           = Column(Integer, primary_key=True, index=True)
+    audiobook_id = Column(Integer, ForeignKey("audiobooks.id", ondelete="CASCADE"), nullable=False, index=True)
+    book_id      = Column(Integer, ForeignKey("books.id", ondelete="CASCADE"), nullable=False)
+    linked_by    = Column(Integer, ForeignKey("players.id", ondelete="SET NULL"), nullable=True)
+    linked_at    = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
 def crear_tablas():
     Base.metadata.create_all(bind=engine)
 

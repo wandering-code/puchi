@@ -20,8 +20,9 @@ from database import (
     Channel, ChannelMember, Message, Activity, ShopItem,
     Session as ClubSession,
 )
-from auth import hash_pin, verify_pin, create_token, get_current_player, SECRET_KEY, ALGORITHM
+from auth import hash_pin, verify_pin, create_token, get_current_player, require_admin, SECRET_KEY, ALGORITHM
 from ws_manager import manager
+import audiolibros
 
 
 # Caché en memoria (vive mientras el proceso esté arriba, se pierde al
@@ -1337,6 +1338,8 @@ class _SubidasEstaticas(StaticFiles):
 
 app = FastAPI(title="Luni API")
 app.mount("/uploads", _SubidasEstaticas(directory=os.path.join(os.path.dirname(__file__), 'uploads')), name="uploads")
+# Audiolibros (#58-#71): su propio módulo, para no engordar más este archivo.
+app.include_router(audiolibros.router)
 
 app.add_middleware(
     CORSMiddleware,
@@ -1696,10 +1699,7 @@ def list_players(db: Session = Depends(get_db)):
 
 # ── Administración (app "Admin", solo wander) ────────────────────────────────
 
-def require_admin(current: Player = Depends(get_current_player)) -> Player:
-    if current.name.lower() != "wander":
-        raise HTTPException(status_code=403, detail="Solo el admin puede hacer esto")
-    return current
+# require_admin vive en auth.py: lo usa también audiolibros.py.
 
 def _admin_player_out(p: Player) -> dict:
     return {

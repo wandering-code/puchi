@@ -45,3 +45,9 @@ def get_current_player(luni_token: Optional[str] = Cookie(None)):
         return player
     finally:
         db.close()
+
+
+def require_admin(current: Player = Depends(get_current_player)) -> Player:
+    if current.name.lower() != "wander":
+        raise HTTPException(status_code=403, detail="Solo el admin puede hacer esto")
+    return current
