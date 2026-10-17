@@ -1340,6 +1340,7 @@ app = FastAPI(title="Luni API")
 app.mount("/uploads", _SubidasEstaticas(directory=os.path.join(os.path.dirname(__file__), 'uploads')), name="uploads")
 # Audiolibros (#58-#71): su propio módulo, para no engordar más este archivo.
 app.include_router(audiolibros.router)
+app.include_router(audiolibros.worker_router)
 
 app.add_middleware(
     CORSMiddleware,
@@ -1375,6 +1376,7 @@ async def turn_credentials(player: Player = Depends(get_current_player)):
 def startup():
     crear_tablas()
     _migrate()
+    audiolibros.migrar(engine)
     _seed_channels()
     _seed_shop_items()
 

@@ -28,3 +28,22 @@ export function duracionCorta(minutos) {
 export function capitulos(n) {
   return `${n} ${n === 1 ? 'capítulo' : 'capítulos'}`
 }
+
+// Segundos → "4:05", "1:02:33", para la posición de un reproductor.
+export function reloj(s) {
+  if (!Number.isFinite(s)) return '–:–'
+  const h = Math.floor(s / 3600)
+  const m = Math.floor((s % 3600) / 60)
+  const seg = String(Math.floor(s % 60)).padStart(2, '0')
+  return h ? `${h}:${String(m).padStart(2, '0')}:${seg}` : `${m}:${seg}`
+}
+
+// Cómo se llama cada estado de un audiolibro en pantalla.
+export const ESTADOS_AB = {
+  borrador:  'Borrador',
+  en_cola:   'En cola',
+  generando: 'Generando',
+  pausado:   'Pausado',
+  listo:     'Listo',
+  error:     'Con fallos',
+}

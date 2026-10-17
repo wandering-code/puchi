@@ -6,7 +6,7 @@ import { useCapa } from '../../../platform/capas'
 import { Cover } from '../../luniteca/piezas'
 import { IconAudiolibro, IconEnlace, IconSubir } from '../../../ui/icons'
 import FichaAudiolibro from './FichaAudiolibro'
-import { capitulos, duracion } from './formato'
+import { capitulos, duracion, ESTADOS_AB } from './formato'
 
 // Audiolibros, la parte del admin (fase 1, issue #63 de puchi): subir el
 // EPUB, repasar sus capítulos y enlazarlo con los libros del catálogo. Aquí
@@ -183,7 +183,10 @@ function Tarjeta({ ab, onAbrir }) {
           {capitulos(ab.chapters_included)} · {duracion(ab.minutes)}
         </p>
         <div className="mt-2 flex flex-wrap gap-1.5">
-          <Etiqueta>Borrador</Etiqueta>
+          <Etiqueta aviso={ab.status === 'error'}>
+            {ESTADOS_AB[ab.status] || ab.status}
+            {ab.chapters_ready > 0 && ab.status !== 'listo' && ` · ${ab.chapters_ready}/${ab.chapters_included}`}
+          </Etiqueta>
           {enlazados === 0 ? (
             <Etiqueta aviso>Sin libro enlazado</Etiqueta>
           ) : (

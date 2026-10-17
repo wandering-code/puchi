@@ -9,10 +9,11 @@ import BotonPeligro from '../../../ui/BotonPeligro'
 import Interruptor from '../../../ui/Interruptor'
 import Avatar from '../../../ui/Avatar'
 import {
-  IconArrowLeft, IconCheck, IconEnlace, IconPencil, IconSearch, IconUnir, IconX,
+  IconArrowLeft, IconCheck, IconEnlace, IconPencil, IconRefresh, IconSearch, IconUnir, IconX,
 } from '../../../ui/icons'
 import { Etiqueta, Girando } from './Audiolibros'
-import { duracion, duracionCorta, palabras } from './formato'
+import { duracion, duracionCorta, palabras, reloj } from './formato'
+import { ESTADOS_AB, Generacion, HojaEmpezar, ReproductorCapitulo } from './Generacion'
 
 // La ficha de un audiolibro: sus datos, la voz, con qué libros va y sus
 // capítulos. Todo lo que se toca aquí se guarda al momento; no hay botón de
@@ -32,6 +33,8 @@ export default function FichaAudiolibro({ id, onCerrar, onCambiar, onBorrar }) {
   const hojaCapitulo = useCapa(null)
   const hojaDatos = useCapa()
   const hojaBuscar = useCapa()
+  const hojaEmpezar = useCapa()
+  const [sobremesa, setSobremesa] = useState(null)
 
   // Al cerrar, `id` pasa a null pero la ficha sigue a la vista mientras baja:
   // se queda con el último audiolibro para no vaciarse a mitad de animación.
@@ -42,6 +45,24 @@ export default function FichaAudiolibro({ id, onCerrar, onCambiar, onBorrar }) {
     api(`/audiobooks/${id}`).then(setAb).catch(e => setError(e.message))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
+
+  // Mientras haya algo en marcha, la ficha se pone al día sola: el progreso
+  // lo va contando el sobremesa. Sin nada en marcha, solo se mira cómo está
+  // el sobremesa, más despacio.
+  const enMarcha = ab?.status === 'en_cola' || ab?.status === 'generando'
+  useEffect(() => {
+    if (!id) return
+    let vivo = true
+    const mirar = () => {
+      api('/audiobook-worker/status').then(e => vivo && setSobremesa(e)).catch(() => {})
+      if (enMarcha) {
+        api(`/audiobooks/${id}`).then(f => { if (vivo) { setAb(f); onCambiar(f) } }).catch(() => {})
+      }
+    }
+    mirar()
+    const t = setInterval(mirar, enMarcha ? 4000 : 15000)
+    return () => { vivo = false; clearInterval(t) }
+  }, [id, enMarcha, onCambiar])
 
   const cargarSugerencias = useCallback((abId) => {
     api(`/audiobooks/${abId}/suggestions`).then(setSugerencias).catch(() => setSugerencias([]))
@@ -67,6 +88,8 @@ export default function FichaAudiolibro({ id, onCerrar, onCambiar, onBorrar }) {
   }, [onCambiar, cargarSugerencias])
 
   const cambiar = (cuerpo) => aplicar(api(`/audiobooks/${ab.id}`, { method: 'PATCH', body: cuerpo }))
+  const generar = (inicio) => aplicar(api(`/audiobooks/${ab.id}/generate`, { method: 'POST', body: { start_chapter_id: inicio } }))
+  const pausar = () => aplicar(api(`/audiobooks/${ab.id}/pause`, { method: 'POST' }))
   const enlazar = (libro) => aplicar(
     api(`/audiobooks/${ab.id}/books`, { method: 'POST', body: { book_id: libro.id, move: !!libro.linked_to } }),
     { recargarSugerencias: true },
@@ -139,6 +162,7 @@ export default function FichaAudiolibro({ id, onCerrar, onCambiar, onBorrar }) {
             <Cabecera ab={ab} onEditar={hojaDatos.abrir} />
             <Cifras ab={ab} />
             <Voz ab={ab} onCambiar={voice => cambiar({ voice })} />
+            <Generacion ab={ab} sobremesa={sobremesa} onGenerar={hojaEmpezar.abrir} onPausar={pausar} />
 
             <Seccion
               titulo="Libros"
@@ -252,6 +276,7 @@ export default function FichaAudiolibro({ id, onCerrar, onCambiar, onBorrar }) {
             onAplicar={aplicar}
           />
           <HojaDatos ab={ab} abierta={hojaDatos.abierta} onCerrar={hojaDatos.cerrar} onGuardar={cambiar} />
+          <HojaEmpezar ab={ab} abierta={hojaEmpezar.abierta} onCerrar={hojaEmpezar.cerrar} onGenerar={generar} />
           <HojaBuscar ab={ab} abierta={hojaBuscar.abierta} onCerrar={hojaBuscar.cerrar} onEnlazar={enlazar} />
         </>
       )}
@@ -283,7 +308,7 @@ function Cifras({ ab }) {
   const cifras = [
     { etiqueta: 'Capítulos', valor: ab.chapters_included, nota: ab.chapters_total > ab.chapters_included ? `de ${ab.chapters_total}` : null },
     { etiqueta: 'Duración', valor: duracionCorta(ab.minutes), nota: 'aprox.' },
-    { etiqueta: 'Estado', valor: 'Borrador', nota: 'sin generar' },
+    { etiqueta: 'Estado', valor: ESTADOS_AB[ab.status] || ab.status, nota: ab.chapters_ready ? `${ab.chapters_ready} ${ab.chapters_ready === 1 ? 'listo' : 'listos'}` : (ab.status === 'borrador' ? 'sin generar' : 'aún ninguno listo') },
   ]
   return (
     <div className="mt-6 grid grid-cols-3 gap-2">
@@ -452,10 +477,17 @@ function FilaCapitulo({ cap, primera, onAbrir, onAlternar }) {
           >
             {cap.title}
           </span>
-          <span className="mt-0.5 block text-[11px] tabular-nums text-ink-mute">
-            {cap.included ? duracion(cap.minutes) : 'apartado'}
-            {cap.included && cap.looks_like_extra && ' · ¿es parte de la historia?'}
-          </span>
+          <EstadoCapitulo cap={cap} />
+          {cap.status === 'generando' && (
+            <span className="mt-1.5 block h-0.5 overflow-hidden rounded-full bg-surface-2">
+              <motion.span
+                className="block h-full rounded-full bg-accent"
+                initial={false}
+                animate={{ width: `${cap.progress * 100}%` }}
+                transition={{ type: 'spring', stiffness: 120, damping: 24 }}
+              />
+            </span>
+          )}
         </span>
       </button>
       {/* El círculo: incluido o apartado, de un toque y sin abrir nada. */}
@@ -486,6 +518,36 @@ function FilaCapitulo({ cap, primera, onAbrir, onAlternar }) {
         </motion.span>
       </button>
     </div>
+  )
+}
+
+// Debajo del título de cada capítulo: si está, cuánto dura de verdad; si no,
+// lo que se estima y en qué punto está.
+function EstadoCapitulo({ cap }) {
+  if (!cap.included) {
+    return <span className="mt-0.5 block text-[11px] text-ink-mute">apartado</span>
+  }
+  const base = 'mt-0.5 flex items-center gap-1 text-[11px] tabular-nums'
+  if (cap.status === 'listo') {
+    return (
+      <span className={`${base} text-read`}>
+        <IconCheck className="h-3 w-3" /> {reloj(cap.duration_s)}
+      </span>
+    )
+  }
+  if (cap.status === 'generando') {
+    return <span className={`${base} text-accent`}>Generando · {Math.round(cap.progress * 100)} %</span>
+  }
+  if (cap.status === 'en_cola') {
+    return <span className={`${base} text-ink-dim`}>En cola · {duracion(cap.minutes)} aprox.</span>
+  }
+  if (cap.status === 'error') {
+    return <span className={`${base} text-danger`}>Falló al generarlo</span>
+  }
+  return (
+    <span className={`${base} text-ink-mute`}>
+      {duracion(cap.minutes)} aprox.{cap.looks_like_extra && ' · ¿es parte de la historia?'}
+    </span>
   )
 }
 
@@ -556,8 +618,51 @@ function HojaCapitulo({ ab, cap, abierta, onCerrar, onAplicar }) {
       </div>
 
       <p className="mt-3 px-1 text-xs tabular-nums text-ink-mute">
-        {palabras(cap.words)} · unos {duracion(cap.minutes)}
+        {palabras(cap.words)} · {duracion(cap.minutes)} aprox.
       </p>
+
+      {cap.has_audio && (
+        <div className="mt-4">
+          <p className="mb-2 px-1 text-xs font-semibold uppercase tracking-[0.12em] text-ink-mute">El audio</p>
+          <ReproductorCapitulo
+            src={`/api/audiobooks/${ab.id}/chapters/${cap.id}/audio?v=${encodeURIComponent(cap.generated_at || '')}`}
+            duracionS={cap.duration_s}
+          />
+          <p className="mt-1.5 px-1 text-[11px] text-ink-mute">
+            Generado el {new Date(cap.generated_at).toLocaleString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+            {cap.voice_used && cap.voice_used !== ab.voice && ' · con la otra voz'}
+          </p>
+        </div>
+      )}
+
+      {cap.status === 'error' && cap.error && (
+        <p className="mt-4 rounded-xl2 bg-danger/10 px-3.5 py-2.5 text-xs leading-relaxed text-danger">
+          Falló tres veces: {cap.error}
+        </p>
+      )}
+
+      {cap.included && (cap.status === 'listo' || cap.status === 'error') && (
+        <motion.button
+          whileTap={{ scale: 0.98 }}
+          onClick={() => onAplicar(api(`/audiobooks/${ab.id}/chapters/${cap.id}/regenerate`, { method: 'POST' }))}
+          className="mt-3 flex w-full items-center gap-3 rounded-xl2 border border-line px-4 py-3 text-left active:bg-surface-2"
+        >
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface-2 text-ink-dim">
+            <IconRefresh className="h-4 w-4" />
+          </span>
+          <span className="min-w-0">
+            <span className="block text-sm font-semibold">{cap.status === 'error' ? 'Volver a intentarlo' : 'Regenerar'}</span>
+            <span className="block text-xs text-ink-mute">Pasa el primero de la cola; el audio de ahora se queda hasta que llegue el nuevo</span>
+          </span>
+        </motion.button>
+      )}
+      {(cap.status === 'en_cola' || cap.status === 'generando') && (
+        <p className="mt-3 rounded-xl2 bg-accent-soft/60 px-3.5 py-2.5 text-xs text-ink-dim">
+          {cap.status === 'generando'
+            ? `Generándose ahora: ${Math.round(cap.progress * 100)} %${cap.progress_note ? ` · ${cap.progress_note}` : ''}`
+            : 'En la cola, esperando su turno.'}
+        </p>
+      )}
 
       {siguiente && (
         <motion.button

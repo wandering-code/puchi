@@ -404,6 +404,35 @@ class AudiobookChapter(Base):
     # Fuera = no se genera ni se escucha (cubierta, índice, créditos…).
     included     = Column(Boolean, nullable=False, default=True)
 
+    # ── Generación (fase 2, #64). Columnas añadidas con ALTER en
+    # audiolibros.migrar(): la tabla ya existía cuando llegaron.
+    # pendiente → en_cola → generando → listo | error
+    status        = Column(String, nullable=False, default="pendiente")
+    # Orden de la cola: primero los urgentes (regenerar, o lo que se quedó a
+    # medias), luego por cuándo se pidieron y, dentro de una petición, en el
+    # orden elegido (empezando por el capítulo que diga el admin).
+    priority      = Column(Boolean, nullable=False, default=False)
+    queued_at     = Column(DateTime, nullable=True)
+    queue_index   = Column(Integer, nullable=True)
+    # Quién lo está generando y hasta cuándo se le guarda: si el sobremesa se
+    # apaga a medias, al vencer vuelve a la cola (#59).
+    worker        = Column(String, nullable=True)
+    started_at    = Column(DateTime, nullable=True)
+    lease_until   = Column(DateTime, nullable=True)
+    progress      = Column(Float, nullable=False, default=0.0)
+    progress_note = Column(String, nullable=True)
+    error         = Column(Text, nullable=True)
+    attempts      = Column(Integer, nullable=False, default=0)
+    # El audio: AAC 64k mono (#61), fuera de uploads/.
+    audio_path    = Column(String, nullable=True)
+    duration_s    = Column(Float, nullable=True)
+    audio_size    = Column(Integer, nullable=True)
+    generated_at  = Column(DateTime, nullable=True)
+    # Con qué se hizo: si un día cambia la voz o la receta, se sabe qué
+    # capítulos son de antes.
+    voice_used    = Column(String, nullable=True)
+    recipe        = Column(JSON, nullable=True)
+
 
 class AudiobookBook(Base):
     """Qué libros del catálogo se escuchan con qué audiolibro. Un libro va con

@@ -7,11 +7,20 @@ la fase 2 (#64), con el sobremesa pidiendo trabajo a Puchi (#59).
 
 Todo es solo del admin (`require_admin`). La parte de escuchar, que sí es de
 todos, irá en endpoints aparte.
+
+Fase 2 (#64): la cola de generación. Puchi solo guarda qué capítulos faltan; el
+sobremesa, cuando está encendido, pide trabajo a `/audiobook-worker/…`, genera
+el capítulo con Higgs y sube el audio (decisión #59). Si se apaga a medias, el
+capítulo vuelve a la cola cuando vence su reserva.
 """
 import difflib
 import hashlib
+import hmac
+import json
 import os
 import re
+import shutil
+from datetime import datetime, timedelta, timezone
 import unicodedata
 import uuid
 from io import BytesIO
@@ -19,10 +28,11 @@ from typing import Optional
 
 import ebooklib
 from ebooklib import epub
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Response, UploadFile
+from fastapi.responses import FileResponse
 from PIL import Image
 from pydantic import BaseModel
-from sqlalchemy import func, or_
+from sqlalchemy import func, or_, text as sql
 from sqlalchemy.orm import Session
 
 from auth import require_admin
@@ -30,13 +40,25 @@ from database import Audiobook, AudiobookBook, AudiobookChapter, Book, PersonalS
 from epub_capitulos import extraer_capitulos_epub
 
 router = APIRouter(prefix="/audiobooks", tags=["audiolibros"])
+# El sobremesa, en su propia ruta: con /audiobooks/worker/… chocaría con las
+# rutas de cada audiolibro (/audiobooks/{id}/…).
+worker_router = APIRouter(prefix="/audiobook-worker", tags=["audiolibros"])
 
 _AQUI = os.path.dirname(__file__)
 # Fuera de uploads/ a propósito: uploads/ lo sirve StaticFiles a cualquiera.
 DIR_EPUB = os.path.join(_AQUI, "datos", "audiolibros")
 DIR_PORTADAS = os.path.join(_AQUI, "uploads", "audiobook_covers")
+DIR_AUDIO = os.path.join(DIR_EPUB, "audio")
 os.makedirs(DIR_EPUB, exist_ok=True)
 os.makedirs(DIR_PORTADAS, exist_ok=True)
+os.makedirs(DIR_AUDIO, exist_ok=True)
+# La clave del sobremesa: en un archivo fuera del repo (datos/ no se versiona),
+# o en el entorno. Sin ninguna de las dos, el sobremesa no puede entrar.
+FICHERO_CLAVE = os.path.join(DIR_EPUB, "..", "worker_token.txt")
+# Lo que se le guarda un capítulo al sobremesa sin saber de él. Cada aviso de
+# progreso la renueva; un capítulo largo avisa cada pocos trozos.
+RESERVA = timedelta(minutes=15)
+INTENTOS = 3
 
 MAX_EPUB = 60 * 1024 * 1024
 # Velocidad de lectura de Higgs con la receta de Kokito, pausas incluidas:
@@ -53,6 +75,37 @@ _NO_ES_TEXTO = re.compile(
     r"agradecimientos|mapas?|glosario|dramatis personae|personajes)\b"
 )
 MIN_PALABRAS = 40
+
+
+# ─── Migración ───────────────────────────────────────────────────────────────
+
+_COLUMNAS_FASE_2 = {
+    "status": "VARCHAR NOT NULL DEFAULT 'pendiente'",
+    "priority": "BOOLEAN NOT NULL DEFAULT false",
+    "queued_at": "TIMESTAMP", "queue_index": "INTEGER",
+    "worker": "VARCHAR", "started_at": "TIMESTAMP", "lease_until": "TIMESTAMP",
+    "progress": "FLOAT NOT NULL DEFAULT 0", "progress_note": "VARCHAR",
+    "error": "TEXT", "attempts": "INTEGER NOT NULL DEFAULT 0",
+    "audio_path": "VARCHAR", "duration_s": "FLOAT", "audio_size": "INTEGER",
+    "generated_at": "TIMESTAMP", "voice_used": "VARCHAR", "recipe": "JSON",
+}
+
+
+def migrar(engine) -> None:
+    """Columnas que llegaron después de crear la tabla. Idempotente, como
+    _migrate() de main.py, y solo sobre tablas de audiolibros."""
+    with engine.begin() as con:
+        for col, tipo in _COLUMNAS_FASE_2.items():
+            con.execute(sql(f"ALTER TABLE audiobook_chapters ADD COLUMN IF NOT EXISTS {col} {tipo}"))
+
+
+def _ahora() -> datetime:
+    # Naive en UTC, como el resto de DateTime de la base de datos.
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def _iso(d: Optional[datetime]) -> Optional[str]:
+    return d.replace(tzinfo=timezone.utc).isoformat() if d else None
 
 
 # ─── Utilidades ──────────────────────────────────────────────────────────────
@@ -207,15 +260,34 @@ def _libro_out(b: Book, duenos: list[dict]) -> dict:
             "year": b.year, "shelves": len(duenos), "owners": duenos}
 
 
+def _estado(incluidos: list) -> str:
+    """El estado del audiolibro sale de sus capítulos, no se guarda aparte:
+    así no puede desincronizarse."""
+    estados = [c.status for c in incluidos]
+    if "generando" in estados:
+        return "generando"
+    if "en_cola" in estados:
+        return "en_cola"
+    if incluidos and all(e == "listo" for e in estados):
+        return "listo"
+    if "error" in estados:
+        return "error"
+    return "pausado" if "listo" in estados else "borrador"
+
+
 def _resumen(ab: Audiobook, caps: list[AudiobookChapter], enlaces: list[dict]) -> dict:
     incluidos = [c for c in caps if c.included]
     palabras = sum(c.words for c in incluidos)
+    listos = [c for c in incluidos if c.status == "listo"]
     return {
         "id": ab.id, "title": ab.title, "author": ab.author, "isbn": ab.isbn,
         "cover_url": ab.cover_url or next((l["cover_url"] for l in enlaces if l["cover_url"]), None),
-        "voice": ab.voice, "status": ab.status,
+        "voice": ab.voice, "status": _estado(incluidos),
         "created_at": ab.created_at.isoformat() if ab.created_at else None,
         "chapters_total": len(caps), "chapters_included": len(incluidos),
+        "chapters_ready": len(listos),
+        "chapters_pending": sum(1 for c in incluidos if c.status in ("en_cola", "generando")),
+        "audio_minutes": round(sum(c.duration_s or 0 for c in listos) / 60),
         "words": palabras, "minutes": _minutos(palabras),
         "books": enlaces,
     }
@@ -240,8 +312,28 @@ def _detalle(db: Session, ab: Audiobook) -> dict:
         # delatan en la primera línea.
         "preview": re.sub(r"\s+", " ", c.text[:220]).strip(),
         "looks_like_extra": _parece_no_texto(c.title, c.words),
+        "status": c.status, "progress": c.progress, "progress_note": c.progress_note,
+        "started_at": _iso(c.started_at), "error": c.error, "priority": c.priority,
+        "duration_s": c.duration_s, "generated_at": _iso(c.generated_at), "voice_used": c.voice_used,
+        "has_audio": bool(c.audio_path),
     } for c in caps]
     return out
+
+
+def _borrar_archivo(ruta: Optional[str]) -> None:
+    if ruta and os.path.exists(ruta):
+        os.remove(ruta)
+
+
+def _olvidar_audio(c: AudiobookChapter) -> None:
+    """El texto del capítulo ha cambiado: su audio ya no le corresponde."""
+    _borrar_archivo(c.audio_path)
+    c.audio_path = c.duration_s = c.audio_size = c.generated_at = c.voice_used = c.recipe = None
+    c.status, c.progress, c.progress_note, c.error, c.worker, c.lease_until = "pendiente", 0.0, None, None, None, None
+
+
+def _dir_audio(ab_id: int) -> str:
+    return os.path.join(DIR_AUDIO, str(ab_id))
 
 
 def _cargar(db: Session, ab_id: int) -> Audiobook:
@@ -269,7 +361,8 @@ def listar(db: Session = Depends(get_db), _: Player = Depends(require_admin)):
     ids = [a.id for a in abs_]
     caps: dict[int, list] = {}
     if ids:
-        for c in (db.query(AudiobookChapter.audiobook_id, AudiobookChapter.words, AudiobookChapter.included)
+        for c in (db.query(AudiobookChapter.audiobook_id, AudiobookChapter.words, AudiobookChapter.included,
+                           AudiobookChapter.status, AudiobookChapter.duration_s)
                   .filter(AudiobookChapter.audiobook_id.in_(ids)).all()):
             caps.setdefault(c.audiobook_id, []).append(c)
     enlaces = _enlaces(db, ids)
@@ -361,15 +454,15 @@ def borrar(ab_id: int, db: Session = Depends(get_db), _: Player = Depends(requir
     db.query(AudiobookBook).filter(AudiobookBook.audiobook_id == ab.id).delete()
     db.delete(ab)
     db.commit()
-    if ruta and os.path.exists(ruta):
-        os.remove(ruta)
+    _borrar_archivo(ruta)
     _borrar_portada(portada)
+    shutil.rmtree(_dir_audio(ab_id), ignore_errors=True)
 
 
 @router.post("/{ab_id}/reread")
 def releer(ab_id: int, db: Session = Depends(get_db), _: Player = Depends(require_admin)):
     """Vuelve a sacar los capítulos del EPUB y deshace todo lo editado en
-    ellos. Los enlaces con libros no se tocan."""
+    ellos, también el audio ya generado. Los enlaces con libros no se tocan."""
     ab = _cargar(db, ab_id)
     if not os.path.exists(ab.epub_path):
         raise HTTPException(status_code=410, detail="El EPUB ya no está en el servidor")
@@ -378,6 +471,7 @@ def releer(ab_id: int, db: Session = Depends(get_db), _: Player = Depends(requir
     db.query(AudiobookChapter).filter(AudiobookChapter.audiobook_id == ab.id).delete()
     _crear_capitulos(db, ab, datos)
     db.commit()
+    shutil.rmtree(_dir_audio(ab.id), ignore_errors=True)
     return _detalle(db, ab)
 
 
@@ -405,6 +499,10 @@ def editar_capitulo(ab_id: int, cap_id: int, cambios: CambiosCapitulo, db: Sessi
         c.title = cambios.title.strip()
     if cambios.included is not None:
         c.included = cambios.included
+        # Apartado: sale de la cola. Si se estaba generando, el sobremesa se
+        # entera en su siguiente aviso de progreso y lo deja.
+        if not c.included and c.status in ("en_cola", "generando"):
+            c.status, c.worker, c.lease_until, c.progress = "pendiente", None, None, 0.0
     db.commit()
     return _detalle(db, _cargar(db, ab_id))
 
@@ -420,9 +518,15 @@ def unir_con_siguiente(ab_id: int, cap_id: int, db: Session = Depends(get_db),
            .order_by(AudiobookChapter.position).first())
     if not sig:
         raise HTTPException(status_code=422, detail="Es el último capítulo: no hay ninguno detrás")
+    en_cola = c.status in ("en_cola", "generando") or sig.status in ("en_cola", "generando")
     c.text = f"{c.text}\n\n{sig.text}".strip()
     c.words = c.words + sig.words
     c.included = c.included or sig.included
+    # Con el texto cambiado, ningún audio de los dos vale ya.
+    _olvidar_audio(c)
+    _borrar_archivo(sig.audio_path)
+    if en_cola:
+        c.status, c.queued_at = "en_cola", c.queued_at or _ahora()
     db.delete(sig)
     db.flush()
     for i, cap in enumerate(db.query(AudiobookChapter).filter(AudiobookChapter.audiobook_id == ab_id)
@@ -544,3 +648,234 @@ def desenlazar(ab_id: int, book_id: int, db: Session = Depends(get_db),
                                    AudiobookBook.book_id == book_id).delete()
     db.commit()
     return _detalle(db, ab)
+
+
+# ─── Generación: lo que pide el admin ────────────────────────────────────────
+
+class Generar(BaseModel):
+    # Por dónde empezar. Sin él, por el primero que falte.
+    start_chapter_id: Optional[int] = None
+
+
+@router.post("/{ab_id}/generate")
+def generar(ab_id: int, cuerpo: Generar, db: Session = Depends(get_db), _: Player = Depends(require_admin)):
+    """Pone en cola todo lo que falta, empezando por el capítulo elegido y
+    siguiendo hasta el final; lo de antes de ese capítulo va detrás."""
+    ab = _cargar(db, ab_id)
+    caps = (db.query(AudiobookChapter)
+            .filter(AudiobookChapter.audiobook_id == ab.id, AudiobookChapter.included.is_(True))
+            .order_by(AudiobookChapter.position).all())
+    faltan = [c for c in caps if c.status in ("pendiente", "error")]
+    if not faltan:
+        raise HTTPException(status_code=422, detail="No queda ningún capítulo por generar")
+    inicio = 0
+    if cuerpo.start_chapter_id:
+        elegido = next((c for c in caps if c.id == cuerpo.start_chapter_id), None)
+        if not elegido:
+            raise HTTPException(status_code=422, detail="Ese capítulo no se lee: inclúyelo antes")
+        inicio = elegido.position
+    orden = [c for c in faltan if c.position >= inicio] + [c for c in faltan if c.position < inicio]
+    ahora = _ahora()
+    for i, c in enumerate(orden):
+        c.status, c.queued_at, c.queue_index = "en_cola", ahora, i
+        c.priority, c.error, c.attempts, c.progress, c.progress_note = False, None, 0, 0.0, None
+    db.commit()
+    return _detalle(db, ab)
+
+
+@router.post("/{ab_id}/pause")
+def pausar(ab_id: int, db: Session = Depends(get_db), _: Player = Depends(require_admin)):
+    """Saca de la cola lo que falta y para lo que se esté generando. Lo ya
+    hecho se queda."""
+    ab = _cargar(db, ab_id)
+    for c in (db.query(AudiobookChapter)
+              .filter(AudiobookChapter.audiobook_id == ab.id,
+                      AudiobookChapter.status.in_(("en_cola", "generando"))).all()):
+        c.status, c.worker, c.lease_until, c.progress, c.progress_note = "pendiente", None, None, 0.0, None
+    db.commit()
+    return _detalle(db, ab)
+
+
+@router.post("/{ab_id}/chapters/{cap_id}/regenerate")
+def regenerar(ab_id: int, cap_id: int, db: Session = Depends(get_db), _: Player = Depends(require_admin)):
+    """Vuelve a generar un capítulo, el primero de la cola. Su audio actual se
+    queda hasta que llegue el nuevo."""
+    c = _capitulo(db, ab_id, cap_id)
+    if not c.included:
+        raise HTTPException(status_code=422, detail="Ese capítulo está apartado")
+    if c.status == "generando":
+        raise HTTPException(status_code=409, detail="Ya se está generando")
+    c.status, c.priority, c.queued_at, c.queue_index = "en_cola", True, _ahora(), 0
+    c.error, c.attempts, c.progress, c.progress_note = None, 0, 0.0, None
+    db.commit()
+    return _detalle(db, _cargar(db, ab_id))
+
+
+@router.get("/{ab_id}/chapters/{cap_id}/audio")
+def audio_capitulo(ab_id: int, cap_id: int, db: Session = Depends(get_db), _: Player = Depends(require_admin)):
+    # FileResponse atiende las peticiones por rangos: el reproductor puede
+    # saltar a cualquier punto sin bajarse el capítulo entero.
+    c = _capitulo(db, ab_id, cap_id)
+    if not c.audio_path or not os.path.exists(c.audio_path):
+        raise HTTPException(status_code=404, detail="Este capítulo todavía no tiene audio")
+    return FileResponse(c.audio_path, media_type="audio/mp4",
+                        headers={"Cache-Control": "private, max-age=3600"})
+
+
+# ─── Generación: el sobremesa ────────────────────────────────────────────────
+# Puchi no llama al sobremesa: es él quien pregunta (#59). Así da igual si está
+# encendido o no, y nada se pierde si se apaga a medias.
+
+# El último aviso del sobremesa. En memoria: si Puchi se reinicia, basta con
+# el siguiente aviso (cada 20 s) para volver a saberlo.
+_LATIDO: dict = {}
+EN_LINEA = timedelta(seconds=90)
+
+
+def _clave_valida(token: Optional[str]) -> bool:
+    esperada = os.getenv("AUDIOLIBROS_WORKER_TOKEN", "").strip()
+    if not esperada and os.path.exists(FICHERO_CLAVE):
+        with open(FICHERO_CLAVE, encoding="utf-8") as f:
+            esperada = f.read().strip()
+    return bool(esperada and token and hmac.compare_digest(esperada, token.strip()))
+
+
+def _solo_sobremesa(x_worker_token: Optional[str] = Header(None)) -> None:
+    if not _clave_valida(x_worker_token):
+        raise HTTPException(status_code=401, detail="Clave del sobremesa no válida")
+
+
+def _latir(nombre: str, higgs_ok: bool, capitulo: Optional[int] = None) -> None:
+    _LATIDO.update({"at": _ahora(), "name": nombre, "higgs_ok": higgs_ok, "chapter_id": capitulo})
+
+
+class Pedir(BaseModel):
+    name: str = "sobremesa"
+    # Si Higgs no responde, el sobremesa avisa de que está vivo pero no
+    # recibe trabajo.
+    higgs_ok: bool = True
+
+
+@worker_router.post("/claim")
+def pedir_trabajo(cuerpo: Pedir, db: Session = Depends(get_db), _=Depends(_solo_sobremesa)):
+    _latir(cuerpo.name, cuerpo.higgs_ok)
+    ahora = _ahora()
+    # Lo que se quedó a medias (reserva vencida) vuelve a la cola, delante.
+    for c in (db.query(AudiobookChapter)
+              .filter(AudiobookChapter.status == "generando", AudiobookChapter.lease_until < ahora).all()):
+        c.status, c.priority, c.worker, c.progress_note = "en_cola", True, None, "Se quedó a medias"
+    db.commit()
+    if not cuerpo.higgs_ok:
+        return Response(status_code=204)
+
+    c = (db.query(AudiobookChapter)
+         .filter(AudiobookChapter.status == "en_cola", AudiobookChapter.included.is_(True))
+         .order_by(AudiobookChapter.priority.desc(), AudiobookChapter.queued_at,
+                   AudiobookChapter.queue_index, AudiobookChapter.position)
+         .with_for_update(skip_locked=True).first())
+    if not c:
+        return Response(status_code=204)
+    ab = db.query(Audiobook).filter(Audiobook.id == c.audiobook_id).first()
+    c.status, c.worker, c.started_at, c.lease_until = "generando", cuerpo.name, ahora, ahora + RESERVA
+    c.progress, c.progress_note, c.attempts = 0.0, "Empezando", (c.attempts or 0) + 1
+    db.commit()
+    _latir(cuerpo.name, True, c.id)
+    return {
+        "chapter_id": c.id, "audiobook_id": ab.id, "audiobook_title": ab.title,
+        "title": c.title, "position": c.position, "text": c.text, "voice": ab.voice,
+        "lease_seconds": int(RESERVA.total_seconds()),
+    }
+
+
+class Progreso(BaseModel):
+    name: str = "sobremesa"
+    progress: float
+    note: Optional[str] = None
+
+
+@worker_router.post("/{cap_id}/progress")
+def avisar_progreso(cap_id: int, cuerpo: Progreso, db: Session = Depends(get_db), _=Depends(_solo_sobremesa)):
+    """Renueva la reserva. La respuesta dice si seguir: el admin puede haber
+    pausado, apartado o borrado el capítulo mientras tanto."""
+    _latir(cuerpo.name, True, cap_id)
+    c = db.query(AudiobookChapter).filter(AudiobookChapter.id == cap_id).first()
+    if not c or c.status != "generando" or c.worker != cuerpo.name:
+        return {"continue": False}
+    c.progress = max(0.0, min(1.0, cuerpo.progress))
+    c.progress_note = (cuerpo.note or "")[:200] or None
+    c.lease_until = _ahora() + RESERVA
+    db.commit()
+    return {"continue": True}
+
+
+@worker_router.post("/{cap_id}/result")
+def entregar_audio(
+    cap_id: int,
+    audio: UploadFile = File(...),
+    duration_s: float = Form(...),
+    recipe: str = Form("{}"),
+    name: str = Form("sobremesa"),
+    db: Session = Depends(get_db),
+    _=Depends(_solo_sobremesa),
+):
+    c = db.query(AudiobookChapter).filter(AudiobookChapter.id == cap_id).first()
+    # Solo si sigue siendo suyo y se está generando. Si el admin lo ha pausado,
+    # apartado o le ha cambiado el texto (unir, volver a leer), ese audio ya no
+    # le corresponde o no se quería.
+    if not c or c.worker != name or c.status != "generando":
+        raise HTTPException(status_code=409, detail="Ese capítulo ya no es tuyo")
+    os.makedirs(_dir_audio(c.audiobook_id), exist_ok=True)
+    ruta = os.path.join(_dir_audio(c.audiobook_id), f"{c.id}-{int(datetime.now().timestamp())}.m4a")
+    with open(ruta, "wb") as f:
+        shutil.copyfileobj(audio.file, f)
+    anterior = c.audio_path
+    try:
+        receta = json.loads(recipe or "{}")
+    except ValueError:
+        receta = {}
+    c.audio_path, c.audio_size, c.duration_s = ruta, os.path.getsize(ruta), duration_s
+    c.generated_at, c.voice_used, c.recipe = _ahora(), receta.get("voice"), receta
+    c.status, c.progress, c.progress_note, c.error = "listo", 1.0, None, None
+    c.worker, c.lease_until, c.priority = None, None, False
+    db.commit()
+    if anterior and anterior != ruta:
+        _borrar_archivo(anterior)
+    _latir(name, True)
+    return {"ok": True}
+
+
+class Fallo(BaseModel):
+    name: str = "sobremesa"
+    message: str
+
+
+@worker_router.post("/{cap_id}/error")
+def avisar_error(cap_id: int, cuerpo: Fallo, db: Session = Depends(get_db), _=Depends(_solo_sobremesa)):
+    """Un fallo se reintenta (hasta INTENTOS veces); después se queda en error
+    para que lo mire el admin."""
+    c = db.query(AudiobookChapter).filter(AudiobookChapter.id == cap_id).first()
+    if not c or c.worker != cuerpo.name:
+        return {"ok": True}
+    c.error = cuerpo.message[:2000]
+    c.worker, c.lease_until, c.progress = None, None, 0.0
+    if (c.attempts or 0) >= INTENTOS:
+        c.status, c.progress_note = "error", None
+    else:
+        c.status, c.priority, c.progress_note = "en_cola", True, f"Reintento tras un fallo ({c.attempts}/{INTENTOS})"
+    db.commit()
+    _latir(cuerpo.name, True)
+    return {"ok": True}
+
+
+@worker_router.get("/status")
+def estado_sobremesa(db: Session = Depends(get_db), _: Player = Depends(require_admin)):
+    """Para el admin: si el sobremesa está encendido y qué tiene la cola."""
+    at = _LATIDO.get("at")
+    en_cola = db.query(func.count(AudiobookChapter.id)).filter(AudiobookChapter.status == "en_cola").scalar()
+    return {
+        "online": bool(at and _ahora() - at < EN_LINEA),
+        "last_seen": _iso(at), "name": _LATIDO.get("name"),
+        "higgs_ok": _LATIDO.get("higgs_ok"), "chapter_id": _LATIDO.get("chapter_id"),
+        "queued": en_cola,
+        "token_configured": bool(os.getenv("AUDIOLIBROS_WORKER_TOKEN") or os.path.exists(FICHERO_CLAVE)),
+    }
