@@ -1,9 +1,13 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { useReproductor } from '../../../platform/reproductor'
+import { useCapa } from '../../../platform/capas'
+import HojaInferior from '../../luniteca/HojaInferior'
 import PantallaInferior from '../../luniteca/PantallaInferior'
 import { Cover } from '../../luniteca/piezas'
-import { IconAdelante30, IconAtras30, IconChevron, IconPausa, IconPlay } from '../../../ui/icons'
+import {
+  IconAdelante30, IconAtras30, IconCheck, IconChevron, IconLuna, IconPausa, IconPistaAnterior, IconPistaSiguiente, IconPlay,
+} from '../../../ui/icons'
 import { Girando } from '../audiolibros/Audiolibros'
 import { duracion, reloj } from '../audiolibros/formato'
 
@@ -13,6 +17,8 @@ import { duracion, reloj } from '../audiolibros/formato'
 
 export default function PantallaReproductor() {
   const r = useReproductor()
+  const hojaVelocidad = useCapa()
+  const hojaDormir = useCapa()
   const abierta = !!r?.pantalla.abierta
   const libro = r?.libro
 
@@ -85,7 +91,8 @@ export default function PantallaReproductor() {
                 </div>
               </div>
 
-              <div className="mt-4 flex items-center justify-center gap-8">
+              <div className="mt-4 flex items-center justify-center gap-2.5">
+                <Boton onClick={r.anterior} etiqueta="Capítulo anterior" pequeno><IconPistaAnterior className="h-6 w-6" /></Boton>
                 <Boton onClick={() => r.saltar(-30)} etiqueta="Atrás 30 segundos"><IconAtras30 className="h-8 w-8" /></Boton>
                 <motion.button
                   onClick={r.alternar}
@@ -108,6 +115,17 @@ export default function PantallaReproductor() {
                   </AnimatePresence>
                 </motion.button>
                 <Boton onClick={() => r.saltar(30)} etiqueta="Adelante 30 segundos"><IconAdelante30 className="h-8 w-8" /></Boton>
+                <Boton onClick={r.siguiente} etiqueta="Capítulo siguiente" pequeno><IconPistaSiguiente className="h-6 w-6" /></Boton>
+              </div>
+
+              <div className="mt-5 flex justify-center gap-2">
+                <Pastilla onClick={hojaVelocidad.abrir} activa={r.velocidad !== 1}>
+                  {formatoVelocidad(r.velocidad)}
+                </Pastilla>
+                <Pastilla onClick={hojaDormir.abrir} activa={!!r.temporizador}>
+                  <IconLuna className="h-3.5 w-3.5" />
+                  <TextoDormir temporizador={r.temporizador} />
+                </Pastilla>
               </div>
             </>
           ) : (
@@ -158,17 +176,121 @@ export default function PantallaReproductor() {
           </section>
         </div>
       )}
+
+      <HojaVelocidad abierta={hojaVelocidad.abierta} onCerrar={hojaVelocidad.cerrar} />
+      <HojaDormir abierta={hojaDormir.abierta} onCerrar={hojaDormir.cerrar} />
     </PantallaInferior>
   )
 }
 
-function Boton({ onClick, etiqueta, children }) {
+const VELOCIDADES = [0.8, 0.9, 1, 1.1, 1.2, 1.3, 1.5, 1.75, 2]
+const formatoVelocidad = (v) => `${String(v).replace('.', ',')}×`
+
+function Pastilla({ onClick, activa, children }) {
+  return (
+    <motion.button
+      whileTap={{ scale: 0.95 }}
+      onClick={onClick}
+      className={`inline-flex h-9 items-center gap-1.5 rounded-full border px-3.5 text-[13px] font-semibold tabular-nums transition-colors ${
+        activa ? 'border-accent-line bg-accent-soft text-accent' : 'border-line text-ink-dim'
+      }`}
+    >
+      {children}
+    </motion.button>
+  )
+}
+
+// "Dormir", o lo que le queda: los minutos se cuentan en vivo.
+function TextoDormir({ temporizador }) {
+  const [, tic] = useState(0)
+  useEffect(() => {
+    if (!temporizador?.fin) return
+    const id = setInterval(() => tic(n => n + 1), 15000)
+    return () => clearInterval(id)
+  }, [temporizador])
+  if (!temporizador) return 'Dormir'
+  if (temporizador.capitulo) return 'Al acabar el capítulo'
+  const min = Math.max(1, Math.ceil((temporizador.fin - Date.now()) / 60000))
+  return `Quedan ${min} min`
+}
+
+function HojaVelocidad({ abierta, onCerrar }) {
+  const r = useReproductor()
+  return (
+    <HojaInferior abierta={abierta} titulo="Velocidad" onCerrar={onCerrar}>
+      <p className="mb-4 text-[13px] text-ink-dim">Se queda para la próxima vez, en cualquier dispositivo.</p>
+      <div className="grid grid-cols-3 gap-2 pb-2">
+        {VELOCIDADES.map(v => {
+          const activa = r.velocidad === v
+          return (
+            <motion.button
+              key={v}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => { r.cambiarVelocidad(v); onCerrar() }}
+              className={`h-12 rounded-xl2 border text-[15px] font-semibold tabular-nums transition-colors ${
+                activa ? 'border-accent bg-accent text-on-accent' : 'border-line bg-surface text-ink'
+              }`}
+            >
+              {formatoVelocidad(v)}
+            </motion.button>
+          )
+        })}
+      </div>
+    </HojaInferior>
+  )
+}
+
+const DORMIR = [
+  { valor: 10, texto: '10 minutos' },
+  { valor: 15, texto: '15 minutos' },
+  { valor: 30, texto: '30 minutos' },
+  { valor: 45, texto: '45 minutos' },
+  { valor: 60, texto: '1 hora' },
+  { valor: 'capitulo', texto: 'Al acabar el capítulo' },
+]
+
+function HojaDormir({ abierta, onCerrar }) {
+  const r = useReproductor()
+  const t = r.temporizador
+  const elegido = !t ? null : t.capitulo ? 'capitulo' : 'minutos'
+  return (
+    <HojaInferior abierta={abierta} titulo="Para dormir" onCerrar={onCerrar}>
+      <p className="mb-3 text-[13px] text-ink-dim">Se pone en pausa, y se guarda dónde ibas.</p>
+      <div className="overflow-hidden rounded-xl2 border border-line bg-surface">
+        {DORMIR.map((o, i) => {
+          const activa = o.valor === 'capitulo' ? elegido === 'capitulo' : false
+          return (
+            <button
+              key={o.valor}
+              onClick={() => { r.dormir(o.valor); onCerrar() }}
+              className={`flex w-full items-center justify-between px-4 py-3.5 text-left text-[15px] ${i ? 'border-t border-line/70' : ''} active:bg-surface-2`}
+            >
+              <span className={activa ? 'font-semibold text-accent' : 'text-ink'}>{o.texto}</span>
+              {activa && <IconCheck className="h-4 w-4 text-accent" />}
+            </button>
+          )
+        })}
+      </div>
+      {t && (
+        <motion.button
+          whileTap={{ scale: 0.98 }}
+          onClick={() => { r.dormir(null); onCerrar() }}
+          className="mt-3 h-12 w-full rounded-xl2 border border-line text-sm font-semibold text-ink-dim active:bg-surface-2"
+        >
+          Quitar el temporizador
+        </motion.button>
+      )}
+    </HojaInferior>
+  )
+}
+
+function Boton({ onClick, etiqueta, pequeno = false, children }) {
   return (
     <motion.button
       onClick={onClick}
       aria-label={etiqueta}
       whileTap={{ scale: 0.88 }}
-      className="flex h-14 w-14 items-center justify-center rounded-full text-ink active:bg-surface-2"
+      className={`flex items-center justify-center rounded-full active:bg-surface-2 ${pequeno ? 'h-11 w-11 text-ink-dim' : 'h-14 w-14 text-ink'}`}
     >
       {children}
     </motion.button>

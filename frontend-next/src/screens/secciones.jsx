@@ -1,6 +1,6 @@
 import { esAdmin } from '../platform/auth'
 import { ES_KOKITO } from '../platform/variante'
-import { IconActividad, IconAudiolibro, IconAuriculares, IconBooks, IconChat, IconClub, IconEscudo, IconHome, IconSettings } from '../ui/icons'
+import { IconActividad, IconAudiolibro, IconBooks, IconChat, IconClub, IconEscudo, IconHome, IconSettings } from '../ui/icons'
 
 // Las secciones de la app, en un solo sitio.
 //
@@ -70,17 +70,6 @@ export const SECCIONES = [
     puntos: [
       'Desde aquí entras en la estantería de cualquiera: se ve y se maneja igual que la tuya, pero sin poder tocar nada suyo.',
       'Un libro que le veas a alguien te lo puedes guardar en la tuya sin salir de donde estás.',
-    ],
-  },
-  {
-    to: '/escuchar',
-    label: 'Escuchar',
-    Icon: IconAuriculares,
-    // Solo en /kokito: es la prueba de audiolibros, aún no es para todos.
-    soloKokito: true,
-    resumen: 'Prueba del reproductor de audiolibros.',
-    puntos: [
-      'Un capítulo de prueba para comprobar que se sigue oyendo con la app en segundo plano y la pantalla bloqueada.',
     ],
   },
   {

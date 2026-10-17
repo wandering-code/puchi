@@ -361,3 +361,10 @@ export const IconEnlace = (p) => (
     <path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" />
   </svg>
 )
+// Capítulo anterior / siguiente: el triángulo con su tope.
+export const IconPistaAnterior = (p) => (
+  <svg {...base} {...p}><path d="M6.5 5.5v13" /><path d="M18 6.2v11.6a.7.7 0 0 1-1.1.6l-8.6-5.8a.7.7 0 0 1 0-1.2l8.6-5.8a.7.7 0 0 1 1.1.6z" /></svg>
+)
+export const IconPistaSiguiente = (p) => (
+  <svg {...base} {...p}><path d="M17.5 5.5v13" /><path d="M6 6.2v11.6a.7.7 0 0 0 1.1.6l8.6-5.8a.7.7 0 0 0 0-1.2L7.1 5.6A.7.7 0 0 0 6 6.2z" /></svg>
+)

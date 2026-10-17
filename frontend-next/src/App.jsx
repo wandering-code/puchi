@@ -19,6 +19,7 @@ import UpdatePrompt from './ui/UpdatePrompt'
 import { ES_KOKITO } from './platform/variante'
 import { ReproductorProvider } from './platform/reproductor'
 import PantallaReproductor from './screens/kokito/escuchar/PantallaReproductor'
+import MiniReproductor from './screens/kokito/escuchar/MiniReproductor'
 
 export default function App() {
   const { player, checking } = useAuth()
@@ -89,6 +90,7 @@ export default function App() {
                     {ES_KOKITO ? (
                       <ReproductorProvider>
                         <Shell />
+                        <MiniReproductor />
                         <PantallaReproductor />
                       </ReproductorProvider>
                     ) : <Shell />}

@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from './api'
 import { useCapa } from './capas'
+import { usarPreferencia } from './preferencias'
 
 // El reproductor de audiolibros, uno para toda la app (fase 3, #65 de puchi).
 //
@@ -12,6 +13,10 @@ import { useCapa } from './capas'
 // Por dónde va cada uno se guarda en el servidor (/listen/{id}/progress): al
 // pausar, al cambiar de capítulo, al irse la app a segundo plano y cada 15 s
 // mientras suena.
+//
+// Fase 4 (#66): la velocidad (va con la cuenta, como el resto de gustos), el
+// temporizador para dormir y quitar el reproductor (`cerrar`), que es lo que
+// hace desaparecer el mini reproductor de abajo.
 
 const Ctx = createContext(null)
 const CADA_CUANTO_GUARDAR = 15000
@@ -25,7 +30,13 @@ export function ReproductorProvider({ children }) {
   const [t, setT] = useState(0)
   const [dur, setDur] = useState(0)
   const pantalla = useCapa()
+  const [velocidad, ponerVelocidad] = usarPreferencia('audiolibro_velocidad', 1)
+  // null | { fin: timestamp } | { capitulo: true }
+  const [temporizador, setTemporizador] = useState(null)
+  const temporizadorRef = useRef(null)
+  temporizadorRef.current = temporizador
   const irA = useRef(null)          // segundo al que saltar en cuanto cargue
+  const velocidadRef = useRef(1)
   const guardadoEn = useRef(0)
   const actual = useRef({ libro: null, capId: null })
   actual.current = { libro, capId }
@@ -59,6 +70,7 @@ export function ReproductorProvider({ children }) {
     }
     setLibro(l)
     setCapId(c.id)
+    a.playbackRate = velocidadRef.current
     if (reproducir) a.play().catch(() => setCargando(false))
   }, [])
 
@@ -102,6 +114,29 @@ export function ReproductorProvider({ children }) {
     if (a?.src) a.currentTime = segundo
   }, [])
 
+  const cambiarVelocidad = useCallback((v) => {
+    if (audio.current) audio.current.playbackRate = v
+    ponerVelocidad(v)
+  }, [ponerVelocidad])
+
+  // Para dormir: a los N minutos, o al acabar el capítulo. Se pone en pausa,
+  // no se quita: al despertar se sigue con un toque.
+  const dormir = useCallback((minutos) => {
+    if (minutos === 'capitulo') setTemporizador({ capitulo: true })
+    else if (minutos) setTemporizador({ fin: Date.now() + minutos * 60000 })
+    else setTemporizador(null)
+  }, [])
+
+  // Quitar el reproductor: para, guarda dónde iba y desaparece el de abajo.
+  const cerrar = useCallback(() => {
+    const a = audio.current
+    guardar(true)
+    if (a) { a.pause(); a.removeAttribute('src'); a.load() }
+    setLibro(null); setCapId(null); setSonando(false); setCargando(false)
+    setT(0); setDur(0); setTemporizador(null)
+    if ('mediaSession' in navigator) navigator.mediaSession.metadata = null
+  }, [guardar])
+
   // Al acabar un capítulo, el siguiente que esté listo.
   const siguiente = useCallback(() => {
     const { libro: l, capId: c } = actual.current
@@ -131,6 +166,13 @@ export function ReproductorProvider({ children }) {
     if (!l) return
     try { setLibro(await api(`/listen/${l.id}`)) } catch { /* sigue con lo que había */ }
   }, [])
+
+  // La velocidad guardada con la cuenta llega del servidor después de montar:
+  // se aplica en cuanto está.
+  useEffect(() => {
+    velocidadRef.current = velocidad
+    if (audio.current) audio.current.playbackRate = velocidad
+  }, [velocidad])
 
   // Al irse a segundo plano o cerrar, se guarda dónde iba.
   useEffect(() => {
@@ -175,7 +217,14 @@ export function ReproductorProvider({ children }) {
     onPlaying: () => setCargando(false),
     onPause: () => { setSonando(false); guardar(true) },
     onWaiting: () => setCargando(true),
-    onEnded: () => { setSonando(false); siguiente() },
+    onEnded: () => {
+      setSonando(false)
+      // "Al acabar el capítulo": se queda aquí en vez de pasar al siguiente.
+      if (temporizadorRef.current?.capitulo) { setTemporizador(null); guardar(true); return }
+      siguiente()
+    },
+    // Cambiar de src devuelve la velocidad a 1: se vuelve a poner.
+    onLoadStart: (e) => { e.currentTarget.playbackRate = velocidadRef.current },
     onLoadedMetadata: (e) => {
       const a = e.currentTarget
       if (Number.isFinite(a.duration)) setDur(a.duration)
@@ -185,6 +234,11 @@ export function ReproductorProvider({ children }) {
       const a = e.currentTarget
       setT(a.currentTime)
       guardar()
+      // El temporizador se mira aquí y no con un setTimeout: con la app en
+      // segundo plano iOS congela los temporizadores, pero el audio sigue
+      // avisando de su avance.
+      const fin = temporizadorRef.current?.fin
+      if (fin && Date.now() >= fin) { setTemporizador(null); a.pause() }
       if ('mediaSession' in navigator && Number.isFinite(a.duration)) {
         try {
           navigator.mediaSession.setPositionState({ duration: a.duration, position: a.currentTime, playbackRate: a.playbackRate })
@@ -195,9 +249,11 @@ export function ReproductorProvider({ children }) {
   }
 
   const valor = useMemo(() => ({
-    libro, cap, sonando, cargando, t, dur, pantalla,
+    libro, cap, sonando, cargando, t, dur, pantalla, velocidad, temporizador,
     abrir, elegir, alternar, saltar, buscar, siguiente, anterior, refrescar,
-  }), [libro, cap, sonando, cargando, t, dur, pantalla, abrir, elegir, alternar, saltar, buscar, siguiente, anterior, refrescar])
+    cambiarVelocidad, dormir, cerrar,
+  }), [libro, cap, sonando, cargando, t, dur, pantalla, velocidad, temporizador, abrir, elegir, alternar,
+    saltar, buscar, siguiente, anterior, refrescar, cambiarVelocidad, dormir, cerrar])
 
   return (
     <Ctx.Provider value={valor}>
