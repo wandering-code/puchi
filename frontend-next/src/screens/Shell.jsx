@@ -176,7 +176,12 @@ function TopBar({ titulo, onAbrirMenu }) {
           {/* El commit, aquí a la vista mientras se está trasteando: evita
               entrar en Ajustes cada vez para saber si el móvil ya tiene el
               código nuevo. Fuera cuando esto se asiente. */}
-          <p className="truncate font-mono text-[10px] leading-none text-ink-mute/70">{version}</p>
+          <p className="truncate font-mono text-[10px] leading-none text-ink-mute/70">
+            {/* En /kokito, a la vista siempre: es la misma app que la normal y
+                sin esto no hay forma de saber en cuál se está. */}
+            {ES_KOKITO && <span className="font-sans font-semibold uppercase tracking-[0.14em] text-accent">Kokito · </span>}
+            {version}
+          </p>
         </div>
 
         {/* Solo el avatar: quién eres se ve al desplegar el menú, y el nombre
