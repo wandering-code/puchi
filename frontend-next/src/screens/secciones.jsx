@@ -1,5 +1,6 @@
 import { esAdmin } from '../platform/auth'
-import { IconActividad, IconBooks, IconChat, IconClub, IconEscudo, IconHome, IconSettings } from '../ui/icons'
+import { ES_KOKITO } from '../platform/variante'
+import { IconActividad, IconAuriculares, IconBooks, IconChat, IconClub, IconEscudo, IconHome, IconSettings } from '../ui/icons'
 
 // Las secciones de la app, en un solo sitio.
 //
@@ -72,6 +73,17 @@ export const SECCIONES = [
     ],
   },
   {
+    to: '/escuchar',
+    label: 'Escuchar',
+    Icon: IconAuriculares,
+    // Solo en /kokito: es la prueba de audiolibros, aún no es para todos.
+    soloKokito: true,
+    resumen: 'Prueba del reproductor de audiolibros.',
+    puntos: [
+      'Un capítulo de prueba para comprobar que se sigue oyendo con la app en segundo plano y la pantalla bloqueada.',
+    ],
+  },
+  {
     to: '/ajustes',
     label: 'Ajustes',
     Icon: IconSettings,
@@ -102,7 +114,7 @@ export const SECCIONES = [
 // impide es el backend (`require_club_member` y `require_admin` devuelven 403).
 export function seccionesDe(player) {
   return SECCIONES.filter(s => (
-    (!s.soloClub || !!player?.club_member) && (!s.soloAdmin || esAdmin(player))
+    (!s.soloClub || !!player?.club_member) && (!s.soloAdmin || esAdmin(player)) && (!s.soloKokito || ES_KOKITO)
   ))
 }
 

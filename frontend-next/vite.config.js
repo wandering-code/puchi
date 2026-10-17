@@ -122,7 +122,15 @@ const limpiezaDeCachés = {
   },
 }
 
-export default defineConfig({
+// Dos compilaciones del mismo código (issue de decisión de /kokito):
+// - la de siempre, en la raíz: `npm run build` → dist/
+// - la de prueba de audiolibros, en /kokito/: `npm run build:kokito` → dist-kokito/
+// Misma rama y mismo backend; solo cambian la ruta, la app instalable y que en
+// /kokito se ven las pantallas de audiolibros (ver platform/variante.js).
+export default defineConfig(({ mode }) => {
+  const kokito = mode === 'kokito'
+  const BASE = kokito ? '/kokito/' : '/'
+  return {
   define: {
     __VERSION__: JSON.stringify(selloDeVersion()),
     __FECHA_BUILD__: JSON.stringify(new Date().toISOString().slice(0, 16).replace('T', ' ')),
@@ -131,11 +139,20 @@ export default defineConfig({
   // vive en la raíz. Mientras convivió con la actual (bajo /next/) hacía
   // falta este base para que los dos builds no chocaran pidiendo /assets/…
   // del mismo host; la actual se ha movido a /v1/ y lleva su propio base.
-  base: '/',
+  base: BASE,
+  build: { outDir: kokito ? 'dist-kokito' : 'dist' },
   resolve: {
     alias: { '@': resolve(__dirname, './src') },
   },
   plugins: [
+    // iOS pone bajo el icono lo que diga apple-mobile-web-app-title, no el
+    // manifest: sin esto las dos apps instaladas se llamarían "Puchi".
+    kokito && {
+      name: 'titulo-kokito',
+      transformIndexHtml: (html) => html
+        .replace('content="Puchi" />', 'content="Kokito" />')
+        .replace('<title>Puchi</title>', '<title>Puchi · Kokito</title>'),
+    },
     selloEnCaliente,
     limpiezaDeCachés,
     react(),
@@ -149,17 +166,19 @@ export default defineConfig({
       // aunque el servidor mande Cache-Control: no-cache.
       includeAssets: ['icons/apple-touch-icon.png'],
       manifest: {
-        id: '/',
-        name: 'Puchi',
-        short_name: 'Puchi',
+        // /kokito es otra app instalable para el sistema operativo: su propio
+        // icono en la pantalla de inicio, que no pisa el de la Puchi normal.
+        id: BASE,
+        name: kokito ? 'Puchi · Kokito' : 'Puchi',
+        short_name: kokito ? 'Kokito' : 'Puchi',
         description: 'Puchi',
         // Sin scope correcto, Android abre la PWA y se sale de ella al primer
         // enlace, y iOS la trata como marcador normal. Quien tenga la PWA
         // instalada desde cuando vivía en /next/ tendrá que volver a añadirla
         // a la pantalla de inicio: el id/scope antiguo no se puede migrar in
         // situ, es un icono distinto para el sistema operativo.
-        scope: '/',
-        start_url: '/',
+        scope: BASE,
+        start_url: BASE,
         display: 'standalone',
         orientation: 'portrait',
         background_color: '#f7f3ee',
@@ -185,7 +204,11 @@ export default defineConfig({
         // también la navegación a la Puchi anterior y le servía DE VUELTA el
         // index.html de esta — se detectó recién desplegado, con /v1/
         // devolviendo el login de la app nueva en vez del de la anterior.
-        navigateFallbackDenylist: [/^\/api/, /^\/uploads/, /^\/ws/, /^\/v1/],
+        //
+        // /kokito, por lo mismo que /v1: es otra app con su propio dist, y el
+        // service worker de la raíz no debe servirle su index.html. Solo en
+        // la raíz: en la de /kokito bloquearía sus propias pantallas.
+        navigateFallbackDenylist: [/^\/api/, /^\/uploads/, /^\/ws/, /^\/v1/, ...(kokito ? [] : [/^\/kokito/])],
         // Lo que SÍ se guarda de /uploads: las imágenes de lomos y portadas.
         // No son datos vivos como la estantería: cada nombre es siempre el
         // mismo archivo (uuid al subir, hash de la URL al cachear una
@@ -232,4 +255,5 @@ export default defineConfig({
     }),
     proxy: PROXY,
   },
+}
 })

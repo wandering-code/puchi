@@ -14,6 +14,8 @@ import Diskordkito from './diskordkito/Diskordkito'
 import Actividad from './actividad/Actividad'
 import Perfil from './perfil/Perfil'
 import Admin from './admin/Admin'
+import PruebaAudio from './kokito/PruebaAudio'
+import { ES_KOKITO } from '../platform/variante'
 import Avatar from '../ui/Avatar'
 import Interruptor from '../ui/Interruptor'
 import { SelectorSeparacion, usarSeparacion } from './luniteca/separacion'
@@ -89,6 +91,7 @@ export default function Shell() {
           {/* La estantería de otra persona. Ruta propia para que el gesto de
               volver funcione y el enlace se pueda compartir. */}
           <Route path="/quien/:id"  element={<Perfil />} />
+          {ES_KOKITO && <Route path="/escuchar" element={<PruebaAudio />} />}
           <Route path="/ajustes"    element={<Ajustes />} />
           <Route path="*"           element={<Placeholder title="Nada por aquí" nota="Esa ruta no existe (todavía)." />} />
         </Routes>

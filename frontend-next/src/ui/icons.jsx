@@ -311,3 +311,30 @@ export const IconMicroOff = (p) => (
 export const IconEncoger = (p) => (
   <svg {...base} {...p}><path d="m7 10 5 5 5-5" /><path d="M5 5h14" /></svg>
 )
+// Auriculares: la sección de audiolibros.
+export const IconAuriculares = (p) => (
+  <svg {...base} {...p}>
+    <path d="M4 15v-3a8 8 0 0 1 16 0v3" />
+    <rect x="3.5" y="14" width="4" height="6" rx="1.5" />
+    <rect x="16.5" y="14" width="4" height="6" rx="1.5" />
+  </svg>
+)
+export const IconPlay = (p) => (
+  <svg {...base} {...p}><path d="M8 5.5v13a.8.8 0 0 0 1.2.7l10.4-6.5a.8.8 0 0 0 0-1.4L9.2 4.8A.8.8 0 0 0 8 5.5z" /></svg>
+)
+export const IconPausa = (p) => (
+  <svg {...base} {...p}><path d="M8 5v14M16 5v14" /></svg>
+)
+// Saltar 30 s atrás / adelante: flecha en arco con el número dentro.
+export const IconAtras30 = (p) => (
+  <svg {...base} {...p}>
+    <path d="M4.5 9A8 8 0 1 1 4 13" /><path d="M4.5 4.5V9H9" />
+    <text x="12.5" y="15.5" textAnchor="middle" fontSize="7" fill="currentColor" stroke="none" fontFamily="Inter, sans-serif" fontWeight="600">30</text>
+  </svg>
+)
+export const IconAdelante30 = (p) => (
+  <svg {...base} {...p}>
+    <path d="M19.5 9A8 8 0 1 0 20 13" /><path d="M19.5 4.5V9H15" />
+    <text x="11.5" y="15.5" textAnchor="middle" fontSize="7" fill="currentColor" stroke="none" fontFamily="Inter, sans-serif" fontWeight="600">30</text>
+  </svg>
+)

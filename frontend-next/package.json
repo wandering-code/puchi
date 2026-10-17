@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:kokito": "vite --mode kokito --port 5178",
     "build": "vite build",
+    "build:kokito": "vite build --mode kokito",
     "preview": "vite preview"
   },
   "dependencies": {

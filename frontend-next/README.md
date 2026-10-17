@@ -525,6 +525,37 @@ que desplazaba con `scrollTo()` dio por bueno un scroll que en el móvil no func
 `padding-bottom` (nunca encogiendo la caja), y lo que sube con el teclado se oculta.
 `index.html` lleva `viewport-fit=cover` e `interactive-widget=resizes-content`.
 
+## /kokito: la Puchi de prueba de audiolibros
+
+`puchi.wanderingcode.dev/kokito` es **el mismo código** compilado otra vez con
+`npm run build:kokito` (sale a `dist-kokito/`). Solo cambian la ruta, la app instalable
+(otro icono en la pantalla de inicio, llamado "Kokito") y que ahí se ven las pantallas
+de audiolibros (`platform/variante.js`, `ES_KOKITO`). Misma rama, mismo backend, misma
+base de datos y misma sesión. Lo de audiolibros se pasa a la raíz cuando esté listo.
+
+En local: `npm run dev:kokito` (puerto 5178, en `/kokito/`).
+
+En nginx, dentro del mismo `server` de Puchi:
+
+```nginx
+location /kokito/ {
+    alias /home/wander/apps/puchi/frontend-next/dist-kokito/;
+    try_files $uri $uri/ /kokito/index.html;
+}
+location = /kokito/sw.js {
+    alias /home/wander/apps/puchi/frontend-next/dist-kokito/sw.js;
+    add_header Cache-Control "no-cache, no-store, must-revalidate";
+}
+location = /kokito/manifest.webmanifest {
+    alias /home/wander/apps/puchi/frontend-next/dist-kokito/manifest.webmanifest;
+    add_header Cache-Control "no-cache";
+}
+```
+
+El service worker de la raíz excluye `/kokito` (igual que `/v1`). Un móvil con un
+service worker anterior a ese cambio sigue recibiendo la Puchi de la raíz al abrir
+`/kokito` hasta que acepta la actualización en la Puchi normal.
+
 ## Despliegue (mini PC)
 
 **Desplegada y conviviendo con la Puchi actual** desde el 8/9/2026 (al día el 9/9/2026,

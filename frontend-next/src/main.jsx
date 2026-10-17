@@ -35,7 +35,9 @@ if (import.meta.env.DEV && 'serviceWorker' in navigator) {
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <BrowserRouter>
+    {/* En /kokito las rutas de la app cuelgan de ahí (/kokito/luniteca…);
+        en la raíz BASE_URL es '/' y esto queda en '' como siempre. */}
+    <BrowserRouter basename={import.meta.env.BASE_URL.replace(/\/$/, '')}>
       <AuthProvider>
         <PreferenciasProvider>
           <App />

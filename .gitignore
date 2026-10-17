@@ -5,6 +5,7 @@ __pycache__/
 .env.local
 coturn.env
 dist/
+dist-kokito/
 venv/
 .venv/
 *.egg-info/
