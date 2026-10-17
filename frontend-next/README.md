@@ -538,6 +538,8 @@ En local: `npm run dev:kokito` (puerto 5178, en `/kokito/`).
 En nginx, dentro del mismo `server` de Puchi:
 
 ```nginx
+# Sin la barra final, /kokito caería en `location /` y serviría la Puchi de la raíz.
+location = /kokito { absolute_redirect off; return 301 /kokito/; }
 location /kokito/ {
     alias /home/wander/apps/puchi/frontend-next/dist-kokito/;
     try_files $uri $uri/ /kokito/index.html;
