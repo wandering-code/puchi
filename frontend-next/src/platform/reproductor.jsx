@@ -81,7 +81,9 @@ export function ReproductorProvider({ children }) {
       irA.current = posicion > 1 ? posicion : null
       setT(posicion)
       setDur(c.duration_s || 0)
-      setCargando(true)
+      // Solo si va a sonar: abriéndolo sin play no llega ningún evento que
+      // lo apague, y el botón se quedaba girando.
+      setCargando(reproducir)
     }
     setLibro(l)
     setCapId(c.id)

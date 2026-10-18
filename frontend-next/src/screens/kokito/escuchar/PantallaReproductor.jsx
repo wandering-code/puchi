@@ -6,7 +6,7 @@ import HojaInferior from '../../luniteca/HojaInferior'
 import PantallaInferior from '../../luniteca/PantallaInferior'
 import { Cover } from '../../luniteca/piezas'
 import {
-  IconAdelante30, IconAtras30, IconCheck, IconChevron, IconEreader, IconLuna, IconPausa, IconPistaAnterior, IconPistaSiguiente, IconPlay,
+  IconAdelante30, IconAtras30, IconCheck, IconChevron, IconLibroFisico, IconLuna, IconPausa, IconPistaAnterior, IconPistaSiguiente, IconPlay,
 } from '../../../ui/icons'
 import { Girando } from '../audiolibros/Audiolibros'
 import { duracion, reloj } from '../audiolibros/formato'
@@ -125,15 +125,15 @@ export default function PantallaReproductor() {
                 <Pastilla onClick={hojaVelocidad.abrir} activa={r.velocidad !== 1}>
                   {formatoVelocidad(r.velocidad)}
                 </Pastilla>
-                <Pastilla onClick={hojaDormir.abrir} activa={!!r.temporizador}>
-                  <IconLuna className="h-3.5 w-3.5" />
-                  <TextoDormir temporizador={r.temporizador} />
-                </Pastilla>
+                {/* Solo icono, a petición del usuario: lo que se lee es la
+                    velocidad; el temporizador se ve encendido por el color. */}
+                <PastillaIcono onClick={hojaDormir.abrir} activa={!!r.temporizador} etiqueta={textoDormir(r.temporizador)}>
+                  <IconLuna className="h-4 w-4" />
+                </PastillaIcono>
                 {/* El texto del capítulo, siguiendo lo que suena (#78). */}
-                <Pastilla onClick={() => r.leer(libro, cap.id)}>
-                  <IconEreader className="h-3.5 w-3.5" />
-                  Texto
-                </Pastilla>
+                <PastillaIcono onClick={() => r.leer(libro, cap.id)} etiqueta="Leer el texto">
+                  <IconLibroFisico className="h-4 w-4" />
+                </PastillaIcono>
               </div>
             </>
           ) : (
@@ -202,9 +202,9 @@ export default function PantallaReproductor() {
 }
 
 const VELOCIDADES = [0.8, 0.9, 1, 1.1, 1.2, 1.3, 1.5, 1.75, 2]
-const formatoVelocidad = (v) => `${String(v).replace('.', ',')}×`
+export const formatoVelocidad = (v) => `${String(v).replace('.', ',')}×`
 
-function Pastilla({ onClick, activa, children }) {
+export function Pastilla({ onClick, activa, children }) {
   return (
     <motion.button
       whileTap={{ scale: 0.95 }}
@@ -218,21 +218,31 @@ function Pastilla({ onClick, activa, children }) {
   )
 }
 
-// "Dormir", o lo que le queda: los minutos se cuentan en vivo.
-function TextoDormir({ temporizador }) {
-  const [, tic] = useState(0)
-  useEffect(() => {
-    if (!temporizador?.fin) return
-    const id = setInterval(() => tic(n => n + 1), 15000)
-    return () => clearInterval(id)
-  }, [temporizador])
-  if (!temporizador) return 'Dormir'
-  if (temporizador.capitulo) return 'Al acabar el capítulo'
-  const min = Math.max(1, Math.ceil((temporizador.fin - Date.now()) / 60000))
-  return `Quedan ${min} min`
+export function PastillaIcono({ onClick, activa = false, etiqueta, children }) {
+  return (
+    <motion.button
+      whileTap={{ scale: 0.92 }}
+      onClick={onClick}
+      aria-label={etiqueta}
+      title={etiqueta}
+      className={`flex h-9 w-9 items-center justify-center rounded-full border transition-colors ${
+        activa ? 'border-accent-line bg-accent-soft text-accent' : 'border-line text-ink-dim'
+      }`}
+    >
+      {children}
+    </motion.button>
+  )
 }
 
-function HojaVelocidad({ abierta, onCerrar }) {
+// Para el lector de pantalla: "Dormir", o lo que le queda.
+export function textoDormir(temporizador) {
+  if (!temporizador) return 'Dormir'
+  if (temporizador.capitulo) return 'Dormir: al acabar el capítulo'
+  const min = Math.max(1, Math.ceil((temporizador.fin - Date.now()) / 60000))
+  return `Dormir: quedan ${min} min`
+}
+
+export function HojaVelocidad({ abierta, onCerrar }) {
   const r = useReproductor()
   return (
     <HojaInferior abierta={abierta} titulo="Velocidad" onCerrar={onCerrar}>
@@ -267,7 +277,7 @@ const DORMIR = [
   { valor: 'capitulo', texto: 'Al acabar el capítulo' },
 ]
 
-function HojaDormir({ abierta, onCerrar }) {
+export function HojaDormir({ abierta, onCerrar }) {
   const r = useReproductor()
   const t = r.temporizador
   const elegido = !t ? null : t.capitulo ? 'capitulo' : 'minutos'

@@ -4,7 +4,7 @@ import { api } from '../../../platform/api'
 import { useCapa } from '../../../platform/capas'
 import HojaInferior from '../../luniteca/HojaInferior'
 import { useReproductor } from '../../../platform/reproductor'
-import { IconAuriculares, IconCheck, IconEreader as IconLibroAbierto, IconPausa, IconPlay, IconX } from '../../../ui/icons'
+import { IconAuriculares, IconCheck, IconEreader as IconLibroAbierto, IconLibroFisico, IconPausa, IconPlay, IconX } from '../../../ui/icons'
 import { Girando } from '../audiolibros/Audiolibros'
 import { duracion, reloj } from '../audiolibros/formato'
 import { Ecualizador } from './PantallaReproductor'
@@ -40,38 +40,38 @@ export default function BloqueAudiolibro({ bookId, abierta }) {
   return (
     <>
       <AnimatePresence initial={false} mode="wait">
-        {hayAudio && <Escuchar key="audio" r={r} datos={datos} pedido={peticion?.requested} />}
+        {hayAudio && <Escuchar key="audio" r={r} datos={datos} pedido={peticion?.requested} leer={hayTexto} />}
         {hayPeticion && <Peticion key="peticion" bookId={bookId} peticion={peticion} onCambio={setPeticion} />}
       </AnimatePresence>
-      {hayTexto && <Leer r={r} datos={datos} />}
+      {/* Sin audio que enseñar, el libro aparte, discreto a la derecha. */}
+      {hayTexto && !hayAudio && (
+        <div className="mt-2 flex w-full justify-end">
+          <BotonLeer r={r} datos={datos} />
+        </div>
+      )}
     </>
   )
 }
 
-// Leer el libro en la app (#78).
-function Leer({ r, datos }) {
+// Leer el libro en la app (#78): solo un icono, a petición del usuario, para
+// no quitarle protagonismo al audiolibro.
+function BotonLeer({ r, datos }) {
   const leido = datos.read && datos.chapters.find(c => c.id === datos.read.chapter_id)
+  const etiqueta = leido ? `Seguir leyendo: «${leido.title}»` : 'Leer el libro aquí'
   return (
     <motion.button
-      initial={{ opacity: 0, y: 6 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={SUAVE}
-      whileTap={{ scale: 0.98 }}
+      whileTap={{ scale: 0.9 }}
       onClick={() => r.leer(datos)}
-      className="mt-2 flex w-full items-center gap-3 rounded-xl2 border border-line bg-surface px-3 py-2.5 text-left active:bg-surface-2"
+      aria-label={etiqueta}
+      title={etiqueta}
+      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-accent-line bg-surface text-accent"
     >
-      <IconLibroAbierto className="h-4 w-4 shrink-0 text-ink-mute" />
-      <span className="min-w-0 flex-1">
-        <span className="block text-[13px] font-semibold leading-tight">{leido ? 'Seguir leyendo aquí' : 'Leer aquí'}</span>
-        <span className="block truncate text-[11px] text-ink-mute">
-          {leido ? `Vas por «${leido.title}»` : datos.chapters.some(c => c.synced) ? 'El texto del libro; toca una frase y suena desde ahí' : 'El texto del libro, capítulo a capítulo'}
-        </span>
-      </span>
+      <IconLibroFisico className="h-5 w-5" />
     </motion.button>
   )
 }
 
-function Escuchar({ r, datos, pedido }) {
+function Escuchar({ r, datos, pedido, leer }) {
   const esteSuena = r.libro?.id === datos.id && r.cap
   const sonando = esteSuena && r.sonando
   const hayAlgo = datos.chapters_ready > 0
@@ -144,6 +144,7 @@ function Escuchar({ r, datos, pedido }) {
             <span className="mt-0.5 block truncate text-xs text-ink-dim">{detalle}</span>
           </span>
         </button>
+        {leer && <BotonLeer r={r} datos={datos} />}
         {hayAlgo && (
           <motion.button
             whileTap={{ scale: 0.9 }}
