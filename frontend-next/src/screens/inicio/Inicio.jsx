@@ -1,43 +1,159 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { motion } from 'motion/react'
+import { AnimatePresence, motion } from 'motion/react'
 import { useAuth } from '../../platform/auth'
 import { usarPreferencia } from '../../platform/preferencias'
+import { CON_AUDIOLIBROS } from '../../platform/variante'
 import { seccionesDe } from '../secciones'
-import { IconArrow, IconInfo, IconPaw, IconRefresh, IconSettings } from '../../ui/icons'
+import {
+  IconActividad, IconArrow, IconAuriculares, IconBooks, IconCampana, IconChat, IconChevron, IconClub, IconPaw,
+  IconSettings,
+} from '../../ui/icons'
 
-// Mientras conviven las dos Puchis, el enlace a la anterior es fijo: cuando
-// se cambien las tornas (esta pase a ser la de siempre y la vieja se mude a
-// /v1) solo hay que tocar esta constante.
+// La pantalla de Inicio (rediseñada el 2026-10-18 a petición del usuario):
+// antes lo contaba todo de golpe y era demasiado. Ahora es un saludo corto y
+// un bloque por cada parte de la app, plegado: quien quiera conocerla lo
+// despliega, y quien no, ve de un vistazo lo que hay.
+//
+// Está escrita como la guía de una app de verdad, para quien la usa: nada de
+// lo que hace el admin por detrás (preparar audiolibros, aprobar cuentas…).
+//
+// Qué bloques salen depende de lo que puede ver cada uno (`seccionesDe`, el
+// mismo filtro que el menú): a quien no es del club no se le habla del club.
+
 const URL_PUCHI_ANTERIOR = 'https://puchi.wanderingcode.dev/v1'
 
-// La pantalla de Inicio: una vuelta rápida por lo que hay, para quien acaba de
-// entrar por primera vez y no sabe por dónde tirar.
-//
-// Lo que se cuenta sale de `screens/secciones.jsx`, que es también de donde
-// salen las entradas del menú — así la guía no puede hablar de una sección que
-// no exista, ni olvidarse de una nueva. Y por lo mismo **a quien no es del
-// club no se le menciona el club**: `seccionesDe` ya filtra por permiso, así
-// que la guía no tiene que acordarse de esconder nada.
-//
-// Quien ya se la sabe no tiene por qué pasar por aquí cada vez: en Ajustes se
-// elige con qué pantalla arranca Puchi, y esta pantalla lo dice al final para
-// que se sepa que se puede.
+// `ruta`: la sección a la que lleva el bloque, y la que decide si se enseña.
+// Los bloques sin ruta (instalarla, trucos) los ve todo el mundo.
+const BLOQUES = [
+  {
+    id: 'luniteca',
+    ruta: '/luniteca',
+    Icon: IconBooks,
+    titulo: 'Luniteca, tu estantería',
+    resumen: 'Todos tus libros: los que lees, los que leíste y los que te esperan.',
+    ir: 'Ir a mi estantería',
+    funciones: [
+      ['Añade tus libros', 'Búscalos por título o autor, escanea el código de barras con la cámara o tráete tu biblioteca entera desde Goodreads o una hoja de cálculo. Y si no aparece, a mano.'],
+      ['Lleva la cuenta', 'Márcalos como «por leer», «leyendo», «leído» o «dropeado», con sus fechas, y apunta por qué página vas: en papel, en eReader o en los dos.'],
+      ['Puntúa y apunta', 'Ponle nota a cada libro y escribe tus impresiones. Lo que te costó y tus notas son solo tuyos.'],
+      ['Mírala a tu manera', 'En cuadrícula, en lista o como una balda de verdad, con los libros de canto. Busca, filtra y ordena como quieras.'],
+      ['Pide un audiolibro', 'Desde la ficha de cualquier libro de tu estantería: dinos por dónde quieres empezar y te avisamos en cuanto esté.', 'audio'],
+      ['Léelo en la app', 'Si un libro tiene audiolibro, puedes leer su texto aquí mismo. Toca una frase y empieza a sonar desde ahí; mientras escuchas, el texto te sigue.', 'audio'],
+    ],
+  },
+  {
+    id: 'escuchar',
+    ruta: '/escuchar',
+    Icon: IconAuriculares,
+    titulo: 'Escuchar',
+    resumen: 'Los audiolibros de tus libros, con un reproductor pensado para ellos.',
+    ir: 'Ir a Escuchar',
+    funciones: [
+      ['Sigue donde lo dejaste', 'En el móvil o en el ordenador: lo que escuchas se guarda en tu cuenta. Y lo escuchado avanza solo la página en tu estantería.'],
+      ['Del papel al audio', 'Si vas leyendo el libro por otro lado, te proponemos seguir escuchando justo desde tu página.'],
+      ['Velocidad y temporizador', 'Escucha más rápido o más despacio, y pon un temporizador para dormirte sin perder el punto.'],
+      ['Sin conexión', 'Descarga los capítulos y escúchalos sin cobertura, en el avión o en el metro.'],
+      ['Descubre más', 'Los audiolibros que hay aunque no tengas el libro: añádelo a tu estantería con un toque y a escuchar.'],
+    ],
+  },
+  {
+    id: 'club',
+    ruta: '/club',
+    Icon: IconClub,
+    titulo: 'Club de lectura',
+    resumen: 'Lo que leemos juntos, al ritmo de las quedadas.',
+    ir: 'Ir al club',
+    funciones: [
+      ['La lectura actual', 'Qué toca leer ahora y hasta qué página hay que llegar para la próxima quedada.'],
+      ['Propón libros', 'Cualquiera del club puede proponer el siguiente.'],
+      ['Las sesiones', 'De cada libro, cuándo nos vimos, qué parte tocaba y qué se dijo.'],
+      ['Las notas del club', 'Lo que le puso cada uno a cada libro, y la media.'],
+    ],
+  },
+  {
+    id: 'diskordkito',
+    ruta: '/diskordkito',
+    Icon: IconChat,
+    titulo: 'Diskordkito',
+    resumen: 'Para hablar con el club, en grupo o de tú a tú.',
+    ir: 'Ir a Diskordkito',
+    funciones: [
+      ['Quién está', 'Arriba ves quién está conectado; toca a alguien y habláis.'],
+      ['Canal y privados', 'El canal de todo el club y una conversación aparte con cada uno.'],
+      ['Llamadas', 'De voz o con vídeo, con una persona o con varias a la vez.'],
+      ['Te enteras estés donde estés', 'Los mensajes y las llamadas te avisan en cualquier pantalla de la app.'],
+    ],
+  },
+  {
+    id: 'actividad',
+    ruta: '/actividad',
+    Icon: IconActividad,
+    titulo: 'Actividad',
+    resumen: 'Qué están leyendo, terminando y puntuando los demás.',
+    ir: 'Ver la actividad',
+    funciones: [
+      ['Lo último de todos', 'Quién empieza un libro, quién lo termina y qué nota le pone.'],
+      ['Las estanterías de los demás', 'Entra en la de cualquiera y mírala como la tuya.'],
+      ['Llévate ideas', 'Un libro que te llame la atención, a tu estantería con un toque.'],
+    ],
+  },
+  {
+    id: 'avisos',
+    Icon: IconCampana,
+    titulo: 'Avisos',
+    resumen: 'Lo que pasa mientras no estás mirando.',
+    funciones: [
+      ['La campana', 'Arriba a la derecha: tus audiolibros listos, capítulos nuevos y respuestas a lo que pediste.', 'audio'],
+      ['En tu móvil', 'Actívalos en Ajustes y te llegarán como notificación, aunque no tengas la app abierta.', 'audio'],
+      ['Novedades', 'Cuando haya algo nuevo en Puchi, te lo contaremos al entrar.'],
+    ],
+  },
+  {
+    id: 'ajustes',
+    ruta: '/ajustes',
+    Icon: IconSettings,
+    titulo: 'Ajustes',
+    resumen: 'Puchi a tu gusto.',
+    ir: 'Ir a Ajustes',
+    funciones: [
+      ['Claro u oscuro', 'También a un toque desde el pie del menú.'],
+      ['Con qué pantalla arranca', 'Si prefieres entrar directamente a tu estantería, o a cualquier otra.'],
+      ['Va contigo', 'Tus gustos se guardan en tu cuenta: los eliges una vez y los ves igual en todos tus dispositivos.'],
+    ],
+  },
+  {
+    id: 'movil',
+    Icon: IconPaw,
+    titulo: 'Puchi en tu móvil',
+    resumen: 'Instálala y se abre como una app más.',
+    funciones: [
+      ['Instálala', 'Desde el navegador del móvil: menú → «Añadir a pantalla de inicio». Se abre a pantalla completa, como cualquier app.'],
+      ['¿Ya la tenías de antes?', 'Si la añadiste antes de que cambiara la dirección, quita el icono y vuelve a añadirla desde aquí: el viejo puede no abrirse o enseñar una versión antigua.'],
+      ['Gestos', 'El menú se abre con el botón de arriba a la izquierda y se cierra arrastrándolo. Las hojas que suben desde abajo se cierran arrastrando el asa o con el gesto de volver.'],
+    ],
+  },
+]
 
 export default function Inicio() {
   const { player } = useAuth()
   const [inicio] = usarPreferencia('inicio', '/')
-  // La de Inicio no se enseña en su propia guía: ya estás en ella.
-  const secciones = useMemo(
-    () => seccionesDe(player).filter(s => s.to !== '/'),
-    [player],
-  )
+  const [abiertos, setAbiertos] = useState(() => new Set())
+  const visibles = useMemo(() => {
+    const rutas = new Set(seccionesDe(player).map(s => s.to))
+    return BLOQUES
+      .filter(b => !b.ruta || rutas.has(b.ruta))
+      .map(b => ({ ...b, funciones: b.funciones.filter(([, , solo]) => solo !== 'audio' || CON_AUDIOLIBROS) }))
+  }, [player])
+
+  const alternar = id => setAbiertos(prev => {
+    const s = new Set(prev)
+    s.has(id) ? s.delete(id) : s.add(id)
+    return s
+  })
 
   return (
     <div className="py-6">
-      <AvisoPuchiNueva />
-      <AvisoReinstalar />
-
       <header className="mb-6">
         <div className="flex items-center gap-2.5">
           <IconPaw className="h-7 w-7 shrink-0 text-accent" />
@@ -46,163 +162,107 @@ export default function Inicio() {
           </h2>
         </div>
         <p className="mt-2.5 max-w-prose text-[15px] leading-relaxed text-ink-dim">
-          Puchi es donde llevas tus libros: lo que estás leyendo, lo que ya leíste y lo que te
-          espera. Esto es un repaso rápido de lo que hay; no hace falta leerlo entero para
-          empezar.
+          {/* El club, solo a quien es del club: a los demás ni se les nombra. */}
+          {player?.club_member
+            ? 'Puchi es tu biblioteca: lo que lees, lo que escuchas y lo que compartes con el club.'
+            : 'Puchi es tu biblioteca: lo que lees, lo que escuchas y lo que leen los demás.'}
+        </p>
+        <p className="mt-2 max-w-prose text-[13px] leading-relaxed text-ink-mute">
+          ¿Quieres conocerla mejor? Despliega cualquier apartado.
         </p>
       </header>
 
-      <div className="space-y-3">
-        {secciones.map((seccion, i) => (
-          <TarjetaSeccion key={seccion.to} seccion={seccion} orden={i} />
+      <div className="space-y-2.5">
+        {visibles.map((b, i) => (
+          <Bloque key={b.id} bloque={b} orden={i} abierto={abiertos.has(b.id)} onAlternar={() => alternar(b.id)} />
         ))}
       </div>
 
-      <Trucos />
+      <Arranque inicioActual={inicio} />
 
-      <Aviso inicioActual={inicio} />
-    </div>
-  )
-}
-
-// Lo primero que se ve al entrar, antes que el propio saludo: mientras esta
-// versión esté en pruebas, quien no la reconozca tiene que enterarse de que
-// existe la de siempre y de cómo volver a ella, sin tener que leer el resto
-// de la pantalla para encontrarlo.
-function AvisoPuchiNueva() {
-  return (
-    <div className="mb-6 flex items-start gap-3 rounded-xl2 border border-accent-line bg-accent-soft p-4">
-      <IconInfo className="h-5 w-5 shrink-0 text-accent" />
-      <p className="min-w-0 flex-1 text-[13px] leading-relaxed text-accent">
-        Esto es la Puchi nueva, todavía en pruebas. Si prefieres la de siempre, está en{' '}
-        <a
-          href={URL_PUCHI_ANTERIOR}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="font-semibold underline underline-offset-2"
-        >
+      <p className="mt-6 text-center text-[11px] text-ink-mute">
+        ¿Buscas la Puchi de antes? Está en{' '}
+        <a href={URL_PUCHI_ANTERIOR} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2">
           puchi.wanderingcode.dev/v1
-        </a>.
+        </a>
       </p>
     </div>
   )
 }
 
-// La dirección cambió (de /next a la raíz) al unificar. Quien ya tenía Puchi
-// añadida a la pantalla de inicio se quedó con un icono que apunta a la
-// dirección vieja — en Android deja de abrir la app instalada y cae al
-// navegador normal; en iOS puede quedarse enseñando una copia congelada de
-// antes del cambio, sin enterarse de nada nuevo. Ninguno de los dos se
-// arregla solo: hay que quitar el icono y añadirlo de nuevo. Color de aviso
-// (no el del acento) porque esto sí pide hacer algo, no es solo información.
-function AvisoReinstalar() {
-  return (
-    <div className="mb-6 flex items-start gap-3 rounded-xl2 border border-danger bg-danger/10 p-4">
-      <IconRefresh className="h-5 w-5 shrink-0 text-danger" />
-      <p className="min-w-0 flex-1 text-[13px] leading-relaxed text-danger">
-        <span className="font-semibold">¿Tienes Puchi añadida a la pantalla de inicio del móvil?</span>{' '}
-        La dirección ha cambiado: quítala (mantén pulsado el icono → Eliminar/Desinstalar) y vuelve a
-        añadirla desde aquí (menú del navegador → "Añadir a pantalla de inicio"), tanto en Android como
-        en iPhone. Si no lo haces, el icono viejo puede dejar de abrir Puchi o enseñar una copia
-        anticuada.
-      </p>
-    </div>
-  )
-}
+const SUAVE = { duration: 0.26, ease: [0.22, 1, 0.36, 1] }
 
-// Cada sección, con lo justo para saber qué se va a encontrar y un toque para
-// ir. Entera es un enlace: leer de qué va algo y tener que buscar después
-// dónde estaba es el paso tonto que sobra.
-function TarjetaSeccion({ seccion, orden }) {
-  const { Icon, label, resumen, puntos = [] } = seccion
+function Bloque({ bloque: b, orden, abierto, onAlternar }) {
+  const { Icon } = b
   return (
-    <motion.div
+    <motion.section
       initial={{ opacity: 0, transform: 'translateY(10px)' }}
       animate={{ opacity: 1, transform: 'translateY(0px)' }}
-      // Escalonadas, pero con tope: con seis secciones, la última entraría casi
-      // medio segundo tarde y se vería llegar.
-      transition={{ duration: 0.3, delay: Math.min(orden * 0.05, 0.2), ease: [0.22, 1, 0.36, 1] }}
+      transition={{ duration: 0.3, delay: Math.min(orden * 0.04, 0.2), ease: [0.22, 1, 0.36, 1] }}
+      className={`overflow-hidden rounded-xl3 border bg-surface transition-colors ${abierto ? 'border-accent-line' : 'border-line'}`}
     >
-      <Link
-        to={seccion.to}
-        className="block rounded-xl3 border border-line bg-surface p-4 transition-transform duration-150 active:scale-[0.99]"
-      >
-        <div className="flex items-center gap-3">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl2 bg-accent-soft text-accent">
-            <Icon className="h-5 w-5" />
-          </span>
-          <div className="min-w-0 flex-1">
-            <p className="font-display text-lg font-bold leading-tight tracking-[-0.01em]">{label}</p>
-            <p className="mt-0.5 text-[13px] leading-snug text-ink-dim">{resumen}</p>
-          </div>
-          <IconArrow className="h-4 w-4 shrink-0 text-ink-mute" />
-        </div>
+      <button onClick={onAlternar} aria-expanded={abierto} className="flex w-full items-center gap-3 p-4 text-left">
+        <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl2 transition-colors ${abierto ? 'bg-accent text-on-accent' : 'bg-accent-soft text-accent'}`}>
+          <Icon className="h-5 w-5" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block font-display text-[17px] font-bold leading-tight tracking-[-0.01em]">{b.titulo}</span>
+          <span className="mt-0.5 block text-[13px] leading-snug text-ink-dim">{b.resumen}</span>
+        </span>
+        <IconChevron className={`h-4 w-4 shrink-0 text-ink-mute transition-transform duration-200 ${abierto ? 'rotate-180' : ''}`} />
+      </button>
 
-        {puntos.length > 0 && (
-          <ul className="mt-3 space-y-1.5 border-t border-line pt-3">
-            {puntos.map(punto => (
-              <li key={punto} className="flex gap-2 text-[13px] leading-relaxed text-ink-dim">
-                <span className="mt-[7px] h-1 w-1 shrink-0 rounded-full bg-accent" aria-hidden />
-                <span className="min-w-0">{punto}</span>
-              </li>
-            ))}
-          </ul>
+      <AnimatePresence initial={false}>
+        {abierto && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={SUAVE}
+            className="overflow-hidden"
+          >
+            <div className="px-4 pb-4">
+              <div className="space-y-2">
+                {b.funciones.map(([titulo, texto]) => (
+                  <div key={titulo} className="rounded-xl2 bg-bg/70 px-3.5 py-3">
+                    <p className="text-sm font-semibold leading-snug">{titulo}</p>
+                    <p className="mt-0.5 text-[13px] leading-relaxed text-ink-dim">{texto}</p>
+                  </div>
+                ))}
+              </div>
+              {b.ruta && (
+                <Link
+                  to={b.ruta}
+                  className="mt-3 flex h-11 items-center justify-center gap-2 rounded-xl2 bg-accent-soft text-[13px] font-semibold text-accent transition-transform duration-150 active:scale-[0.99]"
+                >
+                  {b.ir}
+                  <IconArrow className="h-4 w-4" />
+                </Link>
+              )}
+            </div>
+          </motion.div>
         )}
-      </Link>
-    </motion.div>
+      </AnimatePresence>
+    </motion.section>
   )
 }
 
-// Cuatro cosas que no se adivinan mirando la pantalla y que cambian cómo se
-// usa la app. Ni una más: esto es una primera toma de contacto, no un manual.
-const TRUCOS = [
-  ['El menú', 'Se abre con el botón de arriba a la izquierda y se cierra arrastrándolo hacia el lado, sin tener que apuntar al hueco.'],
-  ['Las hojas que suben de abajo', 'Se cierran arrastrando el asa hacia abajo, o con el gesto de volver del móvil.'],
-  ['Tus gustos van con la cuenta', 'La vista de la estantería, el tema y lo demás se guardan en tu cuenta, no en el navegador: lo eliges una vez y lo ves igual en el móvil y en el ordenador.'],
-  ['Puedes instalarla', 'Desde el navegador del móvil, "Añadir a pantalla de inicio": se abre como una app, a pantalla completa.'],
-]
-
-function Trucos() {
-  return (
-    <section className="mt-8">
-      <h3 className="mb-2.5 text-[11px] uppercase tracking-[0.14em] text-ink-mute">
-        Cosas que conviene saber
-      </h3>
-      <dl className="overflow-hidden rounded-xl2 border border-line bg-surface divide-y divide-[color:var(--color-line)]">
-        {TRUCOS.map(([que, como]) => (
-          <div key={que} className="px-4 py-3">
-            <dt className="text-sm font-semibold">{que}</dt>
-            <dd className="mt-0.5 text-[13px] leading-relaxed text-ink-dim">{como}</dd>
-          </div>
-        ))}
-      </dl>
-    </section>
-  )
-}
-
-// Lo último de la guía, y a propósito: quien acaba de leérsela es justo quien
-// no necesita volver a verla mañana.
-function Aviso({ inicioActual }) {
+// Al final, a propósito: quien ya se la sabe no tiene por qué pasar por aquí
+// cada vez.
+function Arranque({ inicioActual }) {
   const enInicio = inicioActual === '/'
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.3, delay: 0.25 }}
-      className="mt-8"
+    <Link
+      to="/ajustes"
+      className="mt-6 flex items-center gap-3 rounded-xl2 border border-line bg-surface p-4 transition-transform duration-150 active:scale-[0.99]"
     >
-      <Link
-        to="/ajustes"
-        className="flex items-center gap-3 rounded-xl2 border border-accent-line bg-accent-soft p-4 transition-transform duration-150 active:scale-[0.99]"
-      >
-        <IconSettings className="h-5 w-5 shrink-0 text-accent" />
-        <p className="min-w-0 flex-1 text-[13px] leading-relaxed text-accent">
-          {enInicio
-            ? '¿Prefieres que Puchi arranque en tu estantería, o en cualquier otra pantalla? Se elige en Ajustes.'
-            : 'Puchi arranca en la pantalla que elegiste; puedes cambiarla en Ajustes cuando quieras.'}
-        </p>
-        <IconArrow className="h-4 w-4 shrink-0 text-accent" />
-      </Link>
-    </motion.div>
+      <IconSettings className="h-5 w-5 shrink-0 text-accent" />
+      <p className="min-w-0 flex-1 text-[13px] leading-relaxed text-ink-dim">
+        {enInicio
+          ? '¿Prefieres que Puchi arranque directamente en tu estantería? Se elige en Ajustes.'
+          : 'Puchi arranca en la pantalla que elegiste; puedes cambiarla en Ajustes.'}
+      </p>
+      <IconArrow className="h-4 w-4 shrink-0 text-ink-mute" />
+    </Link>
   )
 }
