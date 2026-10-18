@@ -615,6 +615,9 @@ def ver_trozos(ab_id: int, cap_id: int, db: Session = Depends(get_db), _: Player
 class Retoque(BaseModel):
     # El texto a decir. Sin él, el mismo de antes (solo cambia la semilla).
     text: Optional[str] = None
+    # La emoción: "same" (la que tenía), "none" (ninguna) o una de las que
+    # entiende Higgs (affection, anger). Cambiarla quita el estilo (shouting).
+    emotion: str = "same"
 
 
 @router.post("/{ab_id}/chapters/{cap_id}/pieces/{i}/redo")
@@ -631,9 +634,17 @@ def pedir_retoque(ab_id: int, cap_id: int, i: int, cuerpo: Retoque, db: Session 
         raise HTTPException(status_code=409, detail="El capítulo se está generando: espera a que acabe")
     t = mapa[i]
     texto = (cuerpo.text or "").strip() or t.get("texto")
+    if cuerpo.emotion == "same":
+        emocion, estilo = t.get("emocion"), t.get("estilo")
+    elif cuerpo.emotion == "none":
+        emocion, estilo = None, None
+    elif cuerpo.emotion in ("affection", "anger"):
+        emocion, estilo = cuerpo.emotion, None
+    else:
+        raise HTTPException(status_code=422, detail="Emoción: same, none, affection o anger")
     pendientes = [r for r in (c.retoques or []) if r["i"] != i]
     pendientes.append({
-        "i": i, "texto": texto, "emocion": t.get("emocion"), "estilo": t.get("estilo"),
+        "i": i, "texto": texto, "emocion": emocion, "estilo": estilo,
         # Otra semilla cada vez: con la misma saldría igual.
         "semilla": int(t.get("semilla", 100 * i)) + 7919 * (int(t.get("veces", 0)) + 1),
         "pedido": _iso(_ahora()),
@@ -1099,6 +1110,13 @@ def entregar_retoque(
     # Solo se quitan los que iban en este audio: si mientras tanto el admin
     # pidió otro (o volvió a pedir el mismo), se queda para la siguiente.
     hecho = {(h["i"], h["pedido"]) for h in hechos_}
+    # La emoción que se pidió al rehacer se queda en el mapa (el sobremesa
+    # devuelve el mapa con la del trozo original).
+    for r in (c.retoques or []):
+        if (r["i"], r["pedido"]) in hecho and 0 <= r["i"] < len(nuevo_mapa):
+            nuevo_mapa[r["i"]]["emocion"] = r.get("emocion")
+            nuevo_mapa[r["i"]]["estilo"] = r.get("estilo")
+    c.recipe = {**c.recipe, "mapa": nuevo_mapa}
     c.retoques = [r for r in (c.retoques or []) if (r["i"], r["pedido"]) not in hecho] or None
     c.retoque_lease = None
     db.commit()

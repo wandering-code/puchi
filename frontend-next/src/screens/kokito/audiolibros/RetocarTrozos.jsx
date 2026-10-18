@@ -156,20 +156,20 @@ export default function RetocarTrozos({ ab, cap, abierta, onCerrar, onHecho }) {
   elegirRef.current = elegir
   const alTocar = useCallback(i => elegirRef.current(i), [])
 
-  async function rehacer(textoNuevo) {
+  async function rehacer(textoNuevo, emocion = 'same') {
     try {
-      setDatos(await api(`/audiobooks/${ab.id}/chapters/${cap.id}/pieces/${unico}/redo`, { method: 'POST', body: { text: textoNuevo } }))
+      setDatos(await api(`/audiobooks/${ab.id}/chapters/${cap.id}/pieces/${unico}/redo`, { method: 'POST', body: { text: textoNuevo, emotion: emocion } }))
       setError(null)
     } catch (e) { setError(e.message) }
   }
   // Varios de una vez: otra toma de cada uno (los que ya estaban en cola se
   // dejan como estaban). Luego se desmarcan: quedan subrayados como "en cola".
-  async function rehacerVarios() {
+  async function rehacerVarios(emocion = 'same') {
     try {
       let ultimo = null
       for (const i of [...sel].sort((a, b) => a - b)) {
         if (datos?.pieces[i]?.pending && !datos.pieces[i].error) continue
-        ultimo = await api(`/audiobooks/${ab.id}/chapters/${cap.id}/pieces/${i}/redo`, { method: 'POST', body: { text: null } })
+        ultimo = await api(`/audiobooks/${ab.id}/chapters/${cap.id}/pieces/${i}/redo`, { method: 'POST', body: { text: null, emotion: emocion } })
       }
       if (ultimo) setDatos(ultimo)
       setSel(new Set())
@@ -341,11 +341,15 @@ function Tarjeta({ rehechos, posicion, enRonda, onAnterior, onSiguiente, onOirTo
   const [editando, setEditando] = useState(false)
   const [nuevo, setNuevo] = useState('')
   const [enviando, setEnviando] = useState(false)
+  // Con qué emoción se rehace: de entrada, la que tenía el trozo (o, con
+  // varios, cada uno la suya).
+  const [emocion, setEmocion] = useState('same')
   useEffect(() => { setEditando(false); setNuevo(trozo?.pending_text || trozo?.text || '') }, [trozo?.i, trozo?.pending_text, trozo?.text])
+  useEffect(() => { setEmocion(trozo ? (trozo.emotion || 'none') : 'same') }, [trozo?.i, trozo?.emotion, varios > 0])
 
   async function enviar(textoNuevo) {
     setEnviando(true)
-    await onRehacer(textoNuevo)
+    await onRehacer(textoNuevo, emocion)
     setEnviando(false)
     setEditando(false)
   }
@@ -427,8 +431,9 @@ function Tarjeta({ rehechos, posicion, enRonda, onAnterior, onSiguiente, onOirTo
         <Desplegable abierto={varios > 0}>
           <div className="mt-2.5 border-t border-line/70 pt-2.5">
             {error && <p className="mb-2 text-[11px] text-danger">{error}</p>}
+            <Emociones valor={emocion} onCambiar={setEmocion} conIgual />
             <button
-              onClick={async () => { setEnviando(true); await onRehacerVarios(); setEnviando(false) }}
+              onClick={async () => { setEnviando(true); await onRehacerVarios(emocion); setEnviando(false) }}
               disabled={enviando}
               className="inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-xl2 bg-accent text-xs font-semibold text-on-accent transition-transform duration-150 active:scale-[0.98] disabled:opacity-60"
             >
@@ -452,6 +457,7 @@ function Tarjeta({ rehechos, posicion, enRonda, onAnterior, onSiguiente, onOirTo
                 </div>
               )
             ) : null}
+            {(!trozo?.pending || trozo?.error) && <Emociones valor={emocion} onCambiar={setEmocion} />}
             {(!trozo?.pending || trozo?.error) && (
               <div className="flex gap-2">
                 <button
@@ -500,6 +506,31 @@ function Tarjeta({ rehechos, posicion, enRonda, onAnterior, onSiguiente, onOirTo
           </div>
         </Desplegable>
       </div>
+    </div>
+  )
+}
+
+// Con qué emoción rehacerlo. Las que entiende Higgs con esta voz sin pasarse
+// (#73): ninguna, cariño o enfado. «Como estaban», solo al rehacer varios.
+const EMOCIONES = [['none', 'Ninguna'], ['affection', 'Cariño'], ['anger', 'Enfado']]
+
+function Emociones({ valor, onCambiar, conIgual = false }) {
+  const opciones = conIgual ? [['same', 'Como estaban'], ...EMOCIONES] : EMOCIONES
+  return (
+    <div className="mb-2.5 flex items-center gap-1.5">
+      <span className="shrink-0 pr-0.5 text-[11px] text-ink-mute">Emoción</span>
+      {opciones.map(([id, texto]) => (
+        <button
+          key={id}
+          onClick={() => onCambiar(id)}
+          aria-pressed={valor === id}
+          className={`h-7 rounded-full border px-2.5 text-[11px] font-semibold transition-colors ${
+            valor === id ? 'border-accent-line bg-accent-soft text-accent' : 'border-line text-ink-dim'
+          }`}
+        >
+          {texto}
+        </button>
+      ))}
     </div>
   )
 }
