@@ -41,12 +41,14 @@ export function Sobremesa({ estado }) {
 
 // ─── La tarjeta de generación ────────────────────────────────────────────────
 
-export function Generacion({ ab, sobremesa, onGenerar, onPausar }) {
+export function Generacion({ ab, sobremesa, onGenerar, onPausar, onRetener, onReanudar }) {
   const incluidos = ab.chapters.filter(c => c.included)
   const actual = incluidos.find(c => c.status === 'generando')
   const faltan = incluidos.filter(c => c.status !== 'listo')
   const minutosQueFaltan = Math.round(faltan.reduce((s, c) => s + c.minutes, 0) * RTF)
   const enMarcha = ab.status === 'en_cola' || ab.status === 'generando'
+  // Pausado "al acabar": lo que falta sigue en cola, en su orden.
+  const retenido = ab.on_hold && faltan.some(c => c.status === 'en_cola')
   const pct = incluidos.length ? ab.chapters_ready / incluidos.length : 0
 
   return (
@@ -98,7 +100,18 @@ export function Generacion({ ab, sobremesa, onGenerar, onPausar }) {
               <p className="mt-1.5 text-[11px] text-ink-dim">
                 {[actual.progress_note, quedaDelCapitulo(actual)].filter(Boolean).join(' · ')}
               </p>
+              {retenido && (
+                <p className="mt-2 flex items-center gap-1.5 text-[11px] font-semibold text-accent">
+                  <IconPausa className="h-3 w-3" /> Se pausa al acabar este capítulo
+                </p>
+              )}
             </motion.div>
+          ) : retenido ? (
+            <motion.p key="retenido" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="mt-3 text-[13px] text-ink-dim">
+              En pausa. Los {faltan.filter(c => c.status === 'en_cola').length} capítulos que faltan esperan en
+              la cola, en su orden.
+            </motion.p>
           ) : ab.status === 'en_cola' ? (
             <motion.p key="espera" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               className="mt-3 text-[13px] text-ink-dim">
@@ -113,13 +126,22 @@ export function Generacion({ ab, sobremesa, onGenerar, onPausar }) {
           </p>
         ) : (
           <div className="mt-4 flex items-center gap-3">
-            {enMarcha ? (
+            {retenido ? (
               <motion.button
                 whileTap={{ scale: 0.97 }}
-                onClick={onPausar}
+                onClick={onReanudar}
+                className={`flex h-11 flex-1 items-center justify-center gap-2 rounded-xl2 text-sm font-semibold ${
+                  actual ? 'border border-line text-ink-dim active:bg-surface-2' : 'bg-accent text-on-accent shadow-sm'}`}
+              >
+                <IconPlay className="h-4 w-4" /> {actual ? 'No pausar' : 'Reanudar'}
+              </motion.button>
+            ) : enMarcha ? (
+              <motion.button
+                whileTap={{ scale: 0.97 }}
+                onClick={onRetener}
                 className="flex h-11 flex-1 items-center justify-center gap-2 rounded-xl2 border border-line text-sm font-semibold text-ink-dim active:bg-surface-2"
               >
-                <IconPausa className="h-4 w-4" /> Pausar
+                <IconPausa className="h-4 w-4" /> {actual ? 'Pausar tras este' : 'Pausar'}
               </motion.button>
             ) : (
               <motion.button
@@ -138,6 +160,16 @@ export function Generacion({ ab, sobremesa, onGenerar, onPausar }) {
               </p>
             )}
           </div>
+        )}
+        {/* La pausa de antes, de golpe: corta el capítulo en curso y pierde
+            lo que llevaba. Para cuando haga falta de verdad. */}
+        {actual && (
+          <button
+            onClick={onPausar}
+            className="mt-2.5 w-full text-center text-[11px] font-medium text-ink-mute underline-offset-2 active:underline"
+          >
+            Parar ya (se pierde lo que lleva de «{actual.title}»)
+          </button>
         )}
       </div>
     </section>

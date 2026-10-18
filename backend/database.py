@@ -389,6 +389,10 @@ class Audiobook(Base):
     voice       = Column(String, nullable=False, default="voz_femenina_suave")
     # borrador → (fase 2) en_cola / generando / listo
     status      = Column(String, nullable=False, default="borrador")
+    # Pausado "al acabar el capítulo": el que se está generando termina, pero
+    # el sobremesa no coge ninguno más de este libro. Los que faltan siguen en
+    # cola, con su orden, para reanudar sin volver a elegir por dónde empezar.
+    queue_hold  = Column(Boolean, nullable=False, default=False)
     created_by  = Column(Integer, ForeignKey("players.id", ondelete="SET NULL"), nullable=True)
     created_at  = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 

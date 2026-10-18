@@ -90,6 +90,8 @@ export default function FichaAudiolibro({ id, onCerrar, onCambiar, onBorrar }) {
   const cambiar = (cuerpo) => aplicar(api(`/audiobooks/${ab.id}`, { method: 'PATCH', body: cuerpo }))
   const generar = (inicio) => aplicar(api(`/audiobooks/${ab.id}/generate`, { method: 'POST', body: { start_chapter_id: inicio } }))
   const pausar = () => aplicar(api(`/audiobooks/${ab.id}/pause`, { method: 'POST' }))
+  const retener = () => aplicar(api(`/audiobooks/${ab.id}/hold`, { method: 'POST' }))
+  const reanudar = () => aplicar(api(`/audiobooks/${ab.id}/resume`, { method: 'POST' }))
   const enlazar = (libro) => aplicar(
     api(`/audiobooks/${ab.id}/books`, { method: 'POST', body: { book_id: libro.id, move: !!libro.linked_to } }),
     { recargarSugerencias: true },
@@ -162,7 +164,8 @@ export default function FichaAudiolibro({ id, onCerrar, onCambiar, onBorrar }) {
             <Cabecera ab={ab} onEditar={hojaDatos.abrir} />
             <Cifras ab={ab} />
             <Voz ab={ab} onCambiar={voice => cambiar({ voice })} />
-            <Generacion ab={ab} sobremesa={sobremesa} onGenerar={hojaEmpezar.abrir} onPausar={pausar} />
+            <Generacion ab={ab} sobremesa={sobremesa} onGenerar={hojaEmpezar.abrir} onPausar={pausar}
+              onRetener={retener} onReanudar={reanudar} />
 
             <Seccion
               titulo="Libros"

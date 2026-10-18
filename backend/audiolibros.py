@@ -97,6 +97,7 @@ def migrar(engine) -> None:
     with engine.begin() as con:
         for col, tipo in _COLUMNAS_FASE_2.items():
             con.execute(sql(f"ALTER TABLE audiobook_chapters ADD COLUMN IF NOT EXISTS {col} {tipo}"))
+        con.execute(sql("ALTER TABLE audiobooks ADD COLUMN IF NOT EXISTS queue_hold BOOLEAN NOT NULL DEFAULT false"))
         # Fase 6 (#68): por dónde quiere empezar quien lo pide.
         con.execute(sql("ALTER TABLE audiobook_requests ADD COLUMN IF NOT EXISTS start_page INTEGER"))
         con.execute(sql("ALTER TABLE audiobook_requests ADD COLUMN IF NOT EXISTS start_chapter VARCHAR"))
@@ -282,10 +283,14 @@ def _resumen(ab: Audiobook, caps: list[AudiobookChapter], enlaces: list[dict]) -
     incluidos = [c for c in caps if c.included]
     palabras = sum(c.words for c in incluidos)
     listos = [c for c in incluidos if c.status == "listo"]
+    estado = _estado(incluidos)
+    # En cola pero retenido: para el admin está pausado (se reanuda tal cual).
+    if ab.queue_hold and estado == "en_cola":
+        estado = "pausado"
     return {
         "id": ab.id, "title": ab.title, "author": ab.author, "isbn": ab.isbn,
         "cover_url": ab.cover_url or next((l["cover_url"] for l in enlaces if l["cover_url"]), None),
-        "voice": ab.voice, "status": _estado(incluidos),
+        "voice": ab.voice, "status": estado, "on_hold": bool(ab.queue_hold),
         "created_at": ab.created_at.isoformat() if ab.created_at else None,
         "chapters_total": len(caps), "chapters_included": len(incluidos),
         "chapters_ready": len(listos),
@@ -710,6 +715,7 @@ def generar(ab_id: int, cuerpo: Generar, db: Session = Depends(get_db), _: Playe
             raise HTTPException(status_code=422, detail="Ese capítulo no se lee: inclúyelo antes")
         inicio = elegido.position
     orden = [c for c in faltan if c.position >= inicio] + [c for c in faltan if c.position < inicio]
+    ab.queue_hold = False
     ahora = _ahora()
     for i, c in enumerate(orden):
         c.status, c.queued_at, c.queue_index = "en_cola", ahora, i
@@ -727,6 +733,25 @@ def pausar(ab_id: int, db: Session = Depends(get_db), _: Player = Depends(requir
               .filter(AudiobookChapter.audiobook_id == ab.id,
                       AudiobookChapter.status.in_(("en_cola", "generando"))).all()):
         c.status, c.worker, c.lease_until, c.progress, c.progress_note = "pendiente", None, None, 0.0, None
+    ab.queue_hold = False
+    db.commit()
+    return _detalle(db, ab)
+
+
+@router.post("/{ab_id}/hold")
+def pausar_al_acabar(ab_id: int, db: Session = Depends(get_db), _: Player = Depends(require_admin)):
+    """Pausa sin perder nada: el capítulo en curso termina y se sube, y los
+    que faltan esperan en la cola, en su orden, hasta reanudar."""
+    ab = _cargar(db, ab_id)
+    ab.queue_hold = True
+    db.commit()
+    return _detalle(db, ab)
+
+
+@router.post("/{ab_id}/resume")
+def reanudar(ab_id: int, db: Session = Depends(get_db), _: Player = Depends(require_admin)):
+    ab = _cargar(db, ab_id)
+    ab.queue_hold = False
     db.commit()
     return _detalle(db, ab)
 
@@ -803,8 +828,10 @@ def pedir_trabajo(cuerpo: Pedir, db: Session = Depends(get_db), _=Depends(_solo_
     if not cuerpo.higgs_ok:
         return Response(status_code=204)
 
+    retenidos = db.query(Audiobook.id).filter(Audiobook.queue_hold.is_(True))
     c = (db.query(AudiobookChapter)
-         .filter(AudiobookChapter.status == "en_cola", AudiobookChapter.included.is_(True))
+         .filter(AudiobookChapter.status == "en_cola", AudiobookChapter.included.is_(True),
+                 AudiobookChapter.audiobook_id.notin_(retenidos))
          .order_by(AudiobookChapter.priority.desc(), AudiobookChapter.queued_at,
                    AudiobookChapter.queue_index, AudiobookChapter.position)
          .with_for_update(skip_locked=True).first())
