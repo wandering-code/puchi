@@ -10,7 +10,7 @@ from io import BytesIO
 from PIL import Image
 import httpx
 import asyncio
-import os, uuid, shutil, re, unicodedata, hmac, hashlib, base64, time, difflib
+import os, uuid, shutil, re, unicodedata, hmac, hashlib, base64, time, difflib, logging
 from urllib.parse import urlsplit
 from jose import JWTError, jwt
 
@@ -518,6 +518,22 @@ def _dedupe_candidates(candidates: list[dict], author: Optional[str] = None) -> 
 # GOOGLE_BOOKS_API_KEY puesta la cuota sube.
 GOOGLE_BOOKS_API_KEY = os.getenv("GOOGLE_BOOKS_API_KEY")
 
+# Si Google deja de responder bien (sin cuota, clave caducada...) las
+# búsquedas siguen con Open Library y nadie se entera: pasó durante días
+# (#57). Se apunta en el log del backend, como mucho una vez cada 10 minutos
+# por código, para que se vea sin llenarlo.
+_google_avisado: dict[int, float] = {}
+
+def _avisar_google(r: httpx.Response) -> None:
+    ahora = time.monotonic()
+    if ahora - _google_avisado.get(r.status_code, -1e9) < 600:
+        return
+    _google_avisado[r.status_code] = ahora
+    motivo = " ".join(r.text[:200].split())
+    logging.getLogger("uvicorn.error").warning(
+        "Google Books responde %s (%s): %s", r.status_code,
+        "con clave" if GOOGLE_BOOKS_API_KEY else "SIN GOOGLE_BOOKS_API_KEY", motivo)
+
 async def _google_books_lookup(client: httpx.AsyncClient, query: str, isbn: Optional[str] = None, lang: Optional[str] = None, expect_title: Optional[str] = None) -> Optional[dict]:
     """Primer resultado de Google Books normalizado al mismo formato que ya
     usan los endpoints de Open Library. Devuelve None ante cualquier fallo
@@ -539,6 +555,7 @@ async def _google_books_lookup(client: httpx.AsyncClient, query: str, isbn: Opti
     try:
         r = await client.get("https://www.googleapis.com/books/v1/volumes", params=params, timeout=10)
         if r.status_code != 200:
+            _avisar_google(r)
             return None
         items = r.json().get("items") or []
         if not items:
@@ -603,6 +620,7 @@ async def _google_books_by_author(client: httpx.AsyncClient, author: str, exclud
         try:
             r = await client.get("https://www.googleapis.com/books/v1/volumes", params=params, timeout=10)
             if r.status_code != 200:
+                _avisar_google(r)
                 return []
             return r.json().get("items") or []
         except Exception:
