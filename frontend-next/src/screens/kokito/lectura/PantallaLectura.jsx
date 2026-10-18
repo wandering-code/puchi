@@ -6,8 +6,11 @@ import { usarPreferencia } from '../../../platform/preferencias'
 import { useReproductor } from '../../../platform/reproductor'
 import HojaInferior from '../../luniteca/HojaInferior'
 import PantallaInferior from '../../luniteca/PantallaInferior'
+import { Cover } from '../../luniteca/piezas'
 import { IconAdelante30, IconAtras30, IconCheck, IconChevron, IconList, IconLuna, IconPausa, IconPlay } from '../../../ui/icons'
 import { Girando } from '../audiolibros/Audiolibros'
+import Desplegable from '../../../ui/Desplegable'
+import { LLEGADA, enCss } from '../../../ui/curvas'
 import { reloj } from '../audiolibros/formato'
 import {
   Ecualizador, HojaDormir, HojaVelocidad, Pastilla, PastillaIcono, formatoVelocidad, textoDormir,
@@ -267,6 +270,8 @@ export default function PantallaLectura() {
       pie={cap && datos ? (
         <Pie
           r={r}
+          libro={libro}
+          cap={cap}
           listo={cap.ready}
           esteSuena={esteSuena}
           conAudio={conAudio}
@@ -382,134 +387,118 @@ const Texto = memo(function Texto({ parrafos, tam, titulo: tituloCap, tocable, o
   )
 })
 
-// La barra de abajo. Plegada: play y por dónde va. Desplegada, lo mismo que
-// el reproductor: la barra para moverse, ±30 s, la velocidad y el
-// temporizador (pedido por el usuario). Se queda como la dejes.
-function Pie({ r, listo, esteSuena, conAudio, seguir, onPlay, onVolver, onVelocidad, onDormir }) {
+// La barra de abajo: una tarjeta flotante, del mismo material que el mini
+// reproductor (.mini-reproductor) con un toque del color de la app, para que
+// no se confunda con el fondo del texto. Una sola tarjeta que crece: arriba
+// siempre la portada, el capítulo y el play; luego por dónde va; y al
+// desplegarla (pedido por el usuario) la fila de velocidad, ±30 s y
+// temporizador, con la barra de avance que pasa a poder arrastrarse.
+//
+// Todo con transiciones CSS (Desplegable, opacidad, giro de la flecha): las
+// hace el navegador a la frecuencia de la pantalla. Se queda como la dejes.
+function Pie({ r, libro, cap, listo, esteSuena, conAudio, seguir, onPlay, onVolver, onVelocidad, onDormir }) {
   const [abierto, ponerAbierto] = usarPreferencia('lectura_pie_abierto', false)
   const sonando = esteSuena && r.sonando
   const cargando = esteSuena && r.cargando && !r.sonando
   const pct = esteSuena && r.dur ? Math.min(100, (r.t / r.dur) * 100) : 0
-
-  const botonPlay = (grande) => (
-    <motion.button
-      whileTap={{ scale: 0.92 }}
-      onClick={onPlay}
-      aria-label={sonando ? 'Pausa' : 'Escuchar desde aquí'}
-      className={`flex shrink-0 items-center justify-center rounded-full bg-accent text-on-accent shadow-sm ${grande ? 'h-14 w-14' : 'h-11 w-11'}`}
-    >
-      {cargando ? <Girando className={grande ? 'h-6 w-6' : 'h-5 w-5'} />
-        : sonando ? <IconPausa className={grande ? 'h-6 w-6' : 'h-5 w-5'} />
-          : <IconPlay className={`ml-0.5 ${grande ? 'h-6 w-6' : 'h-5 w-5'}`} />}
-    </motion.button>
-  )
-  const volver = (
-    <AnimatePresence initial={false}>
-      {esteSuena && conAudio && !seguir && (
-        <motion.button
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 0.9 }}
-          onClick={onVolver}
-          className="shrink-0 rounded-full border border-accent-line bg-accent-soft px-3 py-1.5 text-xs font-semibold text-accent"
-        >
-          Ir a lo que suena
-        </motion.button>
-      )}
-    </AnimatePresence>
-  )
-  const plegar = (
-    <motion.button
-      whileTap={{ scale: 0.9 }}
-      onClick={() => ponerAbierto(!abierto)}
-      aria-label={abierto ? 'Plegar los controles' : 'Más controles'}
-      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-ink-mute active:bg-surface-2"
-    >
-      <IconChevron className={`h-4 w-4 transition-transform ${abierto ? '' : 'rotate-180'}`} />
-    </motion.button>
-  )
+  const curva = enCss(LLEGADA)
 
   return (
-    <div className="border-t border-line bg-bg/95 px-4 pt-2.5 backdrop-blur" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.6rem)' }}>
-      {!listo ? (
-        <p className="mx-auto min-h-11 w-full max-w-[34rem] py-2 text-xs leading-snug text-ink-mute">Este capítulo todavía no tiene audio.</p>
-      ) : abierto ? (
-        <div className="mx-auto w-full max-w-[34rem]">
-          <div className="flex items-center gap-2">
-            <div className="min-w-0 flex-1">{volver}</div>
-            {plegar}
-          </div>
-          {esteSuena ? (
-            <div className="mt-1">
-              <input
-                type="range" min="0" max={r.dur || 0} step="1" value={Math.min(r.t, r.dur || 0)}
-                onChange={e => r.buscar(Number(e.target.value))}
-                aria-label="Posición en el capítulo"
-                className="barra-audio w-full"
-                style={{ '--avance': `${pct}%` }}
-              />
-              <div className="mt-0.5 flex justify-between text-[11px] tabular-nums text-ink-mute">
-                <span>{reloj(r.t)}</span>
-                <span>−{reloj(Math.max(0, r.dur - r.t))}</span>
-              </div>
-            </div>
-          ) : (
-            <p className="mt-1 text-center text-xs text-ink-dim">
-              {conAudio ? 'Empieza por lo que tienes a la vista, o toca una frase' : 'Escuchar este capítulo'}
+    <div className="px-3 pt-1" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.6rem)' }}>
+      <div
+        className="mini-reproductor mx-auto w-full max-w-[34rem] overflow-hidden rounded-[22px] px-3 pb-3 pt-2.5"
+        style={{ backgroundImage: 'linear-gradient(to bottom, color-mix(in srgb, var(--color-accent) 9%, transparent), transparent 70%)' }}
+      >
+        <div className="flex items-center gap-3">
+          <Cover url={libro?.cover_url} title={libro?.title} className="w-[34px] shrink-0" />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-semibold leading-tight">{cap?.title}</p>
+            <p className="mt-0.5 truncate text-[11px] text-ink-dim">
+              {!listo ? 'Este capítulo todavía no tiene audio'
+                : esteSuena ? <span className="inline-flex items-center gap-1.5 tabular-nums">{sonando && <Ecualizador activo />}{reloj(r.t)} · quedan {reloj(Math.max(0, r.dur - r.t))}</span>
+                  : conAudio ? 'Toca una frase, o el play para empezar por lo que ves'
+                    : 'Sin seguimiento del texto: se generó antes'}
             </p>
+          </div>
+          {listo && (
+            <button
+              onClick={onPlay}
+              aria-label={sonando ? 'Pausa' : 'Escuchar desde aquí'}
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent text-on-accent shadow-sm transition-transform duration-150 active:scale-90"
+            >
+              {cargando ? <Girando className="h-5 w-5" /> : sonando ? <IconPausa className="h-5 w-5" /> : <IconPlay className="ml-0.5 h-5 w-5" />}
+            </button>
           )}
-          <div className="mt-2 flex items-center justify-between">
+          {listo && (
+            <button
+              onClick={() => ponerAbierto(!abierto)}
+              aria-label={abierto ? 'Plegar los controles' : 'Más controles'}
+              aria-expanded={abierto}
+              className="flex h-9 w-8 shrink-0 items-center justify-center rounded-full text-ink-mute active:bg-surface-2"
+            >
+              <IconChevron className="h-4 w-4" style={{ transform: abierto ? 'none' : 'rotate(180deg)', transition: `transform ${curva}` }} />
+            </button>
+          )}
+        </div>
+
+        {/* Por dónde va: la línea fina y la arrastrable, una encima de otra,
+            que se cruzan con un fundido al desplegar. */}
+        {listo && esteSuena && (
+          <div className="relative mt-2 h-4">
+            <div
+              className="absolute inset-x-0 top-1/2 h-[3px] -translate-y-1/2 overflow-hidden rounded-full bg-surface-2"
+              style={{ opacity: abierto ? 0 : 1, transition: `opacity ${curva}` }}
+            >
+              <div className="h-full rounded-full bg-accent" style={{ width: `${pct}%` }} />
+            </div>
+            <input
+              type="range" min="0" max={r.dur || 0} step="1" value={Math.min(r.t, r.dur || 0)}
+              onChange={e => r.buscar(Number(e.target.value))}
+              aria-label="Posición en el capítulo"
+              tabIndex={abierto ? 0 : -1}
+              className="barra-audio absolute inset-x-0 top-1/2 w-full -translate-y-1/2"
+              style={{ '--avance': `${pct}%`, opacity: abierto ? 1 : 0, pointerEvents: abierto ? 'auto' : 'none', transition: `opacity ${curva}` }}
+            />
+          </div>
+        )}
+
+        {/* «Ir a lo que suena», cuando se ha dejado de seguir el audio. */}
+        <Desplegable abierto={esteSuena && conAudio && !seguir}>
+          <div className="flex justify-center pt-2">
+            <button
+              onClick={onVolver}
+              className="rounded-full border border-accent-line bg-accent-soft px-3 py-1.5 text-xs font-semibold text-accent transition-transform duration-150 active:scale-95"
+            >
+              Ir a lo que suena
+            </button>
+          </div>
+        </Desplegable>
+
+        <Desplegable abierto={listo && abierto}>
+          <div className="mt-2.5 flex items-center justify-between border-t border-line/70 pt-2.5">
             <Pastilla onClick={onVelocidad} activa={r.velocidad !== 1}>{formatoVelocidad(r.velocidad)}</Pastilla>
-            <motion.button
-              whileTap={{ scale: 0.88 }}
+            <button
               onClick={() => r.saltar(-30)}
               disabled={!esteSuena}
               aria-label="Atrás 30 segundos"
-              className="flex h-12 w-12 items-center justify-center rounded-full text-ink active:bg-surface-2 disabled:opacity-30"
+              className="flex h-11 w-11 items-center justify-center rounded-full text-ink transition-transform duration-150 active:scale-90 active:bg-surface-2 disabled:opacity-30"
             >
               <IconAtras30 className="h-7 w-7" />
-            </motion.button>
-            {botonPlay(true)}
-            <motion.button
-              whileTap={{ scale: 0.88 }}
+            </button>
+            <button
               onClick={() => r.saltar(30)}
               disabled={!esteSuena}
               aria-label="Adelante 30 segundos"
-              className="flex h-12 w-12 items-center justify-center rounded-full text-ink active:bg-surface-2 disabled:opacity-30"
+              className="flex h-11 w-11 items-center justify-center rounded-full text-ink transition-transform duration-150 active:scale-90 active:bg-surface-2 disabled:opacity-30"
             >
               <IconAdelante30 className="h-7 w-7" />
-            </motion.button>
+            </button>
             <PastillaIcono onClick={onDormir} activa={!!r.temporizador} etiqueta={textoDormir(r.temporizador)}>
               <IconLuna className="h-4 w-4" />
             </PastillaIcono>
           </div>
-        </div>
-      ) : (
-        <div className="mx-auto flex w-full max-w-[34rem] items-center gap-3">
-          {botonPlay(false)}
-          <div className="min-w-0 flex-1">
-            {esteSuena ? (
-              <>
-                <div className="flex items-center justify-between text-[11px] tabular-nums text-ink-mute">
-                  <span className="flex items-center gap-1.5">{sonando && <Ecualizador activo />}{reloj(r.t)}</span>
-                  <span>−{reloj(Math.max(0, r.dur - r.t))}</span>
-                </div>
-                <div className="mt-1 h-1 overflow-hidden rounded-full bg-surface-2">
-                  <div className="h-full rounded-full bg-accent" style={{ width: `${pct}%` }} />
-                </div>
-              </>
-            ) : (
-              <p className="text-xs leading-snug text-ink-dim">
-                {conAudio
-                  ? 'Escuchar desde lo que tienes a la vista, o toca una frase'
-                  : 'Escuchar este capítulo. Es de antes de poder tocar una frase para que suene.'}
-              </p>
-            )}
-          </div>
-          {volver}
-          {plegar}
-        </div>
-      )}
+        </Desplegable>
+      </div>
     </div>
   )
 }
