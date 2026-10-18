@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react'
 import { motion } from 'motion/react'
 import { IconChevron } from '../../ui/icons'
 import { usarPreferencia } from '../../platform/preferencias'
@@ -146,24 +147,61 @@ export function TituloSeccion({ variante, label, cuenta, plegada, onAlternar, an
     ancla.style = { ...(ancla.style || {}), background: mezcla(colorDe(estado), 13) }
   }
 
+  // Pegado, el título ya no está en lo alto de su tarjeta sino en mitad: si
+  // conserva las esquinas redondeadas de la tarjeta, por debajo asoma lo de
+  // dentro (con la franja de color se veían dos esquinitas blancas). Así que
+  // mientras está pegado, sin redondeo arriba.
+  const nodo = useRef(null)
+  const pegado = usarPegado(nodo, !anidado && (variante === 'color' || variante === 'mixto'))
+  if (pegado) {
+    ancla.style = { ...(ancla.style || {}), borderTopLeftRadius: 0, borderTopRightRadius: 0 }
+  }
+
   // La acción va FUERA del botón del título, en la misma fila: un botón dentro
   // de otro botón no es HTML válido y el navegador lo deshace por su cuenta.
   if (!onAlternar) {
     return (
-      <div className={base} {...ancla}>
+      <div ref={nodo} className={base} {...ancla}>
         {contenido}
         {accion}
       </div>
     )
   }
   return (
-    <div className={base} {...ancla}>
+    <div ref={nodo} className={base} {...ancla}>
       <button onClick={onAlternar} className="flex flex-1 items-center gap-2 text-left">
         {contenido}
       </button>
       {accion}
     </div>
   )
+}
+
+// Si un título "sticky" está pegado: en reposo está en lo alto de su tarjeta
+// (a un pelo de su borde) y pegado se separa de él. Se mira al desplazar
+// cualquier cosa (el scroll no burbujea, por eso en captura), una vez por
+// fotograma como mucho.
+function usarPegado(ref, activo) {
+  const [pegado, setPegado] = useState(false)
+  useEffect(() => {
+    if (!activo) { setPegado(false); return }
+    let pedido = 0
+    const mirar = () => {
+      pedido = 0
+      const el = ref.current
+      const caja = el?.parentElement
+      if (!el || !caja) return
+      setPegado(el.getBoundingClientRect().top - caja.getBoundingClientRect().top > 2)
+    }
+    const alMover = () => { if (!pedido) pedido = requestAnimationFrame(mirar) }
+    mirar()
+    document.addEventListener('scroll', alMover, { capture: true, passive: true })
+    return () => {
+      document.removeEventListener('scroll', alMover, { capture: true })
+      if (pedido) cancelAnimationFrame(pedido)
+    }
+  }, [ref, activo])
+  return pegado
 }
 
 function Contenido({ variante, label, cuenta, plegada, hayChevron, anidado, estado }) {
