@@ -14,6 +14,7 @@ import {
 import { Etiqueta, Girando } from './Audiolibros'
 import { duracion, duracionCorta, haceCuanto, palabras, reloj } from './formato'
 import { ESTADOS_AB, Generacion, HojaEmpezar, ReproductorCapitulo } from './Generacion'
+import Trozos from './Trozos'
 
 // La ficha de un audiolibro: sus datos, la voz, con qué libros va y sus
 // capítulos. Todo lo que se toca aquí se guarda al momento; no hay botón de
@@ -581,6 +582,9 @@ const TROZO_LECTURA = 8000
 
 function HojaCapitulo({ ab, cap, abierta, onCerrar, onAplicar }) {
   const [titulo, setTitulo] = useState('')
+  const [tiempo, setTiempo] = useState(null)
+  const [irA, setIrA] = useState(null)
+  const refrescarFicha = useCallback(() => { onAplicar(api(`/audiobooks/${ab.id}`)) }, [onAplicar, ab.id])
   const [texto, setTexto] = useState(null)
   const [hasta, setHasta] = useState(TROZO_LECTURA)
   const [uniendo, setUniendo] = useState(false)
@@ -649,12 +653,24 @@ function HojaCapitulo({ ab, cap, abierta, onCerrar, onAplicar }) {
           <ReproductorCapitulo
             src={`/api/audiobooks/${ab.id}/chapters/${cap.id}/audio?v=${encodeURIComponent(cap.generated_at || '')}`}
             duracionS={cap.duration_s}
+            irA={irA}
+            onTiempo={setTiempo}
           />
           <p className="mt-1.5 px-1 text-[11px] text-ink-mute">
             Generado el {new Date(cap.generated_at).toLocaleString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
             {cap.voice_used && cap.voice_used !== ab.voice && ' · con la otra voz'}
           </p>
         </div>
+      )}
+
+      {cap.has_audio && cap.pieces && cap.status === 'listo' && (
+        <Trozos
+          ab={ab}
+          cap={cap}
+          tiempo={tiempo}
+          onIr={t => setIrA({ t, vez: Date.now() })}
+          onHecho={refrescarFicha}
+        />
       )}
 
       {cap.status === 'error' && cap.error && (

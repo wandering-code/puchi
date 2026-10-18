@@ -98,6 +98,9 @@ def migrar(engine) -> None:
         for col, tipo in _COLUMNAS_FASE_2.items():
             con.execute(sql(f"ALTER TABLE audiobook_chapters ADD COLUMN IF NOT EXISTS {col} {tipo}"))
         con.execute(sql("ALTER TABLE audiobooks ADD COLUMN IF NOT EXISTS queue_hold BOOLEAN NOT NULL DEFAULT false"))
+        # Fase 9 (#71): retocar trozos sueltos.
+        con.execute(sql("ALTER TABLE audiobook_chapters ADD COLUMN IF NOT EXISTS retoques JSON"))
+        con.execute(sql("ALTER TABLE audiobook_chapters ADD COLUMN IF NOT EXISTS retoque_lease TIMESTAMP"))
         # Fase 6 (#68): por dónde quiere empezar quien lo pide.
         con.execute(sql("ALTER TABLE audiobook_requests ADD COLUMN IF NOT EXISTS start_page INTEGER"))
         con.execute(sql("ALTER TABLE audiobook_requests ADD COLUMN IF NOT EXISTS start_chapter VARCHAR"))
@@ -331,6 +334,8 @@ def _detalle(db: Session, ab: Audiobook) -> dict:
         "started_at": _iso(c.started_at), "error": c.error, "priority": c.priority,
         "duration_s": c.duration_s, "generated_at": _iso(c.generated_at), "voice_used": c.voice_used,
         "has_audio": bool(c.audio_path),
+        "pieces": bool(c.audio_path and isinstance(c.recipe, dict) and c.recipe.get("mapa")),
+        "retouches": len(c.retoques or []),
     } for c in caps]
     return out
 
@@ -572,6 +577,78 @@ def unir_con_siguiente(ab_id: int, cap_id: int, db: Session = Depends(get_db),
         cap.position = i
     db.commit()
     return _detalle(db, _cargar(db, ab_id))
+
+
+# ─── Retocar un trozo (fase 9, #71) ─────────────────────────────────────────
+
+def _mapa(c: AudiobookChapter) -> list:
+    return (c.recipe or {}).get("mapa") or [] if isinstance(c.recipe, dict) else []
+
+
+def _trozos_out(c: AudiobookChapter) -> dict:
+    pendientes = {r["i"]: r for r in (c.retoques or [])}
+    return {
+        "chapter_id": c.id, "generated_at": _iso(c.generated_at),
+        "working": bool(c.retoque_lease and c.retoque_lease > _ahora()),
+        "pieces": [{
+            "i": i, "text": t.get("texto"), "emotion": t.get("emocion"), "style": t.get("estilo"),
+            "start": t.get("ini"), "end": t.get("fin"), "redone": t.get("veces", 0),
+            "pending": i in pendientes, "pending_text": pendientes.get(i, {}).get("texto"),
+            "error": pendientes.get(i, {}).get("error"),
+        } for i, t in enumerate(_mapa(c))],
+    }
+
+
+@router.get("/{ab_id}/chapters/{cap_id}/pieces")
+def ver_trozos(ab_id: int, cap_id: int, db: Session = Depends(get_db), _: Player = Depends(require_admin)):
+    c = _capitulo(db, ab_id, cap_id)
+    if not _mapa(c):
+        raise HTTPException(status_code=404, detail="Este capítulo se generó antes de poder retocar trozos: "
+                                                    "regenéralo entero y ya se podrá")
+    return _trozos_out(c)
+
+
+class Retoque(BaseModel):
+    # El texto a decir. Sin él, el mismo de antes (solo cambia la semilla).
+    text: Optional[str] = None
+
+
+@router.post("/{ab_id}/chapters/{cap_id}/pieces/{i}/redo")
+def pedir_retoque(ab_id: int, cap_id: int, i: int, cuerpo: Retoque, db: Session = Depends(get_db),
+                  _: Player = Depends(require_admin)):
+    """Rehacer el trozo i: otra semilla y, si se quiere, otro texto (para que
+    pronuncie bien una palabra, escribiéndola de otra forma). El sobremesa
+    los coge antes que la cola normal."""
+    c = _capitulo(db, ab_id, cap_id)
+    mapa = _mapa(c)
+    if not (0 <= i < len(mapa)):
+        raise HTTPException(status_code=404, detail="Ese trozo no existe")
+    if c.status != "listo":
+        raise HTTPException(status_code=409, detail="El capítulo se está generando: espera a que acabe")
+    t = mapa[i]
+    texto = (cuerpo.text or "").strip() or t.get("texto")
+    pendientes = [r for r in (c.retoques or []) if r["i"] != i]
+    pendientes.append({
+        "i": i, "texto": texto, "emocion": t.get("emocion"), "estilo": t.get("estilo"),
+        # Otra semilla cada vez: con la misma saldría igual.
+        "semilla": int(t.get("semilla", 100 * i)) + 7919 * (int(t.get("veces", 0)) + 1),
+        "pedido": _iso(_ahora()),
+    })
+    c.retoques = pendientes
+    # Si se había rendido (tres fallos), vuelve a la cola.
+    if c.retoque_lease and c.retoque_lease > _ahora() + RESERVA:
+        c.retoque_lease = None
+    db.commit()
+    return _trozos_out(c)
+
+
+@router.delete("/{ab_id}/chapters/{cap_id}/pieces/{i}/redo")
+def anular_retoque(ab_id: int, cap_id: int, i: int, db: Session = Depends(get_db),
+                   _: Player = Depends(require_admin)):
+    c = _capitulo(db, ab_id, cap_id)
+    c.retoques = [r for r in (c.retoques or []) if r["i"] != i] or None
+    db.commit()
+    return _trozos_out(c)
 
 
 # ─── Enlaces con libros del catálogo ─────────────────────────────────────────
@@ -843,6 +920,25 @@ def pedir_trabajo(cuerpo: Pedir, db: Session = Depends(get_db), _=Depends(_solo_
     if not cuerpo.higgs_ok:
         return Response(status_code=204)
 
+    # Los retoques primero: son cortos y los ha pedido el admin a propósito.
+    r = (db.query(AudiobookChapter)
+         .filter(AudiobookChapter.retoques.isnot(None), AudiobookChapter.status == "listo",
+                 or_(AudiobookChapter.retoque_lease.is_(None), AudiobookChapter.retoque_lease < ahora))
+         .with_for_update(skip_locked=True).all())
+    r = next((c for c in r if c.retoques), None)
+    if r:
+        ab = db.query(Audiobook).filter(Audiobook.id == r.audiobook_id).first()
+        r.retoque_lease = ahora + RESERVA
+        db.commit()
+        _latir(cuerpo.name, True, r.id)
+        return {
+            "tipo": "retoque", "chapter_id": r.id, "audiobook_id": ab.id, "audiobook_title": ab.title,
+            "title": r.title, "position": r.position, "voice": r.voice_used or ab.voice,
+            "mapa": _mapa(r), "retoques": r.retoques,
+            "pausa_ms": (r.recipe or {}).get("pausa_ms", 350),
+            "lease_seconds": int(RESERVA.total_seconds()),
+        }
+
     retenidos = db.query(Audiobook.id).filter(Audiobook.queue_hold.is_(True))
     c = (db.query(AudiobookChapter)
          .filter(AudiobookChapter.status == "en_cola", AudiobookChapter.included.is_(True),
@@ -931,6 +1027,9 @@ def entregar_audio(
     c.generated_at, c.voice_used, c.recipe = _ahora(), receta.get("voice"), receta
     c.status, c.progress, c.progress_note, c.error = "listo", 1.0, None, None
     c.worker, c.lease_until, c.priority = None, None, False
+    # Audio nuevo entero, mapa nuevo: los retoques pedidos sobre el de antes
+    # ya no sirven.
+    c.retoques, c.retoque_lease = None, None
     db.commit()
     if anterior and anterior != ruta:
         _borrar_archivo(anterior)
@@ -939,9 +1038,77 @@ def entregar_audio(
     return {"ok": True}
 
 
+@worker_router.get("/{cap_id}/audio")
+def audio_para_retocar(cap_id: int, db: Session = Depends(get_db), _=Depends(_solo_sobremesa)):
+    """El audio actual del capítulo, para encajarle los trozos nuevos."""
+    c = db.query(AudiobookChapter).filter(AudiobookChapter.id == cap_id).first()
+    if not c or not c.audio_path or not os.path.exists(c.audio_path):
+        raise HTTPException(status_code=404, detail="Ese capítulo no tiene audio")
+    return FileResponse(c.audio_path, media_type="audio/mp4")
+
+
+@worker_router.post("/{cap_id}/retouch-result")
+def entregar_retoque(
+    cap_id: int,
+    audio: UploadFile = File(...),
+    duration_s: float = Form(...),
+    mapa: str = Form(...),
+    hechos: str = Form(...),   # [{i, pedido}] de los retoques que lleva este audio
+    name: str = Form("sobremesa"),
+    db: Session = Depends(get_db),
+    _=Depends(_solo_sobremesa),
+):
+    c = db.query(AudiobookChapter).filter(AudiobookChapter.id == cap_id).first()
+    if not c or c.status != "listo" or not c.audio_path:
+        raise HTTPException(status_code=409, detail="Ese capítulo ya no está para retocar")
+    try:
+        nuevo_mapa, hechos_ = json.loads(mapa), json.loads(hechos)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Mapa o lista de hechos ilegibles")
+    os.makedirs(_dir_audio(c.audiobook_id), exist_ok=True)
+    ruta = os.path.join(_dir_audio(c.audiobook_id), f"{c.id}-{int(datetime.now().timestamp())}.m4a")
+    with open(ruta, "wb") as f:
+        shutil.copyfileobj(audio.file, f)
+    anterior = c.audio_path
+    c.audio_path, c.audio_size, c.duration_s = ruta, os.path.getsize(ruta), duration_s
+    c.generated_at = _ahora()
+    c.recipe = {**(c.recipe or {}), "mapa": nuevo_mapa, "retocado": _iso(_ahora())}
+    # Solo se quitan los que iban en este audio: si mientras tanto el admin
+    # pidió otro (o volvió a pedir el mismo), se queda para la siguiente.
+    hecho = {(h["i"], h["pedido"]) for h in hechos_}
+    c.retoques = [r for r in (c.retoques or []) if (r["i"], r["pedido"]) not in hecho] or None
+    c.retoque_lease = None
+    db.commit()
+    if anterior and anterior != ruta:
+        _borrar_archivo(anterior)
+    _latir(name, True)
+    return {"ok": True}
+
+
 class Fallo(BaseModel):
     name: str = "sobremesa"
     message: str
+
+
+@worker_router.post("/{cap_id}/retouch-error")
+def fallo_retoque(cap_id: int, cuerpo: Fallo, db: Session = Depends(get_db), _=Depends(_solo_sobremesa)):
+    """Un retoque que falla se apunta en el propio retoque; al tercero se
+    deja de intentar (y el admin lo ve con el error)."""
+    c = db.query(AudiobookChapter).filter(AudiobookChapter.id == cap_id).first()
+    if not c:
+        return {"ok": True}
+    nuevos = []
+    for r in (c.retoques or []):
+        r = {**r, "intentos": int(r.get("intentos", 0)) + 1, "error": cuerpo.message[:300]}
+        nuevos.append(r)
+    c.retoques = nuevos or None
+    # Con tres fallos, sale de la cola hasta que el admin lo vuelva a pedir.
+    if nuevos and all(r["intentos"] >= INTENTOS for r in nuevos):
+        c.retoque_lease = _ahora() + timedelta(days=3650)
+    else:
+        c.retoque_lease = None
+    db.commit()
+    return {"ok": True}
 
 
 @worker_router.post("/{cap_id}/error")

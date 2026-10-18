@@ -324,7 +324,9 @@ export function HojaEmpezar({ ab, abierta, onCerrar, onGenerar }) {
 
 // ─── Escuchar un capítulo (para el admin) ────────────────────────────────────
 
-export function ReproductorCapitulo({ src, duracionS }) {
+// `irA` ({ t, vez }): saltar a ese segundo y sonar (lo usa Retocar trozos).
+// `onTiempo`: por dónde va, para resaltar el trozo que suena.
+export function ReproductorCapitulo({ src, duracionS, irA = null, onTiempo = null }) {
   const audio = useRef(null)
   const [sonando, setSonando] = useState(false)
   const [t, setT] = useState(0)
@@ -332,6 +334,13 @@ export function ReproductorCapitulo({ src, duracionS }) {
 
   // Al cambiar de capítulo (o al cerrar la hoja), que no siga sonando el anterior.
   useEffect(() => () => audio.current?.pause(), [src])
+
+  useEffect(() => {
+    const a = audio.current
+    if (!a || !irA) return
+    a.currentTime = irA.t
+    a.play().catch(() => {})
+  }, [irA])
 
   const alternar = () => {
     const a = audio.current
@@ -349,7 +358,7 @@ export function ReproductorCapitulo({ src, duracionS }) {
         onPlay={() => setSonando(true)}
         onPause={() => setSonando(false)}
         onEnded={() => setSonando(false)}
-        onTimeUpdate={e => setT(e.currentTarget.currentTime)}
+        onTimeUpdate={e => { setT(e.currentTarget.currentTime); onTiempo?.(e.currentTarget.currentTime) }}
         onLoadedMetadata={e => Number.isFinite(e.currentTarget.duration) && setDur(e.currentTarget.duration)}
       />
       <motion.button

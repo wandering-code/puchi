@@ -440,6 +440,13 @@ class AudiobookChapter(Base):
     # capítulos son de antes.
     voice_used    = Column(String, nullable=True)
     recipe        = Column(JSON, nullable=True)
+    # Retocar un trozo suelto (#71). recipe["mapa"] dice dónde empieza y
+    # acaba cada trozo en el audio; `retoques` son los que el admin ha pedido
+    # rehacer ([{i, texto, emocion, estilo, semilla, pedido}]) y
+    # `retoque_lease` hasta cuándo se los guarda el sobremesa que los hace.
+    # El capítulo sigue "listo" y se puede escuchar mientras tanto.
+    retoques      = Column(JSON, nullable=True)
+    retoque_lease = Column(DateTime, nullable=True)
 
 
 class AudiobookBook(Base):
