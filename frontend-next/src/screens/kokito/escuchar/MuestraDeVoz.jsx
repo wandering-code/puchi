@@ -8,13 +8,14 @@ import { IconPausa, IconPlay } from '../../../ui/icons'
 // puede usar todo el mundo, generada con la misma cadena que un capítulo
 // (emociones automáticas incluidas) a partir de un texto escrito para esto,
 // con diálogo, una pregunta y una exclamación. Comprobado con Whisper: dice
-// exactamente lo que pone.
+// exactamente lo que pone. Es la toma que eligió el usuario de oído entre
+// cuatro (semillas 2000 + 100·i): cada semilla interpreta un poco distinto.
 //
 // Su propio <audio>, aparte del reproductor de la app: si estabas escuchando
 // un audiolibro, se pausa para que no suenen los dos.
 
 const URL_MUESTRA = `${import.meta.env.BASE_URL}muestras/voz-femenina.m4a`
-const DURACION = 25.8
+const DURACION = 24.1
 
 export default function MuestraDeVoz({ className = '' }) {
   const r = useReproductor()
@@ -55,7 +56,7 @@ export default function MuestraDeVoz({ className = '' }) {
       </motion.button>
       <div className="min-w-0 flex-1">
         <p className="text-[13px] font-semibold leading-tight text-ink">Escucha cómo suena</p>
-        <p className="text-[11px] text-ink-dim">Un fragmento con la voz de los audiolibros · 26 s</p>
+        <p className="text-[11px] text-ink-dim">Un fragmento con la voz de los audiolibros · 24 s</p>
         <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-surface">
           <div className="h-full rounded-full bg-accent transition-[width] duration-200" style={{ width: `${pct}%` }} />
         </div>
