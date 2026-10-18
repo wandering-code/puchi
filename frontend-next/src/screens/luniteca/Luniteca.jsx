@@ -52,6 +52,17 @@ export default function Luniteca() {
   // Cómo se separan las secciones: se está probando cuál gusta (ver separacion.jsx).
   const [separacion] = usarSeparacion()
   const [conPanel] = usarCabeceraConPanel()
+  // El rebote del iPhone al tirar hacia abajo estando arriba deja ver el fondo
+  // de la zona que se desplaza, no lo que hay por encima de la cabecera (eso
+  // iOS no lo pinta: probado). Así que, con el panel, ese fondo es del tinte
+  // en su mitad de arriba y la estantería lleva el suyo propio encima.
+  const raiz = useRef(null)
+  useEffect(() => {
+    const zona = conPanel && raiz.current?.closest('[data-scroll="pantalla"]')
+    if (!zona) return
+    zona.style.background = 'linear-gradient(to bottom, color-mix(in srgb, var(--color-accent) 11%, var(--color-bg)) 50%, var(--color-bg) 50%)'
+    return () => { zona.style.background = '' }
+  }, [conPanel, shelf === null])
   // Con el panel, la barra de herramientas mide 60px y no 56: los títulos se
   // pegan justo debajo, no medio tapados.
   const desdeTitulos = conPanel ? 'top-[60px]' : 'top-14'
@@ -301,14 +312,10 @@ export default function Luniteca() {
   if (shelf === null) return <Cargando />
 
   return (
-    <div className="py-6">
+    <div ref={raiz} className={conPanel ? '-mx-5 min-h-full bg-bg px-5 py-6' : 'py-6'}>
       <header className={conPanel ? `relative -mx-5 -mt-6 px-5 pb-3 pt-6 ${TINTE}` : 'mb-4'}>
         {conPanel && (
           <>
-            {/* El mismo tinte hacia arriba, fuera de la pantalla: al tirar de
-                la página hacia abajo en el iPhone (el rebote), lo que asoma
-                por encima es esto y no el fondo de la página. */}
-            <div aria-hidden className={`pointer-events-none absolute inset-x-0 bottom-full h-[100vh] ${TINTE}`} />
             <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
               <IconLuna className="absolute -right-6 -top-4 h-40 w-40 text-accent opacity-[0.09]" />
             </div>
