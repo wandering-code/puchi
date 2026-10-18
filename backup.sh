@@ -12,6 +12,14 @@
 #
 # Al acabar deja backend/datos/copia_estado.json, que Puchi enseña al admin
 # en Audiolibros (y avisa si es de hace más de un día).
+#
+# Restaurar (en el mini PC, con el backend parado si se pisa todo):
+# - Audiolibros y claves:
+#     rsync -a /mnt/backups/puchi/datos/ /home/wander/apps/puchi/backend/datos/
+#   Un archivo borrado sin querer en los últimos 30 días está en
+#   /mnt/backups/puchi/datos_retirados/<fecha>/ con su misma ruta.
+# - Base de datos: docker exec -i puchi-db-1 pg_restore -U luni -d luni --clean #     < /mnt/backups/puchi/puchi_prod_<fecha>.dump
+# - Imágenes: tar -xzf /mnt/backups/puchi/puchi_uploads_<fecha>.tar.gz -C backend/
 set -euo pipefail
 
 DATE=$(date +%Y%m%d_%H%M%S)
