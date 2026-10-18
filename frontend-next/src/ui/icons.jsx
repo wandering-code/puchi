@@ -312,6 +312,12 @@ export const IconEncoger = (p) => (
   <svg {...base} {...p}><path d="m7 10 5 5 5-5" /><path d="M5 5h14" /></svg>
 )
 // Auriculares: la sección de audiolibros.
+export const IconCampana = (p) => (
+  <svg {...base} {...p}>
+    <path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 1.5h-15z" />
+    <path d="M10 20.5a2 2 0 0 0 4 0" />
+  </svg>
+)
 export const IconAuriculares = (p) => (
   <svg {...base} {...p}>
     <path d="M4 15v-3a8 8 0 0 1 16 0v3" />

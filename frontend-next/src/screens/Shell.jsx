@@ -16,6 +16,7 @@ import Perfil from './perfil/Perfil'
 import Admin from './admin/Admin'
 import Audiolibros from './kokito/audiolibros/Audiolibros'
 import { ES_KOKITO } from '../platform/variante'
+import { Campana } from './kokito/avisos/Avisos'
 import Avatar from '../ui/Avatar'
 import Interruptor from '../ui/Interruptor'
 import { SelectorSeparacion, usarSeparacion } from './luniteca/separacion'
@@ -157,6 +158,9 @@ function TopBar({ titulo, onAbrirMenu }) {
         >
           <IconMenu className="h-6 w-6" />
         </button>
+        {/* En /kokito la derecha lleva además la campana de avisos: un hueco
+            igual aquí mantiene el título centrado. */}
+        {ES_KOKITO && <span aria-hidden className="w-11 shrink-0" />}
 
         {/* La sección actual, en el centro. Con el menú escondido detrás de un
             botón hace falta algo que diga dónde estás. */}
@@ -188,7 +192,8 @@ function TopBar({ titulo, onAbrirMenu }) {
             aquí competía con el título de la sección en un móvil estrecho.
             Va dentro de un hueco del mismo ancho que el botón de menú, para
             que el título quede centrado de verdad y no descuadrado. */}
-        <div className="flex h-11 w-11 shrink-0 items-center justify-end">
+        <div className={`flex h-11 shrink-0 items-center justify-end ${ES_KOKITO ? 'w-[88px]' : 'w-11'}`}>
+          {ES_KOKITO && <Campana />}
           <Avatar jugador={player} size={36} />
         </div>
       </div>

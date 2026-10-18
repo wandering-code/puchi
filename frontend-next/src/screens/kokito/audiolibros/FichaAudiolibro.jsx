@@ -12,7 +12,7 @@ import {
   IconArrowLeft, IconCheck, IconEnlace, IconPencil, IconRefresh, IconSearch, IconUnir, IconX,
 } from '../../../ui/icons'
 import { Etiqueta, Girando } from './Audiolibros'
-import { duracion, duracionCorta, palabras, reloj } from './formato'
+import { duracion, duracionCorta, haceCuanto, palabras, reloj } from './formato'
 import { ESTADOS_AB, Generacion, HojaEmpezar, ReproductorCapitulo } from './Generacion'
 
 // La ficha de un audiolibro: sus datos, la voz, con qué libros va y sus
@@ -417,7 +417,7 @@ function Oyentes({ oyentes }) {
   return (
     <Seccion
       titulo="Quién podrá escucharlo"
-      nota="Quien tiene alguno de esos libros en su estantería. Cuando haya avisos, serán para ellos."
+      nota="Quien tiene alguno de esos libros en su estantería. Los avisos van a quien lo pidió."
     >
       {lista.length === 0 ? (
         <p className="rounded-xl2 border border-dashed border-line px-4 py-3 text-sm text-ink-dim">
@@ -434,11 +434,30 @@ function Oyentes({ oyentes }) {
                   {ESTADOS[o.shelf_status]?.texto || 'En su estantería'}
                 </p>
               </div>
+              <EstadoAviso oyente={o} />
             </div>
           ))}
         </div>
       )}
     </Seccion>
+  )
+}
+
+// Lo que sabe del audiolibro cada uno: si lo pidió, si se le ha avisado y si
+// lo ha visto (fase 7, #69).
+const AVISO = { ab_ready: 'Avisado', ab_new_chapter: 'Avisado de un capítulo', ab_complete: 'Avisado: completo' }
+
+function EstadoAviso({ oyente }) {
+  const ultimo = (oyente.notices || []).filter(n => AVISO[n.kind]).at(-1)
+  if (!oyente.requested && !ultimo) return null
+  if (!ultimo) {
+    return <span className="shrink-0 rounded-full bg-surface-2 px-2 py-0.5 text-[11px] font-medium text-ink-dim">Lo pidió</span>
+  }
+  return (
+    <span className="shrink-0 text-right">
+      <span className="block rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-medium text-accent">{AVISO[ultimo.kind]}</span>
+      <span className="mt-0.5 block text-[10px] text-ink-mute">{ultimo.read ? 'Visto' : 'Sin ver'} · {haceCuanto(ultimo.at)}</span>
+    </span>
   )
 }
 

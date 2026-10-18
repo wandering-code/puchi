@@ -468,10 +468,17 @@ def rechazar(cuerpo: Rechazo, db: Session = Depends(get_db), _: Player = Depends
     novela, y a todos se les da el mismo motivo."""
     motivo = (cuerpo.reason or "").strip()[:300] or None
     ahora = _ahora()
-    for r in (db.query(AudiobookRequest)
-              .filter(AudiobookRequest.book_id.in_(cuerpo.book_ids), AudiobookRequest.rejected_at.is_(None)).all()):
+    nuevas = (db.query(AudiobookRequest)
+              .filter(AudiobookRequest.book_id.in_(cuerpo.book_ids), AudiobookRequest.rejected_at.is_(None)).all())
+    for r in nuevas:
         r.rejected_at, r.reject_reason = ahora, motivo
     db.commit()
+    try:
+        from avisos_audiolibros import al_rechazar
+        al_rechazar(db, nuevas)
+    except Exception as e:
+        db.rollback()
+        print(f"[avisos] no se pudo avisar del rechazo: {e!r}", flush=True)
     return bandeja(db)
 
 
@@ -480,6 +487,8 @@ def deshacer_rechazo(cuerpo: Rechazo, db: Session = Depends(get_db), _: Player =
     for r in db.query(AudiobookRequest).filter(AudiobookRequest.book_id.in_(cuerpo.book_ids)).all():
         r.rejected_at = r.reject_reason = None
     db.commit()
+    from avisos_audiolibros import al_deshacer_rechazo
+    al_deshacer_rechazo(db, cuerpo.book_ids)
     return bandeja(db)
 
 

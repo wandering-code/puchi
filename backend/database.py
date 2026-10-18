@@ -492,6 +492,26 @@ class AudiobookRequest(Base):
     start_chapter = Column(String, nullable=True)
 
 
+class PlayerNotice(Base):
+    """Un aviso para una persona (fase 7 de audiolibros, #69): "ya puedes
+    escuchar…", "nuevo capítulo", "completo", "no se va a preparar". Se guarda
+    para que lo vea aunque no tuviera la app abierta cuando pasó, y para que
+    el admin sepa a quién se ha avisado ya."""
+    __tablename__ = "player_notices"
+
+    id           = Column(Integer, primary_key=True, index=True)
+    player_id    = Column(Integer, ForeignKey("players.id", ondelete="CASCADE"), nullable=False, index=True)
+    # ab_ready | ab_new_chapter | ab_complete | ab_rejected
+    kind         = Column(String, nullable=False)
+    audiobook_id = Column(Integer, ForeignKey("audiobooks.id", ondelete="CASCADE"), nullable=True, index=True)
+    book_id      = Column(Integer, ForeignKey("books.id", ondelete="CASCADE"), nullable=True)
+    chapter_id   = Column(Integer, ForeignKey("audiobook_chapters.id", ondelete="SET NULL"), nullable=True)
+    title        = Column(String, nullable=False)
+    body         = Column(String, nullable=True)
+    created_at   = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    read_at      = Column(DateTime, nullable=True)
+
+
 def crear_tablas():
     Base.metadata.create_all(bind=engine)
 

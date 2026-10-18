@@ -306,11 +306,14 @@ def _detalle(db: Session, ab: Audiobook) -> dict:
     oyentes: dict[int, dict] = {}
     # Aquí dentro: audiolibros_peticiones importa de este módulo.
     from audiolibros_peticiones import deseos, pedido_por
+    from avisos_audiolibros import avisados
+    dados = avisados(db, ab.id)
     out["start_wishes"] = deseos(db, ab.id, [c for c in caps if c.included])
     pidieron = pedido_por(db, [b["id"] for b in out["books"]])
     for libro in out["books"]:
         for d in libro["owners"]:
-            oyentes.setdefault(d["id"], {**d, "book_title": libro["title"], "requested": d["id"] in pidieron})
+            oyentes.setdefault(d["id"], {**d, "book_title": libro["title"], "requested": d["id"] in pidieron,
+                                         "notices": dados.get(d["id"], [])})
     out["listeners"] = sorted(oyentes.values(), key=lambda d: d["name"].lower())
     out["chapters"] = [{
         "id": c.id, "position": c.position, "title": c.title, "words": c.words,
@@ -325,6 +328,17 @@ def _detalle(db: Session, ab: Audiobook) -> dict:
         "has_audio": bool(c.audio_path),
     } for c in caps]
     return out
+
+
+def _avisar(db: Session, ab_id: int, nuevo: Optional[AudiobookChapter] = None) -> None:
+    """Los avisos de la fase 7 (#69). Nunca tumban lo que los llama: si
+    fallan, el capítulo sigue entregado y el enlace hecho."""
+    try:
+        from avisos_audiolibros import revisar
+        revisar(db, ab_id, nuevo)
+    except Exception as e:
+        db.rollback()
+        print(f"[avisos] no se pudo avisar del audiolibro {ab_id}: {e!r}", flush=True)
 
 
 def _borrar_archivo(ruta: Optional[str]) -> None:
@@ -654,6 +668,8 @@ def enlazar(ab_id: int, cuerpo: Enlace, db: Session = Depends(get_db),
     if not actual:
         db.add(AudiobookBook(audiobook_id=ab.id, book_id=cuerpo.book_id, linked_by=admin.id))
     db.commit()
+    # Si quien lo pidió ya tiene listo su capítulo, se le avisa ahora (#69).
+    _avisar(db, ab.id)
     return _detalle(db, ab)
 
 
@@ -858,6 +874,7 @@ def entregar_audio(
     if anterior and anterior != ruta:
         _borrar_archivo(anterior)
     _latir(name, True)
+    _avisar(db, c.audiobook_id, c)
     return {"ok": True}
 
 

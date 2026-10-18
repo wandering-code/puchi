@@ -18,6 +18,8 @@ import Shell from './screens/Shell'
 import UpdatePrompt from './ui/UpdatePrompt'
 import { ES_KOKITO } from './platform/variante'
 import { ReproductorProvider } from './platform/reproductor'
+import { NotificacionesProvider } from './platform/notificaciones'
+import { HojaAvisos } from './screens/kokito/avisos/Avisos'
 import PantallaReproductor from './screens/kokito/escuchar/PantallaReproductor'
 import MiniReproductor from './screens/kokito/escuchar/MiniReproductor'
 
@@ -89,9 +91,14 @@ export default function App() {
                         pantalla. De momento solo en /kokito. */}
                     {ES_KOKITO ? (
                       <ReproductorProvider>
-                        <Shell />
-                        <MiniReproductor />
-                        <PantallaReproductor />
+                        {/* Los avisos de audiolibros (#69), dentro del
+                            reproductor: tocar uno abre lo que se escucha. */}
+                        <NotificacionesProvider>
+                          <Shell />
+                          <MiniReproductor />
+                          <PantallaReproductor />
+                          <HojaAvisos />
+                        </NotificacionesProvider>
                       </ReproductorProvider>
                     ) : <Shell />}
                   </PendientesProvider>
