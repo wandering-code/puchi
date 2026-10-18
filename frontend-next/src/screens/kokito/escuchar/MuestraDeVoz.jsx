@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react'
-import { motion } from 'motion/react'
 import { useReproductor } from '../../../platform/reproductor'
 import { IconPausa, IconPlay } from '../../../ui/icons'
 
@@ -46,14 +45,13 @@ export default function MuestraDeVoz({ className = '' }) {
   const pct = Math.min(100, (t / DURACION) * 100)
   return (
     <div className={`flex items-center gap-3 rounded-xl2 border border-accent-line bg-accent-soft/40 px-3 py-2.5 ${className}`}>
-      <motion.button
-        whileTap={{ scale: 0.9 }}
+      <button
         onClick={alternar}
         aria-label={sonando ? 'Pausar la muestra' : 'Escuchar una muestra de la voz'}
-        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent text-on-accent shadow-sm"
+        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent text-on-accent shadow-sm transition-transform duration-150 active:scale-90"
       >
         {sonando ? <IconPausa className="h-4 w-4" /> : <IconPlay className="ml-0.5 h-4 w-4" />}
-      </motion.button>
+      </button>
       <div className="min-w-0 flex-1">
         <p className="text-[13px] font-semibold leading-tight text-ink">Escucha cómo suena</p>
         <p className="text-[11px] text-ink-dim">Un fragmento con la voz de los audiolibros · 24 s</p>

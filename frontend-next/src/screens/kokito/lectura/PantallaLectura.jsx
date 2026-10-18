@@ -283,7 +283,9 @@ export default function PantallaLectura() {
           <h2 className="mb-6 font-display text-[1.6rem] font-bold leading-tight tracking-[-0.02em]">{cap.title}</h2>
         )}
         {error && !datos && <p className="rounded-xl2 bg-danger/10 px-3.5 py-2.5 text-sm text-danger">{error}</p>}
-        {!datos && !error && (
+        {/* Solo abierta: el lector vive montado y estas barras, animadas sin
+            fin, tendrían al navegador repintando aunque no se vea. */}
+        {abierta && !datos && !error && (
           <div className="space-y-3">
             {[100, 92, 97, 60, 0, 95, 88, 99, 70].map((w, n) => (
               <div key={n} className="h-4 animate-pulse rounded bg-surface-2" style={{ width: `${w}%`, opacity: w ? 1 : 0 }} />

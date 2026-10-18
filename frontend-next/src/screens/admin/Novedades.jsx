@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { AnimatePresence, motion } from 'motion/react'
+import Desplegable from '../../ui/Desplegable'
 import { api } from '../../platform/api'
 import { useCapa } from '../../platform/capas'
 import HojaInferior from '../luniteca/HojaInferior'
@@ -39,10 +39,9 @@ export default function Novedades() {
 
   return (
     <div className="mt-5">
-      <motion.button
-        whileTap={{ scale: 0.98 }}
+      <button
         onClick={nuevo}
-        className="flex w-full items-center gap-3 rounded-xl3 border border-dashed border-accent-line bg-accent-soft/40 p-3.5 text-left"
+        className="flex w-full items-center gap-3 rounded-xl3 border border-dashed border-accent-line bg-accent-soft/40 p-3.5 text-left transition-transform duration-150 active:scale-[0.98]"
       >
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-on-accent">
           <IconPlus className="h-5 w-5" />
@@ -51,7 +50,7 @@ export default function Novedades() {
           <span className="block font-display text-[15px] font-bold">Nuevo aviso</span>
           <span className="block text-xs text-ink-dim">Le saldrá a cada uno hasta que le dé a «Entendido»</span>
         </span>
-      </motion.button>
+      </button>
 
       {error && <p className="mt-4 text-sm text-danger">{error}</p>}
       {lista === null && <div className="mt-4 h-24 animate-pulse rounded-xl2 bg-surface-2" />}
@@ -143,22 +142,14 @@ function TarjetaAviso({ aviso: a, abierto, onAlternar, onEditar, onCambio, onBor
         <IconChevron className={`mt-1 h-4 w-4 shrink-0 text-ink-mute transition-transform ${abierto ? 'rotate-180' : ''}`} />
       </button>
 
-      <AnimatePresence initial={false}>
-        {abierto && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
-            className="overflow-hidden"
-          >
+      <Desplegable abierto={abierto}>
             <div className="border-t border-line px-3.5 pb-3.5 pt-3">
               {a.body && <TextoNovedad texto={a.body} className="text-[13px] leading-relaxed text-ink-dim" />}
               {error && <p className="mt-2 text-xs text-danger">{error}</p>}
 
               <p className="mb-1.5 mt-4 text-[11px] font-semibold uppercase tracking-[0.12em] text-ink-mute">Quién lo ha visto</p>
               {!gente ? (
-                <div className="h-12 animate-pulse rounded-xl2 bg-surface-2" />
+                <div className={`h-12 rounded-xl2 bg-surface-2 ${abierto ? 'animate-pulse' : ''}`} />
               ) : gente.length === 0 ? (
                 <p className="text-xs text-ink-mute">No va dirigido a nadie ahora mismo.</p>
               ) : (
@@ -179,14 +170,7 @@ function TarjetaAviso({ aviso: a, abierto, onAlternar, onEditar, onCambio, onBor
                 </div>
               )}
 
-              <AnimatePresence initial={false}>
-                {relanzando && (
-                  <motion.div
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: 'auto', opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    className="overflow-hidden"
-                  >
+              <Desplegable abierto={relanzando}>
                     <div className="mt-3 rounded-xl2 bg-accent-soft/50 p-3">
                       <p className="text-xs leading-relaxed text-ink-dim">
                         Vuelve a salirle a todos, también a quien ya lo había visto.
@@ -199,9 +183,7 @@ function TarjetaAviso({ aviso: a, abierto, onAlternar, onEditar, onCambio, onBor
                         <button onClick={() => setRelanzando(false)} className="h-9 rounded-xl2 border border-line px-3 text-xs text-ink-dim">Cancelar</button>
                       </div>
                     </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
+              </Desplegable>
 
               <div className="mt-3 flex items-center gap-2">
                 <button onClick={onEditar} className="inline-flex h-9 items-center gap-1.5 rounded-full border border-line px-3 text-xs font-semibold text-ink-dim active:bg-surface-2">
@@ -216,9 +198,7 @@ function TarjetaAviso({ aviso: a, abierto, onAlternar, onEditar, onCambio, onBor
                 <BotonPeligro etiqueta="Borrar" pregunta="¿Borrar este aviso?" confirmar="Borrar" onConfirmar={borrar} />
               </div>
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      </Desplegable>
     </div>
   )
 }
@@ -280,14 +260,13 @@ function HojaAviso({ abierta, aviso, onCerrar, onGuardado }) {
       titulo={aviso ? 'Editar aviso' : 'Nuevo aviso'}
       onCerrar={onCerrar}
       pie={
-        <motion.button
-          whileTap={{ scale: 0.98 }}
+        <button
           onClick={guardar}
           disabled={!vale || enviando}
           className="flex h-12 flex-1 items-center justify-center rounded-xl2 bg-accent text-sm font-semibold text-on-accent disabled:opacity-50"
         >
           {aviso ? 'Guardar' : 'Publicar'}
-        </motion.button>
+        </button>
       }
     >
       <div className="space-y-4 pb-2">
@@ -335,14 +314,7 @@ function HojaAviso({ abierta, aviso, onCerrar, onGuardado }) {
             {publico === 'club' && (cuentas ? `Los ${cuantosClub} del club` : 'Los del club')}
             {publico === 'personas' && `${elegidos.length} elegidas`}
           </p>
-          <AnimatePresence initial={false}>
-            {publico === 'personas' && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: 'auto', opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                className="overflow-hidden"
-              >
+          <Desplegable abierto={publico === 'personas'}>
                 <div className="mt-2 max-h-64 divide-y divide-[color:var(--color-line)] overflow-y-auto rounded-xl2 border border-line bg-surface">
                   {(cuentas || []).map(p => {
                     const si = elegidos.includes(p.id)
@@ -358,9 +330,7 @@ function HojaAviso({ abierta, aviso, onCerrar, onGuardado }) {
                     )
                   })}
                 </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+          </Desplegable>
         </div>
 
         {!aviso && (

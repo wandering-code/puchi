@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { AnimatePresence, motion } from 'motion/react'
+import Desplegable from '../../ui/Desplegable'
 import { useAuth } from '../../platform/auth'
 import { usarPreferencia } from '../../platform/preferencias'
 import { CON_AUDIOLIBROS } from '../../platform/variante'
@@ -192,16 +192,15 @@ export default function Inicio() {
   )
 }
 
-const SUAVE = { duration: 0.26, ease: [0.22, 1, 0.36, 1] }
-
 function Bloque({ bloque: b, orden, abierto, onAlternar }) {
   const { Icon } = b
   return (
-    <motion.section
-      initial={{ opacity: 0, transform: 'translateY(10px)' }}
-      animate={{ opacity: 1, transform: 'translateY(0px)' }}
-      transition={{ duration: 0.3, delay: Math.min(orden * 0.04, 0.2), ease: [0.22, 1, 0.36, 1] }}
-      className={`overflow-hidden rounded-xl3 border bg-surface transition-colors ${abierto ? 'border-accent-line' : 'border-line'}`}
+    // Las animaciones de esta pantalla van en CSS (la entrada con .entra, el
+    // despliegue con Desplegable): las hace el navegador a la frecuencia de
+    // la pantalla, y no Motion desde JavaScript, que en Safari va a 60.
+    <section
+      className={`entra overflow-hidden rounded-xl3 border bg-surface transition-colors ${abierto ? 'border-accent-line' : 'border-line'}`}
+      style={{ '--entra-desde': 'translateY(10px)', '--entra-dura': '300ms', '--entra-espera': `${Math.min(orden * 40, 200)}ms` }}
     >
       <button onClick={onAlternar} aria-expanded={abierto} className="flex w-full items-center gap-3 p-4 text-left">
         <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl2 transition-colors ${abierto ? 'bg-accent text-on-accent' : 'bg-accent-soft text-accent'}`}>
@@ -214,15 +213,7 @@ function Bloque({ bloque: b, orden, abierto, onAlternar }) {
         <IconChevron className={`h-4 w-4 shrink-0 text-ink-mute transition-transform duration-200 ${abierto ? 'rotate-180' : ''}`} />
       </button>
 
-      <AnimatePresence initial={false}>
-        {abierto && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={SUAVE}
-            className="overflow-hidden"
-          >
+      <Desplegable abierto={abierto}>
             <div className="px-4 pb-4">
               {b.muestra && CON_AUDIOLIBROS && <MuestraDeVoz className="mb-2" />}
               <div className="space-y-2">
@@ -244,10 +235,8 @@ function Bloque({ bloque: b, orden, abierto, onAlternar }) {
                 </Link>
               )}
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </motion.section>
+      </Desplegable>
+    </section>
   )
 }
 

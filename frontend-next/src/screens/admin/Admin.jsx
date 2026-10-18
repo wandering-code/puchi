@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { AnimatePresence, motion } from 'motion/react'
+import Desplegable from '../../ui/Desplegable'
+import { LLEGADA, enCss } from '../../ui/curvas'
 import { api } from '../../platform/api'
 import { esAdmin as esElAdmin, useAuth } from '../../platform/auth'
 import { useLiveUpdates } from '../../platform/live'
@@ -50,7 +51,18 @@ export default function Admin() {
   // Optimista: el cambio se ve al momento y, si el servidor lo rechaza, se
   // vuelve a lo que había. Aprobar o desactivar a alguien es un gesto que se
   // hace de seguido sobre varias cuentas, y esperar a cada respuesta se nota.
+  // La fila que se va de la pestaña (aprobada, rechazada, desactivada,
+  // borrada) primero se pliega y luego sale de la lista.
+  const [saliendo, setSaliendo] = useState(() => new Set())
+  async function despedir(id) {
+    setSaliendo(s => new Set(s).add(id))
+    await new Promise(r => setTimeout(r, 260))
+  }
+  const olvidar = id => setSaliendo(s => { const n = new Set(s); n.delete(id); return n })
+
   async function actualizar(id, cambios) {
+    const sigue = !cambios.status || cambios.status === ESTADO_DE[pestana]
+    if (!sigue) await despedir(id)
     const antes = jugadores
     setJugadores(js => js.map(p => p.id === id ? { ...p, ...cambios } : p))
     try {
@@ -59,10 +71,13 @@ export default function Admin() {
     } catch (err) {
       setJugadores(antes)
       setError(err.message || 'No se ha podido guardar')
+    } finally {
+      olvidar(id)
     }
   }
 
   async function eliminar(id) {
+    await despedir(id)
     const antes = jugadores
     setJugadores(js => js.filter(p => p.id !== id))
     try {
@@ -70,6 +85,8 @@ export default function Admin() {
     } catch (err) {
       setJugadores(antes)
       setError(err.message || 'No se ha podido eliminar')
+    } finally {
+      olvidar(id)
     }
   }
 
@@ -94,7 +111,19 @@ export default function Admin() {
           varias cuentas hay que bajar, y cambiar de pestaña sin volver arriba
           es la diferencia entre usarlo y no usarlo. */}
       <div className="sticky top-0 z-20 -mx-5 border-b border-line bg-bg/85 px-5 py-2 backdrop-blur-xl">
-        <div className="flex gap-1">
+        <div className="relative flex gap-1">
+          {/* Una sola pastilla que se desliza con una transición CSS (en la GPU,
+              a la frecuencia de la pantalla), como el selector de vista de la
+              estantería. Con layoutId la movía Motion desde JavaScript, a 60. */}
+          <span
+            aria-hidden
+            className="absolute inset-y-0 left-0 rounded-xl2 bg-accent-soft"
+            style={{
+              width: `calc((100% - ${(PESTANAS.length - 1) * 4}px) / ${PESTANAS.length})`,
+              transform: `translateX(calc(${Math.max(0, PESTANAS.findIndex(x => x.id === pestana))} * (100% + 4px)))`,
+              transition: `transform ${enCss(LLEGADA)}`,
+            }}
+          />
           {PESTANAS.map(({ id, label }) => {
             const activa = pestana === id
             const cuenta = listas[id]?.length || 0
@@ -107,13 +136,6 @@ export default function Admin() {
                   activa ? 'text-accent' : 'text-ink-dim'
                 }`}
               >
-                {activa && (
-                  <motion.span
-                    layoutId="admin-pestana"
-                    className="absolute inset-0 rounded-xl2 bg-accent-soft"
-                    transition={{ type: 'spring', stiffness: 420, damping: 34 }}
-                  />
-                )}
                 <span className="relative inline-flex items-center gap-1.5">
                   {label}
                   {/* La cuenta solo donde importa que no se quede sin mirar:
@@ -149,26 +171,17 @@ export default function Admin() {
       {/* Las tres listas se cruzan al cambiar de pestaña, y dentro de cada una
           las filas que se van (una cuenta aprobada sale de "Pendientes") se
           animan en su sitio en vez de desaparecer de golpe. */}
+      {/* Todo en CSS (la entrada con .entra, la salida plegándose con
+          Desplegable): lo hace el navegador a la frecuencia de la pantalla. */}
       {pestana !== 'novedades' && (
-      <AnimatePresence mode="wait" initial={false}>
-        <motion.div
+        <div
           key={pestana}
-          initial={{ opacity: 0, y: 6 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -4 }}
-          transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
-          className="mt-5 space-y-2"
+          className="entra mt-5"
+          style={{ '--entra-desde': 'translateY(6px)', '--entra-dura': '200ms' }}
         >
-          <AnimatePresence initial={false} mode="popLayout">
             {visibles.map(p => (
-              <motion.div
-                key={p.id}
-                layout
-                initial={{ opacity: 0, y: -6 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.96 }}
-                transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
-              >
+              <Desplegable key={p.id} abierto={!saliendo.has(p.id)}>
+                <div className="pb-2">
                 <FilaCuenta
                   jugador={p}
                   pestana={pestana}
@@ -178,15 +191,17 @@ export default function Admin() {
                   onActualizar={cambios => actualizar(p.id, cambios)}
                   onEliminar={() => eliminar(p.id)}
                 />
-              </motion.div>
+                </div>
+              </Desplegable>
             ))}
-          </AnimatePresence>
-        </motion.div>
-      </AnimatePresence>
+        </div>
       )}
     </div>
   )
 }
+
+// El estado de las cuentas que enseña cada pestaña.
+const ESTADO_DE = { pendientes: 'pending', miembros: 'approved', desactivados: 'deactivated' }
 
 const VACIO = {
   pendientes:   'No hay ninguna cuenta esperando aprobación.',
@@ -216,22 +231,20 @@ function FilaCuenta({ jugador, pestana, soyYo, clubAlAprobar, onClubAlAprobar, o
             etiqueta="Entra también en el club de lectura"
           />
           <div className="mt-3 flex gap-2">
-            <motion.button
-              whileTap={{ scale: 0.97 }}
+            <button
               onClick={() => onActualizar({ status: 'approved', club_member: clubAlAprobar })}
-              className="flex h-11 flex-[1.3] items-center justify-center gap-2 rounded-xl2 bg-accent text-sm font-semibold text-on-accent"
+              className="flex h-11 flex-[1.3] items-center justify-center gap-2 rounded-xl2 bg-accent text-sm font-semibold text-on-accent transition-transform duration-150 active:scale-[0.97]"
             >
               <IconCheck className="h-4 w-4" />
               Aprobar
-            </motion.button>
-            <motion.button
-              whileTap={{ scale: 0.97 }}
+            </button>
+            <button
               onClick={() => onActualizar({ status: 'rejected' })}
-              className="flex h-11 flex-1 items-center justify-center gap-2 rounded-xl2 border border-line text-sm text-danger"
+              className="flex h-11 flex-1 items-center justify-center gap-2 rounded-xl2 border border-line text-sm text-danger transition-transform duration-150 active:scale-[0.97]"
             >
               <IconX className="h-4 w-4" />
               Rechazar
-            </motion.button>
+            </button>
           </div>
         </div>
       )}
@@ -267,18 +280,17 @@ function FilaCuenta({ jugador, pestana, soyYo, clubAlAprobar, onClubAlAprobar, o
 
       {pestana === 'desactivados' && (
         <div className="mt-3 flex items-center justify-between gap-3">
-          <motion.button
-            whileTap={{ scale: 0.97 }}
+          <button
             // Reactivar devuelve el acceso tal cual lo tendría alguien recién
             // aprobado. No se guarda si antes estaba o no en el club —
             // desactivar se lo quita—, así que se asume el caso normal y, si
             // no era del club, se le quita desde "Cuentas".
             onClick={() => onActualizar({ status: 'approved', club_member: true })}
-            className="flex h-10 items-center gap-2 rounded-xl2 bg-accent px-3.5 text-sm font-semibold text-on-accent"
+            className="flex h-10 items-center gap-2 rounded-xl2 bg-accent px-3.5 text-sm font-semibold text-on-accent transition-transform duration-150 active:scale-[0.97]"
           >
             <IconCheck className="h-4 w-4" />
             Reactivar
-          </motion.button>
+          </button>
           <BotonPeligro
             etiqueta="Eliminar"
             pregunta="¿Borrar la cuenta y todos sus libros?"
