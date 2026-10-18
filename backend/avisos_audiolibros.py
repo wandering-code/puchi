@@ -13,6 +13,10 @@ A quién y cuándo, según lo que decidió el usuario:
 - "Completo": cuando ya está todo, una vez.
 - "No se va a preparar": al rechazar su petición.
 
+Y al admin, por el mismo camino (decidió que no hacía falta ntfy): cada
+petición nueva, cada audiolibro que se termina de generar y cada capítulo
+que falla del todo.
+
 Cada aviso se guarda (player_notices) para verlo aunque no tuviera la app
 abierta, se le manda en directo por el WebSocket si la tiene y, si ha
 activado los avisos en su móvil, le llega también como push (push.py).
@@ -57,7 +61,8 @@ def _repartir(db: Session, avisos: list[PlayerNotice]) -> None:
                 "title": n.title, "body": n.body or "",
                 # Uno por libro: un "nuevo capítulo" sustituye al anterior en
                 # la pantalla de bloqueo en vez de amontonarse.
-                "tag": f"ab-{n.audiobook_id}" if n.audiobook_id else f"libro-{n.book_id}",
+                "tag": (f"adm-{n.id}" if n.kind.startswith("adm_")
+                        else f"ab-{n.audiobook_id}" if n.audiobook_id else f"libro-{n.book_id}"),
                 "url": f"/kokito/?aviso={n.id}",
                 "badge": sin_leer[n.player_id],
             }))
@@ -205,6 +210,72 @@ def al_deshacer_rechazo(db: Session, book_ids: list[int]) -> None:
      .filter(PlayerNotice.kind == "ab_rejected", PlayerNotice.book_id.in_(book_ids))
      .delete(synchronize_session=False))
     db.commit()
+
+
+# ─── Para el admin ───────────────────────────────────────────────────────────
+
+def _admins(db: Session) -> list[int]:
+    # El admin es la cuenta "wander" (auth.require_admin).
+    return [i for (i,) in db.query(Player.id)
+            .filter(Player.name.ilike("wander"), Player.status == "approved").all()]
+
+
+def _duracion(segundos: float) -> str:
+    minutos = round(segundos / 60)
+    h, m = divmod(minutos, 60)
+    return f"{h} h {m:02d} min" if h else f"{m} min"
+
+
+def admin_peticion(db: Session, r: AudiobookRequest, quien: Player) -> None:
+    """Alguien ha pedido un audiolibro. Hace commit."""
+    admins = [a for a in _admins(db) if a != quien.id]
+    libro = db.query(Book).filter(Book.id == r.book_id).first()
+    if not admins or not libro:
+        return
+    if r.start_chapter:
+        desde = f"Quiere empezar por «{r.start_chapter}»"
+    elif r.start_page:
+        desde = f"Quiere empezar por la pág. {r.start_page}"
+    else:
+        desde = "Desde el principio"
+    nuevos = [PlayerNotice(player_id=a, kind="adm_request", book_id=libro.id,
+                           title=f"{quien.name} pide «{libro.title}»", body=desde) for a in admins]
+    db.add_all(nuevos)
+    db.commit()
+    _repartir(db, nuevos)
+
+
+def admin_si_terminado(db: Session, ab_id: int) -> None:
+    """Si con este capítulo ya está todo generado, avisa una vez. Hace commit."""
+    caps = (db.query(AudiobookChapter)
+            .filter(AudiobookChapter.audiobook_id == ab_id, AudiobookChapter.included.is_(True)).all())
+    if not caps or not all(_listo(c) for c in caps):
+        return
+    admins = _admins(db)
+    ya = {pid for (pid,) in db.query(PlayerNotice.player_id)
+          .filter(PlayerNotice.kind == "adm_ab_done", PlayerNotice.audiobook_id == ab_id).all()}
+    ab = db.query(Audiobook).filter(Audiobook.id == ab_id).first()
+    nuevos = [PlayerNotice(player_id=a, kind="adm_ab_done", audiobook_id=ab_id,
+                           title=f"«{ab.title}» ya está generado entero",
+                           body=f"{len(caps)} capítulos · {_duracion(sum(c.duration_s or 0 for c in caps))}")
+              for a in admins if a not in ya]
+    if nuevos:
+        db.add_all(nuevos)
+        db.commit()
+        _repartir(db, nuevos)
+
+
+def admin_fallo(db: Session, c: AudiobookChapter, intentos: int) -> None:
+    """Un capítulo ha fallado todas las veces y se ha quedado en error."""
+    ab = db.query(Audiobook).filter(Audiobook.id == c.audiobook_id).first()
+    nuevos = [PlayerNotice(player_id=a, kind="adm_ch_error", audiobook_id=c.audiobook_id, chapter_id=c.id,
+                           title=f"Falla un capítulo de «{ab.title if ab else '?'}»",
+                           body=f"«{c.title}» tras {intentos} intentos: {(c.error or '')[:140]}")
+              for a in _admins(db)]
+    if nuevos:
+        db.add_all(nuevos)
+        db.commit()
+        _repartir(db, nuevos)
 
 
 def avisados(db: Session, ab_id: int) -> dict[int, list[dict]]:

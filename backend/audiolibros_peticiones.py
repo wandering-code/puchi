@@ -316,12 +316,20 @@ def pedir(book_id: int, deseo: Optional[Deseo] = None, db: Session = Depends(get
         raise HTTPException(status_code=409, detail="Este libro ya tiene audiolibro")
     mia = (db.query(AudiobookRequest)
            .filter(AudiobookRequest.player_id == p.id, AudiobookRequest.book_id == book_id).first())
+    nueva = not mia
     if not mia:
         mia = AudiobookRequest(player_id=p.id, book_id=book_id)
         db.add(mia)
     if not mia.rejected_at:
         _aplicar(mia, deseo)
     db.commit()
+    if nueva:
+        try:
+            from avisos_audiolibros import admin_peticion
+            admin_peticion(db, mia, p)
+        except Exception as e:
+            db.rollback()
+            print(f"[avisos] no se pudo avisar al admin: {e!r}", flush=True)
     return _de_un_libro(db, book_id, p)
 
 

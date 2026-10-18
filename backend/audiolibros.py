@@ -334,8 +334,10 @@ def _avisar(db: Session, ab_id: int, nuevo: Optional[AudiobookChapter] = None) -
     """Los avisos de la fase 7 (#69). Nunca tumban lo que los llama: si
     fallan, el capítulo sigue entregado y el enlace hecho."""
     try:
-        from avisos_audiolibros import revisar
+        from avisos_audiolibros import admin_si_terminado, revisar
         revisar(db, ab_id, nuevo)
+        if nuevo is not None:
+            admin_si_terminado(db, ab_id)
     except Exception as e:
         db.rollback()
         print(f"[avisos] no se pudo avisar del audiolibro {ab_id}: {e!r}", flush=True)
@@ -898,6 +900,13 @@ def avisar_error(cap_id: int, cuerpo: Fallo, db: Session = Depends(get_db), _=De
         c.status, c.priority, c.progress_note = "en_cola", True, f"Reintento tras un fallo ({c.attempts}/{INTENTOS})"
     db.commit()
     _latir(cuerpo.name, True)
+    if c.status == "error":
+        try:
+            from avisos_audiolibros import admin_fallo
+            admin_fallo(db, c, INTENTOS)
+        except Exception as e:
+            db.rollback()
+            print(f"[avisos] no se pudo avisar del fallo: {e!r}", flush=True)
     return {"ok": True}
 
 

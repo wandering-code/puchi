@@ -147,9 +147,14 @@ export function HojaAvisos() {
   }, [abierta])
   if (!n) return null
 
+  const lleva = a => a.kind.startsWith('adm_') || (a.audiobook_id && a.kind !== 'ab_rejected')
+
   async function tocar(a) {
-    if (!a.audiobook_id || a.kind === 'ab_rejected') return
+    if (!lleva(a)) return
+    // Cerrar la hoja es un "atrás" del historial, y llega un momento
+    // después: si se navega antes, ese "atrás" deshace la navegación.
     n.hoja.cerrar()
+    await trasVolver()
     await n.abrirAviso(a)
   }
 
@@ -170,14 +175,13 @@ export function HojaAvisos() {
       <div className="space-y-2 pb-2">
         {(n.lista || []).map(a => {
           const nuevo = nuevos.current.has(a.id)
-          const lleva = a.audiobook_id && a.kind !== 'ab_rejected'
           return (
             <button
               key={a.id}
               onClick={() => tocar(a)}
-              disabled={!lleva}
+              disabled={!lleva(a)}
               className={`flex w-full items-start gap-3 rounded-xl2 border p-2.5 text-left transition-colors disabled:cursor-default ${
-                nuevo ? 'border-accent-line bg-accent-soft/50' : 'border-line bg-surface'} ${lleva ? 'active:bg-surface-2' : ''}`}
+                nuevo ? 'border-accent-line bg-accent-soft/50' : 'border-line bg-surface'} ${lleva(a) ? 'active:bg-surface-2' : ''}`}
             >
               <Cover url={a.cover_url} title={a.title} className="w-10 shrink-0" />
               <span className="min-w-0 flex-1 py-0.5">
@@ -192,4 +196,19 @@ export function HojaAvisos() {
       </div>
     </HojaInferior>
   )
+}
+
+// Espera al "atrás" que provoca cerrar una capa (o 400 ms, por si no llega).
+function trasVolver() {
+  return new Promise(listo => {
+    let hecho = false
+    const fin = () => {
+      if (hecho) return
+      hecho = true
+      window.removeEventListener('popstate', fin)
+      listo()
+    }
+    window.addEventListener('popstate', fin)
+    setTimeout(fin, 400)
+  })
 }

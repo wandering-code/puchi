@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { api } from './api'
 import { useAvisos } from './avisos'
 import { useCapa } from './capas'
@@ -24,6 +25,7 @@ export function NotificacionesProvider({ children }) {
   const [lista, setLista] = useState(null)
   const [sinLeer, setSinLeer] = useState(0)
   const hoja = useCapa()
+  const navegar = useNavigate()
   const vistos = useRef(null) // ids ya conocidos: lo que no esté aquí es nuevo
   // El ?aviso=ID con el que se abre la app desde una notificación. Se lee
   // aquí, al primer render, y no en un efecto: los efectos de las pantallas
@@ -37,10 +39,16 @@ export function NotificacionesProvider({ children }) {
   // sonar: el play lo da quien escucha). El de "no se va a preparar" no lleva
   // a ningún sitio.
   const abrirAviso = useCallback(async (n) => {
+    // Los del admin, a Audiolibros: la bandeja (una petición) o la ficha del
+    // audiolibro (terminado, o con un capítulo que falla).
+    if (n.kind.startsWith('adm_')) {
+      navegar('/audiolibros', { state: { abrir: n.audiobook_id || null, vez: Date.now() } })
+      return
+    }
     if (!n.audiobook_id || n.kind === 'ab_rejected' || !r) return
     const datos = await api(`/listen/${n.audiobook_id}`).catch(() => null)
     if (datos) r.abrir(datos, { reproducir: false })
-  }, [r])
+  }, [r, navegar])
 
   // `cargar` tiene que ser siempre la misma función: los efectos de abajo
   // dependen de ella, y si cambiara en cada render (el reproductor y la capa
@@ -88,7 +96,7 @@ export function NotificacionesProvider({ children }) {
     if (!n) return
     await api('/notices/read', { method: 'POST', body: { ids: [id] } }).catch(() => {})
     cargar()
-    if (n.kind === 'ab_rejected' || !n.audiobook_id) ultimo.current.hoja.abrir()
+    if (!n.kind.startsWith('adm_') && (n.kind === 'ab_rejected' || !n.audiobook_id)) ultimo.current.hoja.abrir()
     else ultimo.current.abrirAviso(n)
   }, [cargar])
 

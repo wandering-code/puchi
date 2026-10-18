@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import { AnimatePresence, motion } from 'motion/react'
 import { api } from '../../../platform/api'
 import { esAdmin, useAuth } from '../../../platform/auth'
@@ -21,6 +22,14 @@ export default function Audiolibros() {
   const [error, setError] = useState(null)
   const [subiendo, setSubiendo] = useState(null) // nombre del archivo
   const ficha = useCapa(null) // id del audiolibro abierto
+  // Desde un aviso de admin (#69): abrir la ficha de ese audiolibro.
+  const donde = useLocation()
+  const abrirDesdeAviso = donde.state?.abrir
+  const vezDelAviso = donde.state?.vez
+  useEffect(() => {
+    if (abrirDesdeAviso) ficha.abrir(abrirDesdeAviso)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [abrirDesdeAviso, vezDelAviso])
   // Al cerrar una ficha (con la X o con "atrás") se vuelven a pedir las
   // peticiones: enlazar o desenlazar libros desde ella cambia en qué punto
   // está cada una.
