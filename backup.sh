@@ -18,7 +18,8 @@
 #     rsync -a /mnt/backups/puchi/datos/ /home/wander/apps/puchi/backend/datos/
 #   Un archivo borrado sin querer en los últimos 30 días está en
 #   /mnt/backups/puchi/datos_retirados/<fecha>/ con su misma ruta.
-# - Base de datos: docker exec -i puchi-db-1 pg_restore -U luni -d luni --clean #     < /mnt/backups/puchi/puchi_prod_<fecha>.dump
+# - Base de datos:
+#     docker exec -i puchi-db-1 pg_restore -U luni -d luni --clean < /mnt/backups/puchi/puchi_prod_<fecha>.dump
 # - Imágenes: tar -xzf /mnt/backups/puchi/puchi_uploads_<fecha>.tar.gz -C backend/
 set -euo pipefail
 
