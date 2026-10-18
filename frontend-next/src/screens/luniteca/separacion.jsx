@@ -49,7 +49,7 @@ const CON_BLOQUE = ['bloque', 'mixto']
 // usaban: las cuatro secciones se veían exactamente iguales. Con esto se sabe
 // en cuál estás sin leer el título, y de paso la pantalla deja de ser toda del
 // mismo tono, que era lo que se notaba flojo.
-const COLOR_DE_ESTADO = {
+export const COLOR_DE_ESTADO = {
   reading: 'var(--color-accent)',
   read:    'var(--color-read)',
   want:    'var(--color-want)',
@@ -114,19 +114,22 @@ export function TituloSeccion({ variante, label, cuenta, plegada, onAlternar, an
   // después en esta cadena — con w-full puesto, el título pegado se quedaba
   // corto por la derecha y por ahí asomaban los libros de detrás.
   const base = `flex items-center gap-2 text-left ${clasePegada || 'w-full'}`
+  // Las cifras de arriba (Luniteca) bajan hasta aquí: `data-seccion` es a
+  // dónde, y el margen es para que no quede debajo de la barra pegada.
+  const ancla = anidado || !estado ? {} : { 'data-seccion': estado, style: { scrollMarginTop: 64 } }
 
   // La acción va FUERA del botón del título, en la misma fila: un botón dentro
   // de otro botón no es HTML válido y el navegador lo deshace por su cuenta.
   if (!onAlternar) {
     return (
-      <div className={base}>
+      <div className={base} {...ancla}>
         {contenido}
         {accion}
       </div>
     )
   }
   return (
-    <div className={base}>
+    <div className={base} {...ancla}>
       <button onClick={onAlternar} className="flex flex-1 items-center gap-2 text-left">
         {contenido}
       </button>

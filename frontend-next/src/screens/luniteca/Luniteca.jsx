@@ -19,7 +19,7 @@ import { colorDePortada, precargarColores } from './colorPortada'
 import { precargarProporciones } from './proporcionLomo'
 import { generarYSubirLomo } from './generarLomo'
 import { usarVuelo } from './usarVuelo'
-import { CajaSeccion, TituloSeccion, huecoEntreSecciones, usarSeparacion } from './separacion'
+import { COLOR_DE_ESTADO, CajaSeccion, TituloSeccion, huecoEntreSecciones, usarSeparacion } from './separacion'
 import { LLEGADA, enCss } from '../../ui/curvas'
 import { useHoja } from './HojaInferior'
 import { useCapa } from '../../platform/capas'
@@ -280,6 +280,20 @@ export default function Luniteca() {
   // abrirLibro va con useCallback por lo mismo: la tarjeta memoizada lo llama
   // como onAbrir(entrada) desde dentro.
 
+  // Las cifras de la cabecera llevan a su sección, desplegándola si hace falta.
+  // Se baja en el fotograma siguiente: si estaba plegada, primero tiene que
+  // empezar a abrirse para que el título quede donde toca.
+  function irASeccion(estado) {
+    if (estado === 'read' || estado === 'want') setPlegadas(p => ({ ...p, [estado]: false }))
+    if (estado === 'read') {
+      const ano = String(new Date().getFullYear())
+      setAnosPlegados(prev => { if (!prev.has(ano)) return prev; const s = new Set(prev); s.delete(ano); return s })
+    }
+    requestAnimationFrame(() => {
+      document.querySelector(`[data-seccion="${estado}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
+  }
+
   if (shelf === null) return <Cargando />
 
   return (
@@ -291,6 +305,7 @@ export default function Luniteca() {
             ? 'Tu estantería está vacía'
             : `${shelf.length} ${shelf.length === 1 ? 'libro' : 'libros'} en tu estantería`}
         </p>
+        {!grupos.vacia && <Cifras shelf={shelf} onIr={irASeccion} />}
       </header>
 
       <Herramientas
@@ -507,8 +522,22 @@ export function Herramientas({
           mode="popLayout": lo que sale deja de ocupar sitio en cuanto empieza
           a irse, así que lo que entra ocupa su hueco con un solo movimiento en
           vez de esperar a que termine la salida. */}
-      <div className="flex items-center gap-1">
+      <div className="relative flex items-center gap-1">
+        {/* Lupa y filtros comparten píldora, como el selector de vista de la
+            derecha: son las dos formas de cambiar QUÉ se ve. La píldora es un
+            fondo aparte y no una caja alrededor, para no tocar la búsqueda,
+            que crece desde la lupa por encima de lo demás (ver abajo). Al
+            buscar se apaga, y la lupa se queda sola con su color de activa. */}
+        <motion.span
+          aria-hidden
+          className="pointer-events-none absolute left-0 top-1/2 h-10 w-[84px] -translate-y-1/2 rounded-full border border-line bg-surface sombra-pastilla"
+          initial={false}
+          animate={{ opacity: buscando ? 0 : 1 }}
+          transition={{ duration: 0.14, ease: [0.32, 0.72, 0, 1] }}
+        />
         <BotonHerramienta
+          agrupado
+          className="ml-1"
           activo={buscando}
           onClick={() => { onBuscando(!buscando); if (buscando) onQuery('') }}
           etiqueta={buscando ? 'Cerrar búsqueda' : 'Buscar'}
@@ -534,6 +563,7 @@ export function Herramientas({
                   misma hoja, así que dos botones que abren lo mismo solo
                   confunden. */}
               <BotonHerramienta
+                agrupado
                 activo={filtrosActivos || ordenActivo}
                 onClick={onAbrirHoja}
                 etiqueta="Filtrar y ordenar"
@@ -548,7 +578,7 @@ export function Herramientas({
                   usar sin volver a la Puchi actual. En la estantería de otra
                   persona no hay nada que añadir aquí. */}
               {onAnadir && (
-                <BotonHerramienta principal onClick={onAnadir} etiqueta={etiquetaAnadir}>
+                <BotonHerramienta principal onClick={onAnadir} etiqueta={etiquetaAnadir} className="ml-2.5">
                   <IconPlus className="h-[18px] w-[18px]" />
                 </BotonHerramienta>
               )}
@@ -649,6 +679,37 @@ export function Herramientas({
   )
 }
 
+// Debajo del título, lo que hay en la estantería de un vistazo: lo que estás
+// leyendo, lo leído este año y lo pendiente. Cada una lleva a su sección. Se
+// cuenta sobre la estantería entera, no sobre lo filtrado: es el resumen de
+// tu estantería, no de la búsqueda.
+function Cifras({ shelf, onIr }) {
+  const ano = String(new Date().getFullYear())
+  const cifras = [
+    { estado: 'reading', n: shelf.filter(e => e.status === 'reading' || e.status === 'rereading').length, texto: 'leyendo' },
+    { estado: 'read', n: shelf.filter(e => e.status === 'read' && e.finished_at?.startsWith(ano)).length, texto: `en ${ano}`, etiqueta: `leídos en ${ano}` },
+    { estado: 'want', n: shelf.filter(e => e.status === 'want_to_read').length, texto: 'por leer' },
+  ].filter(c => c.n > 0)
+  if (!cifras.length) return null
+  return (
+    <div className="mt-3 flex flex-wrap gap-1.5">
+      {cifras.map(c => (
+        <motion.button
+          key={c.estado}
+          whileTap={{ scale: 0.95 }}
+          onClick={() => onIr(c.estado)}
+          aria-label={`${c.n} ${c.etiqueta || c.texto}`}
+          className="inline-flex h-8 items-center gap-1.5 rounded-full border border-line bg-surface pl-2.5 pr-3 text-[13px] text-ink-dim sombra-pastilla"
+        >
+          <span className="h-2 w-2 rounded-full" style={{ background: COLOR_DE_ESTADO[c.estado] }} />
+          <span className="font-semibold tabular-nums text-ink">{c.n}</span>
+          {c.texto}
+        </motion.button>
+      ))}
+    </div>
+  )
+}
+
 // Los tres botones de la barra llevan su propia superficie, teñida del color
 // de la app. Sueltos sobre el fondo se veían planos, y encima descuadraban con
 // el selector de vista de al lado, que sí tiene su píldora: un lado de la
@@ -661,18 +722,24 @@ export function Herramientas({
 // Y `activo` sube el tono en vez de estrenar color: antes marcaba el activo
 // con este mismo fondo, así que ahora que lo llevan todos hay que subir un
 // escalón para que se siga notando cuál está puesto.
-function BotonHerramienta({ activo, principal, onClick, etiqueta, children }) {
+//
+// `agrupado`: dentro de la píldora de lupa y filtros, del tamaño de los del
+// selector de vista. Sin fondo propio (lo pone la píldora) y en gris, como los
+// iconos de la vista que no está elegida; encendido, en el color de la app.
+function BotonHerramienta({ activo, principal, agrupado, onClick, etiqueta, className = '', children }) {
   return (
     <button
       onClick={onClick}
       aria-label={etiqueta}
       aria-pressed={activo}
-      className={`relative flex h-10 w-10 items-center justify-center rounded-full transition-colors ${
-        principal
-          ? 'bg-accent text-on-accent sombra-pastilla active:bg-accent/90'
-          : activo
-            ? 'bg-accent/20 text-accent'
-            : 'bg-accent/[0.08] text-accent active:bg-accent/20'
+      className={`relative flex items-center justify-center rounded-full transition-colors ${className} ${
+        agrupado
+          ? `h-8 w-9 ${activo ? 'bg-accent/25 text-accent' : 'text-ink-dim active:bg-accent/10'}`
+          : principal
+            ? 'h-10 w-10 bg-accent text-on-accent sombra-pastilla active:bg-accent/90'
+            : activo
+              ? 'h-10 w-10 bg-accent/20 text-accent'
+              : 'h-10 w-10 bg-accent/[0.08] text-accent active:bg-accent/20'
       }`}
     >
       {children}
