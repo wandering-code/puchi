@@ -11,6 +11,7 @@ import { CajaSeccion, TituloSeccion, huecoEntreSecciones, usarSeparacion } from 
 import { Cover } from '../luniteca/piezas'
 import { colorDePortada, precargarColores } from '../luniteca/colorPortada'
 import { usarVuelo } from '../luniteca/usarVuelo'
+import { LunaDelPanel, usarPanel } from '../luniteca/panel'
 import HojaFiltros from '../luniteca/HojaFiltros'
 import AnadirLibro from '../luniteca/AnadirLibro'
 import { useHoja } from '../luniteca/HojaInferior'
@@ -45,6 +46,8 @@ export default function Club() {
   // cada estantería (ver platform/preferencias).
   const [vista, setVista] = usarPreferencia('vista', 'grid')
   const [variante] = usarSeparacion()
+  // La misma cabecera que tengas puesta en tu Luniteca (prueba, ver panel.jsx).
+  const panel = usarPanel(entradas !== null)
   // Filtrar, ordenar y buscar aquí es cosa del momento: vive en la pantalla y
   // se deshace al salir, igual que en la estantería de otra persona.
   const [query, setQuery] = useState('')
@@ -116,10 +119,11 @@ export default function Club() {
   if (entradas === null) return <Cargando />
 
   return (
-    <div className="py-6">
-      <header className="mb-4">
-        <h2 className="font-display text-[1.75rem] font-bold tracking-[-0.02em]">Club de lectura</h2>
-        <p className="mt-1 text-sm text-ink-dim">
+    <div ref={panel.raiz} className={panel.claseRaiz}>
+      <header className={panel.claseCabecera}>
+        <LunaDelPanel conPanel={panel.conPanel} />
+        <h2 className="relative font-display text-[1.75rem] font-bold tracking-[-0.02em]">Club de lectura</h2>
+        <p className="relative mt-1 text-sm text-ink-dim">
           {grupos.vacia
             ? 'Todavía no hay ningún libro en el club'
             : resumen(grupos)}
@@ -130,6 +134,7 @@ export default function Club() {
           botón no es un libro tuyo: es una propuesta para el club, y lo puede
           hacer cualquier miembro, no solo el admin. */}
       <Herramientas
+        panel={panel.barra}
         vista={vista}
         onVista={v => startTransition(() => setVista(v))}
         query={query}
@@ -156,8 +161,8 @@ export default function Club() {
 
       <div className={`mt-5 ${huecoEntreSecciones(variante)}`}>
         {grupos.actual.length > 0 && (
-          <CajaSeccion variante={variante}>
-            <TituloSeccion variante={variante} label="Lectura actual" cuenta={grupos.actual.length} estado="reading" />
+          <CajaSeccion variante={variante} estado="reading">
+            <TituloSeccion variante={variante} desde={panel.desdeTitulos} label="Lectura actual" cuenta={grupos.actual.length} estado="reading" />
             <div className="mt-3 space-y-2">
               {grupos.actual.map(e => (
                 <TarjetaLecturaActual
@@ -174,9 +179,10 @@ export default function Club() {
         )}
 
         {grupos.propuestos.length > 0 && (
-          <CajaSeccion variante={variante}>
+          <CajaSeccion variante={variante} estado="want">
             <TituloSeccion
               variante={variante}
+              desde={panel.desdeTitulos}
               label="Propuestos"
               cuenta={grupos.propuestos.length}
               estado="want"
@@ -192,9 +198,10 @@ export default function Club() {
         )}
 
         {grupos.leidosPorAno.length > 0 && (
-          <CajaSeccion variante={variante}>
+          <CajaSeccion variante={variante} estado="read">
             <TituloSeccion
               variante={variante}
+              desde={panel.desdeTitulos}
               label="Leídos"
               estado="read"
               cuenta={grupos.leidosPorAno.reduce((n, g) => n + g.items.length, 0)}
@@ -216,6 +223,7 @@ export default function Club() {
                     <TituloSeccion
                       variante={variante}
                       anidado
+                      estado="read"
                       label={year === 'sin-fecha' ? 'Sin fecha' : year}
                       cuenta={items.length}
                       plegada={anosPlegados.has(year)}

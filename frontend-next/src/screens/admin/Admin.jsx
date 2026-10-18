@@ -7,6 +7,7 @@ import Avatar from '../../ui/Avatar'
 import BotonPeligro from '../../ui/BotonPeligro'
 import Interruptor from '../../ui/Interruptor'
 import { IconCheck, IconX } from '../../ui/icons'
+import Novedades from './Novedades'
 
 // Administración: quién entra en Puchi y quién está en el club de lectura.
 //
@@ -22,6 +23,8 @@ const PESTANAS = [
   { id: 'pendientes',   label: 'Pendientes' },
   { id: 'miembros',     label: 'Cuentas' },
   { id: 'desactivados', label: 'Desactivadas' },
+  // Avisos de novedades para todos o para algunos (#72).
+  { id: 'novedades',    label: 'Novedades' },
 ]
 
 export default function Admin() {
@@ -84,7 +87,7 @@ export default function Admin() {
     <div className="py-6">
       <header className="mb-4">
         <h2 className="font-display text-[1.75rem] font-bold tracking-[-0.02em]">Administración</h2>
-        <p className="mt-1 text-sm text-ink-dim">Quién entra en Puchi y quién está en el club.</p>
+        <p className="mt-1 text-sm text-ink-dim">Quién entra en Puchi, quién está en el club y los avisos de novedades.</p>
       </header>
 
       {/* Pegada arriba, como la barra de herramientas de la estantería: con
@@ -94,7 +97,7 @@ export default function Admin() {
         <div className="flex gap-1">
           {PESTANAS.map(({ id, label }) => {
             const activa = pestana === id
-            const cuenta = listas[id].length
+            const cuenta = listas[id]?.length || 0
             return (
               <button
                 key={id}
@@ -137,13 +140,16 @@ export default function Admin() {
         </div>
       )}
 
-      {jugadores !== null && visibles.length === 0 && (
+      {pestana === 'novedades' && <Novedades />}
+
+      {pestana !== 'novedades' && jugadores !== null && visibles.length === 0 && (
         <p className="mt-10 text-center text-sm text-ink-mute">{VACIO[pestana]}</p>
       )}
 
       {/* Las tres listas se cruzan al cambiar de pestaña, y dentro de cada una
           las filas que se van (una cuenta aprobada sale de "Pendientes") se
           animan en su sitio en vez de desaparecer de golpe. */}
+      {pestana !== 'novedades' && (
       <AnimatePresence mode="wait" initial={false}>
         <motion.div
           key={pestana}
@@ -177,6 +183,7 @@ export default function Admin() {
           </AnimatePresence>
         </motion.div>
       </AnimatePresence>
+      )}
     </div>
   )
 }

@@ -10,7 +10,7 @@ import { Cover, NotaBadge, PagesLabel, ProgressBar, StarRating } from './piezas'
 import BookDetail from './BookDetail'
 import {
   IconChevron, IconEreader, IconFilter, IconGrid, IconList, IconLibroFisico, IconLomos, IconPlegarTodo,
-  IconLuna, IconPlus, IconSearch, IconX,
+  IconPlus, IconSearch, IconX,
 } from '../../ui/icons'
 import HojaFiltros from './HojaFiltros'
 import AnadirLibro from './AnadirLibro'
@@ -19,6 +19,7 @@ import { colorDePortada, precargarColores } from './colorPortada'
 import { precargarProporciones } from './proporcionLomo'
 import { generarYSubirLomo } from './generarLomo'
 import { usarVuelo } from './usarVuelo'
+import { LunaDelPanel, usarPanel } from './panel'
 import { COLOR_DE_ESTADO, CajaSeccion, TituloSeccion, huecoEntreSecciones, usarSeparacion } from './separacion'
 import { LLEGADA, enCss } from '../../ui/curvas'
 import { useHoja } from './HojaInferior'
@@ -51,21 +52,9 @@ export default function Luniteca() {
   const [anosPlegados, setAnosPlegados] = useState(() => new Set())
   // Cómo se separan las secciones: se está probando cuál gusta (ver separacion.jsx).
   const [separacion] = usarSeparacion()
-  const [conPanel] = usarCabeceraConPanel()
-  // El rebote del iPhone al tirar hacia abajo estando arriba deja ver el fondo
-  // de la zona que se desplaza, no lo que hay por encima de la cabecera (eso
-  // iOS no lo pinta: probado). Así que, con el panel, ese fondo es del tinte
-  // en su mitad de arriba y la estantería lleva el suyo propio encima.
-  const raiz = useRef(null)
-  useEffect(() => {
-    const zona = conPanel && raiz.current?.closest('[data-scroll="pantalla"]')
-    if (!zona) return
-    zona.style.background = 'linear-gradient(to bottom, color-mix(in srgb, var(--color-accent) 11%, var(--color-bg)) 50%, var(--color-bg) 50%)'
-    return () => { zona.style.background = '' }
-  }, [conPanel, shelf === null])
-  // Con el panel, la barra de herramientas mide 60px y no 56: los títulos se
-  // pegan justo debajo, no medio tapados.
-  const desdeTitulos = conPanel ? 'top-[60px]' : 'top-14'
+  // La cabecera con panel, si está puesta (prueba, ver panel.jsx).
+  const panel = usarPanel(shelf !== null)
+  const desdeTitulos = panel.desdeTitulos
 
   const cargar = useCallback(async () => {
     try {
@@ -312,15 +301,9 @@ export default function Luniteca() {
   if (shelf === null) return <Cargando />
 
   return (
-    <div ref={raiz} className={conPanel ? '-mx-5 min-h-full bg-bg px-5 py-6' : 'py-6'}>
-      <header className={conPanel ? `relative -mx-5 -mt-6 px-5 pb-3 pt-6 ${TINTE}` : 'mb-4'}>
-        {conPanel && (
-          <>
-            <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
-              <IconLuna className="absolute -right-6 -top-4 h-40 w-40 text-accent opacity-[0.09]" />
-            </div>
-          </>
-        )}
+    <div ref={panel.raiz} className={panel.claseRaiz}>
+      <header className={panel.claseCabecera}>
+        <LunaDelPanel conPanel={panel.conPanel} />
         <h2 className="relative font-display text-[1.75rem] font-bold tracking-[-0.02em]">Luniteca</h2>
         <p className="relative mt-1 text-sm text-ink-dim">
           {grupos.vacia
@@ -331,7 +314,7 @@ export default function Luniteca() {
       </header>
 
       <Herramientas
-        panel={conPanel ? PANEL : null}
+        panel={panel.barra}
         vista={vista} onVista={cambiarVista}
         query={query} onQuery={setQuery}
         onAbrirHoja={hojaFiltros.abrir}
@@ -519,16 +502,6 @@ function Aviso({ titulo, texto }) {
 // igual. Lo único que cambia es qué hace el botón de añadir: en la de otra
 // persona no hay nada que añadir (sin `onAnadir` no se pinta) y en la del club
 // lo que se añade es una propuesta, así que su etiqueta también cambia.
-// PRUEBA (2026-10-18): la cabecera como un panel teñido del color de la app,
-// con una luna de fondo, que acaba en la barra de herramientas con las
-// esquinas redondeadas. Se enciende en Ajustes; apagado, la de antes.
-const TINTE = 'bg-[color-mix(in_srgb,var(--color-accent)_11%,var(--color-bg))]'
-const PANEL = `${TINTE} rounded-b-[26px] shadow-[0_10px_24px_-14px_rgb(var(--color-sombra)/.45)]`
-
-export function usarCabeceraConPanel() {
-  return usarPreferencia('luniteca_cabecera_panel', false)
-}
-
 export function Herramientas({
   vista, onVista, query, onQuery,
   onAbrirHoja, onAnadir, etiquetaAnadir = 'Añadir libro', ordenActivo, filtrosActivos,

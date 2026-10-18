@@ -527,6 +527,34 @@ class PlayerNotice(Base):
     read_at      = Column(DateTime, nullable=True)
 
 
+class Announcement(Base):
+    """Un aviso de novedades del admin (#72): sale a cada persona a la que va
+    dirigido hasta que le da a "Entendido". Relanzarlo (`launched_at`) hace
+    que vuelva a salir a todos, también a quien ya lo había aceptado."""
+    __tablename__ = "announcements"
+
+    id          = Column(Integer, primary_key=True, index=True)
+    title       = Column(String, nullable=False)
+    body        = Column(Text, nullable=False, default="")
+    # todos | club | personas (entonces, las de player_ids)
+    audience    = Column(String, nullable=False, default="todos")
+    player_ids  = Column(JSON, nullable=True)
+    created_at  = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    launched_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class AnnouncementAck(Base):
+    """Quién ha aceptado un aviso, y cuándo. Cuenta como aceptado si fue
+    después del último lanzamiento."""
+    __tablename__ = "announcement_acks"
+    __table_args__ = (UniqueConstraint("announcement_id", "player_id"),)
+
+    id              = Column(Integer, primary_key=True, index=True)
+    announcement_id = Column(Integer, ForeignKey("announcements.id", ondelete="CASCADE"), nullable=False, index=True)
+    player_id       = Column(Integer, ForeignKey("players.id", ondelete="CASCADE"), nullable=False, index=True)
+    accepted_at     = Column(DateTime, nullable=False)
+
+
 def crear_tablas():
     Base.metadata.create_all(bind=engine)
 

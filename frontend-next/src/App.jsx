@@ -10,6 +10,7 @@ import { LlamadasProvider } from './platform/llamadas'
 import AvisosDeMensaje from './screens/diskordkito/AvisosDeMensaje'
 import AvisoDeLlamada from './screens/diskordkito/AvisoDeLlamada'
 import AvisoDeRegistro from './screens/admin/AvisoDeRegistro'
+import AvisoDeNovedades from './screens/admin/AvisoDeNovedades'
 import Llamada from './screens/diskordkito/Llamada'
 import LlamadaGrupo from './screens/diskordkito/LlamadaGrupo'
 import PastillaLlamada from './screens/diskordkito/PastillaLlamada'
@@ -80,6 +81,8 @@ export default function App() {
                     <AvisosDeMensaje />
                     <AvisoDeLlamada />
                     <AvisoDeRegistro />
+                    {/* Los avisos de novedades del admin (#72). */}
+                    <AvisoDeNovedades />
                     {/* El escenario y la pastilla van en portales a <body>, así
                         que da igual dónde se pongan aquí — lo que importa es que
                         están FUERA del Shell: la llamada sobrevive a cambiar de
