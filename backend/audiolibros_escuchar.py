@@ -106,6 +106,8 @@ def _para_escuchar(db: Session, ab: Audiobook, p: Player) -> dict:
             "ready": c.status == "listo" and bool(c.audio_path),
             "duration_s": c.duration_s, "minutes": _minutos(c.words),
             "generated_at": _iso(c.generated_at),
+            # Lo que ocupa, para saber cuánto se va a descargar (#71).
+            "size": c.audio_size,
         } for i, c in enumerate(caps)],
         "progress": {
             "chapter_id": prog.chapter_id, "position_s": prog.position_s, "updated_at": _iso(prog.updated_at),

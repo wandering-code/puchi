@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from './api'
+import { urlAudio } from './descargas'
 import { useCapa } from './capas'
 import { usarPreferencia } from './preferencias'
 
@@ -50,8 +51,16 @@ export function ReproductorProvider({ children }) {
     const ahora = Date.now()
     if (!forzar && ahora - guardadoEn.current < CADA_CUANTO_GUARDAR) return
     guardadoEn.current = ahora
-    api(`/listen/${l.id}/progress`, { method: 'PUT', body: { chapter_id: c, position_s: a.currentTime } })
-      .catch(() => {})
+    enviarPosicion(l.id, c, a.currentTime)
+  }, [])
+
+  // Sin red (escuchando lo descargado), la posición se apunta y se manda en
+  // cuanto vuelve. Si no, al volver a casa el progreso se quedaba donde se
+  // perdió la conexión.
+  useEffect(() => {
+    mandarPendientes()
+    window.addEventListener('online', mandarPendientes)
+    return () => window.removeEventListener('online', mandarPendientes)
   }, [])
 
   // Carga un capítulo y, si se pide, lo arranca. Se llama DENTRO del toque
@@ -60,7 +69,9 @@ export function ReproductorProvider({ children }) {
   const cargar = useCallback((l, c, posicion = 0, reproducir = true) => {
     const a = audio.current
     if (!a || !c?.ready) return
-    const url = `/api/listen/${l.id}/chapters/${c.id}/audio?v=${encodeURIComponent(c.generated_at || '')}`
+    // La misma URL con la que se descarga: si el capítulo está descargado,
+    // el service worker lo sirve desde el móvil (ver platform/descargas.js).
+    const url = urlAudio(l.id, c)
     if (actual.current.libro?.id !== l.id || actual.current.capId !== c.id || !a.src) {
       a.src = url
       irA.current = posicion > 1 ? posicion : null
@@ -263,12 +274,24 @@ export function ReproductorProvider({ children }) {
     onError: () => { setCargando(false); setSonando(false) },
   }
 
+  // Vuelve a pedir el capítulo cargado, en el mismo punto y sonando si
+  // sonaba. Hace falta al borrar su descarga (#71): el navegador lo tenía
+  // leído del móvil y, sin el archivo, el siguiente salto fallaba.
+  const recargarFuente = useCallback(() => {
+    const a = audio.current
+    if (!a?.src) return
+    const sonaba = !a.paused
+    irA.current = a.currentTime > 1 ? a.currentTime : null
+    a.load()
+    if (sonaba) a.play().catch(() => {})
+  }, [])
+
   const valor = useMemo(() => ({
     libro, cap, sonando, cargando, t, dur, pantalla, velocidad, temporizador,
     abrir, elegir, alternar, saltar, buscar, siguiente, anterior, refrescar,
-    cambiarVelocidad, dormir, cerrar,
+    cambiarVelocidad, dormir, cerrar, recargarFuente,
   }), [libro, cap, sonando, cargando, t, dur, pantalla, velocidad, temporizador, abrir, elegir, alternar,
-    saltar, buscar, siguiente, anterior, refrescar, cambiarVelocidad, dormir, cerrar])
+    saltar, buscar, siguiente, anterior, refrescar, cambiarVelocidad, dormir, cerrar, recargarFuente])
 
   return (
     <Ctx.Provider value={valor}>
@@ -282,4 +305,36 @@ export function ReproductorProvider({ children }) {
 // Fuera de /kokito no hay proveedor: devuelve null y quien lo use no enseña nada.
 export function useReproductor() {
   return useContext(Ctx)
+}
+
+// ─── Posición pendiente (sin red) ────────────────────────────────────────────
+
+const PENDIENTES = 'kokito_posicion_pendiente'
+
+function leerPendientes() {
+  try { return JSON.parse(localStorage.getItem(PENDIENTES) || '{}') } catch { return {} }
+}
+
+function escribirPendientes(p) {
+  try {
+    if (Object.keys(p).length) localStorage.setItem(PENDIENTES, JSON.stringify(p))
+    else localStorage.removeItem(PENDIENTES)
+  } catch { /* sin almacenamiento: se pierde solo esta posición */ }
+}
+
+function enviarPosicion(abId, capId, segundo) {
+  return api(`/listen/${abId}/progress`, { method: 'PUT', body: { chapter_id: capId, position_s: segundo } })
+    .then(() => {
+      const p = leerPendientes()
+      if (p[abId]) { delete p[abId]; escribirPendientes(p) }
+    })
+    .catch((e) => {
+      // Solo si es la red: un 403/404 no se arregla reintentando.
+      if (e?.status) return
+      escribirPendientes({ ...leerPendientes(), [abId]: { chapter_id: capId, position_s: segundo } })
+    })
+}
+
+function mandarPendientes() {
+  for (const [abId, v] of Object.entries(leerPendientes())) enviarPosicion(abId, v.chapter_id, v.position_s)
 }

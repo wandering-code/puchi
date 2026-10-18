@@ -34,10 +34,16 @@ export function AuthProvider({ children }) {
   // token, que /auth/me no devuelve.
   useEffect(() => {
     if (!player) return
+    // Solo se cierra la sesión si el servidor dice que ya no vale. Sin red
+    // (escuchando un audiolibro descargado en el metro, #71) se sigue con la
+    // cuenta guardada: antes, abrir la app sin conexión te echaba.
     fetch('/api/auth/me', { credentials: 'include' })
-      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(r => {
+        if (r.ok) return r.json()
+        throw Object.assign(new Error('sesión'), { fuera: [401, 403, 404].includes(r.status) })
+      })
       .then(fresh => login({ ...fresh, token: player.token }))
-      .catch(() => logout())
+      .catch(e => { if (e?.fuera) logout() })
       .finally(() => setChecking(false))
     // Solo al montar.
     // eslint-disable-next-line react-hooks/exhaustive-deps

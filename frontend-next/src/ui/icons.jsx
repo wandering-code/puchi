@@ -357,6 +357,10 @@ export const IconAudiolibro = (p) => (
 export const IconSubir = (p) => (
   <svg {...base} {...p}><path d="M12 15V4M7.5 8.5 12 4l4.5 4.5" /><path d="M4.5 14v4.5a1.5 1.5 0 0 0 1.5 1.5h12a1.5 1.5 0 0 0 1.5-1.5V14" /></svg>
 )
+// Descargar: la flecha de subir, al revés.
+export const IconBajar = (p) => (
+  <svg {...base} {...p}><path d="M12 4v11M7.5 10.5 12 15l4.5-4.5" /><path d="M4.5 14v4.5a1.5 1.5 0 0 0 1.5 1.5h12a1.5 1.5 0 0 0 1.5-1.5V14" /></svg>
+)
 // Unir dos capítulos: dos caminos que se juntan en uno, hacia abajo.
 export const IconUnir = (p) => (
   <svg {...base} {...p}><path d="M6.5 3.5v3.5c0 2.5 5.5 4 5.5 7v6" /><path d="M17.5 3.5v3.5c0 2.5-5.5 4-5.5 7" /><path d="m8.5 17 3.5 3.5 3.5-3.5" /></svg>

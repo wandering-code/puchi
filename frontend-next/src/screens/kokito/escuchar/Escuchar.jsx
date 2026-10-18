@@ -86,13 +86,23 @@ function Tarjeta({ a, r, onCambio }) {
   const [error, setError] = useState(null)
   const esteSuena = r?.libro?.id === a.id && r.cap
   const sonando = esteSuena && r.sonando
+  // Los datos para escuchar, pedidos ya al aparecer la tarjeta: en iPhone
+  // el audio solo arranca si el play va en el mismo toque, sin esperar a la
+  // red entre medias.
+  const [listo, setListo] = useState(null)
+  useEffect(() => {
+    if (!a.mine) return
+    let vivo = true
+    api(`/listen/${a.id}`).then(d => { if (vivo) setListo(d) }).catch(() => {})
+    return () => { vivo = false }
+  }, [a.id, a.mine])
 
   const estado = a.complete
     ? `${capitulos(a.chapters_total)} · ${duracion(a.audio_minutes)}`
     : `${a.chapters_ready} de ${a.chapters_total} capítulos · llegan más`
 
   async function datos() {
-    return api(`/listen/${a.id}`)
+    return listo || api(`/listen/${a.id}`)
   }
   // Como en la ficha del libro: la tarjeta abre el reproductor; el play solo
   // pone a sonar y deja el mini de abajo.
@@ -101,9 +111,11 @@ function Tarjeta({ a, r, onCambio }) {
     if (esteSuena) { r.pantalla.abrir(); return }
     r.abrir(await datos(), { reproducir: false })
   }
-  async function play() {
+  function play() {
     if (esteSuena) { r.alternar(); return }
-    r.abrir(await datos(), { reproducir: true, mostrar: false })
+    if (listo) { r.abrir(listo, { reproducir: true, mostrar: false }); return }
+    // Aún no habían llegado (muy raro): se piden y se intenta igual.
+    api(`/listen/${a.id}`).then(d => r.abrir(d, { reproducir: true, mostrar: false })).catch(() => {})
   }
   async function anadir() {
     setOcupado(true)

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { useReproductor } from '../../../platform/reproductor'
 import { useCapa } from '../../../platform/capas'
@@ -10,6 +10,8 @@ import {
 } from '../../../ui/icons'
 import { Girando } from '../audiolibros/Audiolibros'
 import { duracion, reloj } from '../audiolibros/formato'
+import { borrarLibro, descargados, descargarCapitulo, hayDescargas, megas, pedirQueSeQueden } from '../../../platform/descargas'
+import { IconBajar } from '../../../ui/icons'
 
 // La pantalla del reproductor (fase 3, #65): sube desde abajo como el resto
 // de la app. Cerrarla no para el audio: el <audio> es del reproductor global
@@ -21,6 +23,7 @@ export default function PantallaReproductor() {
   const hojaDormir = useCapa()
   const abierta = !!r?.pantalla.abierta
   const libro = r?.libro
+  const descargas = usarDescargas(libro, r?.recargarFuente)
 
   // Mientras se generan más capítulos, que vayan apareciendo sin tener que
   // salir y volver a entrar.
@@ -143,9 +146,12 @@ export default function PantallaReproductor() {
                   : `${libro.chapters_ready} de ${libro.chapters_total} listos`}
               </span>
             </div>
+            <Descargas libro={libro} estado={descargas} />
             <div className="overflow-hidden rounded-xl2 border border-line bg-surface">
               {libro.chapters.map((c, i) => {
                 const actual = c.id === cap?.id
+                const bajado = descargas.hechos.has(c.id)
+                const bajando = descargas.bajando?.capId === c.id
                 return (
                   <button
                     key={c.id}
@@ -164,6 +170,13 @@ export default function PantallaReproductor() {
                         {c.ready ? reloj(c.duration_s) : 'En camino: se está preparando'}
                       </span>
                     </span>
+                    {bajando ? (
+                      <Girando className="h-3.5 w-3.5 shrink-0 text-accent" />
+                    ) : bajado ? (
+                      <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent" aria-label="Descargado">
+                        <IconCheck className="h-2.5 w-2.5" />
+                      </span>
+                    ) : null}
                   </button>
                 )
               })}
@@ -311,5 +324,143 @@ export function Ecualizador({ activo }) {
         />
       ))}
     </span>
+  )
+}
+
+// ─── Escuchar sin conexión (#71) ──────────────────────────────────────────
+
+function usarDescargas(libro, recargarFuente) {
+  const [hechos, setHechos] = useState(() => new Set())
+  const [bajando, setBajando] = useState(null) // { capId, hecho, total, titulo }
+  const [error, setError] = useState(null)
+  const parar = useRef(false)
+  const id = libro?.id
+  const listos = libro ? libro.chapters.filter(c => c.ready) : []
+  const clave = listos.map(c => `${c.id}:${c.generated_at}`).join(',')
+
+  useEffect(() => {
+    if (!libro || !hayDescargas) return
+    let vivo = true
+    descargados(libro).then(h => { if (vivo) setHechos(h) })
+    return () => { vivo = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, clave])
+
+  const descargar = useCallback(async () => {
+    if (!libro) return
+    const faltan = libro.chapters.filter(c => c.ready && !hechos.has(c.id))
+    if (!faltan.length) return
+    parar.current = false
+    setError(null)
+    pedirQueSeQueden()
+    for (let i = 0; i < faltan.length; i++) {
+      if (parar.current) break
+      const c = faltan[i]
+      setBajando({ capId: c.id, hecho: i, total: faltan.length, titulo: c.title })
+      try {
+        await descargarCapitulo(libro.id, c)
+        setHechos(h => new Set(h).add(c.id))
+      } catch (e) {
+        setError(e.message === 'Failed to fetch' ? 'Sin conexión: se para la descarga' : e.message)
+        break
+      }
+    }
+    setBajando(null)
+  }, [libro, hechos])
+
+  const borrar = useCallback(async () => {
+    if (!libro) return
+    parar.current = true
+    await borrarLibro(libro.id)
+    setHechos(new Set())
+    // Este reproductor solo enseña el libro que tiene cargado, así que lo que
+    // suena era uno de los borrados: que lo vuelva a pedir a la red.
+    recargarFuente?.()
+  }, [libro, recargarFuente])
+
+  const tam = cs => cs.reduce((s, c) => s + (c.size || 0), 0)
+  return {
+    hechos, bajando, error, descargar, borrar,
+    pararDescarga: () => { parar.current = true },
+    total: listos.length,
+    hechosN: listos.filter(c => hechos.has(c.id)).length,
+    bytesTotal: tam(listos),
+    bytesFaltan: tam(listos.filter(c => !hechos.has(c.id))),
+    bytesHechos: tam(listos.filter(c => hechos.has(c.id))),
+  }
+}
+
+function Descargas({ libro, estado: d }) {
+  const [confirmar, setConfirmar] = useState(false)
+  useEffect(() => { setConfirmar(false) }, [libro?.id, d.hechosN])
+  if (!hayDescargas || !d.total) return null
+
+  const caja = 'mb-3 rounded-xl2 border px-3.5 py-3'
+  const borrar = (
+    <button
+      onClick={() => (confirmar ? d.borrar() : setConfirmar(true))}
+      className={`shrink-0 rounded-full px-2.5 py-1.5 text-xs font-medium ${confirmar ? 'bg-danger/10 text-danger' : 'text-ink-mute active:bg-surface-2'}`}
+    >
+      {confirmar ? '¿Borrar?' : 'Borrar'}
+    </button>
+  )
+
+  if (d.bajando) {
+    const pct = (d.bajando.hecho / d.bajando.total) * 100
+    return (
+      <div className={`${caja} border-accent-line bg-accent-soft/40`}>
+        <div className="flex items-center gap-3">
+          <Girando className="h-4 w-4 shrink-0 text-accent" />
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-semibold">Descargando {d.bajando.hecho + 1} de {d.bajando.total}</span>
+            <span className="block truncate text-[11px] text-ink-dim">{d.bajando.titulo}</span>
+          </span>
+          <button onClick={d.pararDescarga} className="shrink-0 rounded-full px-2.5 py-1.5 text-xs font-medium text-ink-mute active:bg-surface-2">
+            Parar
+          </button>
+        </div>
+        <div className="mt-2.5 h-1 overflow-hidden rounded-full bg-surface/80">
+          <motion.div className="h-full rounded-full bg-accent" initial={false} animate={{ width: `${Math.max(3, pct)}%` }} />
+        </div>
+      </div>
+    )
+  }
+
+  if (d.hechosN === d.total) {
+    return (
+      <div className={`${caja} flex items-center gap-3 border-line bg-surface`}>
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent">
+          <IconCheck className="h-4 w-4" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-semibold">Descargado</span>
+          <span className="block text-[11px] text-ink-dim">
+            Se puede escuchar sin conexión · {megas(d.bytesHechos)}
+          </span>
+        </span>
+        {borrar}
+      </div>
+    )
+  }
+
+  return (
+    <div className={`${caja} flex items-center gap-3 border-line bg-surface`}>
+      <button onClick={d.descargar} className="flex min-w-0 flex-1 items-center gap-3 text-left">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent text-on-accent">
+          <IconBajar className="h-4 w-4" />
+        </span>
+        <span className="min-w-0">
+          <span className="block text-sm font-semibold">
+            {d.hechosN ? 'Descargar el resto' : 'Descargar para escuchar sin conexión'}
+          </span>
+          <span className="block text-[11px] text-ink-dim">
+            {d.error || (d.hechosN
+              ? `${d.hechosN} de ${d.total} descargados · faltan ${megas(d.bytesFaltan)}`
+              : `${d.total} ${d.total === 1 ? 'capítulo' : 'capítulos'} · ${megas(d.bytesTotal)}`)}
+          </span>
+        </span>
+      </button>
+      {d.hechosN > 0 && borrar}
+    </div>
   )
 }
