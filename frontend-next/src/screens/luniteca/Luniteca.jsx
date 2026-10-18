@@ -23,6 +23,7 @@ import { CajaSeccion, TituloSeccion, huecoEntreSecciones, usarSeparacion } from 
 import { LLEGADA, enCss } from '../../ui/curvas'
 import { useHoja } from './HojaInferior'
 import { useCapa } from '../../platform/capas'
+import { usarLibrosConAudio } from '../kokito/escuchar/librosConAudio'
 
 const VISTAS = [['grid', IconGrid, 'Cuadrícula'], ['list', IconList, 'Lista'], ['lomos', IconLomos, 'Estantería']]
 
@@ -209,9 +210,11 @@ export default function Luniteca() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [libroPedido, shelf])
 
+  // Qué libros tienen audiolibro (solo /kokito; en la raíz es null).
+  const conAudio = usarLibrosConAudio()
   const grupos = useMemo(
-    () => agruparEstanteria(shelf, { filters, query, sort }),
-    [shelf, filters, query, sort],
+    () => agruparEstanteria(shelf, { filters, query, sort, conAudio }),
+    [shelf, filters, query, sort, conAudio],
   )
   const opciones = useMemo(() => opcionesDeFiltro(shelf), [shelf])
   // Sobre la estantería ENTERA, no sobre lo que se ve: si se calculara por
@@ -413,6 +416,7 @@ export default function Luniteca() {
         filters={filters} onFilters={setFilters}
         opciones={opciones}
         visibles={grupos.visible.length}
+        conAudio={conAudio && shelf ? shelf.filter(e => conAudio.has(e.book?.id)).length : null}
       />
 
       {/* La ficha no se desmonta al cerrarla, se queda con el último libro y

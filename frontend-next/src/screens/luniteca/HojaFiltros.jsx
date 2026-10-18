@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { EMPTY_FILTERS, MAX_PAGES_OPTIONS, MIN_RATING_OPTIONS, SORT_FIELDS } from './shelf'
-import { IconChevron } from '../../ui/icons'
+import { IconAuriculares, IconChevron } from '../../ui/icons'
 import HojaInferior from './HojaInferior'
 
 // Filtros y orden en la hoja que sube desde abajo. Antes eran dos paneles que
@@ -10,6 +10,9 @@ import HojaInferior from './HojaInferior'
 // se toca está en la mitad de abajo de la pantalla.
 export default function HojaFiltros({
   abierta, onCerrar, sort, onSort, filters, onFilters, opciones, visibles,
+  // Cuántos de tus libros tienen audiolibro. Solo /kokito lo pasa; sin él no
+  // sale el filtro.
+  conAudio = null,
 }) {
   const hayFiltros = Object.keys(EMPTY_FILTERS).some(k => filters[k] !== EMPTY_FILTERS[k])
   const hayAlgo = hayFiltros || !!sort.field
@@ -63,6 +66,22 @@ export default function HojaFiltros({
           })}
         </div>
       </Apartado>
+
+      {conAudio != null && (
+        <Apartado titulo="Audiolibro">
+          <button
+            onClick={() => onFilters({ ...filters, audio: filters.audio ? '' : 'si' })}
+            aria-pressed={!!filters.audio}
+            className={`flex items-center gap-2 rounded-full border px-3.5 py-2 text-sm transition-colors ${
+              filters.audio ? 'border-accent-line bg-accent-soft text-accent' : 'border-line text-ink-dim'
+            }`}
+          >
+            <IconAuriculares className="h-4 w-4" />
+            Con audiolibro
+            <span className="tabular-nums opacity-70">{conAudio}</span>
+          </button>
+        </Apartado>
+      )}
 
       <Apartado titulo="Filtrar">
         <div className="grid gap-3 sm:grid-cols-2">

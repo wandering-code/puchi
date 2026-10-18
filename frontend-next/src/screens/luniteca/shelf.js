@@ -97,7 +97,9 @@ export function formatoPrecio(n) {
   return n.toLocaleString('es', { style: 'currency', currency: 'EUR', minimumFractionDigits: n % 1 === 0 ? 0 : 2 })
 }
 
-export const EMPTY_FILTERS = { genre: '', folder: '', author: '', maxPages: '', minRating: '' }
+// `audio` solo lo enseña /kokito (audiolibros, #74): 'si' = solo los que
+// tienen un audiolibro que ya se puede escuchar.
+export const EMPTY_FILTERS = { genre: '', folder: '', author: '', maxPages: '', minRating: '', audio: '' }
 
 // De 50 en 50: nadie filtra "máximo 437 páginas".
 export const MAX_PAGES_OPTIONS = Array.from({ length: 20 }, (_, i) => String((i + 1) * 100))
@@ -111,7 +113,7 @@ export const MIN_RATING_OPTIONS = Array.from({ length: 10 }, (_, i) => String((i
 
 // Se aplica sobre toda la estantería ANTES de repartir por estado, así que un
 // filtro por género o carpeta se nota en todas las secciones a la vez.
-export function matchesFilters(e, filters) {
+export function matchesFilters(e, filters, conAudio = null) {
   if (filters.genre  && e.book.genre  !== filters.genre)  return false
   if (filters.folder && e.folder      !== filters.folder) return false
   if (filters.author && e.book.author !== filters.author) return false
@@ -120,6 +122,7 @@ export function matchesFilters(e, filters) {
     if (!total || total > Number(filters.maxPages)) return false
   }
   if (filters.minRating && !(e.rating >= Number(filters.minRating))) return false
+  if (filters.audio && !conAudio?.has(e.book.id)) return false
   return true
 }
 
@@ -224,9 +227,9 @@ export function statusPatch(newStatus, entry) {
 // Reparte la estantería en las secciones que se pintan, ya filtrada y
 // ordenada. Se llama desde un useMemo: sin él, cada sección recibe arrays
 // nuevos en cada render y se reconcilian cientos de portadas por nada.
-export function agruparEstanteria(shelf, { filters, query, sort }) {
+export function agruparEstanteria(shelf, { filters, query, sort, conAudio = null }) {
   const s = shelf || []
-  const visible = s.filter(e => matchesFilters(e, filters) && matchesQuery(e, query))
+  const visible = s.filter(e => matchesFilters(e, filters, conAudio) && matchesQuery(e, query))
 
   const reading = visible.filter(e => e.status === 'reading' || e.status === 'rereading')
   const read    = visible.filter(e => e.status === 'read')

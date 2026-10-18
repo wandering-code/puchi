@@ -1,6 +1,6 @@
 import { esAdmin } from '../platform/auth'
 import { ES_KOKITO } from '../platform/variante'
-import { IconActividad, IconAudiolibro, IconBooks, IconChat, IconClub, IconEscudo, IconHome, IconSettings } from '../ui/icons'
+import { IconActividad, IconAudiolibro, IconAuriculares, IconBooks, IconChat, IconClub, IconEscudo, IconHome, IconSettings } from '../ui/icons'
 
 // Las secciones de la app, en un solo sitio.
 //
@@ -70,6 +70,18 @@ export const SECCIONES = [
     puntos: [
       'Desde aquí entras en la estantería de cualquiera: se ve y se maneja igual que la tuya, pero sin poder tocar nada suyo.',
       'Un libro que le veas a alguien te lo puedes guardar en la tuya sin salir de donde estás.',
+    ],
+  },
+  {
+    to: '/escuchar',
+    label: 'Escuchar',
+    Icon: IconAuriculares,
+    soloKokito: true,
+    resumen: 'Los audiolibros que ya se pueden escuchar.',
+    puntos: [
+      'Arriba, los que tienes en tu estantería, con lo que llevas escuchado.',
+      'Debajo, el resto: añádelo a tu estantería con un toque y podrás escucharlo.',
+      'En la Luniteca, «Filtrar» → «Con audiolibro» deja solo los tuyos que se pueden escuchar.',
     ],
   },
   {

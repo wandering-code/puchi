@@ -19,6 +19,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from auth import get_current_player
@@ -111,6 +112,85 @@ def _para_escuchar(db: Session, ab: Audiobook, p: Player) -> dict:
             "percent": _porcentaje(caps, prog.chapter_id, prog.position_s),
         } if prog and prog.chapter_id else None,
     }
+
+
+# ─── Descubrir (issue #74) ───────────────────────────────────────────────────
+# Los avisos van solo a quien pidió el audiolibro (#69). El resto los
+# encuentra aquí: un filtro en su Luniteca y la lista de todos los que hay.
+
+def _escuchables(db: Session) -> dict[int, list[AudiobookChapter]]:
+    """Audiolibros con al menos un capítulo que ya suena, con sus capítulos
+    incluidos en orden."""
+    caps: dict[int, list] = {}
+    for c in (db.query(AudiobookChapter)
+              .filter(AudiobookChapter.included.is_(True))
+              .order_by(AudiobookChapter.audiobook_id, AudiobookChapter.position).all()):
+        caps.setdefault(c.audiobook_id, []).append(c)
+    return {ab: cs for ab, cs in caps.items() if any(c.status == "listo" and c.audio_path for c in cs)}
+
+
+@router.get("/books")
+def libros_con_audio(db: Session = Depends(get_db), _: Player = Depends(get_current_player)):
+    """Qué libros del catálogo tienen un audiolibro que ya se puede escuchar:
+    para el filtro "Con audiolibro" de la Luniteca."""
+    ids = list(_escuchables(db))
+    if not ids:
+        return {"book_ids": []}
+    return {"book_ids": [b for (b,) in db.query(AudiobookBook.book_id)
+                         .filter(AudiobookBook.audiobook_id.in_(ids)).all()]}
+
+
+@router.get("/catalog")
+def catalogo(db: Session = Depends(get_db), p: Player = Depends(get_current_player)):
+    """Todos los audiolibros que ya se pueden escuchar, estén o no en tu
+    estantería. Para escuchar uno hay que tener el libro (#60): si no lo
+    tienes, `add_book_id` es el que se añadiría (de sus ediciones, la que
+    más gente tiene)."""
+    caps = _escuchables(db)
+    if not caps:
+        return []
+    abs_ = db.query(Audiobook).filter(Audiobook.id.in_(caps)).all()
+    enlaces: dict[int, list[Book]] = {}
+    for ab_id, b in (db.query(AudiobookBook.audiobook_id, Book)
+                     .join(Book, Book.id == AudiobookBook.book_id)
+                     .filter(AudiobookBook.audiobook_id.in_(caps)).all()):
+        enlaces.setdefault(ab_id, []).append(b)
+    todos = [b.id for bs in enlaces.values() for b in bs]
+    mios = {e.book_id: e for e in db.query(PersonalShelf)
+            .filter(PersonalShelf.player_id == p.id, PersonalShelf.book_id.in_(todos)).all()} if todos else {}
+    cuantos = dict(db.query(PersonalShelf.book_id, func.count(PersonalShelf.id))
+                   .filter(PersonalShelf.book_id.in_(todos)).group_by(PersonalShelf.book_id).all()) if todos else {}
+    progresos = {g.audiobook_id: g for g in db.query(AudiobookProgress)
+                 .filter(AudiobookProgress.player_id == p.id, AudiobookProgress.audiobook_id.in_(caps)).all()}
+
+    out = []
+    for ab in abs_:
+        cs = caps[ab.id]
+        libros = enlaces.get(ab.id, [])
+        if not libros:
+            continue
+        listos = [c for c in cs if c.status == "listo" and c.audio_path]
+        mio = next((mios[b.id] for b in libros if b.id in mios), None)
+        prog = progresos.get(ab.id)
+        canonico = max(libros, key=lambda b: (cuantos.get(b.id, 0), -b.id))
+        out.append({
+            "id": ab.id, "title": ab.title, "author": ab.author,
+            "cover_url": ab.cover_url or next((b.cover_url for b in libros if b.cover_url), None),
+            "chapters_total": len(cs), "chapters_ready": len(listos),
+            "audio_minutes": round(sum(c.duration_s or 0 for c in listos) / 60),
+            "minutes": _minutos(sum(c.words for c in cs)),
+            "complete": len(listos) == len(cs),
+            "ready_since": _iso(max((c.generated_at for c in listos if c.generated_at), default=None)),
+            # Cuánta gente lo tiene en su estantería (con cualquiera de sus ediciones).
+            "shelves": sum(cuantos.get(b.id, 0) for b in libros),
+            "mine": {"book_id": mio.book_id, "status": mio.status} if mio else None,
+            "add_book_id": canonico.id,
+            "percent": _porcentaje(cs, prog.chapter_id, prog.position_s) if prog and prog.chapter_id else None,
+        })
+    # Lo tuyo primero (lo que vas escuchando, arriba); luego lo más reciente.
+    mias = sorted([a for a in out if a["mine"]], key=lambda a: (a["percent"] is None, a["title"].lower()))
+    otras = sorted([a for a in out if not a["mine"]], key=lambda a: a["ready_since"] or "", reverse=True)
+    return mias + otras
 
 
 @router.get("/book/{book_id}")
