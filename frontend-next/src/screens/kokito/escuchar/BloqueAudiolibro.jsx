@@ -237,8 +237,8 @@ function Peticion({ bookId, peticion, onCambio }) {
           aria-label={rechazado ? undefined : `${t.titulo}. Cambiar por dónde empezar`}
         >
           <span className="block font-display text-[15px] font-bold leading-tight">{t.titulo}</span>
-          <span className="mt-0.5 line-clamp-2 block text-xs text-ink-dim">{nota}</span>
-          {!rechazado && <span className="mt-1 block text-[11px] font-semibold text-accent">Cambiar por dónde empezar</span>}
+          <span className="mt-0.5 block break-words text-xs text-ink-dim">{nota}</span>
+          {!rechazado && <span className="mt-1 block text-[11px] font-semibold text-accent">Cambiar</span>}
         </button>
         {status === 'pedido' && (
           <button

@@ -225,7 +225,7 @@ export function HojaEmpezar({ ab, abierta, onCerrar, onGenerar }) {
                 <span className="min-w-0 flex-1 text-xs leading-snug">
                   <span className="font-semibold text-ink">{d.player.name}</span>
                   <span className="text-ink-dim"> pidió {pedido}</span>
-                  <span className="block truncate text-ink-mute">
+                  <span className="block break-words text-ink-mute">
                     {d.chapter_title
                       ? `${vale ? '→' : 'ya generado:'} «${d.chapter_title}»${d.how === 'pagina' ? ' (aprox.)' : d.how === 'orden' ? ' (contando capítulos)' : ''}`
                       : 'No se encuentra ese capítulo: elígelo a mano'}

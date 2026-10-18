@@ -219,15 +219,15 @@ function Deseos({ g }) {
   for (const r of g.requests) {
     if (vistos.has(r.player.id) || r.rejected_at) continue
     vistos.add(r.player.id)
-    if (r.start_chapter) lineas.push([r.player, `capítulo «${r.start_chapter}»`])
-    else if (r.start_page) lineas.push([r.player, `pág. ${r.start_page}${r.total_pages ? ` de ${r.total_pages}` : ''}`])
+    if (r.start_chapter) lineas.push([r.player, `desde «${r.start_chapter}»`])
+    else if (r.start_page) lineas.push([r.player, `desde la pág. ${r.start_page}${r.total_pages ? ` de ${r.total_pages}` : ''}`])
   }
   if (!lineas.length) return null
   return (
     <div className="mt-1.5 space-y-0.5">
       {lineas.map(([p, texto]) => (
-        <p key={p.id} className="truncate text-[11px] text-ink-dim">
-          <span className="font-semibold" style={{ color: p.color || undefined }}>{p.name}</span> quiere empezar por {texto}
+        <p key={p.id} className="break-words text-[11px] leading-snug text-ink-dim">
+          <span className="font-semibold" style={{ color: p.color || undefined }}>{p.name}</span>: {texto}
         </p>
       ))}
     </div>
