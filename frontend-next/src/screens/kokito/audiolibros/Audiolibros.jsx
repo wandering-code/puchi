@@ -191,6 +191,8 @@ export default function Audiolibros() {
         </AnimatePresence>
       </div>
 
+      <CopiaDeSeguridad />
+
       <FichaAudiolibro
         id={ficha.abierta}
         onCerrar={ficha.cerrar}
@@ -232,6 +234,32 @@ function Tarjeta({ ab, onAbrir }) {
         </div>
       </div>
     </motion.button>
+  )
+}
+
+// La copia de seguridad de cada noche (backup.sh): los audios cuestan horas
+// de sobremesa, así que se ve aquí si llegó al USB. Discreta si va bien;
+// en rojo si es vieja o no llegó.
+function CopiaDeSeguridad() {
+  const [e, setE] = useState(null)
+  useEffect(() => { api('/audiobook-worker/backup').then(setE).catch(() => {}) }, [])
+  if (!e) return null
+  const mal = e.stale || !e.usb
+  const gb = b => `${(b / 1024 ** 3).toFixed(1).replace('.', ',')} GB`
+  let texto
+  if (!e.at) texto = 'Todavía no hay ninguna copia de los audios.'
+  else if (!e.usb) texto = 'La última copia no llegó al USB: ¿está conectado?'
+  else {
+    const cuando = new Date(e.at).toLocaleString('es-ES', { weekday: 'long', hour: '2-digit', minute: '2-digit' })
+    texto = `Última: ${cuando} · ${e.audio_files} audios, ${gb(e.copy_bytes)} · quedan ${gb(e.usb_free)} en el USB`
+    if (e.stale) texto = `La última copia es vieja (${cuando}). ${texto.split(' · ').slice(1).join(' · ')}`
+  }
+  return (
+    <div className={`mt-8 rounded-xl2 border px-4 py-3 ${mal ? 'border-danger/40 bg-danger/5' : 'border-line bg-surface'}`}>
+      <p className={`text-[11px] uppercase tracking-wider ${mal ? 'text-danger' : 'text-ink-mute'}`}>Copia de seguridad</p>
+      <p className={`mt-1 text-[13px] leading-relaxed ${mal ? 'text-danger' : 'text-ink-dim'}`}>{texto}</p>
+      {!mal && <p className="mt-0.5 text-[11px] text-ink-mute">Cada noche a las 4:00, en el USB del mini PC. Lo borrado se guarda 30 días.</p>}
+    </div>
   )
 }
 

@@ -969,6 +969,25 @@ def avisar_error(cap_id: int, cuerpo: Fallo, db: Session = Depends(get_db), _=De
     return {"ok": True}
 
 
+@worker_router.get("/backup")
+def estado_copia(_: Player = Depends(require_admin)):
+    """La última copia de seguridad (backup.sh, cada noche): cuándo, si llegó
+    al USB y cuánto ocupa. Si no hay o es de hace más de un día y medio, algo
+    ha fallado (#71)."""
+    ruta = os.path.join(DIR_EPUB, "..", "copia_estado.json")
+    try:
+        with open(ruta, encoding="utf-8") as f:
+            estado = json.load(f)
+    except (OSError, ValueError):
+        return {"at": None, "stale": True}
+    try:
+        cuando = datetime.fromisoformat(estado["at"].replace("Z", "+00:00"))
+        estado["stale"] = datetime.now(timezone.utc) - cuando > timedelta(hours=36)
+    except (KeyError, ValueError):
+        estado["stale"] = True
+    return estado
+
+
 @worker_router.get("/status")
 def estado_sobremesa(db: Session = Depends(get_db), _: Player = Depends(require_admin)):
     """Para el admin: si el sobremesa está encendido y qué tiene la cola."""

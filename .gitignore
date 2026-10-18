@@ -26,6 +26,9 @@ backend/uploads/*
 
 # EPUB de los audiolibros: libros con derechos, nunca al repo (ver audiolibros.py)
 backend/datos/
+# Registros que escriben los scripts del mini PC (backup.sh…)
+backup.log
+precalentar.log
 
 # Backups de BBDD (datos personales reales de producción) — nunca al repo
 backend/backups/
