@@ -619,9 +619,10 @@ async def _google_books_by_author(client: httpx.AsyncClient, author: str, exclud
             params["key"] = GOOGLE_BOOKS_API_KEY
         try:
             r = await client.get("https://www.googleapis.com/books/v1/volumes", params=params, timeout=10)
-            # Con clave, "inauthor:" + langRestrict devuelve 503 siempre (visto
-            # el 2026-10-18, #57); sin langRestrict responde bien. El idioma se
-            # filtra igual abajo, por el `language` de cada resultado.
+            # Google responde 503 a ratos a estas búsquedas (visto el
+            # 2026-10-18, #57): se reintenta una vez, y sin langRestrict, que
+            # es lo que más le cuesta. El idioma se filtra igual abajo, por el
+            # `language` de cada resultado.
             if r.status_code == 503:
                 params.pop("langRestrict", None)
                 r = await client.get("https://www.googleapis.com/books/v1/volumes", params=params, timeout=10)
