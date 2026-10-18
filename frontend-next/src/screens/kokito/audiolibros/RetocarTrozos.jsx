@@ -131,7 +131,13 @@ export default function RetocarTrozos({ ab, cap, abierta, onCerrar, onHecho }) {
     const a = audio.current
     if (!a) return
     pararRonda()
-    if (a.paused) { hasta.current = null; if (r?.sonando) r.alternar(); a.play().catch(() => {}) } else a.pause()
+    if (!a.paused) { a.pause(); return }
+    // Con un trozo marcado (por ejemplo, con las flechas), el play es para
+    // oír ESE trozo, no para seguir por donde se quedó el audio.
+    if (trozo) { sonar(Math.max(0, trozo.start - 0.1), trozo.end); return }
+    hasta.current = null
+    if (r?.sonando) r.alternar()
+    a.play().catch(() => {})
   }
 
   // Tocar marca el trozo (y suena); tocarlo otra vez lo desmarca.
