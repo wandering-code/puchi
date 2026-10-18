@@ -47,3 +47,26 @@ export const ESTADOS_AB = {
   listo:     'Listo',
   error:     'Con fallos',
 }
+
+// "hace 3 días", como en Actividad.
+export function haceCuanto(iso) {
+  if (!iso) return ''
+  const min = Math.floor(Math.max(0, Date.now() - new Date(iso).getTime()) / 60000)
+  if (min < 1) return 'ahora mismo'
+  if (min < 60) return `hace ${min} min`
+  const horas = Math.floor(min / 60)
+  if (horas < 24) return `hace ${horas} h`
+  const dias = Math.floor(horas / 24)
+  if (dias === 1) return 'ayer'
+  if (dias < 7) return `hace ${dias} días`
+  const semanas = Math.floor(dias / 7)
+  if (semanas < 5) return `hace ${semanas} ${semanas === 1 ? 'semana' : 'semanas'}`
+  const meses = Math.floor(dias / 30)
+  return meses < 12 ? `hace ${meses} ${meses === 1 ? 'mes' : 'meses'}` : 'hace más de un año'
+}
+
+// "Ana", "Ana y Luis", "Ana, Luis y 3 más".
+export function nombres(lista) {
+  if (lista.length <= 2) return lista.join(' y ')
+  return `${lista.slice(0, 2).join(', ')} y ${lista.length - 2} más`
+}

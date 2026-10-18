@@ -470,6 +470,22 @@ class AudiobookProgress(Base):
     updated_at   = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
+class AudiobookRequest(Base):
+    """Alguien pide escuchar un libro de su estantería (fase 6, #68). Se pide
+    el libro, no un audiolibro: lo normal es que aún no exista. Cuando el admin
+    lo enlaza con uno, el estado de la petición sale de ese audiolibro; aquí
+    solo se guarda si la rechazó y por qué."""
+    __tablename__ = "audiobook_requests"
+    __table_args__ = (UniqueConstraint("player_id", "book_id"),)
+
+    id            = Column(Integer, primary_key=True, index=True)
+    player_id     = Column(Integer, ForeignKey("players.id", ondelete="CASCADE"), nullable=False, index=True)
+    book_id       = Column(Integer, ForeignKey("books.id", ondelete="CASCADE"), nullable=False, index=True)
+    created_at    = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    rejected_at   = Column(DateTime, nullable=True)
+    reject_reason = Column(String, nullable=True)
+
+
 def crear_tablas():
     Base.metadata.create_all(bind=engine)
 

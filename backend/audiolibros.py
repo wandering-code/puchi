@@ -301,9 +301,12 @@ def _detalle(db: Session, ab: Audiobook) -> dict:
     # Quién podrá escucharlo: todos los que tienen alguno de los libros
     # enlazados, una vez cada uno aunque tenga dos ediciones.
     oyentes: dict[int, dict] = {}
+    # Aquí dentro: audiolibros_peticiones importa de este módulo.
+    from audiolibros_peticiones import pedido_por
+    pidieron = pedido_por(db, [b["id"] for b in out["books"]])
     for libro in out["books"]:
         for d in libro["owners"]:
-            oyentes.setdefault(d["id"], {**d, "book_title": libro["title"]})
+            oyentes.setdefault(d["id"], {**d, "book_title": libro["title"], "requested": d["id"] in pidieron})
     out["listeners"] = sorted(oyentes.values(), key=lambda d: d["name"].lower())
     out["chapters"] = [{
         "id": c.id, "position": c.position, "title": c.title, "words": c.words,
@@ -370,8 +373,11 @@ def listar(db: Session = Depends(get_db), _: Player = Depends(require_admin)):
 
 
 @router.post("")
-def subir(epub_file: UploadFile = File(...), db: Session = Depends(get_db),
-          admin: Player = Depends(require_admin)):
+def subir(epub_file: UploadFile = File(...),
+          # Desde una petición (fase 6, #68): los libros de quienes lo pidieron,
+          # separados por comas, para dejarlos ya enlazados.
+          link_books: Optional[str] = Form(None),
+          db: Session = Depends(get_db), admin: Player = Depends(require_admin)):
     datos = epub_file.file.read(MAX_EPUB + 1)
     if len(datos) > MAX_EPUB:
         raise HTTPException(status_code=413, detail="El EPUB pasa de 60 MB")
@@ -412,6 +418,13 @@ def subir(epub_file: UploadFile = File(...), db: Session = Depends(get_db),
         os.remove(ruta)
         _borrar_portada(ab.cover_url)
         raise HTTPException(status_code=422, detail="No se han podido sacar los capítulos del EPUB")
+    # Solo los que aún no van con otro audiolibro: mover uno lo decide el admin
+    # a mano desde la ficha.
+    ids = {int(x) for x in (link_books or "").split(",") if x.strip().isdigit()}
+    if ids:
+        ya_enlazados = {b for (b,) in db.query(AudiobookBook.book_id).filter(AudiobookBook.book_id.in_(ids)).all()}
+        for (bid,) in db.query(Book.id).filter(Book.id.in_(ids - ya_enlazados)).all():
+            db.add(AudiobookBook(audiobook_id=ab.id, book_id=bid, linked_by=admin.id))
     db.commit()
     db.refresh(ab)
     return _detalle(db, ab)

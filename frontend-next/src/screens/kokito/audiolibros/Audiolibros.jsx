@@ -6,6 +6,7 @@ import { useCapa } from '../../../platform/capas'
 import { Cover } from '../../luniteca/piezas'
 import { IconAudiolibro, IconEnlace, IconSubir } from '../../../ui/icons'
 import FichaAudiolibro from './FichaAudiolibro'
+import Peticiones from './Peticiones'
 import { capitulos, duracion, ESTADOS_AB } from './formato'
 
 // Audiolibros, la parte del admin (fase 1, issue #63 de puchi): subir el
@@ -20,6 +21,16 @@ export default function Audiolibros() {
   const [error, setError] = useState(null)
   const [subiendo, setSubiendo] = useState(null) // nombre del archivo
   const ficha = useCapa(null) // id del audiolibro abierto
+  // Al cerrar una ficha (con la X o con "atrás") se vuelven a pedir las
+  // peticiones: enlazar o desenlazar libros desde ella cambia en qué punto
+  // está cada una.
+  const [versionPeticiones, setVersionPeticiones] = useState(0)
+  const hayFicha = ficha.abierta != null
+  const habiaFicha = useRef(false)
+  useEffect(() => {
+    if (habiaFicha.current && !hayFicha) setVersionPeticiones(v => v + 1)
+    habiaFicha.current = hayFicha
+  }, [hayFicha])
   const entrada = useRef(null)
 
   const cargar = useCallback(() => {
@@ -69,7 +80,7 @@ export default function Audiolibros() {
     <div className="mx-auto max-w-2xl py-6">
       <header className="mb-5">
         <h2 className="font-display text-[1.75rem] font-bold tracking-[-0.02em]">Audiolibros</h2>
-        <p className="mt-1 text-sm text-ink-dim">El EPUB, sus capítulos y con qué libros va cada uno.</p>
+        <p className="mt-1 text-sm text-ink-dim">Lo que te piden, el EPUB, sus capítulos y con qué libros va cada uno.</p>
       </header>
 
       <input
@@ -120,6 +131,20 @@ export default function Audiolibros() {
         )}
       </AnimatePresence>
 
+      <Peticiones
+        audiolibros={lista}
+        version={versionPeticiones}
+        onAbrir={id => ficha.abrir(id)}
+        onSubido={nuevo => {
+          setLista(l => [nuevo, ...(l || [])])
+          ficha.abrir(nuevo.id)
+        }}
+      />
+
+      {lista?.length > 0 && (
+        <h3 className="mb-3 mt-8 px-1 font-display text-lg font-bold tracking-[-0.01em]">Audiolibros</h3>
+      )}
+
       {lista === null && (
         <div className="mt-5 space-y-2.5">
           {Array.from({ length: 3 }).map((_, i) => (
@@ -140,7 +165,7 @@ export default function Audiolibros() {
         </div>
       )}
 
-      <div className="mt-5 space-y-2.5">
+      <div className="space-y-2.5">
         <AnimatePresence initial={false} mode="popLayout">
           {(lista || []).map(ab => (
             <motion.div
