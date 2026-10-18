@@ -912,6 +912,38 @@ class Pedir(BaseModel):
     higgs_ok: bool = True
 
 
+def _dar_retoque(db: Session, nombre: str, ahora: datetime) -> Optional[dict]:
+    """Un capítulo con retoques pendientes, reservado para el sobremesa, o
+    None si no hay ninguno."""
+    r = (db.query(AudiobookChapter)
+         .filter(AudiobookChapter.retoques.isnot(None), AudiobookChapter.status == "listo",
+                 or_(AudiobookChapter.retoque_lease.is_(None), AudiobookChapter.retoque_lease < ahora))
+         .with_for_update(skip_locked=True).all())
+    r = next((c for c in r if c.retoques), None)
+    if not r:
+        return None
+    ab = db.query(Audiobook).filter(Audiobook.id == r.audiobook_id).first()
+    r.retoque_lease = ahora + RESERVA
+    db.commit()
+    return {
+        "tipo": "retoque", "chapter_id": r.id, "audiobook_id": ab.id, "audiobook_title": ab.title,
+        "title": r.title, "position": r.position, "voice": r.voice_used or ab.voice,
+        "mapa": _mapa(r), "retoques": r.retoques,
+        "pausa_ms": (r.recipe or {}).get("pausa_ms", 350),
+        "lease_seconds": int(RESERVA.total_seconds()),
+    }
+
+
+@worker_router.post("/retouch-claim")
+def pedir_retoque(cuerpo: Pedir, db: Session = Depends(get_db), _=Depends(_solo_sobremesa)):
+    """Solo retoques, para pedirlos A MEDIAS de un capítulo largo: el
+    sobremesa los hace entre trozo y trozo, en vez de esperar a acabarlo (que
+    puede ser hora y media). No da capítulos ni toca el que está generando."""
+    if not cuerpo.higgs_ok:
+        return Response(status_code=204)
+    return _dar_retoque(db, cuerpo.name, _ahora()) or Response(status_code=204)
+
+
 @worker_router.post("/claim")
 def pedir_trabajo(cuerpo: Pedir, db: Session = Depends(get_db), _=Depends(_solo_sobremesa)):
     _latir(cuerpo.name, cuerpo.higgs_ok)
@@ -925,23 +957,10 @@ def pedir_trabajo(cuerpo: Pedir, db: Session = Depends(get_db), _=Depends(_solo_
         return Response(status_code=204)
 
     # Los retoques primero: son cortos y los ha pedido el admin a propósito.
-    r = (db.query(AudiobookChapter)
-         .filter(AudiobookChapter.retoques.isnot(None), AudiobookChapter.status == "listo",
-                 or_(AudiobookChapter.retoque_lease.is_(None), AudiobookChapter.retoque_lease < ahora))
-         .with_for_update(skip_locked=True).all())
-    r = next((c for c in r if c.retoques), None)
-    if r:
-        ab = db.query(Audiobook).filter(Audiobook.id == r.audiobook_id).first()
-        r.retoque_lease = ahora + RESERVA
-        db.commit()
-        _latir(cuerpo.name, True, r.id)
-        return {
-            "tipo": "retoque", "chapter_id": r.id, "audiobook_id": ab.id, "audiobook_title": ab.title,
-            "title": r.title, "position": r.position, "voice": r.voice_used or ab.voice,
-            "mapa": _mapa(r), "retoques": r.retoques,
-            "pausa_ms": (r.recipe or {}).get("pausa_ms", 350),
-            "lease_seconds": int(RESERVA.total_seconds()),
-        }
+    retoque = _dar_retoque(db, cuerpo.name, ahora)
+    if retoque:
+        _latir(cuerpo.name, True, retoque["chapter_id"])
+        return retoque
 
     retenidos = db.query(Audiobook.id).filter(Audiobook.queue_hold.is_(True))
     c = (db.query(AudiobookChapter)
