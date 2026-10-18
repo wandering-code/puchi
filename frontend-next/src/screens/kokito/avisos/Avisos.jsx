@@ -3,6 +3,9 @@ import { AnimatePresence, motion } from 'motion/react'
 import { useNotificaciones } from '../../../platform/notificaciones'
 import { activarPush, desactivarPush, estadoPush } from '../../../platform/push'
 import { api } from '../../../platform/api'
+import { esAdmin, useAuth } from '../../../platform/auth'
+import { usarPreferencia } from '../../../platform/preferencias'
+import Interruptor from '../../../ui/Interruptor'
 import { Girando } from '../audiolibros/Audiolibros'
 import HojaInferior from '../../luniteca/HojaInferior'
 import { Cover } from '../../luniteca/piezas'
@@ -36,6 +39,56 @@ export function Campana() {
         )}
       </AnimatePresence>
     </button>
+  )
+}
+
+// Ajustes → Avisos (#69, parte 3): qué avisos quiere cada uno. Apagar uno
+// es no recibirlo en ningún sitio, ni en la campana ni en el móvil (el
+// backend no lo crea: avisos_audiolibros.quiere). Va con la cuenta.
+const TIPOS = [
+  { id: 'ab_ready', etiqueta: 'Ya puedes escuchar', nota: 'Cuando un audiolibro que pediste tiene listo tu capítulo' },
+  { id: 'ab_new_chapter', etiqueta: 'Capítulo nuevo', nota: 'Solo si vas al día y estás esperando el siguiente' },
+  { id: 'ab_complete', etiqueta: 'Audiolibro completo', nota: 'Cuando ya están todos los capítulos' },
+  { id: 'ab_rejected', etiqueta: 'Petición rechazada', nota: 'Si un audiolibro que pediste no se va a preparar' },
+]
+const TIPOS_ADMIN = [
+  { id: 'adm_request', etiqueta: 'Peticiones nuevas', nota: 'Cuando alguien pide un audiolibro' },
+  { id: 'adm_ab_done', etiqueta: 'Audiolibro generado', nota: 'Cuando el sobremesa termina un libro entero' },
+  { id: 'adm_ch_error', etiqueta: 'Capítulo que falla', nota: 'Cuando un capítulo falla todas las veces' },
+]
+
+export function AvisosEnAjustes() {
+  const { player } = useAuth()
+  const [elegidos, ponerElegidos] = usarPreferencia('avisos', {})
+  const cambiar = (id, v) => ponerElegidos({ ...(elegidos || {}), [id]: v })
+  const lista = (tipos) => tipos.map((t, i) => (
+    <div key={t.id} className={`px-4 py-3 ${i ? 'border-t border-line/70' : ''}`}>
+      <Interruptor
+        puesto={elegidos?.[t.id] !== false}
+        onCambiar={v => cambiar(t.id, v)}
+        etiqueta={t.etiqueta}
+        nota={t.nota}
+      />
+    </div>
+  ))
+  return (
+    <div className="mt-6 overflow-hidden rounded-xl2 border border-line bg-surface">
+      <p className="border-b border-line px-4 py-2 text-xs uppercase tracking-wider text-ink-mute">Avisos</p>
+      {/* Sin push en este dispositivo el recuadro no sale, y sin esto
+          quedaría su hueco. */}
+      <div className="px-4 pt-3 empty:hidden">
+        <EnEsteMovil abierta />
+      </div>
+      {lista(TIPOS)}
+      {esAdmin(player) && (
+        <>
+          <p className="border-y border-line bg-surface-2/40 px-4 py-2 text-xs uppercase tracking-wider text-ink-mute">
+            Como admin
+          </p>
+          {lista(TIPOS_ADMIN)}
+        </>
+      )}
+    </div>
   )
 }
 

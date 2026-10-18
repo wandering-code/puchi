@@ -16,7 +16,7 @@ import Perfil from './perfil/Perfil'
 import Admin from './admin/Admin'
 import Audiolibros from './kokito/audiolibros/Audiolibros'
 import { ES_KOKITO } from '../platform/variante'
-import { Campana } from './kokito/avisos/Avisos'
+import { AvisosEnAjustes, Campana } from './kokito/avisos/Avisos'
 import Avatar from '../ui/Avatar'
 import Interruptor from '../ui/Interruptor'
 import { SelectorSeparacion, usarSeparacion } from './luniteca/separacion'
@@ -383,6 +383,8 @@ function Ajustes() {
       <SeparacionDeSecciones />
 
       <VistaDeLomos />
+
+      {ES_KOKITO && <AvisosEnAjustes />}
 
       <div className="mt-6 overflow-hidden rounded-xl2 border border-line bg-surface">
         <p className="border-b border-line px-4 py-2 text-xs uppercase tracking-wider text-ink-mute">Diagnóstico</p>

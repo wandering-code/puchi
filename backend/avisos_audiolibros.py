@@ -37,6 +37,15 @@ from database import (
 
 router = APIRouter(prefix="/notices", tags=["avisos"])
 
+def quiere(p: Player, tipo: str) -> bool:
+    """Si esa persona quiere este tipo de aviso. Lo elige en Ajustes y se
+    guarda con su cuenta (customization["next"]["avisos"], como el resto de
+    preferencias de la app); lo que no ha tocado, sí."""
+    cust = p.customization if isinstance(p.customization, dict) else {}
+    elegidos = (cust.get("next") or {}).get("avisos") or {}
+    return elegidos.get(tipo, True) is not False
+
+
 # Cuánto del último capítulo tiene que haber escuchado para contar como "al
 # día": casi todo, o los dos últimos minutos.
 AL_DIA = 0.85
@@ -138,6 +147,8 @@ def revisar(db: Session, ab_id: int, nuevo: Optional[AudiobookChapter] = None) -
         titulo = ab.title
 
         if "ab_ready" not in ya:
+            if not quiere(pl, "ab_ready"):
+                continue
             objetivo, _como = capitulo_deseado(caps, r.start_page, r.start_chapter, _paginas(e, b))
             pedido = objetivo is not None
             objetivo = objetivo or caps[0]
@@ -157,7 +168,7 @@ def revisar(db: Session, ab_id: int, nuevo: Optional[AudiobookChapter] = None) -
                                     title=f"«{titulo}» está completo", read_at=_ahora()))
             continue
 
-        if completo and "ab_complete" not in ya:
+        if completo and "ab_complete" not in ya and quiere(pl, "ab_complete"):
             nuevos.append(PlayerNotice(
                 player_id=pl.id, kind="ab_complete", audiobook_id=ab_id, book_id=b.id,
                 title=f"«{titulo}» está completo",
@@ -166,7 +177,7 @@ def revisar(db: Session, ab_id: int, nuevo: Optional[AudiobookChapter] = None) -
             db.add(nuevos[-1])
             continue
 
-        if nuevo is not None and _al_dia(db, pl.id, ab_id, caps, nuevo):
+        if nuevo is not None and quiere(pl, "ab_new_chapter") and _al_dia(db, pl.id, ab_id, caps, nuevo):
             # Uno sin leer basta: si no lo ha visto, no se le amontonan más.
             previo = ya.get("ab_new_chapter")
             if previo and not previo.read_at:
@@ -192,7 +203,8 @@ def al_rechazar(db: Session, peticiones: list[AudiobookRequest]) -> None:
     nuevos = []
     for r in peticiones:
         libro = db.query(Book).filter(Book.id == r.book_id).first()
-        if not libro:
+        quien = db.query(Player).filter(Player.id == r.player_id).first()
+        if not libro or not quien or not quiere(quien, "ab_rejected"):
             continue
         nuevos.append(PlayerNotice(
             player_id=r.player_id, kind="ab_rejected", book_id=r.book_id,
@@ -214,10 +226,10 @@ def al_deshacer_rechazo(db: Session, book_ids: list[int]) -> None:
 
 # ─── Para el admin ───────────────────────────────────────────────────────────
 
-def _admins(db: Session) -> list[int]:
-    # El admin es la cuenta "wander" (auth.require_admin).
-    return [i for (i,) in db.query(Player.id)
-            .filter(Player.name.ilike("wander"), Player.status == "approved").all()]
+def _admins(db: Session, tipo: str) -> list[int]:
+    # El admin es la cuenta "wander" (auth.require_admin), si quiere ese aviso.
+    return [p.id for p in db.query(Player)
+            .filter(Player.name.ilike("wander"), Player.status == "approved").all() if quiere(p, tipo)]
 
 
 def _duracion(segundos: float) -> str:
@@ -228,7 +240,7 @@ def _duracion(segundos: float) -> str:
 
 def admin_peticion(db: Session, r: AudiobookRequest, quien: Player) -> None:
     """Alguien ha pedido un audiolibro. Hace commit."""
-    admins = [a for a in _admins(db) if a != quien.id]
+    admins = [a for a in _admins(db, "adm_request") if a != quien.id]
     libro = db.query(Book).filter(Book.id == r.book_id).first()
     if not admins or not libro:
         return
@@ -251,7 +263,7 @@ def admin_si_terminado(db: Session, ab_id: int) -> None:
             .filter(AudiobookChapter.audiobook_id == ab_id, AudiobookChapter.included.is_(True)).all())
     if not caps or not all(_listo(c) for c in caps):
         return
-    admins = _admins(db)
+    admins = _admins(db, "adm_ab_done")
     ya = {pid for (pid,) in db.query(PlayerNotice.player_id)
           .filter(PlayerNotice.kind == "adm_ab_done", PlayerNotice.audiobook_id == ab_id).all()}
     ab = db.query(Audiobook).filter(Audiobook.id == ab_id).first()
@@ -271,7 +283,7 @@ def admin_fallo(db: Session, c: AudiobookChapter, intentos: int) -> None:
     nuevos = [PlayerNotice(player_id=a, kind="adm_ch_error", audiobook_id=c.audiobook_id, chapter_id=c.id,
                            title=f"Falla un capítulo de «{ab.title if ab else '?'}»",
                            body=f"«{c.title}» tras {intentos} intentos: {(c.error or '')[:140]}")
-              for a in _admins(db)]
+              for a in _admins(db, "adm_ch_error")]
     if nuevos:
         db.add_all(nuevos)
         db.commit()
