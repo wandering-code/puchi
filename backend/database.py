@@ -484,6 +484,12 @@ class AudiobookRequest(Base):
     created_at    = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     rejected_at   = Column(DateTime, nullable=True)
     reject_reason = Column(String, nullable=True)
+    # Por dónde quiere empezar quien lo pide: una página de su libro o un
+    # capítulo escrito a mano ("12", "el de la boda"). Sin ninguno, desde el
+    # principio. Cuando hay EPUB se traduce a un capítulo de verdad
+    # (audiolibros_peticiones.capitulo_deseado).
+    start_page    = Column(Integer, nullable=True)
+    start_chapter = Column(String, nullable=True)
 
 
 def crear_tablas():

@@ -85,7 +85,11 @@ export function ReproductorProvider({ children }) {
       if (reproducir && audio.current?.paused) audio.current.play().catch(() => {})
     } else {
       const guardado = l.progress && l.chapters.find(c => c.id === l.progress.chapter_id && c.ready)
-      let c = guardado || l.chapters.find(c => c.ready)
+      // Sin nada escuchado, por donde pidió empezar al pedirlo (#68): ese
+      // capítulo, o el primero listo a partir de él.
+      const desde = !guardado && l.start_chapter_id ? l.chapters.findIndex(c => c.id === l.start_chapter_id) : -1
+      const pedido = desde >= 0 ? l.chapters.slice(desde).find(c => c.ready) : null
+      let c = guardado || pedido || l.chapters.find(c => c.ready)
       let pos = guardado ? l.progress.position_s : 0
       // Se dejó al final de un capítulo: se sigue por el siguiente que esté
       // listo, o por el principio de este si todavía no hay otro. Si no, el

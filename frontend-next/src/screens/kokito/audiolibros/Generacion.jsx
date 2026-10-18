@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import HojaInferior from '../../luniteca/HojaInferior'
+import Avatar from '../../../ui/Avatar'
 import { IconCheck, IconPausa, IconPlay } from '../../../ui/icons'
 import { Girando } from './Audiolibros'
 import { duracion, reloj } from './formato'
@@ -156,8 +157,24 @@ export function HojaEmpezar({ ab, abierta, onCerrar, onGenerar }) {
   const candidatos = ab.chapters.filter(c => c.included && c.status !== 'listo')
   const [elegido, setElegido] = useState(null)
   const [enviando, setEnviando] = useState(false)
+  // Lo que pidieron los usuarios (#68), ya traducido a capítulo. Se propone
+  // el que antes llega en el libro: así todos tienen pronto el suyo o uno
+  // anterior.
+  const deseos = (ab.start_wishes || []).filter(d => candidatos.some(c => c.id === d.chapter_id))
+  const quienes = id => deseos.filter(d => d.chapter_id === id).map(d => d.player)
   useEffect(() => {
-    if (abierta) setElegido(candidatos[0]?.id ?? null)
+    if (!abierta) return
+    const pos = id => candidatos.findIndex(c => c.id === id)
+    const propuesto = [...deseos].sort((a, b) => pos(a.chapter_id) - pos(b.chapter_id))[0]
+    setElegido(propuesto?.chapter_id ?? candidatos[0]?.id ?? null)
+    // Si se propone uno de más abajo, se baja hasta él cuando la hoja ya ha
+    // subido (antes, la hoja vuelve arriba al abrirse y lo deshace).
+    if (propuesto) {
+      const t = setTimeout(() => {
+        document.querySelector('[data-cap-propuesto]')?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+      }, 450)
+      return () => clearTimeout(t)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [abierta])
   const cap = candidatos.find(c => c.id === elegido)
@@ -190,12 +207,42 @@ export function HojaEmpezar({ ab, abierta, onCerrar, onGenerar }) {
         Se genera desde el que elijas hasta el final, y después lo de antes. Así el primero que
         se pueda escuchar es el que hace falta.
       </p>
+      {(ab.start_wishes || []).length > 0 && (
+        <div className="mb-4 space-y-1.5">
+          <p className="px-1 text-[11px] uppercase tracking-[0.1em] text-ink-mute">Lo que piden</p>
+          {ab.start_wishes.map(d => {
+            const vale = deseos.includes(d)
+            const pedido = d.start_chapter ? `«${d.start_chapter}»` : `pág. ${d.start_page}${d.total_pages ? ` de ${d.total_pages}` : ''}`
+            return (
+              <button
+                key={d.player.id}
+                disabled={!vale}
+                onClick={() => setElegido(d.chapter_id)}
+                className={`flex w-full items-center gap-2.5 rounded-xl2 border px-3 py-2 text-left transition-colors ${
+                  vale && elegido === d.chapter_id ? 'border-accent-line bg-accent-soft/60' : 'border-line bg-surface'} disabled:opacity-70`}
+              >
+                <Avatar jugador={d.player} size={24} />
+                <span className="min-w-0 flex-1 text-xs leading-snug">
+                  <span className="font-semibold text-ink">{d.player.name}</span>
+                  <span className="text-ink-dim"> pidió {pedido}</span>
+                  <span className="block truncate text-ink-mute">
+                    {d.chapter_title
+                      ? `${vale ? '→' : 'ya generado:'} «${d.chapter_title}»${d.how === 'pagina' ? ' (aprox.)' : d.how === 'orden' ? ' (contando capítulos)' : ''}`
+                      : 'No se encuentra ese capítulo: elígelo a mano'}
+                  </span>
+                </span>
+              </button>
+            )
+          })}
+        </div>
+      )}
       <div className="overflow-hidden rounded-xl2 border border-line bg-surface">
         {candidatos.map((c, i) => {
           const activo = c.id === elegido
           return (
             <button
               key={c.id}
+              data-cap-propuesto={quienes(c.id).length > 0 || undefined}
               onClick={() => setElegido(c.id)}
               className={`flex w-full items-center gap-3 px-3.5 py-3 text-left transition-colors ${i ? 'border-t border-line/70' : ''} ${activo ? 'bg-accent-soft/60' : 'active:bg-surface-2'}`}
             >
@@ -204,6 +251,13 @@ export function HojaEmpezar({ ab, abierta, onCerrar, onGenerar }) {
                 <span className={`block truncate text-sm ${activo ? 'font-semibold text-ink' : 'text-ink'}`}>{c.title}</span>
                 <span className="block text-[11px] text-ink-mute">{duracion(c.minutes)}{c.status === 'error' ? ' · falló la otra vez' : ''}</span>
               </span>
+              {quienes(c.id).length > 0 && (
+                <span className="flex shrink-0 -space-x-1.5">
+                  {quienes(c.id).slice(0, 3).map(p => (
+                    <span key={p.id} className="rounded-full ring-2 ring-surface"><Avatar jugador={p} size={18} /></span>
+                  ))}
+                </span>
+              )}
               <span
                 className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors ${activo ? 'border-accent bg-accent text-on-accent' : 'border-line'}`}
               >

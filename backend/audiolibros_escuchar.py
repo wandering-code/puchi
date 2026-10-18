@@ -23,10 +23,12 @@ from sqlalchemy.orm import Session
 
 from auth import get_current_player
 from audiolibros import _ahora, _estado, _iso, _minutos
+from audiolibros_peticiones import capitulo_deseado
 from ws_manager import manager
 from database import (
     Activity,
-    Audiobook, AudiobookBook, AudiobookChapter, AudiobookProgress, Book, PersonalShelf, Player, get_db,
+    Audiobook, AudiobookBook, AudiobookChapter, AudiobookProgress, AudiobookRequest, Book, PersonalShelf,
+    Player, get_db,
 )
 
 router = APIRouter(prefix="/listen", tags=["audiolibros"])
@@ -70,6 +72,21 @@ def _para_escuchar(db: Session, ab: Audiobook, p: Player) -> dict:
     prog = (db.query(AudiobookProgress)
             .filter(AudiobookProgress.player_id == p.id, AudiobookProgress.audiobook_id == ab.id).first())
     listos = [c for c in caps if c.status == "listo"]
+    # Si lo pidió diciendo por dónde empezar, la primera vez empieza ahí
+    # (fase 6, #68). Después manda lo que haya escuchado.
+    empezar = None
+    if not (prog and prog.chapter_id):
+        pet = (db.query(AudiobookRequest, PersonalShelf, Book)
+               .join(AudiobookBook, AudiobookBook.book_id == AudiobookRequest.book_id)
+               .join(PersonalShelf, (PersonalShelf.book_id == AudiobookRequest.book_id)
+                     & (PersonalShelf.player_id == AudiobookRequest.player_id))
+               .join(Book, Book.id == AudiobookRequest.book_id)
+               .filter(AudiobookBook.audiobook_id == ab.id, AudiobookRequest.player_id == p.id,
+                       AudiobookRequest.rejected_at.is_(None)).first())
+        if pet:
+            r, e, b = pet
+            cap, _como = capitulo_deseado(caps, r.start_page, r.start_chapter, e.custom_total_pages or b.num_pages or e.ereader_total_pages)
+            empezar = cap.id if cap else None
     # La del EPUB; si no trae, la de alguno de los libros enlazados.
     portada = ab.cover_url or (db.query(Book.cover_url)
                                .join(AudiobookBook, AudiobookBook.book_id == Book.id)
@@ -78,6 +95,7 @@ def _para_escuchar(db: Session, ab: Audiobook, p: Player) -> dict:
     return {
         "id": ab.id, "title": ab.title, "author": ab.author, "cover_url": portada,
         "status": _estado(caps),
+        "start_chapter_id": empezar,
         "chapters_total": len(caps), "chapters_ready": len(listos),
         "audio_minutes": round(sum(c.duration_s or 0 for c in listos) / 60),
         "minutes": _minutos(sum(c.words for c in caps)),

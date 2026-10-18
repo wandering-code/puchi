@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { api } from '../../../platform/api'
+import { useCapa } from '../../../platform/capas'
+import HojaInferior from '../../luniteca/HojaInferior'
 import { useReproductor } from '../../../platform/reproductor'
 import { IconAuriculares, IconCheck, IconPausa, IconPlay, IconX } from '../../../ui/icons'
 import { Girando } from '../audiolibros/Audiolibros'
@@ -52,6 +54,9 @@ function Escuchar({ r, datos, pedido }) {
   } else if (guardado) {
     const pct = datos.progress.percent != null ? ` · ${Math.round(datos.progress.percent * 100)} % del libro` : ''
     detalle = `Vas por «${guardado.title}»${pct}`
+  } else if (datos.start_chapter_id && hayAlgo) {
+    const desde = datos.chapters.find(c => c.id === datos.start_chapter_id)
+    detalle = desde ? `Empezará por «${desde.title}», como pediste` : `${datos.chapters_ready} de ${datos.chapters_total} capítulos listos`
   } else if (!hayAlgo) {
     detalle = datos.status === 'generando'
       ? 'Generando el primer capítulo…'
@@ -122,22 +127,58 @@ const TEXTOS = {
   rechazado:  { titulo: 'No se va a preparar', nota: 'De momento este libro se queda sin audio' },
 }
 
+// Las páginas en las que piensa quien pide. La página se guarda como
+// current_page, en las del físico (ver shelf.js); quien lee en eReader la ve
+// y la escribe en las de su eReader, con la misma regla de tres que la ficha.
+function ladoDe(p) {
+  const base = p.total_pages
+  const er = p.ereader_total_pages
+  const f = p.reading_format === 'ereader' && er && base && er !== base ? er / base : 1
+  return {
+    total: f === 1 ? base : er,
+    donde: f === 1 ? '' : ' de tu eReader',
+    aLado: n => (n == null ? n : Math.max(1, Math.round(n * f))),
+    aBase: n => Math.max(1, Math.round(n / f)),
+  }
+}
+
+// "Desde la pág. 120", "Desde «el tres»" o nada si es desde el principio.
+function textoDeseo(p) {
+  if (p.start_chapter) return `Desde «${p.start_chapter}»`
+  if (p.start_page) return `Desde la pág. ${ladoDe(p).aLado(p.start_page)}`
+  return null
+}
+
 function Peticion({ bookId, peticion, onCambio }) {
   const [enviando, setEnviando] = useState(false)
   const [error, setError] = useState(null)
+  const hoja = useCapa()
   const { status, others } = peticion
 
-  async function cambiar(metodo) {
+  async function cambiar(metodo, cuerpo) {
     setEnviando(true)
     setError(null)
     try {
-      onCambio(await api(`/audiobook-requests/book/${bookId}`, { method: metodo }))
+      onCambio(await api(`/audiobook-requests/book/${bookId}`, { method: metodo, body: cuerpo }))
+      return true
     } catch (e) {
       setError(e.message)
+      return false
     } finally {
       setEnviando(false)
     }
   }
+
+  const hojaDesde = (
+    <HojaDesde
+      peticion={peticion}
+      abierta={hoja.abierta}
+      onCerrar={hoja.cerrar}
+      onGuardar={async deseo => {
+        if (await cambiar(status ? 'PATCH' : 'POST', deseo)) hoja.cerrar()
+      }}
+    />
+  )
 
   const esperan = others === 1 ? '1 persona más lo espera' : others > 1 ? `${others} personas más lo esperan` : null
 
@@ -159,20 +200,23 @@ function Peticion({ bookId, peticion, onCambio }) {
           <motion.button
             whileTap={{ scale: 0.94 }}
             disabled={enviando}
-            onClick={() => cambiar('POST')}
+            onClick={() => hoja.abrir()}
             className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-accent-line bg-accent-soft px-3.5 text-xs font-semibold text-accent disabled:opacity-70"
           >
             {enviando && <Girando className="h-3.5 w-3.5" />}
             Pedir
           </motion.button>
         </div>
+        {hojaDesde}
       </motion.div>
     )
   }
 
   const t = TEXTOS[status] || TEXTOS.pedido
   const rechazado = status === 'rechazado'
-  const nota = error || (rechazado ? (peticion.reason || t.nota) : status === 'pedido' && others ? `Tú y ${others} más lo esperáis` : t.nota)
+  const deseo = textoDeseo(peticion)
+  const base = status === 'pedido' && others ? `Tú y ${others} más lo esperáis` : t.nota
+  const nota = error || (rechazado ? (peticion.reason || t.nota) : deseo ? `${deseo} · ${base}` : base)
 
   return (
     <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={SUAVE} className="mt-6 w-full">
@@ -186,10 +230,16 @@ function Peticion({ bookId, peticion, onCambio }) {
             : status === 'generando' ? <Girando className="h-5 w-5" />
               : status === 'pedido' ? <IconCheck className="h-5 w-5" /> : <IconAuriculares className="h-5 w-5" />}
         </span>
-        <span className="min-w-0 flex-1">
+        <button
+          disabled={rechazado}
+          onClick={() => hoja.abrir()}
+          className="min-w-0 flex-1 text-left"
+          aria-label={rechazado ? undefined : `${t.titulo}. Cambiar por dónde empezar`}
+        >
           <span className="block font-display text-[15px] font-bold leading-tight">{t.titulo}</span>
           <span className="mt-0.5 line-clamp-2 block text-xs text-ink-dim">{nota}</span>
-        </span>
+          {!rechazado && <span className="mt-1 block text-[11px] font-semibold text-accent">Cambiar por dónde empezar</span>}
+        </button>
         {status === 'pedido' && (
           <button
             disabled={enviando}
@@ -200,6 +250,134 @@ function Peticion({ bookId, peticion, onCambio }) {
           </button>
         )}
       </div>
+      {hojaDesde}
     </motion.div>
+  )
+}
+
+// Por dónde quiere empezar. Todavía no hay EPUB, así que no hay capítulos que
+// enseñarle: dice una página de su libro o escribe el capítulo como lo
+// recuerde ("12", "el de la boda"). Si ya lo está leyendo, se le propone
+// seguir por donde va.
+const ENTRADA = 'h-12 w-full rounded-xl2 border border-line bg-surface px-3.5 text-[15px] text-ink outline-none transition-colors placeholder:text-ink-mute focus:border-accent-line'
+
+function HojaDesde({ peticion, abierta, onCerrar, onGuardar }) {
+  const [modo, setModo] = useState('principio')
+  const [pagina, setPagina] = useState('')
+  const [capitulo, setCapitulo] = useState('')
+  const [enviando, setEnviando] = useState(false)
+  const yaPedido = !!peticion.status
+  const lado = ladoDe(peticion)
+  const total = lado.total
+  const va = peticion.current_page > 0 ? lado.aLado(peticion.current_page) : null
+
+  useEffect(() => {
+    if (!abierta) return
+    if (peticion.start_chapter) {
+      setModo('capitulo'); setCapitulo(peticion.start_chapter); setPagina('')
+    } else if (peticion.start_page) {
+      setModo('pagina'); setPagina(String(lado.aLado(peticion.start_page))); setCapitulo('')
+    } else if (!yaPedido && va > 0) {
+      setModo('pagina'); setPagina(String(va)); setCapitulo('')
+    } else {
+      setModo('principio'); setPagina(''); setCapitulo('')
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [abierta])
+
+  const n = parseInt(pagina, 10)
+  const paginaMala = modo === 'pagina' && (!n || n < 1 || (total && n > total))
+  const vale = modo === 'principio' || (modo === 'pagina' && !paginaMala) || (modo === 'capitulo' && capitulo.trim())
+
+  async function guardar() {
+    setEnviando(true)
+    await onGuardar(modo === 'pagina' ? { start_page: lado.aBase(n) } : modo === 'capitulo' ? { start_chapter: capitulo.trim() } : {})
+    setEnviando(false)
+  }
+
+  const opciones = [
+    { id: 'principio', titulo: 'Desde el principio' },
+    { id: 'pagina', titulo: 'Desde una página', nota: va ? `Vas por la ${va}${total ? ` de ${total}` : ''}${lado.donde}` : total ? `Tu libro tiene ${total}${lado.donde ? ' en tu eReader' : ''}` : null },
+    { id: 'capitulo', titulo: 'Desde un capítulo', nota: 'Escríbelo como lo recuerdes' },
+  ]
+
+  return (
+    <HojaInferior
+      abierta={abierta}
+      titulo={yaPedido ? '¿Por dónde empezar?' : 'Pedir el audiolibro'}
+      onCerrar={onCerrar}
+      pie={
+        <motion.button
+          whileTap={{ scale: 0.98 }}
+          onClick={guardar}
+          disabled={!vale || enviando}
+          className="flex h-12 flex-1 items-center justify-center gap-2 rounded-xl2 bg-accent text-sm font-semibold text-on-accent disabled:opacity-50"
+        >
+          {enviando && <Girando className="h-4 w-4" />}
+          {yaPedido ? 'Guardar' : 'Pedir'}
+        </motion.button>
+      }
+    >
+      <p className="mb-3 text-[13px] leading-relaxed text-ink-dim">
+        Se empezará a preparar por ahí, y la primera vez que le des a escuchar sonará desde ese capítulo.
+      </p>
+      <div className="overflow-hidden rounded-xl2 border border-line bg-surface">
+        {opciones.map((o, i) => {
+          const activa = modo === o.id
+          return (
+            <div key={o.id} className={`${i ? 'border-t border-line/70' : ''} ${activa ? 'bg-accent-soft/50' : ''} transition-colors`}>
+              <button onClick={() => setModo(o.id)} className="flex w-full items-center gap-3 px-3.5 py-3 text-left">
+                <span className="min-w-0 flex-1">
+                  <span className={`block text-sm ${activa ? 'font-semibold' : ''} text-ink`}>{o.titulo}</span>
+                  {o.nota && <span className="block text-[11px] text-ink-mute">{o.nota}</span>}
+                </span>
+                <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors ${activa ? 'border-accent bg-accent' : 'border-line'}`}>
+                  {activa && <span className="h-1.5 w-1.5 rounded-full bg-on-accent" />}
+                </span>
+              </button>
+              <AnimatePresence initial={false}>
+                {activa && o.id !== 'principio' && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={SUAVE}
+                    className="overflow-hidden"
+                  >
+                    <div className="px-3.5 pb-3.5">
+                      {o.id === 'pagina' ? (
+                        <>
+                          <input
+                            value={pagina}
+                            onChange={e => setPagina(e.target.value.replace(/\D/g, '').slice(0, 5))}
+                            inputMode="numeric"
+                            placeholder="Página"
+                            aria-label="Página"
+                            className={`${ENTRADA} tabular-nums`}
+                          />
+                          {paginaMala && pagina && (
+                            <p className="mt-1.5 px-1 text-[11px] text-danger">
+                              {total ? `Tiene que estar entre 1 y ${total}` : 'Pon una página'}
+                            </p>
+                          )}
+                        </>
+                      ) : (
+                        <input
+                          value={capitulo}
+                          onChange={e => setCapitulo(e.target.value.slice(0, 120))}
+                          placeholder="Por ejemplo: 12, o «La boda»"
+                          aria-label="Capítulo"
+                          className={ENTRADA}
+                        />
+                      )}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          )
+        })}
+      </div>
+    </HojaInferior>
   )
 }

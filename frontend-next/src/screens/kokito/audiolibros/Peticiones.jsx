@@ -212,6 +212,28 @@ function Pidieron({ g }) {
   )
 }
 
+// Por dónde quiere empezar cada uno, si no es desde el principio.
+function Deseos({ g }) {
+  const lineas = []
+  const vistos = new Set()
+  for (const r of g.requests) {
+    if (vistos.has(r.player.id) || r.rejected_at) continue
+    vistos.add(r.player.id)
+    if (r.start_chapter) lineas.push([r.player, `capítulo «${r.start_chapter}»`])
+    else if (r.start_page) lineas.push([r.player, `pág. ${r.start_page}${r.total_pages ? ` de ${r.total_pages}` : ''}`])
+  }
+  if (!lineas.length) return null
+  return (
+    <div className="mt-1.5 space-y-0.5">
+      {lineas.map(([p, texto]) => (
+        <p key={p.id} className="truncate text-[11px] text-ink-dim">
+          <span className="font-semibold" style={{ color: p.color || undefined }}>{p.name}</span> quiere empezar por {texto}
+        </p>
+      ))}
+    </div>
+  )
+}
+
 function Tarjeta({ g, subiendo, onSubir, onEnlazar, onSugerencia, onRechazar, onAbrir }) {
   const pendiente = g.state === 'pendiente'
   const [enlazando, setEnlazando] = useState(false)
@@ -229,6 +251,7 @@ function Tarjeta({ g, subiendo, onSubir, onEnlazar, onSugerencia, onRechazar, on
           </p>
         )}
         <Pidieron g={g} />
+        <Deseos g={g} />
         {!pendiente && (
           <div className="mt-2 flex flex-wrap gap-1.5">
             <Etiqueta aviso={g.state === 'error'}>

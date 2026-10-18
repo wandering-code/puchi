@@ -97,6 +97,9 @@ def migrar(engine) -> None:
     with engine.begin() as con:
         for col, tipo in _COLUMNAS_FASE_2.items():
             con.execute(sql(f"ALTER TABLE audiobook_chapters ADD COLUMN IF NOT EXISTS {col} {tipo}"))
+        # Fase 6 (#68): por dónde quiere empezar quien lo pide.
+        con.execute(sql("ALTER TABLE audiobook_requests ADD COLUMN IF NOT EXISTS start_page INTEGER"))
+        con.execute(sql("ALTER TABLE audiobook_requests ADD COLUMN IF NOT EXISTS start_chapter VARCHAR"))
 
 
 def _ahora() -> datetime:
@@ -302,7 +305,8 @@ def _detalle(db: Session, ab: Audiobook) -> dict:
     # enlazados, una vez cada uno aunque tenga dos ediciones.
     oyentes: dict[int, dict] = {}
     # Aquí dentro: audiolibros_peticiones importa de este módulo.
-    from audiolibros_peticiones import pedido_por
+    from audiolibros_peticiones import deseos, pedido_por
+    out["start_wishes"] = deseos(db, ab.id, [c for c in caps if c.included])
     pidieron = pedido_por(db, [b["id"] for b in out["books"]])
     for libro in out["books"]:
         for d in libro["owners"]:

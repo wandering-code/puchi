@@ -12,7 +12,14 @@ admin lo rechazó. Todo lo demás sale de lo que ya hay:
   1)") se juntan en una sola para el admin, con todos los interesados.
 
 Una petición deja de contar si quien la hizo quita el libro de su estantería.
+
+Al pedirlo se puede decir por dónde empezar: una página del libro que tiene
+en la estantería, o un capítulo escrito a mano (todavía no hay EPUB, así que
+no hay lista de capítulos que enseñarle). Cuando el admin sube el EPUB, eso se
+traduce a un capítulo de verdad: se le propone al elegir por dónde generar, y
+es por donde empieza a sonar la primera vez que lo escucha.
 """
+import re
 import difflib
 from typing import Optional
 
@@ -75,12 +82,140 @@ def _juntar(libros: list[Book]) -> list[list[Book]]:
     return list(grupos.values())
 
 
+# ─── Por dónde empezar ───────────────────────────────────────────────────────
+
+_UNIDADES = ["cero", "uno", "dos", "tres", "cuatro", "cinco", "seis", "siete", "ocho", "nueve", "diez",
+             "once", "doce", "trece", "catorce", "quince", "dieciseis", "diecisiete", "dieciocho",
+             "diecinueve", "veinte"]
+_DECENAS = {30: "treinta", 40: "cuarenta", 50: "cincuenta", 60: "sesenta", 70: "setenta",
+            80: "ochenta", 90: "noventa"}
+_ORDINALES = ["primero", "segundo", "tercero", "cuarto", "quinto", "sexto", "septimo", "octavo",
+              "noveno", "decimo"]
+
+
+def _en_letras(n: int) -> list[str]:
+    """Cómo puede aparecer escrito un número en un título: "doce",
+    "veintitres", "treinta y uno", "primero"…"""
+    formas = []
+    if n <= 20:
+        formas.append(_UNIDADES[n])
+    elif n < 30:
+        formas.append("veinti" + _UNIDADES[n - 20])
+    elif n < 100:
+        d, u = n - n % 10, n % 10
+        formas.append(_DECENAS[d] + (f" y {_UNIDADES[u]}" if u else ""))
+    if 1 <= n <= 10:
+        formas.append(_ORDINALES[n - 1])
+        if n in (1, 3):
+            formas.append(_ORDINALES[n - 1][:-1])  # primer, tercer
+    return formas
+
+
+def _romano(n: int) -> str:
+    out = ""
+    for valor, letra in ((50, "l"), (40, "xl"), (10, "x"), (9, "ix"), (5, "v"), (4, "iv"), (1, "i")):
+        while n >= valor:
+            out, n = out + letra, n - valor
+    return out
+
+
+def _numero(texto: str) -> Optional[int]:
+    """El número que alguien ha escrito para un capítulo: "12", "cap. XII",
+    "el doce", "capítulo veintitrés"."""
+    t = _normal(texto)
+    m = re.search(r"\b(\d{1,3})\b", t)
+    if m:
+        return int(m.group(1))
+    for n in range(99, 0, -1):  # de mayor a menor: "veintidos" antes que "dos"
+        if any(re.search(rf"\b{f}\b", t) for f in _en_letras(n)):
+            return n
+    for n in range(60, 0, -1):
+        if re.search(rf"\b{_romano(n)}\b", t):
+            return n
+    return None
+
+
+def capitulo_deseado(caps: list, start_page: Optional[int], start_chapter: Optional[str],
+                     total_paginas: Optional[int]):
+    """El capítulo (de los que se leen, en orden) por el que quiere empezar.
+    Devuelve (capítulo, cómo se ha sacado) o (None, None)."""
+    if not caps:
+        return None, None
+    if start_chapter and start_chapter.strip():
+        t = _normal(start_chapter)
+        n = _numero(start_chapter)
+        if n is not None:
+            # El que lleva ese número en el título, de más a menos seguro:
+            # "12. Reembolsado" o "Capítulo 12", luego un 12 en cualquier
+            # sitio, y por último "XII" o "Doce" al principio. Las letras y los
+            # romanos solo al principio: si no, "1" daría con "I. Talins" (una
+            # parte, no un capítulo) o con "Durante el primer año…".
+            inicio = r"^(capitulo\s+)?"
+            pasadas = [
+                [inicio + rf"{n}\b"],
+                [rf"\b{n}\b"],
+                [inicio + rf"{_romano(n)}\b"],
+                [inicio + rf"{f}\b" for f in _en_letras(n)],
+            ]
+            for patrones in pasadas:
+                for c in caps:
+                    titulo = _normal(c.title)
+                    if any(re.search(pt, titulo) for pt in patrones):
+                        return c, "titulo"
+        # …o el que se llama como lo que ha escrito…
+        sin_numero = re.sub(r"\b(capitulo|cap|el|la|de|del)\b", " ", t).strip()
+        if len(sin_numero) >= 4:
+            for c in caps:
+                if sin_numero in _normal(c.title):
+                    return c, "titulo"
+        # …o, si no, el que hace ese número contando los que se leen.
+        if n is not None and 1 <= n <= len(caps):
+            return caps[n - 1], "orden"
+        return None, None
+    if start_page and total_paginas:
+        # Por la proporción del libro en palabras: la página 126 de 491 cae en
+        # el capítulo que contiene el 25 % del texto.
+        total = sum(c.words for c in caps) or 1
+        objetivo = min(1.0, max(0.0, (start_page - 1) / total_paginas)) * total
+        llevado = 0
+        for c in caps:
+            if llevado + c.words > objetivo:
+                return c, "pagina"
+            llevado += c.words
+        return caps[-1], "pagina"
+    return None, None
+
+
+def deseos(db: Session, ab_id: int, caps: list) -> list[dict]:
+    """Por dónde quiere empezar cada uno de los que pidieron los libros de
+    este audiolibro, ya traducido a capítulo. Solo los que no es el principio."""
+    libros = [b for (b,) in db.query(AudiobookBook.book_id).filter(AudiobookBook.audiobook_id == ab_id).all()]
+    if not libros:
+        return []
+    out = []
+    for r, pl, b, e in _vigentes(db, libros):
+        if r.rejected_at or not (r.start_page or (r.start_chapter or "").strip()):
+            continue
+        total = _paginas(e, b)
+        cap, como = capitulo_deseado(caps, r.start_page, r.start_chapter, total)
+        out.append({"player": _jugador(pl), "start_page": r.start_page, "total_pages": total,
+                    "start_chapter": r.start_chapter, "chapter_id": cap.id if cap else None,
+                    "chapter_title": cap.title if cap else None, "how": como})
+    return out
+
+
+def _paginas(e: PersonalShelf, b: Book) -> Optional[int]:
+    """Las páginas en las que se guarda current_page: las del físico si se
+    conocen y, si no, las del eReader (como totalPages() del frontend)."""
+    return e.custom_total_pages or (b.num_pages if b else None) or e.ereader_total_pages
+
+
 # ─── Lo que cuenta ───────────────────────────────────────────────────────────
 
 def _vigentes(db: Session, book_ids: Optional[list[int]] = None):
-    """(petición, quién, libro) de las peticiones que siguen en pie: de
+    """(petición, quién, libro, su copia en la estantería) de las peticiones que siguen en pie: de
     cuentas aprobadas y con el libro todavía en su estantería."""
-    q = (db.query(AudiobookRequest, Player, Book)
+    q = (db.query(AudiobookRequest, Player, Book, PersonalShelf)
          .join(Player, Player.id == AudiobookRequest.player_id)
          .join(Book, Book.id == AudiobookRequest.book_id)
          .join(PersonalShelf, and_(PersonalShelf.player_id == AudiobookRequest.player_id,
@@ -116,15 +251,22 @@ def _para_quien_pide(estado: str, listos: int) -> str:
 # ─── Quien pide ──────────────────────────────────────────────────────────────
 
 def _de_un_libro(db: Session, book_id: int, p: Player) -> dict:
-    tiene = (db.query(PersonalShelf.id)
+    tiene = (db.query(PersonalShelf)
              .filter(PersonalShelf.player_id == p.id, PersonalShelf.book_id == book_id).first())
     mia = (db.query(AudiobookRequest)
            .filter(AudiobookRequest.player_id == p.id, AudiobookRequest.book_id == book_id).first())
     enlace = db.query(AudiobookBook).filter(AudiobookBook.book_id == book_id).first()
     out = {"can_request": False, "requested": bool(mia), "status": None,
-           "requested_at": _iso(mia.created_at) if mia else None, "reason": None, "others": 0}
+           "requested_at": _iso(mia.created_at) if mia else None, "reason": None, "others": 0,
+           "start_page": mia.start_page if mia else None, "start_chapter": mia.start_chapter if mia else None}
     if not tiene:
         return out
+    # Para proponerle empezar por donde va.
+    out["current_page"] = tiene.current_page if tiene.status in ("reading", "rereading") else None
+    out["total_pages"] = _paginas(tiene, tiene.book)
+    # Quien lee en eReader piensa en sus páginas: el frontend se las convierte.
+    out["reading_format"] = tiene.reading_format
+    out["ereader_total_pages"] = tiene.ereader_total_pages
     if enlace:
         if mia:
             out["status"] = _para_quien_pide(*_estado_audiolibro(db, enlace.audiobook_id))
@@ -138,7 +280,7 @@ def _de_un_libro(db: Session, book_id: int, p: Player) -> dict:
     # dice que no es el único.
     libro = db.query(Book).filter(Book.id == book_id).first()
     yo = (_titulos(libro.title, libro.original_title), libro.author, _isbn(libro.isbn))
-    otros = {pl.id for r, pl, b in _vigentes(db)
+    otros = {pl.id for r, pl, b, _e in _vigentes(db)
              if pl.id != p.id and not r.rejected_at
              and not db.query(AudiobookBook.id).filter(AudiobookBook.book_id == b.id).first()
              and (b.id == book_id or _mismo_libro(*yo, _titulos(b.title, b.original_title), b.author, _isbn(b.isbn)))}
@@ -151,17 +293,51 @@ def ver_mia(book_id: int, db: Session = Depends(get_db), p: Player = Depends(get
     return _de_un_libro(db, book_id, p)
 
 
+class Deseo(BaseModel):
+    """Por dónde empezar. Sin nada, desde el principio."""
+    start_page: Optional[int] = None
+    start_chapter: Optional[str] = None
+
+
+def _aplicar(r: AudiobookRequest, d: Optional[Deseo]) -> None:
+    d = d or Deseo()
+    texto = (d.start_chapter or "").strip()[:120] or None
+    r.start_chapter = texto
+    r.start_page = d.start_page if (d.start_page and d.start_page > 0 and not texto) else None
+
+
 @router.post("/book/{book_id}")
-def pedir(book_id: int, db: Session = Depends(get_db), p: Player = Depends(get_current_player)):
+def pedir(book_id: int, deseo: Optional[Deseo] = None, db: Session = Depends(get_db),
+          p: Player = Depends(get_current_player)):
     if not (db.query(PersonalShelf.id)
             .filter(PersonalShelf.player_id == p.id, PersonalShelf.book_id == book_id).first()):
         raise HTTPException(status_code=403, detail="Solo se pueden pedir libros de tu estantería")
     if db.query(AudiobookBook.id).filter(AudiobookBook.book_id == book_id).first():
         raise HTTPException(status_code=409, detail="Este libro ya tiene audiolibro")
-    if not (db.query(AudiobookRequest.id)
-            .filter(AudiobookRequest.player_id == p.id, AudiobookRequest.book_id == book_id).first()):
-        db.add(AudiobookRequest(player_id=p.id, book_id=book_id))
-        db.commit()
+    mia = (db.query(AudiobookRequest)
+           .filter(AudiobookRequest.player_id == p.id, AudiobookRequest.book_id == book_id).first())
+    if not mia:
+        mia = AudiobookRequest(player_id=p.id, book_id=book_id)
+        db.add(mia)
+    if not mia.rejected_at:
+        _aplicar(mia, deseo)
+    db.commit()
+    return _de_un_libro(db, book_id, p)
+
+
+@router.patch("/book/{book_id}")
+def cambiar_deseo(book_id: int, deseo: Deseo, db: Session = Depends(get_db),
+                  p: Player = Depends(get_current_player)):
+    """Cambiar por dónde empezar, también con el audiolibro ya en marcha:
+    mientras no se haya escuchado nada, sigue sirviendo para la primera vez."""
+    mia = (db.query(AudiobookRequest)
+           .filter(AudiobookRequest.player_id == p.id, AudiobookRequest.book_id == book_id).first())
+    if not mia:
+        raise HTTPException(status_code=404, detail="No lo has pedido")
+    if mia.rejected_at:
+        raise HTTPException(status_code=409, detail="Esta petición ya está rechazada")
+    _aplicar(mia, deseo)
+    db.commit()
     return _de_un_libro(db, book_id, p)
 
 
@@ -184,9 +360,10 @@ def anular(book_id: int, db: Session = Depends(get_db), p: Player = Depends(get_
 
 # ─── El admin ────────────────────────────────────────────────────────────────
 
-def _fila(r: AudiobookRequest, pl: Player) -> dict:
+def _fila(r: AudiobookRequest, pl: Player, paginas: Optional[int]) -> dict:
     return {"id": r.id, "book_id": r.book_id, "player": _jugador(pl), "created_at": _iso(r.created_at),
-            "rejected_at": _iso(r.rejected_at), "reason": r.reject_reason}
+            "rejected_at": _iso(r.rejected_at), "reason": r.reject_reason,
+            "start_page": r.start_page, "start_chapter": r.start_chapter, "total_pages": paginas}
 
 
 def _libro(b: Book) -> dict:
@@ -210,12 +387,12 @@ def bandeja(db: Session = Depends(get_db), _: Player = Depends(require_admin)):
     if not filas:
         return []
     enlazados = {b: a for b, a in db.query(AudiobookBook.book_id, AudiobookBook.audiobook_id)
-                 .filter(AudiobookBook.book_id.in_({b.id for _r, _p, b in filas})).all()}
+                 .filter(AudiobookBook.book_id.in_({b.id for _r, _p, b, _e in filas})).all()}
 
     por_libro: dict[int, list] = {}
     libros: dict[int, Book] = {}
-    for r, pl, b in filas:
-        por_libro.setdefault(b.id, []).append(_fila(r, pl))
+    for r, pl, b, e in filas:
+        por_libro.setdefault(b.id, []).append(_fila(r, pl, _paginas(e, b)))
         libros[b.id] = b
 
     grupos = []
