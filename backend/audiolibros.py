@@ -864,6 +864,23 @@ def pedir_trabajo(cuerpo: Pedir, db: Session = Depends(get_db), _=Depends(_solo_
     }
 
 
+@worker_router.post("/release")
+def soltar(cuerpo: Pedir, db: Session = Depends(get_db), _=Depends(_solo_sobremesa)):
+    """El sobremesa se apaga (el "Parar audiolibros" del escritorio): lo que
+    estaba generando vuelve el primero a la cola ya, sin esperar a que venza
+    la reserva, y deja de contar como encendido."""
+    sueltos = 0
+    for c in (db.query(AudiobookChapter)
+              .filter(AudiobookChapter.status == "generando", AudiobookChapter.worker == cuerpo.name).all()):
+        c.status, c.priority, c.worker, c.lease_until = "en_cola", True, None, None
+        c.progress, c.progress_note = 0.0, "Se quedó a medias: el sobremesa se apagó"
+        sueltos += 1
+    db.commit()
+    if _LATIDO.get("name") == cuerpo.name:
+        _LATIDO["at"] = None
+    return {"released": sueltos}
+
+
 class Progreso(BaseModel):
     name: str = "sobremesa"
     progress: float
