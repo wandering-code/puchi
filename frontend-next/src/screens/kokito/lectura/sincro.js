@@ -61,7 +61,15 @@ export function casar(texto, trozos) {
       ini = a
       fin = b + k
     }
-    out.push({ i, desde: T.pos[ini], hasta: T.pos[fin - 1] + 1, start: t.start, end: t.end })
+    // Los signos pegados a los bordes (¡ ¿ « — al principio, ! ? . » al final)
+    // van con el trozo: si no, al resaltarlo se quedaban fuera ("¡[Los precios
+    // han subido]!"). Sin pasar del trozo anterior ni cruzar un espacio.
+    let desde = T.pos[ini]
+    let hasta = T.pos[fin - 1] + 1
+    const tope = out.length ? out[out.length - 1].hasta : 0
+    while (desde > tope && /[^\s\p{L}\p{N}]/u.test(texto[desde - 1])) desde--
+    while (hasta < texto.length && /[^\s\p{L}\p{N}]/u.test(texto[hasta])) hasta++
+    out.push({ i, desde, hasta, start: t.start, end: t.end })
     cursor = fin
   }
   return out

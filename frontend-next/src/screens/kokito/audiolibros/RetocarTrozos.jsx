@@ -77,6 +77,43 @@ export default function RetocarTrozos({ ab, cap, abierta, onCerrar, onHecho }) {
   const trozo = unico != null ? datos?.pieces[unico] : null
   const suena = sonando && datos ? datos.pieces.find(p => t >= p.start && t < p.end)?.i : null
 
+  // Los ya rehechos, en orden, para ir de uno a otro (o oírlos todos
+  // seguidos) sin buscarlos en el texto.
+  const rehechos = useMemo(() => (datos?.pieces || []).filter(p => p.redone > 0 && !p.pending).map(p => p.i), [datos?.pieces])
+  const ronda = useRef(null) // los que faltan por sonar en "Oír todos"
+  const [enRonda, setEnRonda] = useState(false)
+  const pararRonda = () => { ronda.current = null; setEnRonda(false) }
+
+  function verTrozo(i) {
+    const p = datos?.pieces[i]
+    if (!p) return
+    setSel(new Set([i]))
+    sonar(Math.max(0, p.start - 0.1), p.end)
+    requestAnimationFrame(() => {
+      document.querySelector(`[data-retoque] [data-i="${i}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    })
+  }
+  function irRehecho(paso) {
+    if (!rehechos.length) return
+    pararRonda()
+    const desde = unico ?? (paso > 0 ? -1 : Infinity)
+    const siguiente = paso > 0
+      ? rehechos.find(i => i > desde) ?? rehechos[0]
+      : [...rehechos].reverse().find(i => i < desde) ?? rehechos[rehechos.length - 1]
+    verTrozo(siguiente)
+  }
+  function siguienteDeRonda() {
+    const i = ronda.current?.shift()
+    if (i == null) { pararRonda(); return }
+    verTrozo(i)
+  }
+  function oirTodos() {
+    if (enRonda) { pararRonda(); audio.current?.pause(); return }
+    ronda.current = [...rehechos]
+    setEnRonda(true)
+    siguienteDeRonda()
+  }
+
   const src = ab && cap && datos ? `/api/audiobooks/${ab.id}/chapters/${cap.id}/audio?v=${encodeURIComponent(datos.generated_at || '')}` : null
 
   function sonar(desde, hastaS = null) {
@@ -90,11 +127,13 @@ export default function RetocarTrozos({ ab, cap, abierta, onCerrar, onHecho }) {
   function alternar() {
     const a = audio.current
     if (!a) return
+    pararRonda()
     if (a.paused) { hasta.current = null; if (r?.sonando) r.alternar(); a.play().catch(() => {}) } else a.pause()
   }
 
   // Tocar marca el trozo (y suena); tocarlo otra vez lo desmarca.
   const elegir = useCallback((i) => {
+    pararRonda()
     if (sel.has(i)) {
       setSel(s => { const n = new Set(s); n.delete(i); return n })
       return
@@ -173,6 +212,12 @@ export default function RetocarTrozos({ ab, cap, abierta, onCerrar, onHecho }) {
           onRehacer={rehacer}
           onAnular={anular}
           onSoltar={() => setSel(new Set())}
+          rehechos={rehechos}
+          posicion={unico != null ? rehechos.indexOf(unico) : -1}
+          enRonda={enRonda}
+          onAnterior={() => irRehecho(-1)}
+          onSiguiente={() => irRehecho(1)}
+          onOirTodos={oirTodos}
         />
       ) : null}
     >
@@ -188,13 +233,23 @@ export default function RetocarTrozos({ ab, cap, abierta, onCerrar, onHecho }) {
           onTimeUpdate={e => {
             const a = e.currentTarget
             setT(a.currentTime)
-            if (hasta.current != null && a.currentTime >= hasta.current) { a.pause(); hasta.current = null }
+            if (hasta.current != null && a.currentTime >= hasta.current) {
+              a.pause()
+              hasta.current = null
+              // Oyendo todos los rehechos: el siguiente, tras una pausa corta.
+              if (ronda.current) setTimeout(siguienteDeRonda, 350)
+            }
           }}
         />
       )}
       <div className="mx-auto w-full max-w-[34rem] px-6 pb-10 pt-4">
         <p className="mb-5 rounded-xl2 bg-accent-soft/60 px-3.5 py-2.5 text-[13px] leading-relaxed text-ink-dim">
-          Toca la parte que suena mal: se oye solo ese trozo y abajo puedes rehacerlo. Puedes marcar varios y rehacerlos de una vez; tocar otra vez desmarca. Lo subrayado está en cola.
+          Toca la parte que suena mal: se oye solo ese trozo y abajo puedes rehacerlo. Puedes marcar varios y rehacerlos de una vez; tocar otra vez desmarca.
+          <span className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-[11px]">
+            <span className="underline decoration-[color:var(--color-read)] decoration-2 underline-offset-4">Rehecho</span>
+            <span className="underline decoration-accent decoration-dotted decoration-2 underline-offset-4">En cola</span>
+            <span className="underline decoration-danger decoration-2 underline-offset-4">Falló</span>
+          </span>
         </p>
         {error && !datos && <p className="rounded-xl2 bg-danger/10 px-3.5 py-2.5 text-sm text-danger">{error}</p>}
         {(!datos || texto == null) && !error && (
@@ -244,7 +299,7 @@ const Texto = memo(function Texto({ parrafos, piezas, sel, suena, onTocar }) {
     if (el) onTocar(Number(el.dataset.i))
   }
   return (
-    <div onClick={alTocar} className="font-serif text-[17px] leading-[1.8] text-ink" lang="es">
+    <div onClick={alTocar} data-retoque className="font-serif text-[17px] leading-[1.8] text-ink" lang="es">
       {parrafos.map((tramos, n) => (
         <p key={n} className="mb-[0.85em]">
           {tramos.map((tr, k) => {
@@ -257,7 +312,9 @@ const Texto = memo(function Texto({ parrafos, piezas, sel, suena, onTocar }) {
                 data-i={tr.i}
                 className={`cursor-pointer rounded-[4px] [box-decoration-break:clone] transition-colors duration-200 ${
                   estado === 'sel' ? 'bg-accent/25' : estado === 'suena' ? 'bg-accent-soft' : 'active:bg-accent/15'
-                } ${p?.pending ? (p.error ? 'underline decoration-danger decoration-2 underline-offset-4' : 'underline decoration-accent decoration-dotted decoration-2 underline-offset-4') : ''}`}
+                } ${p?.pending
+                  ? (p.error ? 'underline decoration-danger decoration-2 underline-offset-4' : 'underline decoration-accent decoration-dotted decoration-2 underline-offset-4')
+                  : p?.redone > 0 ? 'underline decoration-[color:var(--color-read)] decoration-2 underline-offset-4' : ''}`}
               >
                 {tr.texto}
               </span>
@@ -271,7 +328,7 @@ const Texto = memo(function Texto({ parrafos, piezas, sel, suena, onTocar }) {
 
 // Abajo: con un trozo elegido, lo que se puede hacer con él; si no, solo el
 // play para escuchar el capítulo seguido.
-function Tarjeta({ trozo, varios, onRehacerVarios, sonando, t, dur, pendientes, error, onAlternar, onEscucharTrozo, onRehacer, onAnular, onSoltar }) {
+function Tarjeta({ rehechos, posicion, enRonda, onAnterior, onSiguiente, onOirTodos, trozo, varios, onRehacerVarios, sonando, t, dur, pendientes, error, onAlternar, onEscucharTrozo, onRehacer, onAnular, onSoltar }) {
   const [editando, setEditando] = useState(false)
   const [nuevo, setNuevo] = useState('')
   const [enviando, setEnviando] = useState(false)
@@ -333,6 +390,30 @@ function Tarjeta({ trozo, varios, onRehacerVarios, sonando, t, dur, pendientes, 
         <div className="mt-2 h-[3px] overflow-hidden rounded-full bg-surface-2">
           <div className="h-full rounded-full bg-accent" style={{ width: `${pct}%`, transition: 'width 0.25s linear' }} />
         </div>
+
+        {/* Los rehechos, para oírlos sin buscarlos: anterior, siguiente o
+            todos seguidos (cada uno se marca y se trae a la vista). */}
+        <Desplegable abierto={rehechos.length > 0 && !varios && (!trozo || posicion >= 0)}>
+          <div className="mt-2.5 flex items-center gap-2 rounded-xl2 bg-[color-mix(in_srgb,var(--color-read)_12%,transparent)] px-2 py-1.5">
+            <span className="h-2 w-2 shrink-0 rounded-full bg-[color:var(--color-read)]" aria-hidden />
+            <span className="min-w-0 flex-1 truncate text-xs font-semibold text-ink">
+              {posicion >= 0 ? `Rehecho ${posicion + 1} de ${rehechos.length}` : `${rehechos.length} ${rehechos.length === 1 ? 'rehecho' : 'rehechos'}`}
+            </span>
+            <button onClick={onAnterior} aria-label="Rehecho anterior" className="flex h-8 w-8 items-center justify-center rounded-full text-ink-dim transition-transform duration-150 active:scale-90 active:bg-surface-2">
+              <IconChevron className="h-4 w-4 rotate-90" />
+            </button>
+            <button onClick={onSiguiente} aria-label="Rehecho siguiente" className="flex h-8 w-8 items-center justify-center rounded-full text-ink-dim transition-transform duration-150 active:scale-90 active:bg-surface-2">
+              <IconChevron className="h-4 w-4 -rotate-90" />
+            </button>
+            <button
+              onClick={onOirTodos}
+              className={`inline-flex h-8 items-center gap-1 rounded-full px-2.5 text-[11px] font-semibold transition-colors ${enRonda ? 'bg-accent text-on-accent' : 'border border-line bg-surface text-ink-dim'}`}
+            >
+              {enRonda ? <IconPausa className="h-3 w-3" /> : <IconPlay className="h-3 w-3" />}
+              {enRonda ? 'Parar' : 'Oír todos'}
+            </button>
+          </div>
+        </Desplegable>
 
         <Desplegable abierto={varios > 0}>
           <div className="mt-2.5 border-t border-line/70 pt-2.5">
