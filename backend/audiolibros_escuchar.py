@@ -53,6 +53,12 @@ def _con_acceso(db: Session, ab_id: int, p: Player) -> Audiobook:
     return ab
 
 
+def _suena(c: AudiobookChapter) -> bool:
+    """Se puede escuchar si tiene audio, aunque se esté regenerando: el audio
+    de antes se queda hasta que llega el nuevo."""
+    return bool(c.audio_path)
+
+
 def _porcentaje(caps: list, cap_id: Optional[int], segundo: float) -> Optional[float]:
     """Qué parte del libro va escuchada, por palabras: las de los capítulos
     de antes, más lo que va del actual (por tiempo). Por palabras y no por
@@ -96,7 +102,7 @@ def _donde_lees(db: Session, ab: Audiobook, p: Player, caps: list) -> Optional[d
         pagina, de = max(1, round(e.current_page * er / total)), er
     return {"page": pagina, "of": de, "fraction": min(1.0, (e.current_page - 1) / total),
             "chapter_id": cap.id, "chapter_title": cap.title,
-            "ready": cap.status == "listo" and bool(cap.audio_path)}
+            "ready": _suena(cap)}
 
 
 def _para_escuchar(db: Session, ab: Audiobook, p: Player) -> dict:
@@ -105,7 +111,7 @@ def _para_escuchar(db: Session, ab: Audiobook, p: Player) -> dict:
             .order_by(AudiobookChapter.position).all())
     prog = (db.query(AudiobookProgress)
             .filter(AudiobookProgress.player_id == p.id, AudiobookProgress.audiobook_id == ab.id).first())
-    listos = [c for c in caps if c.status == "listo"]
+    listos = [c for c in caps if _suena(c)]
     # Si lo pidió diciendo por dónde empezar, la primera vez empieza ahí
     # (fase 6, #68). Después manda lo que haya escuchado.
     empezar = None
@@ -154,7 +160,7 @@ def _para_escuchar(db: Session, ab: Audiobook, p: Player) -> dict:
         "chapters": [{
             "id": c.id, "number": i + 1, "title": c.title,
             # Para quien escucha solo hay dos casos: se puede o todavía no.
-            "ready": c.status == "listo" and bool(c.audio_path),
+            "ready": _suena(c),
             "duration_s": c.duration_s, "minutes": _minutos(c.words),
             "generated_at": _iso(c.generated_at),
             # Lo que ocupa, para saber cuánto se va a descargar (#71).
@@ -179,7 +185,7 @@ def _escuchables(db: Session) -> dict[int, list[AudiobookChapter]]:
               .filter(AudiobookChapter.included.is_(True))
               .order_by(AudiobookChapter.audiobook_id, AudiobookChapter.position).all()):
         caps.setdefault(c.audiobook_id, []).append(c)
-    return {ab: cs for ab, cs in caps.items() if any(c.status == "listo" and c.audio_path for c in cs)}
+    return {ab: cs for ab, cs in caps.items() if any(_suena(c) for c in cs)}
 
 
 @router.get("/books")
@@ -222,7 +228,7 @@ def catalogo(db: Session = Depends(get_db), p: Player = Depends(get_current_play
         libros = enlaces.get(ab.id, [])
         if not libros:
             continue
-        listos = [c for c in cs if c.status == "listo" and c.audio_path]
+        listos = [c for c in cs if _suena(c)]
         mio = next((mios[b.id] for b in libros if b.id in mios), None)
         prog = progresos.get(ab.id)
         canonico = max(libros, key=lambda b: (cuantos.get(b.id, 0), -b.id))
@@ -274,7 +280,7 @@ def audio(ab_id: int, cap_id: int, db: Session = Depends(get_db), p: Player = De
     _con_acceso(db, ab_id, p)
     c = (db.query(AudiobookChapter)
          .filter(AudiobookChapter.id == cap_id, AudiobookChapter.audiobook_id == ab_id).first())
-    if not c or not c.included or c.status != "listo" or not c.audio_path or not os.path.exists(c.audio_path):
+    if not c or not c.included or not _suena(c) or not os.path.exists(c.audio_path):
         raise HTTPException(status_code=404, detail="Este capítulo todavía no se puede escuchar")
     # Por rangos (FileResponse): se empieza a oír enseguida y se puede saltar
     # a cualquier punto de un capítulo de una hora sin bajárselo entero.
