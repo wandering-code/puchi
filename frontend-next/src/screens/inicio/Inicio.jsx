@@ -5,6 +5,7 @@ import { useAuth } from '../../platform/auth'
 import { usarPreferencia } from '../../platform/preferencias'
 import { CON_AUDIOLIBROS } from '../../platform/variante'
 import { seccionesDe } from '../secciones'
+import MuestraDeVoz from '../kokito/escuchar/MuestraDeVoz'
 import {
   IconActividad, IconArrow, IconAuriculares, IconBooks, IconCampana, IconChat, IconChevron, IconClub, IconPaw,
   IconSettings,
@@ -38,7 +39,7 @@ const BLOQUES = [
       ['Lleva la cuenta', 'Márcalos como «por leer», «leyendo», «leído» o «dropeado», con sus fechas, y apunta por qué página vas: en papel, en eReader o en los dos.'],
       ['Puntúa y apunta', 'Ponle nota a cada libro y escribe tus impresiones. Lo que te costó y tus notas son solo tuyos.'],
       ['Mírala a tu manera', 'En cuadrícula, en lista o como una balda de verdad, con los libros de canto. Busca, filtra y ordena como quieras.'],
-      ['Pide un audiolibro', 'Desde la ficha de cualquier libro de tu estantería: dinos por dónde quieres empezar y te avisamos en cuanto esté.', 'audio'],
+      ['Pide un audiolibro', 'Desde la ficha de cualquier libro de tu estantería: dinos por dónde quieres empezar y te avisamos en cuanto esté.', 'audio', 'muestra'],
       ['Léelo en la app', 'Si un libro tiene audiolibro, puedes leer su texto aquí mismo. Toca una frase y empieza a sonar desde ahí; mientras escuchas, el texto te sigue.', 'audio'],
     ],
   },
@@ -49,6 +50,7 @@ const BLOQUES = [
     titulo: 'Escuchar',
     resumen: 'Los audiolibros de tus libros, con un reproductor pensado para ellos.',
     ir: 'Ir a Escuchar',
+    muestra: true,
     funciones: [
       ['Sigue donde lo dejaste', 'En el móvil o en el ordenador: lo que escuchas se guarda en tu cuenta. Y lo escuchado avanza solo la página en tu estantería.'],
       ['Del papel al audio', 'Si vas leyendo el libro por otro lado, te proponemos seguir escuchando justo desde tu página.'],
@@ -222,11 +224,13 @@ function Bloque({ bloque: b, orden, abierto, onAlternar }) {
             className="overflow-hidden"
           >
             <div className="px-4 pb-4">
+              {b.muestra && CON_AUDIOLIBROS && <MuestraDeVoz className="mb-2" />}
               <div className="space-y-2">
-                {b.funciones.map(([titulo, texto]) => (
+                {b.funciones.map(([titulo, texto, , muestra]) => (
                   <div key={titulo} className="rounded-xl2 bg-bg/70 px-3.5 py-3">
                     <p className="text-sm font-semibold leading-snug">{titulo}</p>
                     <p className="mt-0.5 text-[13px] leading-relaxed text-ink-dim">{texto}</p>
+                    {muestra && <MuestraDeVoz className="mt-2.5" />}
                   </div>
                 ))}
               </div>

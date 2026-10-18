@@ -8,6 +8,7 @@ import { IconAuriculares, IconCheck, IconEreader as IconLibroAbierto, IconLibroF
 import { Girando } from '../audiolibros/Audiolibros'
 import { duracion, reloj } from '../audiolibros/formato'
 import { Ecualizador } from './PantallaReproductor'
+import MuestraDeVoz from './MuestraDeVoz'
 
 // En la ficha de un libro de tu estantería (/kokito):
 // - si tiene audiolibro, para escucharlo (fase 3, #65);
@@ -392,6 +393,8 @@ function HojaDesde({ peticion, abierta, onCerrar, onGuardar }) {
       <p className="mb-3 text-[13px] leading-relaxed text-ink-dim">
         Se empezará a preparar por ahí, y la primera vez que le des a escuchar sonará desde ese capítulo.
       </p>
+      {/* Para hacerse a la idea de cómo va a sonar antes de pedirlo. */}
+      {!yaPedido && <MuestraDeVoz className="mb-3" />}
       <div className="overflow-hidden rounded-xl2 border border-line bg-surface">
         {opciones.map((o, i) => {
           const activa = modo === o.id
