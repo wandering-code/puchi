@@ -30,6 +30,11 @@ export const SEPARACIONES = [
     detalle: 'Las dos cosas: cada sección en su tarjeta, y su nombre se queda arriba mientras recorres esa tarjeta.',
   },
   {
+    id: 'color',
+    nombre: 'Bloque con cabecera de color',
+    detalle: 'Cada sección en su tarjeta, con una franja arriba teñida de su color en vez de la raya, y el número en una pastilla. Se queda arriba al bajar.',
+  },
+  {
     id: 'minimal',
     nombre: 'Solo el nombre, con aire',
     detalle: 'Sin líneas ni recuadros: el nombre en pequeño y mucho espacio entre secciones.',
@@ -42,7 +47,12 @@ export function usarSeparacion() {
   return [SEPARACIONES.some(x => x.id === valor) ? valor : 'linea', poner]
 }
 
-const CON_BLOQUE = ['bloque', 'mixto']
+const CON_BLOQUE = ['bloque', 'mixto', 'color']
+
+// Para el tinte de la variante 'color' cuando la sección no es de un estado
+// (las del club o las de un perfil): el de la app.
+const colorDe = (estado) => COLOR_DE_ESTADO[estado] || 'var(--color-accent)'
+const mezcla = (color, pct, con = 'var(--color-surface)') => `color-mix(in srgb, ${color} ${pct}%, ${con})`
 
 // Cada sección lleva el color de su estado. Los colores ya existían en la
 // paleta (los usa el punto de estado de la ficha) pero en la estantería no se
@@ -64,8 +74,17 @@ export function huecoEntreSecciones(variante) {
 }
 
 // La caja que envuelve una sección entera.
-export function CajaSeccion({ variante, children }) {
+export function CajaSeccion({ variante, estado = null, children }) {
   if (!CON_BLOQUE.includes(variante)) return <section>{children}</section>
+  if (variante === 'color') {
+    // El borde, un poco del color de la sección: la tarjeta entera se lee
+    // como suya, no solo la franja de arriba.
+    return (
+      <section className="rounded-xl3 border bg-surface p-4" style={{ borderColor: mezcla(colorDe(estado), 28, 'var(--color-line)') }}>
+        {children}
+      </section>
+    )
+  }
   // El fondo de la tarjeta es opaco y no translúcido en la variante mixta: su
   // título se queda pegado por encima de los libros de la propia sección, y
   // con transparencia se verían pasar por debajo del texto.
@@ -100,6 +119,10 @@ export function TituloSeccion({ variante, label, cuenta, plegada, onAlternar, an
     ? ''
     : variante === 'pegada'
       ? `sticky ${desde} z-[5] -mx-5 w-[calc(100%+2.5rem)] border-b border-line bg-bg px-5 py-2.5`
+      : variante === 'color'
+        // Como en "mixto", pegado dentro de su tarjeta, pero sin raya: lo que
+        // lo separa de los libros es su fondo teñido.
+        ? `sticky ${desde} z-[5] -mx-4 -mt-4 w-[calc(100%+2rem)] rounded-t-[inherit] px-4 py-3`
       : variante === 'mixto'
         // El ancho va explícito: con -mx-4 y w-full el elemento se queda corto
         // por la derecha (w-full mide el padre, sin contar los márgenes
@@ -117,6 +140,11 @@ export function TituloSeccion({ variante, label, cuenta, plegada, onAlternar, an
   // Las cifras de arriba (Luniteca) bajan hasta aquí: `data-seccion` es a
   // dónde, y el margen es para que no quede debajo de la barra pegada.
   const ancla = anidado || !estado ? {} : { 'data-seccion': estado, style: { scrollMarginTop: 64 } }
+  // La franja de color: opaca (mezcla de dos colores opacos), porque al
+  // quedarse pegada pasan los libros por debajo.
+  if (variante === 'color' && !anidado) {
+    ancla.style = { ...(ancla.style || {}), background: mezcla(colorDe(estado), 13) }
+  }
 
   // La acción va FUERA del botón del título, en la misma fila: un botón dentro
   // de otro botón no es HTML válido y el navegador lo deshace por su cuenta.
@@ -154,6 +182,30 @@ function Contenido({ variante, label, cuenta, plegada, hayChevron, anidado, esta
   const tamano = anidado
     ? 'font-display text-base font-semibold'
     : 'font-display text-lg font-bold tracking-[-0.01em]'
+
+  if (variante === 'color') {
+    const c = colorDe(estado)
+    return (
+      <>
+        <span className={anidado ? 'font-display text-base font-semibold' : 'font-display text-lg font-bold tracking-[-0.01em]'}
+          style={anidado ? undefined : { color: mezcla(c, 55, 'var(--color-ink)') }}>
+          {label}
+        </span>
+        <span
+          className="rounded-full px-2 py-px text-[11px] font-semibold tabular-nums"
+          style={{ background: mezcla(c, anidado ? 12 : 22), color: mezcla(c, 75, 'var(--color-ink)') }}
+        >
+          {cuenta}
+        </span>
+        <span className="flex-1" />
+        {hayChevron && (
+          <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${anidado ? '' : 'bg-surface/70'}`}>
+            <IconChevron className={`h-4 w-4 text-ink-mute transition-transform duration-200 ${plegada ? '' : 'rotate-180'}`} />
+          </span>
+        )}
+      </>
+    )
+  }
 
   if (variante === 'minimal') {
     return (

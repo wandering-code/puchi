@@ -8,7 +8,7 @@ import { isIOS, isStandalone, safeInsets } from '../platform/pwa'
 import { useCapa } from '../platform/capas'
 import { LLEGADA, SALIDA, enCss } from '../ui/curvas'
 import Inicio from './inicio/Inicio'
-import Luniteca from './luniteca/Luniteca'
+import Luniteca, { usarCabeceraConPanel } from './luniteca/Luniteca'
 import Club from './club/Club'
 import Diskordkito from './diskordkito/Diskordkito'
 import Actividad from './actividad/Actividad'
@@ -531,6 +531,7 @@ function PantallaDeInicio() {
 // se prueban las cuatro en el móvil y se deja la que gane.
 function SeparacionDeSecciones() {
   const [elegida, setElegida] = usarSeparacion()
+  const [conPanel, setConPanel] = usarCabeceraConPanel()
   return (
     <div className="mt-6 overflow-hidden rounded-xl2 border border-line bg-surface">
       <p className="border-b border-line px-4 py-2 text-xs uppercase tracking-wider text-ink-mute">
@@ -540,8 +541,16 @@ function SeparacionDeSecciones() {
         elegida={elegida}
         onElegir={setElegida}
       />
+      <div className="border-t border-line px-4 py-3">
+        <Interruptor
+          puesto={conPanel}
+          onCambiar={setConPanel}
+          etiqueta="Cabecera con panel de color"
+          nota="La parte de arriba de Luniteca, en un panel teñido que se separa de la estantería. Apagado, como estaba."
+        />
+      </div>
       <p className="border-t border-line px-4 py-2.5 text-xs text-ink-mute">
-        Vuelve a Luniteca para verlo. Cuando decidas, quito las otras tres.
+        Vuelve a Luniteca para verlo. Cuando decidas, quito lo que sobre.
       </p>
     </div>
   )

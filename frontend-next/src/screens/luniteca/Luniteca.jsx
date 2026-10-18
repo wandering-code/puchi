@@ -10,7 +10,7 @@ import { Cover, NotaBadge, PagesLabel, ProgressBar, StarRating } from './piezas'
 import BookDetail from './BookDetail'
 import {
   IconChevron, IconEreader, IconFilter, IconGrid, IconList, IconLibroFisico, IconLomos, IconPlegarTodo,
-  IconPlus, IconSearch, IconX,
+  IconLuna, IconPlus, IconSearch, IconX,
 } from '../../ui/icons'
 import HojaFiltros from './HojaFiltros'
 import AnadirLibro from './AnadirLibro'
@@ -51,6 +51,10 @@ export default function Luniteca() {
   const [anosPlegados, setAnosPlegados] = useState(() => new Set())
   // Cómo se separan las secciones: se está probando cuál gusta (ver separacion.jsx).
   const [separacion] = usarSeparacion()
+  const [conPanel] = usarCabeceraConPanel()
+  // Con el panel, la barra de herramientas mide 60px y no 56: los títulos se
+  // pegan justo debajo, no medio tapados.
+  const desdeTitulos = conPanel ? 'top-[60px]' : 'top-14'
 
   const cargar = useCallback(async () => {
     try {
@@ -298,9 +302,12 @@ export default function Luniteca() {
 
   return (
     <div className="py-6">
-      <header className="mb-4">
-        <h2 className="font-display text-[1.75rem] font-bold tracking-[-0.02em]">Luniteca</h2>
-        <p className="mt-1 text-sm text-ink-dim">
+      <header className={conPanel ? `relative -mx-5 -mt-6 overflow-hidden px-5 pb-3 pt-6 ${TINTE}` : 'mb-4'}>
+        {conPanel && (
+          <IconLuna aria-hidden className="pointer-events-none absolute -right-6 -top-4 h-40 w-40 text-accent opacity-[0.09]" />
+        )}
+        <h2 className="relative font-display text-[1.75rem] font-bold tracking-[-0.02em]">Luniteca</h2>
+        <p className="relative mt-1 text-sm text-ink-dim">
           {grupos.vacia
             ? 'Tu estantería está vacía'
             : `${shelf.length} ${shelf.length === 1 ? 'libro' : 'libros'} en tu estantería`}
@@ -309,6 +316,7 @@ export default function Luniteca() {
       </header>
 
       <Herramientas
+        panel={conPanel ? PANEL : null}
         vista={vista} onVista={cambiarVista}
         query={query} onQuery={setQuery}
         onAbrirHoja={hojaFiltros.abrir}
@@ -335,8 +343,8 @@ export default function Luniteca() {
 
       <div className={`mt-5 ${huecoEntreSecciones(separacion)}`}>
         {grupos.reading.length > 0 && (
-          <CajaSeccion variante={separacion}>
-            <TituloSeccion variante={separacion} label="Leyendo" cuenta={grupos.reading.length} estado="reading" />
+          <CajaSeccion variante={separacion} estado="reading">
+            <TituloSeccion variante={separacion} desde={desdeTitulos} label="Leyendo" cuenta={grupos.reading.length} estado="reading" />
             <div className="mt-3 space-y-2">
               {grupos.reading.map(e => (
                 <TarjetaLeyendo key={e.id} entry={e} onAbrir={abrirLibro} fuera={e.id === fueraId} />
@@ -346,9 +354,10 @@ export default function Luniteca() {
         )}
 
         {grupos.readYearGroups.length > 0 && (
-          <CajaSeccion variante={separacion}>
+          <CajaSeccion variante={separacion} estado="read">
             <TituloSeccion
               variante={separacion}
+              desde={desdeTitulos}
               label="Leídos"
               estado="read"
               cuenta={grupos.readYearGroups.reduce((n, g) => n + g.items.length, 0)}
@@ -370,6 +379,7 @@ export default function Luniteca() {
                     <TituloSeccion
                       variante={separacion}
                       anidado
+                      estado="read"
                       label={year === 'sin-fecha' ? 'Sin fecha' : year}
                       cuenta={items.length}
                       plegada={anosPlegados.has(year)}
@@ -389,6 +399,7 @@ export default function Luniteca() {
 
         <SeccionPlegable
           variante={separacion}
+          desde={desdeTitulos}
           label="Por leer" entries={grupos.want} vista={vista} estado="want"
           plegada={plegadas.want}
           onAlternar={alternarWant}
@@ -399,6 +410,7 @@ export default function Luniteca() {
 
         <SeccionPlegable
           variante={separacion}
+          desde={desdeTitulos}
           label="Dropeados" entries={grupos.dropped} vista={vista} estado="dropped"
           plegada={plegadas.dropped}
           onAlternar={alternarDropped}
@@ -492,9 +504,22 @@ function Aviso({ titulo, texto }) {
 // igual. Lo único que cambia es qué hace el botón de añadir: en la de otra
 // persona no hay nada que añadir (sin `onAnadir` no se pinta) y en la del club
 // lo que se añade es una propuesta, así que su etiqueta también cambia.
+// PRUEBA (2026-10-18): la cabecera como un panel teñido del color de la app,
+// con una luna de fondo, que acaba en la barra de herramientas con las
+// esquinas redondeadas. Se enciende en Ajustes; apagado, la de antes.
+const TINTE = 'bg-[color-mix(in_srgb,var(--color-accent)_11%,var(--color-bg))]'
+const PANEL = `${TINTE} rounded-b-[26px] shadow-[0_10px_24px_-14px_rgb(var(--color-sombra)/.45)]`
+
+export function usarCabeceraConPanel() {
+  return usarPreferencia('luniteca_cabecera_panel', false)
+}
+
 export function Herramientas({
   vista, onVista, query, onQuery,
   onAbrirHoja, onAnadir, etiquetaAnadir = 'Añadir libro', ordenActivo, filtrosActivos,
+  // El fondo de la barra cuando cierra un panel de cabecera (Luniteca); sin
+  // él, la de siempre, del color de la página y con su raya.
+  panel = null,
 }) {
   // Que la búsqueda esté abierta es cosa SOLO de esta barra: si vive arriba,
   // abrirla vuelve a renderizar la estantería entera y el toque se comía 49ms
@@ -514,7 +539,7 @@ export function Herramientas({
   // Se queda pegada arriba al bajar por una estantería larga: con 300 libros,
   // volver arriba solo para filtrar es la diferencia entre usarlo y no usarlo.
   return (
-    <div className="sticky top-0 z-20 -mx-5 border-b border-line bg-bg/85 px-5 py-2 backdrop-blur-xl">
+    <div className={`sticky top-0 z-20 -mx-5 px-5 py-2 ${panel ? `${panel} pb-3` : 'border-b border-line bg-bg/85 backdrop-blur-xl'}`}>
       {/* Al buscar, el campo ocupa la fila entera y el resto de botones se
           van: antes la barra se desplegaba DEBAJO y empujaba la estantería,
           que es el mismo salto que ya se quitó de los filtros. La lupa se
@@ -782,11 +807,11 @@ export function BotonPlegarAnos({ todosPlegados, onAlternar }) {
   )
 }
 
-const SeccionPlegable = memo(function SeccionPlegable({ variante, label, entries, vista, plegada, onAlternar, onAbrir, fueraId = null, generosDeAutor = null, estado = null }) {
+const SeccionPlegable = memo(function SeccionPlegable({ variante, desde = 'top-14', label, entries, vista, plegada, onAlternar, onAbrir, fueraId = null, generosDeAutor = null, estado = null }) {
   if (entries.length === 0) return null
   return (
-    <CajaSeccion variante={variante}>
-      <TituloSeccion variante={variante} label={label} cuenta={entries.length} plegada={plegada} onAlternar={onAlternar} estado={estado} />
+    <CajaSeccion variante={variante} estado={estado}>
+      <TituloSeccion variante={variante} desde={desde} label={label} cuenta={entries.length} plegada={plegada} onAlternar={onAlternar} estado={estado} />
       <Plegable abierta={!plegada}>
         <div className="pt-3">
           <Coleccion entries={entries} vista={vista} onAbrir={onAbrir} fueraId={fueraId} generosDeAutor={generosDeAutor} />
