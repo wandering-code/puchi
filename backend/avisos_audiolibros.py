@@ -14,7 +14,8 @@ A quién y cuándo, según lo que decidió el usuario:
 - "No se va a preparar": al rechazar su petición.
 
 Cada aviso se guarda (player_notices) para verlo aunque no tuviera la app
-abierta, y se le manda en directo por el WebSocket si la tiene.
+abierta, se le manda en directo por el WebSocket si la tiene y, si ha
+activado los avisos en su móvil, le llega también como push (push.py).
 """
 from typing import Optional
 
@@ -37,11 +38,39 @@ router = APIRouter(prefix="/notices", tags=["avisos"])
 AL_DIA = 0.85
 
 
+def _repartir(db: Session, avisos: list[PlayerNotice]) -> None:
+    """Los avisos recién guardados, a donde estén: push a sus móviles y, si
+    tienen la app abierta, en directo por el WebSocket. Si algo falla no pasa
+    nada: el aviso ya está guardado y lo verá al abrir la app."""
+    if not avisos:
+        return
+    try:
+        import push
+        sin_leer = {}
+        mensajes = []
+        for n in avisos:
+            if n.player_id not in sin_leer:
+                sin_leer[n.player_id] = (db.query(PlayerNotice)
+                                         .filter(PlayerNotice.player_id == n.player_id,
+                                                 PlayerNotice.read_at.is_(None)).count())
+            mensajes.append((n.player_id, {
+                "title": n.title, "body": n.body or "",
+                # Uno por libro: un "nuevo capítulo" sustituye al anterior en
+                # la pantalla de bloqueo en vez de amontonarse.
+                "tag": f"ab-{n.audiobook_id}" if n.audiobook_id else f"libro-{n.book_id}",
+                "url": f"/kokito/?aviso={n.id}",
+                "badge": sin_leer[n.player_id],
+            }))
+        push.enviar(mensajes)
+    except Exception as e:
+        print(f"[avisos] no se pudo mandar el push: {e!r}", flush=True)
+    _avisar_en_directo({n.player_id for n in avisos})
+
+
 def _avisar_en_directo(ids: set[int]) -> None:
     """Le dice a la app abierta de cada uno que tiene avisos nuevos. Los
     endpoints que llaman aquí son síncronos (corren en un hilo aparte), así
-    que se vuelve al bucle de eventos con anyio. Si falla no pasa nada: el
-    aviso ya está guardado y lo verá al abrir la app."""
+    que se vuelve al bucle de eventos con anyio."""
     if not ids:
         return
     try:
@@ -93,7 +122,7 @@ def revisar(db: Session, ab_id: int, nuevo: Optional[AudiobookChapter] = None) -
     if not libros:
         return
     completo = all(_listo(c) for c in caps)
-    avisados: set[int] = set()
+    nuevos: list[PlayerNotice] = []
     vistos: set[int] = set()
 
     for r, pl, b, e in _vigentes(db, libros):
@@ -109,27 +138,27 @@ def revisar(db: Session, ab_id: int, nuevo: Optional[AudiobookChapter] = None) -
             objetivo = objetivo or caps[0]
             if not _listo(objetivo):
                 continue
-            db.add(PlayerNotice(
+            nuevos.append(PlayerNotice(
                 player_id=pl.id, kind="ab_ready", audiobook_id=ab_id, book_id=b.id, chapter_id=objetivo.id,
                 title=f"Ya puedes escuchar «{titulo}»",
                 body=(f"Empieza por «{objetivo.title}», como pediste" if pedido
                       else "El primer capítulo está listo"),
             ))
+            db.add(nuevos[-1])
             # Si ya está todo, con este aviso basta: el de "completo" se da
             # por visto para no mandar dos a la vez.
             if completo:
                 db.add(PlayerNotice(player_id=pl.id, kind="ab_complete", audiobook_id=ab_id, book_id=b.id,
                                     title=f"«{titulo}» está completo", read_at=_ahora()))
-            avisados.add(pl.id)
             continue
 
         if completo and "ab_complete" not in ya:
-            db.add(PlayerNotice(
+            nuevos.append(PlayerNotice(
                 player_id=pl.id, kind="ab_complete", audiobook_id=ab_id, book_id=b.id,
                 title=f"«{titulo}» está completo",
                 body=f"Ya se pueden escuchar los {len(caps)} capítulos",
             ))
-            avisados.add(pl.id)
+            db.add(nuevos[-1])
             continue
 
         if nuevo is not None and _al_dia(db, pl.id, ab_id, caps, nuevo):
@@ -138,35 +167,36 @@ def revisar(db: Session, ab_id: int, nuevo: Optional[AudiobookChapter] = None) -
             if previo and not previo.read_at:
                 previo.chapter_id, previo.created_at = nuevo.id, _ahora()
                 previo.body = f"«{nuevo.title}» ya está listo"
+                nuevos.append(previo)
             else:
                 if previo:
                     db.delete(previo)
-                db.add(PlayerNotice(
+                nuevos.append(PlayerNotice(
                     player_id=pl.id, kind="ab_new_chapter", audiobook_id=ab_id, book_id=b.id, chapter_id=nuevo.id,
                     title=f"Nuevo capítulo de «{titulo}»", body=f"«{nuevo.title}» ya está listo",
                 ))
-            avisados.add(pl.id)
+                db.add(nuevos[-1])
 
-    if avisados:
+    if nuevos:
         db.commit()
-        _avisar_en_directo(avisados)
+        _repartir(db, nuevos)
 
 
 def al_rechazar(db: Session, peticiones: list[AudiobookRequest]) -> None:
     """Avisa a cada uno de que su petición no se va a preparar. Hace commit."""
-    ids = set()
+    nuevos = []
     for r in peticiones:
         libro = db.query(Book).filter(Book.id == r.book_id).first()
         if not libro:
             continue
-        db.add(PlayerNotice(
+        nuevos.append(PlayerNotice(
             player_id=r.player_id, kind="ab_rejected", book_id=r.book_id,
             title=f"No se va a preparar «{libro.title}»",
             body=r.reject_reason or "De momento este libro se queda sin audiolibro",
         ))
-        ids.add(r.player_id)
+        db.add(nuevos[-1])
     db.commit()
-    _avisar_en_directo(ids)
+    _repartir(db, nuevos)
 
 
 def al_deshacer_rechazo(db: Session, book_ids: list[int]) -> None:

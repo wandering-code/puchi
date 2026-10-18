@@ -26,6 +26,7 @@ import audiolibros
 import audiolibros_escuchar
 import audiolibros_peticiones
 import avisos_audiolibros
+import push
 
 
 # Caché en memoria (vive mientras el proceso esté arriba, se pierde al
@@ -1347,6 +1348,7 @@ app.include_router(audiolibros.worker_router)
 app.include_router(audiolibros_escuchar.router)
 app.include_router(audiolibros_peticiones.router)
 app.include_router(avisos_audiolibros.router)
+app.include_router(push.router)
 
 app.add_middleware(
     CORSMiddleware,
@@ -1383,6 +1385,7 @@ def startup():
     crear_tablas()
     _migrate()
     audiolibros.migrar(engine)
+    push.migrar()
     _seed_channels()
     _seed_shop_items()
 

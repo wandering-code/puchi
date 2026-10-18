@@ -3,6 +3,7 @@ import { api } from './api'
 import { useAvisos } from './avisos'
 import { useCapa } from './capas'
 import { useReproductor } from './reproductor'
+import { ponerGlobo, refrescarPush } from './push'
 import { Cover } from '../screens/luniteca/piezas'
 
 // Los avisos guardados de cada uno (fase 7 de audiolibros, #69): "ya puedes
@@ -24,6 +25,13 @@ export function NotificacionesProvider({ children }) {
   const [sinLeer, setSinLeer] = useState(0)
   const hoja = useCapa()
   const vistos = useRef(null) // ids ya conocidos: lo que no esté aquí es nuevo
+  // El ?aviso=ID con el que se abre la app desde una notificación. Se lee
+  // aquí, al primer render, y no en un efecto: los efectos de las pantallas
+  // corren antes, y entrar por /kokito/ redirige a Luniteca y se lo come.
+  const avisoDeEntrada = useRef(undefined)
+  if (avisoDeEntrada.current === undefined) {
+    avisoDeEntrada.current = Number(new URLSearchParams(window.location.search).get('aviso')) || null
+  }
 
   // Abrir un aviso: lo de un audiolibro abre su reproductor (sin arrancar a
   // sonar: el play lo da quien escucha). El de "no se va a preparar" no lleva
@@ -66,6 +74,42 @@ export function NotificacionesProvider({ children }) {
   }, [])
 
   useEffect(() => { cargar() }, [cargar])
+
+  // El push (#69, parte 2): renovar la suscripción de este dispositivo al
+  // abrir, y el número sobre el icono de la app al día con la campana.
+  useEffect(() => { refrescarPush() }, [])
+  useEffect(() => { ponerGlobo(sinLeer) }, [sinLeer])
+
+  // Tocar una notificación abre la app en ese aviso: con ?aviso=ID si estaba
+  // cerrada, o con un mensaje del service worker si ya estaba abierta.
+  const abrirPorId = useCallback(async (id) => {
+    const l = await api('/notices').catch(() => null)
+    const n = l?.find(x => x.id === id)
+    if (!n) return
+    await api('/notices/read', { method: 'POST', body: { ids: [id] } }).catch(() => {})
+    cargar()
+    if (n.kind === 'ab_rejected' || !n.audiobook_id) ultimo.current.hoja.abrir()
+    else ultimo.current.abrirAviso(n)
+  }, [cargar])
+
+  useEffect(() => {
+    const id = avisoDeEntrada.current
+    if (id) {
+      avisoDeEntrada.current = null
+      // Fuera de la URL (si sigue ahí): si no, al recargar se volvería a abrir.
+      if (window.location.search.includes('aviso=')) {
+        window.history.replaceState(window.history.state, '', window.location.pathname)
+      }
+      abrirPorId(id)
+    }
+    function alMensaje(ev) {
+      if (ev.data?.type !== 'abrir-aviso') return
+      const otro = Number(new URL(ev.data.url).searchParams.get('aviso'))
+      if (otro) abrirPorId(otro)
+    }
+    navigator.serviceWorker?.addEventListener('message', alMensaje)
+    return () => navigator.serviceWorker?.removeEventListener('message', alMensaje)
+  }, [abrirPorId])
 
   useEffect(() => {
     function alRecibir(ev) {
