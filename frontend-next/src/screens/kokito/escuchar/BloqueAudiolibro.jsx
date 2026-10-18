@@ -4,7 +4,7 @@ import { api } from '../../../platform/api'
 import { useCapa } from '../../../platform/capas'
 import HojaInferior from '../../luniteca/HojaInferior'
 import { useReproductor } from '../../../platform/reproductor'
-import { IconAuriculares, IconCheck, IconPausa, IconPlay, IconX } from '../../../ui/icons'
+import { IconAuriculares, IconCheck, IconEreader as IconLibroAbierto, IconPausa, IconPlay, IconX } from '../../../ui/icons'
 import { Girando } from '../audiolibros/Audiolibros'
 import { duracion, reloj } from '../audiolibros/formato'
 import { Ecualizador } from './PantallaReproductor'
@@ -56,7 +56,8 @@ function Escuchar({ r, datos, pedido }) {
     detalle = `Vas por «${guardado.title}»${pct}`
   } else if (datos.start_chapter_id && hayAlgo) {
     const desde = datos.chapters.find(c => c.id === datos.start_chapter_id)
-    detalle = desde ? `Empezará por «${desde.title}», como pediste` : `${datos.chapters_ready} de ${datos.chapters_total} capítulos listos`
+    const porque = datos.start_reason === 'lectura' ? 'donde vas leyendo' : 'como pediste'
+    detalle = desde ? `Empezará por «${desde.title}», ${porque}` : `${datos.chapters_ready} de ${datos.chapters_total} capítulos listos`
   } else if (!hayAlgo) {
     detalle = datos.status === 'generando'
       ? 'Generando el primer capítulo…'
@@ -81,6 +82,17 @@ function Escuchar({ r, datos, pedido }) {
   function play() {
     if (esteSuena) r.alternar()
     else r.abrir(datos, { reproducir: true, mostrar: false })
+  }
+
+  // Leyendo vas por delante de lo escuchado (#71): escuchar desde el capítulo
+  // de tu página. Si este libro ya está cargado, basta con cambiar de
+  // capítulo; si no, se abre empezando ahí.
+  const lectura = datos.reading
+  const capLectura = lectura && datos.chapters.find(c => c.id === lectura.chapter_id)
+  function desdeLectura() {
+    if (!capLectura?.ready) return
+    if (r.libro?.id === datos.id) r.elegir(capLectura)
+    else r.abrir({ ...datos, progress: { chapter_id: capLectura.id, position_s: 0 } }, { reproducir: true, mostrar: false })
   }
 
   return (
@@ -114,6 +126,35 @@ function Escuchar({ r, datos, pedido }) {
           </motion.button>
         )}
       </div>
+      <AnimatePresence initial={false}>
+        {lectura?.ahead && capLectura && r.cap?.id !== capLectura.id && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={SUAVE}
+            className="overflow-hidden"
+          >
+            <div className="mt-2 flex items-center gap-3 rounded-xl2 border border-line bg-surface px-3 py-2.5 text-left">
+              <IconLibroAbierto className="h-4 w-4 shrink-0 text-ink-mute" />
+              <span className="min-w-0 flex-1 text-xs leading-snug text-ink-dim">
+                Leyendo vas por la pág. {lectura.page} de {lectura.of}
+                <span className="block truncate text-ink-mute">«{capLectura.title}»</span>
+              </span>
+              {capLectura.ready ? (
+                <button
+                  onClick={desdeLectura}
+                  className="shrink-0 rounded-full border border-accent-line bg-accent-soft px-3 py-1.5 text-xs font-semibold text-accent"
+                >
+                  Escuchar desde ahí
+                </button>
+              ) : (
+                <span className="shrink-0 text-[11px] text-ink-mute">Aún no está listo</span>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   )
 }

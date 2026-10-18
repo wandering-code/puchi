@@ -66,6 +66,39 @@ def _porcentaje(caps: list, cap_id: Optional[int], segundo: float) -> Optional[f
     return min(1.0, (sum(c.words for c in caps[:i]) + fraccion * actual.words) / total)
 
 
+# Margen para decir que la lectura va "por delante" del audio: lo que se lee
+# de más en una sentada, no una página suelta.
+POR_DELANTE = 0.01
+
+
+def _donde_lees(db: Session, ab: Audiobook, p: Player, caps: list) -> Optional[dict]:
+    """Por dónde vas leyendo este libro en papel o eReader (fase 9, #71): la
+    página, en qué parte del libro cae y el capítulo que le corresponde. Solo
+    si lo estás leyendo y hay página guardada."""
+    e = (db.query(PersonalShelf)
+         .join(AudiobookBook, AudiobookBook.book_id == PersonalShelf.book_id)
+         .filter(AudiobookBook.audiobook_id == ab.id, PersonalShelf.player_id == p.id,
+                 PersonalShelf.status.in_(("reading", "rereading")), PersonalShelf.current_page > 0)
+         .order_by(PersonalShelf.current_page.desc()).first())
+    if not e:
+        return None
+    total = e.custom_total_pages or (e.book.num_pages if e.book else None) or e.ereader_total_pages
+    if not total:
+        return None
+    cap, _como = capitulo_deseado(caps, e.current_page, None, total)
+    if not cap:
+        return None
+    # La página como la ve quien lee: en las de su eReader si lee ahí (la
+    # misma regla de tres que la ficha del libro).
+    pagina, de = e.current_page, total
+    er = e.ereader_total_pages
+    if e.reading_format == "ereader" and er and er != total:
+        pagina, de = max(1, round(e.current_page * er / total)), er
+    return {"page": pagina, "of": de, "fraction": min(1.0, (e.current_page - 1) / total),
+            "chapter_id": cap.id, "chapter_title": cap.title,
+            "ready": cap.status == "listo" and bool(cap.audio_path)}
+
+
 def _para_escuchar(db: Session, ab: Audiobook, p: Player) -> dict:
     caps = (db.query(AudiobookChapter)
             .filter(AudiobookChapter.audiobook_id == ab.id, AudiobookChapter.included.is_(True))
@@ -88,6 +121,20 @@ def _para_escuchar(db: Session, ab: Audiobook, p: Player) -> dict:
             r, e, b = pet
             cap, _como = capitulo_deseado(caps, r.start_page, r.start_chapter, e.custom_total_pages or b.num_pages or e.ereader_total_pages)
             empezar = cap.id if cap else None
+    motivo = "peticion" if empezar else None
+
+    # Lo que llevas leído (#71). La primera vez, si vas más adelante que lo
+    # que pediste (o no pediste nada), se empieza por donde lees. Después,
+    # si lees por delante de lo escuchado, se ofrece saltar ahí.
+    lectura = _donde_lees(db, ab, p, caps)
+    if lectura and not (prog and prog.chapter_id):
+        pos = {c.id: c.position for c in caps}
+        if empezar is None or pos[lectura["chapter_id"]] > pos.get(empezar, -1):
+            empezar, motivo = lectura["chapter_id"], "lectura"
+    if lectura:
+        escuchado = _porcentaje(caps, prog.chapter_id, prog.position_s) if prog and prog.chapter_id else None
+        lectura["ahead"] = escuchado is not None and lectura["fraction"] > escuchado + POR_DELANTE
+        del lectura["fraction"]
     # La del EPUB; si no trae, la de alguno de los libros enlazados.
     portada = ab.cover_url or (db.query(Book.cover_url)
                                .join(AudiobookBook, AudiobookBook.book_id == Book.id)
@@ -97,6 +144,10 @@ def _para_escuchar(db: Session, ab: Audiobook, p: Player) -> dict:
         "id": ab.id, "title": ab.title, "author": ab.author, "cover_url": portada,
         "status": _estado(caps),
         "start_chapter_id": empezar,
+        # Por qué empieza ahí: "peticion" (lo pidió así) o "lectura" (por
+        # donde va leyendo).
+        "start_reason": motivo,
+        "reading": lectura,
         "chapters_total": len(caps), "chapters_ready": len(listos),
         "audio_minutes": round(sum(c.duration_s or 0 for c in listos) / 60),
         "minutes": _minutos(sum(c.words for c in caps)),
