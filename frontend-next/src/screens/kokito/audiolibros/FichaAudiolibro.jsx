@@ -90,7 +90,7 @@ export default function FichaAudiolibro({ id, onCerrar, onCambiar, onBorrar }) {
   const cambiar = (cuerpo) => aplicar(api(`/audiobooks/${ab.id}`, { method: 'PATCH', body: cuerpo }))
   const generar = (inicio) => aplicar(api(`/audiobooks/${ab.id}/generate`, { method: 'POST', body: { start_chapter_id: inicio } }))
   const pausar = () => aplicar(api(`/audiobooks/${ab.id}/pause`, { method: 'POST' }))
-  const retener = () => aplicar(api(`/audiobooks/${ab.id}/hold`, { method: 'POST' }))
+  const retener = (ahora = false) => aplicar(api(`/audiobooks/${ab.id}/hold`, { method: 'POST', body: { now: ahora } }))
   const reanudar = () => aplicar(api(`/audiobooks/${ab.id}/resume`, { method: 'POST' }))
   const enlazar = (libro) => aplicar(
     api(`/audiobooks/${ab.id}/books`, { method: 'POST', body: { book_id: libro.id, move: !!libro.linked_to } }),

@@ -111,6 +111,8 @@ export function Generacion({ ab, sobremesa, onGenerar, onPausar, onRetener, onRe
               className="mt-3 text-[13px] text-ink-dim">
               En pausa. Los {faltan.filter(c => c.status === 'en_cola').length} capítulos que faltan esperan en
               la cola, en su orden.
+              {faltan.some(c => c.progress_note === 'Se reinicia al reanudar') &&
+                ` Empezará otra vez «${faltan.find(c => c.progress_note === 'Se reinicia al reanudar').title}» desde el principio.`}
             </motion.p>
           ) : ab.status === 'en_cola' ? (
             <motion.p key="espera" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
@@ -135,13 +137,35 @@ export function Generacion({ ab, sobremesa, onGenerar, onPausar, onRetener, onRe
               >
                 <IconPlay className="h-4 w-4" /> {actual ? 'No pausar' : 'Reanudar'}
               </motion.button>
+            ) : enMarcha && actual ? (
+              <div className="flex flex-1 flex-col gap-2">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-mute">Pausar</p>
+                <div className="flex gap-2">
+                  <motion.button
+                    whileTap={{ scale: 0.97 }}
+                    onClick={() => onRetener(false)}
+                    className="flex min-h-11 flex-1 flex-col items-center justify-center rounded-xl2 border border-line px-2 py-1.5 text-sm font-semibold text-ink active:bg-surface-2"
+                  >
+                    Al acabar este
+                    <span className="text-[10px] font-normal text-ink-mute">no empieza el siguiente</span>
+                  </motion.button>
+                  <motion.button
+                    whileTap={{ scale: 0.97 }}
+                    onClick={() => onRetener(true)}
+                    className="flex min-h-11 flex-1 flex-col items-center justify-center rounded-xl2 border border-line px-2 py-1.5 text-sm font-semibold text-ink active:bg-surface-2"
+                  >
+                    Ahora
+                    <span className="text-[10px] font-normal text-ink-mute">lo reinicia al reanudar</span>
+                  </motion.button>
+                </div>
+              </div>
             ) : enMarcha ? (
               <motion.button
                 whileTap={{ scale: 0.97 }}
-                onClick={onRetener}
+                onClick={() => onRetener(false)}
                 className="flex h-11 flex-1 items-center justify-center gap-2 rounded-xl2 border border-line text-sm font-semibold text-ink-dim active:bg-surface-2"
               >
-                <IconPausa className="h-4 w-4" /> {actual ? 'Pausar tras este' : 'Pausar'}
+                <IconPausa className="h-4 w-4" /> Pausar
               </motion.button>
             ) : (
               <motion.button
@@ -154,22 +178,17 @@ export function Generacion({ ab, sobremesa, onGenerar, onPausar, onRetener, onRe
                 {ab.chapters_ready ? 'Seguir generando' : 'Generar'}
               </motion.button>
             )}
-            {faltan.length > 0 && (
+            {faltan.length > 0 && !(enMarcha && actual && !retenido) && (
               <p className="w-[42%] text-[11px] leading-snug text-ink-mute">
                 {faltan.length === 1 ? 'Falta 1 capítulo' : `Faltan ${faltan.length} capítulos`}: {duracion(minutosQueFaltan)} de sobremesa, aprox.
               </p>
             )}
           </div>
         )}
-        {/* La pausa de antes, de golpe: corta el capítulo en curso y pierde
-            lo que llevaba. Para cuando haga falta de verdad. */}
-        {actual && (
-          <button
-            onClick={onPausar}
-            className="mt-2.5 w-full text-center text-[11px] font-medium text-ink-mute underline-offset-2 active:underline"
-          >
-            Parar ya (se pierde lo que lleva de «{actual.title}»)
-          </button>
+        {enMarcha && actual && !retenido && faltan.length > 0 && (
+          <p className="mt-2.5 text-[11px] text-ink-mute">
+            {faltan.length === 1 ? 'Falta 1 capítulo' : `Faltan ${faltan.length} capítulos`}: {duracion(minutosQueFaltan)} de sobremesa, aprox.
+          </p>
         )}
       </div>
     </section>

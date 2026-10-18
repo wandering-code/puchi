@@ -738,12 +738,27 @@ def pausar(ab_id: int, db: Session = Depends(get_db), _: Player = Depends(requir
     return _detalle(db, ab)
 
 
+class Retener(BaseModel):
+    # False: el capítulo en curso termina y se sube.
+    # True: se corta ya y vuelve el primero a la cola; al reanudar se genera
+    # otra vez desde el principio.
+    now: bool = False
+
+
 @router.post("/{ab_id}/hold")
-def pausar_al_acabar(ab_id: int, db: Session = Depends(get_db), _: Player = Depends(require_admin)):
-    """Pausa sin perder nada: el capítulo en curso termina y se sube, y los
-    que faltan esperan en la cola, en su orden, hasta reanudar."""
+def pausar(ab_id: int, cuerpo: Optional[Retener] = None, db: Session = Depends(get_db),
+           _: Player = Depends(require_admin)):
+    """Las dos pausas que pidió el usuario. En las dos, lo que falta se queda
+    en la cola, en su orden, y "Reanudar" sigue sin volver a elegir nada."""
     ab = _cargar(db, ab_id)
     ab.queue_hold = True
+    if cuerpo and cuerpo.now:
+        # El sobremesa se entera en su próximo aviso de progreso (le
+        # contesta "no sigas") y, si intenta subirlo, se le rechaza.
+        for c in (db.query(AudiobookChapter)
+                  .filter(AudiobookChapter.audiobook_id == ab.id, AudiobookChapter.status == "generando").all()):
+            c.status, c.priority, c.worker, c.lease_until = "en_cola", True, None, None
+            c.progress, c.progress_note, c.attempts = 0.0, "Se reinicia al reanudar", 0
     db.commit()
     return _detalle(db, ab)
 
