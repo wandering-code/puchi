@@ -38,7 +38,7 @@ function cerca(pajar, aguja, desde) {
   return i >= 0 && i - desde < LEJOS ? i : -1
 }
 
-// [{desde, hasta, start, end}]: qué caracteres del texto suenan entre qué
+// [{i, desde, hasta, start, end}]: qué trozo (`i`, su posición en `trozos`) y qué caracteres del texto suenan entre qué
 // segundos. Los trozos que no se encuentran (un retoque con otro texto muy
 // distinto, por ejemplo) se quedan fuera; los de alrededor cubren el hueco.
 export function casar(texto, trozos) {
@@ -46,7 +46,7 @@ export function casar(texto, trozos) {
   const T = normalizar(texto, { sinRomanos: true })
   const out = []
   let cursor = 0
-  for (const t of trozos) {
+  for (const [i, t] of trozos.entries()) {
     if (t.start == null || t.end == null) continue
     const n = normalizar(t.text || '').norm
     if (!n) continue
@@ -61,7 +61,7 @@ export function casar(texto, trozos) {
       ini = a
       fin = b + k
     }
-    out.push({ desde: T.pos[ini], hasta: T.pos[fin - 1] + 1, start: t.start, end: t.end })
+    out.push({ i, desde: T.pos[ini], hasta: T.pos[fin - 1] + 1, start: t.start, end: t.end })
     cursor = fin
   }
   return out

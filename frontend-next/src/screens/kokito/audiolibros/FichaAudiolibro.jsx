@@ -9,12 +9,12 @@ import BotonPeligro from '../../../ui/BotonPeligro'
 import Interruptor from '../../../ui/Interruptor'
 import Avatar from '../../../ui/Avatar'
 import {
-  IconArrowLeft, IconCheck, IconEnlace, IconPencil, IconRefresh, IconSearch, IconUnir, IconX,
+  IconArrowLeft, IconCheck, IconChevron, IconEnlace, IconPencil, IconRefresh, IconSearch, IconUnir, IconX,
 } from '../../../ui/icons'
 import { Etiqueta, Girando } from './Audiolibros'
 import { duracion, duracionCorta, haceCuanto, palabras, reloj } from './formato'
 import { ESTADOS_AB, Generacion, HojaEmpezar, ReproductorCapitulo } from './Generacion'
-import Trozos from './Trozos'
+import RetocarTrozos from './RetocarTrozos'
 
 // La ficha de un audiolibro: sus datos, la voz, con qué libros va y sus
 // capítulos. Todo lo que se toca aquí se guarda al momento; no hay botón de
@@ -585,6 +585,7 @@ function HojaCapitulo({ ab, cap, abierta, onCerrar, onAplicar }) {
   const [tiempo, setTiempo] = useState(null)
   const [irA, setIrA] = useState(null)
   const refrescarFicha = useCallback(() => { onAplicar(api(`/audiobooks/${ab.id}`)) }, [onAplicar, ab.id])
+  const pantallaRetoque = useCapa()
   const [texto, setTexto] = useState(null)
   const [hasta, setHasta] = useState(TROZO_LECTURA)
   const [uniendo, setUniendo] = useState(false)
@@ -663,15 +664,32 @@ function HojaCapitulo({ ab, cap, abierta, onCerrar, onAplicar }) {
         </div>
       )}
 
+      {/* Retocar trozos sueltos: el capítulo entero en texto, en su propia
+          pantalla (RetocarTrozos), para tocar la parte que suena mal. */}
       {cap.has_audio && cap.pieces && cap.status === 'listo' && (
-        <Trozos
-          ab={ab}
-          cap={cap}
-          tiempo={tiempo}
-          onIr={t => setIrA({ t, vez: Date.now() })}
-          onHecho={refrescarFicha}
-        />
+        <button
+          onClick={() => pantallaRetoque.abrir()}
+          className="mt-4 flex w-full items-center gap-3 rounded-xl2 border border-line px-4 py-3 text-left transition-transform duration-150 active:scale-[0.99] active:bg-surface-2"
+        >
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface-2 text-ink-dim">
+            <IconRefresh className="h-4 w-4" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-semibold">Retocar trozos</span>
+            <span className="block text-xs text-ink-mute">
+              {cap.retouches ? `${cap.retouches} en camino · ` : ''}Toca en el texto lo que suena mal
+            </span>
+          </span>
+          <IconChevron className="h-4 w-4 shrink-0 -rotate-90 text-ink-mute" />
+        </button>
       )}
+      <RetocarTrozos
+        ab={ab}
+        cap={cap}
+        abierta={!!pantallaRetoque.abierta}
+        onCerrar={pantallaRetoque.cerrar}
+        onHecho={refrescarFicha}
+      />
 
       {cap.status === 'error' && cap.error && (
         <p className="mt-4 rounded-xl2 bg-danger/10 px-3.5 py-2.5 text-xs leading-relaxed text-danger">
