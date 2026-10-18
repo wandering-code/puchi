@@ -302,9 +302,17 @@ export default function Luniteca() {
 
   return (
     <div className="py-6">
-      <header className={conPanel ? `relative -mx-5 -mt-6 overflow-hidden px-5 pb-3 pt-6 ${TINTE}` : 'mb-4'}>
+      <header className={conPanel ? `relative -mx-5 -mt-6 px-5 pb-3 pt-6 ${TINTE}` : 'mb-4'}>
         {conPanel && (
-          <IconLuna aria-hidden className="pointer-events-none absolute -right-6 -top-4 h-40 w-40 text-accent opacity-[0.09]" />
+          <>
+            {/* El mismo tinte hacia arriba, fuera de la pantalla: al tirar de
+                la página hacia abajo en el iPhone (el rebote), lo que asoma
+                por encima es esto y no el fondo de la página. */}
+            <div aria-hidden className={`pointer-events-none absolute inset-x-0 bottom-full h-[100vh] ${TINTE}`} />
+            <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
+              <IconLuna className="absolute -right-6 -top-4 h-40 w-40 text-accent opacity-[0.09]" />
+            </div>
+          </>
         )}
         <h2 className="relative font-display text-[1.75rem] font-bold tracking-[-0.02em]">Luniteca</h2>
         <p className="relative mt-1 text-sm text-ink-dim">
