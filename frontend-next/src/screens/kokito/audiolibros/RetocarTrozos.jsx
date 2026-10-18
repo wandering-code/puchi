@@ -84,11 +84,14 @@ export default function RetocarTrozos({ ab, cap, abierta, onCerrar, onHecho }) {
   const [enRonda, setEnRonda] = useState(false)
   const pararRonda = () => { ronda.current = null; setEnRonda(false) }
 
-  function verTrozo(i) {
+  // `oir`: si suena al llegar. Con las flechas no (pedido por el usuario):
+  // solo se marca y se trae a la vista; para oírlo, «Oír» o tocarlo.
+  function verTrozo(i, { oir = true } = {}) {
     const p = datos?.pieces[i]
     if (!p) return
     setSel(new Set([i]))
-    sonar(Math.max(0, p.start - 0.1), p.end)
+    if (oir) sonar(Math.max(0, p.start - 0.1), p.end)
+    else { hasta.current = null; audio.current?.pause() }
     requestAnimationFrame(() => {
       document.querySelector(`[data-retoque] [data-i="${i}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' })
     })
@@ -100,7 +103,7 @@ export default function RetocarTrozos({ ab, cap, abierta, onCerrar, onHecho }) {
     const siguiente = paso > 0
       ? rehechos.find(i => i > desde) ?? rehechos[0]
       : [...rehechos].reverse().find(i => i < desde) ?? rehechos[rehechos.length - 1]
-    verTrozo(siguiente)
+    verTrozo(siguiente, { oir: false })
   }
   function siguienteDeRonda() {
     const i = ronda.current?.shift()
