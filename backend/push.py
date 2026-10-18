@@ -193,6 +193,7 @@ def probar(db: Session = Depends(get_db), p: Player = Depends(get_current_player
     n = db.query(PushSubscription).filter(PushSubscription.player_id == p.id).count()
     if not n:
         raise HTTPException(status_code=404, detail="Este dispositivo no tiene los avisos activados")
-    enviar([(p.id, {"title": "Avisos activados", "body": "Así te llegarán los avisos de Kokito.",
+    enviar([(p.id, {"title": "Ya puedes escuchar «Tu próximo libro» 🎧",
+                    "body": "Así te avisaremos, por ejemplo, cuando tu audiolibro esté listo.",
                     "tag": "prueba", "url": "/kokito/"})])
     return {"devices": n}
