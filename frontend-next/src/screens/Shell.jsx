@@ -17,7 +17,7 @@ import Perfil from './perfil/Perfil'
 import Admin from './admin/Admin'
 import Audiolibros from './kokito/audiolibros/Audiolibros'
 import Escuchar from './kokito/escuchar/Escuchar'
-import { ES_KOKITO } from '../platform/variante'
+import { CON_AUDIOLIBROS, ES_KOKITO } from '../platform/variante'
 import { AvisosEnAjustes, Campana } from './kokito/avisos/Avisos'
 import Avatar from '../ui/Avatar'
 import Interruptor from '../ui/Interruptor'
@@ -94,8 +94,8 @@ export default function Shell() {
           {/* La estantería de otra persona. Ruta propia para que el gesto de
               volver funcione y el enlace se pueda compartir. */}
           <Route path="/quien/:id"  element={<Perfil />} />
-          {ES_KOKITO && <Route path="/audiolibros" element={<Audiolibros />} />}
-          {ES_KOKITO && <Route path="/escuchar" element={<Escuchar />} />}
+          {CON_AUDIOLIBROS && <Route path="/audiolibros" element={<Audiolibros />} />}
+          {CON_AUDIOLIBROS && <Route path="/escuchar" element={<Escuchar />} />}
           <Route path="/ajustes"    element={<Ajustes />} />
           <Route path="*"           element={<Placeholder title="Nada por aquí" nota="Esa ruta no existe (todavía)." />} />
         </Routes>
@@ -163,7 +163,7 @@ function TopBar({ titulo, onAbrirMenu }) {
         </button>
         {/* En /kokito la derecha lleva además la campana de avisos: un hueco
             igual aquí mantiene el título centrado. */}
-        {ES_KOKITO && <span aria-hidden className="w-11 shrink-0" />}
+        {CON_AUDIOLIBROS && <span aria-hidden className="w-11 shrink-0" />}
 
         {/* La sección actual, en el centro. Con el menú escondido detrás de un
             botón hace falta algo que diga dónde estás. */}
@@ -195,8 +195,8 @@ function TopBar({ titulo, onAbrirMenu }) {
             aquí competía con el título de la sección en un móvil estrecho.
             Va dentro de un hueco del mismo ancho que el botón de menú, para
             que el título quede centrado de verdad y no descuadrado. */}
-        <div className={`flex h-11 shrink-0 items-center justify-end ${ES_KOKITO ? 'w-[88px]' : 'w-11'}`}>
-          {ES_KOKITO && <Campana />}
+        <div className={`flex h-11 shrink-0 items-center justify-end ${CON_AUDIOLIBROS ? 'w-[88px]' : 'w-11'}`}>
+          {CON_AUDIOLIBROS && <Campana />}
           <Avatar jugador={player} size={36} />
         </div>
       </div>
@@ -387,7 +387,7 @@ function Ajustes() {
 
       <VistaDeLomos />
 
-      {ES_KOKITO && <AvisosEnAjustes />}
+      {CON_AUDIOLIBROS && <AvisosEnAjustes />}
 
       <div className="mt-6 overflow-hidden rounded-xl2 border border-line bg-surface">
         <p className="border-b border-line px-4 py-2 text-xs uppercase tracking-wider text-ink-mute">Diagnóstico</p>

@@ -9,7 +9,7 @@ import HojaInferior, { useHoja } from '../luniteca/HojaInferior'
 import BookDetail from '../luniteca/BookDetail'
 import { copiarAMiEstanteria } from '../luniteca/shelf'
 import { IconBooks, IconFilter } from '../../ui/icons'
-import { ES_KOKITO } from '../../platform/variante'
+import { CON_AUDIOLIBROS } from '../../platform/variante'
 
 // Lo que va pasando en las estanterías de todos: quién añade, empieza o
 // termina un libro.
@@ -119,10 +119,10 @@ export default function Actividad() {
     const params = new URLSearchParams({ limit: String(POR_PAGINA), offset: String(desde) })
     if (filtrarPor) params.set('player_id', String(filtrarPor.id))
     // Solo /kokito pide "empezó a escuchar": la Puchi normal no lo recibe.
-    if (ES_KOKITO) params.set('con_escucha', 'true')
+    if (CON_AUDIOLIBROS) params.set('con_escucha', 'true')
     const datos = await api(`/activity/feed?${params}`)
     setHayMas(datos.has_more)
-    const nuevos = ES_KOKITO ? sinInicioRepetido(datos.items) : datos.items
+    const nuevos = CON_AUDIOLIBROS ? sinInicioRepetido(datos.items) : datos.items
     setItems(previos => (desde === 0 ? nuevos : [...(previos || []), ...nuevos]))
   }, [filtro])
 

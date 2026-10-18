@@ -197,9 +197,8 @@ export default defineConfig(({ mode }) => {
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
         // Las notificaciones push de los avisos de audiolibros (#69): el
         // service worker que genera Workbox carga además public/push-sw.js.
-        // Solo en /kokito mientras los audiolibros sean de prueba.
-        importScripts: kokito ? ['kokito-sw.js'] : [],
-        globIgnores: kokito ? [] : ['kokito-sw.js'],
+        // En las dos desde que los audiolibros pasaron a producción.
+        importScripts: ['kokito-sw.js'],
         // Nada de /api ni /uploads en la caché del shell: son datos vivos del
         // backend compartido con la Puchi anterior, y servirlos de una caché
         // vieja daría estanterías desactualizadas sin que se note.

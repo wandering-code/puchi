@@ -16,7 +16,7 @@ import PantallaInferior from './PantallaInferior'
 import { useHoja } from './HojaInferior'
 import { HojaSugerencia, Relacionados, useRelacionados } from './Relacionados'
 import { useDeshacerAlta } from './deshacerAlta'
-import { ES_KOKITO } from '../../platform/variante'
+import { CON_AUDIOLIBROS } from '../../platform/variante'
 import BloqueAudiolibro from '../kokito/escuchar/BloqueAudiolibro'
 
 // Distribución tomada de la Luniteca nueva de la Puchi actual: portada grande
@@ -192,7 +192,7 @@ export default function BookDetail({
                 <StatusChip status={entry.status} />
                 {readingDatesLabel(entry) && <Chip>{readingDatesLabel(entry)}</Chip>}
                 {entry.folder && <Chip>{entry.folder}</Chip>}
-                {etiquetaFormato(entry, ES_KOKITO) && <Chip>{etiquetaFormato(entry, ES_KOKITO)}</Chip>}
+                {etiquetaFormato(entry, CON_AUDIOLIBROS) && <Chip>{etiquetaFormato(entry, CON_AUDIOLIBROS)}</Chip>}
                 {llevaLecturas && entry.times_read > 1 && <Chip>{entry.times_read} lecturas</Chip>}
               </>
             ) : (
@@ -228,7 +228,7 @@ export default function BookDetail({
 
           {/* El audiolibro, si lo hay: solo en tu propia ficha (escucharlo
               depende de tenerlo en tu estantería) y de momento solo en /kokito. */}
-          {ES_KOKITO && !soloLectura && <BloqueAudiolibro bookId={libro.id} abierta={abierta} />}
+          {CON_AUDIOLIBROS && !soloLectura && <BloqueAudiolibro bookId={libro.id} abierta={abierta} />}
 
           {/* Lo que se puede hacer con el libro de otro: quedárselo. */}
           {/* La key ata el botón al libro: la ficha ya no se desmonta al

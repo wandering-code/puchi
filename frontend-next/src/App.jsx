@@ -17,7 +17,7 @@ import PastillaLlamada from './screens/diskordkito/PastillaLlamada'
 import LoginScreen from './screens/LoginScreen'
 import Shell from './screens/Shell'
 import UpdatePrompt from './ui/UpdatePrompt'
-import { ES_KOKITO } from './platform/variante'
+import { CON_AUDIOLIBROS } from './platform/variante'
 import { ReproductorProvider } from './platform/reproductor'
 import { NotificacionesProvider } from './platform/notificaciones'
 import { HojaAvisos } from './screens/kokito/avisos/Avisos'
@@ -93,7 +93,7 @@ export default function App() {
                     {/* El reproductor de audiolibros, por fuera del Shell por lo
                         mismo que la llamada: sigue sonando al cambiar de
                         pantalla. De momento solo en /kokito. */}
-                    {ES_KOKITO ? (
+                    {CON_AUDIOLIBROS ? (
                       <ReproductorProvider>
                         {/* Los avisos de audiolibros (#69), dentro del
                             reproductor: tocar uno abre lo que se escucha. */}

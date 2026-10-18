@@ -1,5 +1,5 @@
 import { esAdmin } from '../platform/auth'
-import { ES_KOKITO } from '../platform/variante'
+import { CON_AUDIOLIBROS } from '../platform/variante'
 import { IconActividad, IconAudiolibro, IconAuriculares, IconBooks, IconChat, IconClub, IconEscudo, IconHome, IconSettings } from '../ui/icons'
 
 // Las secciones de la app, en un solo sitio.
@@ -128,7 +128,7 @@ export const SECCIONES = [
 // impide es el backend (`require_club_member` y `require_admin` devuelven 403).
 export function seccionesDe(player) {
   return SECCIONES.filter(s => (
-    (!s.soloClub || !!player?.club_member) && (!s.soloAdmin || esAdmin(player)) && (!s.soloKokito || ES_KOKITO)
+    (!s.soloClub || !!player?.club_member) && (!s.soloAdmin || esAdmin(player)) && (!s.soloKokito || CON_AUDIOLIBROS)
   ))
 }
 

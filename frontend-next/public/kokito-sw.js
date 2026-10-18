@@ -12,7 +12,7 @@ self.addEventListener('push', (evento) => {
   try {
     datos = evento.data ? evento.data.json() : {}
   } catch {
-    datos = { title: 'Kokito', body: evento.data ? evento.data.text() : '' }
+    datos = { title: 'Puchi', body: evento.data ? evento.data.text() : '' }
   }
   evento.waitUntil((async () => {
     // El número sobre el icono de la app (iOS 16.4+, Android, escritorio).
@@ -22,7 +22,7 @@ self.addEventListener('push', (evento) => {
         else await self.navigator.clearAppBadge()
       } catch { /* sin permiso para el globo: no pasa nada */ }
     }
-    await self.registration.showNotification(datos.title || 'Kokito', {
+    await self.registration.showNotification(datos.title || 'Puchi', {
       body: datos.body || '',
       // Uno por libro: un "nuevo capítulo" sustituye al anterior.
       tag: datos.tag,
@@ -36,7 +36,14 @@ self.addEventListener('push', (evento) => {
 
 self.addEventListener('notificationclick', (evento) => {
   evento.notification.close()
-  const url = new URL(evento.notification.data?.url || './', self.location.origin).href
+  // El servidor manda las direcciones de /kokito/. Si este service worker es
+  // el de la raíz (los audiolibros ya están en producción), se abre la raíz.
+  const destino = new URL(evento.notification.data?.url || './', self.location.origin)
+  const ambito = new URL(self.registration.scope).pathname
+  if (destino.pathname.startsWith('/kokito/') && !ambito.startsWith('/kokito/')) {
+    destino.pathname = destino.pathname.replace(/^\/kokito\//, ambito)
+  }
+  const url = destino.href
   evento.waitUntil((async () => {
     const abiertas = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
     const nuestra = abiertas.find(c => c.url.startsWith(self.registration.scope))
