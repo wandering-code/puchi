@@ -6,7 +6,7 @@ import HojaInferior from '../../luniteca/HojaInferior'
 import PantallaInferior from '../../luniteca/PantallaInferior'
 import { Cover } from '../../luniteca/piezas'
 import {
-  IconAdelante30, IconAtras30, IconCheck, IconChevron, IconLuna, IconPausa, IconPistaAnterior, IconPistaSiguiente, IconPlay,
+  IconAdelante30, IconAtras30, IconCheck, IconChevron, IconEreader, IconLuna, IconPausa, IconPistaAnterior, IconPistaSiguiente, IconPlay,
 } from '../../../ui/icons'
 import { Girando } from '../audiolibros/Audiolibros'
 import { duracion, reloj } from '../audiolibros/formato'
@@ -128,6 +128,11 @@ export default function PantallaReproductor() {
                 <Pastilla onClick={hojaDormir.abrir} activa={!!r.temporizador}>
                   <IconLuna className="h-3.5 w-3.5" />
                   <TextoDormir temporizador={r.temporizador} />
+                </Pastilla>
+                {/* El texto del capítulo, siguiendo lo que suena (#78). */}
+                <Pastilla onClick={() => r.leer(libro, cap.id)}>
+                  <IconEreader className="h-3.5 w-3.5" />
+                  Texto
                 </Pastilla>
               </div>
             </>

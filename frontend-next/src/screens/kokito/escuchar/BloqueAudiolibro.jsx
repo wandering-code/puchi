@@ -31,14 +31,43 @@ export default function BloqueAudiolibro({ bookId, abierta }) {
   }, [bookId, abierta, r])
 
   if (!r) return null
-  const hayAudio = datos && datos.id != null
+  // Con el EPUB subido llega aunque no haya nada generado (#78): entonces se
+  // puede leer, pero lo del audio sigue siendo la petición.
+  const hayAudio = datos && datos.id != null && !(datos.status === 'borrador' && !datos.chapters_ready)
   const hayPeticion = !hayAudio && peticion && (peticion.can_request || peticion.status)
+  const hayTexto = datos && datos.id != null && datos.chapters_total > 0
 
   return (
-    <AnimatePresence initial={false} mode="wait">
-      {hayAudio && <Escuchar key="audio" r={r} datos={datos} pedido={peticion?.requested} />}
-      {hayPeticion && <Peticion key="peticion" bookId={bookId} peticion={peticion} onCambio={setPeticion} />}
-    </AnimatePresence>
+    <>
+      <AnimatePresence initial={false} mode="wait">
+        {hayAudio && <Escuchar key="audio" r={r} datos={datos} pedido={peticion?.requested} />}
+        {hayPeticion && <Peticion key="peticion" bookId={bookId} peticion={peticion} onCambio={setPeticion} />}
+      </AnimatePresence>
+      {hayTexto && <Leer r={r} datos={datos} />}
+    </>
+  )
+}
+
+// Leer el libro en la app (#78).
+function Leer({ r, datos }) {
+  const leido = datos.read && datos.chapters.find(c => c.id === datos.read.chapter_id)
+  return (
+    <motion.button
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={SUAVE}
+      whileTap={{ scale: 0.98 }}
+      onClick={() => r.leer(datos)}
+      className="mt-2 flex w-full items-center gap-3 rounded-xl2 border border-line bg-surface px-3 py-2.5 text-left active:bg-surface-2"
+    >
+      <IconLibroAbierto className="h-4 w-4 shrink-0 text-ink-mute" />
+      <span className="min-w-0 flex-1">
+        <span className="block text-[13px] font-semibold leading-tight">{leido ? 'Seguir leyendo aquí' : 'Leer aquí'}</span>
+        <span className="block truncate text-[11px] text-ink-mute">
+          {leido ? `Vas por «${leido.title}»` : datos.chapters.some(c => c.synced) ? 'El texto del libro; toca una frase y suena desde ahí' : 'El texto del libro, capítulo a capítulo'}
+        </span>
+      </span>
+    </motion.button>
   )
 }
 

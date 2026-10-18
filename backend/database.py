@@ -479,6 +479,10 @@ class AudiobookProgress(Base):
     chapter_id   = Column(Integer, ForeignKey("audiobook_chapters.id", ondelete="SET NULL"), nullable=True)
     position_s   = Column(Float, nullable=False, default=0.0)
     updated_at   = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    # Por dónde va leyendo el texto en la app (#78): el capítulo y el párrafo.
+    # Aparte de lo escuchado: se puede leer por un sitio y escuchar por otro.
+    read_chapter_id = Column(Integer, ForeignKey("audiobook_chapters.id", ondelete="SET NULL"), nullable=True)
+    read_para       = Column(Integer, nullable=True)
 
 
 class AudiobookRequest(Base):

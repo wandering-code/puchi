@@ -59,6 +59,13 @@ def _suena(c: AudiobookChapter) -> bool:
     return bool(c.audio_path)
 
 
+def _con_mapa(c: AudiobookChapter) -> bool:
+    """Si se sabe en qué segundo suena cada trozo del texto: los generados
+    desde el 2026-10-18 (#71). Con eso se puede tocar una frase y que suene, y
+    resaltar la que suena (#78)."""
+    return bool(c.audio_path and isinstance(c.recipe, dict) and c.recipe.get("mapa"))
+
+
 def _porcentaje(caps: list, cap_id: Optional[int], segundo: float) -> Optional[float]:
     """Qué parte del libro va escuchada, por palabras: las de los capítulos
     de antes, más lo que va del actual (por tiempo). Por palabras y no por
@@ -165,11 +172,15 @@ def _para_escuchar(db: Session, ab: Audiobook, p: Player) -> dict:
             "generated_at": _iso(c.generated_at),
             # Lo que ocupa, para saber cuánto se va a descargar (#71).
             "size": c.audio_size,
+            "synced": _con_mapa(c),
         } for i, c in enumerate(caps)],
         "progress": {
             "chapter_id": prog.chapter_id, "position_s": prog.position_s, "updated_at": _iso(prog.updated_at),
             "percent": _porcentaje(caps, prog.chapter_id, prog.position_s),
         } if prog and prog.chapter_id else None,
+        # Por dónde va leyendo en la app (#78).
+        "read": {"chapter_id": prog.read_chapter_id, "para": prog.read_para or 0}
+        if prog and prog.read_chapter_id else None,
     }
 
 
@@ -255,8 +266,9 @@ def catalogo(db: Session = Depends(get_db), p: Player = Depends(get_current_play
 @router.get("/book/{book_id}")
 def de_un_libro(book_id: int, db: Session = Depends(get_db), p: Player = Depends(get_current_player)):
     """El audiolibro de un libro, si lo hay y si lo puede escuchar quien
-    pregunta. Sin audiolibro (o sin nada generado todavía) devuelve null: la
-    ficha del libro simplemente no enseña nada."""
+    pregunta. Sin audiolibro devuelve null: la ficha del libro simplemente no
+    enseña nada. Sin nada generado todavía también se devuelve, porque con el
+    EPUB subido ya se puede leer (#78); la ficha decide qué enseña."""
     enlace = db.query(AudiobookBook).filter(AudiobookBook.book_id == book_id).first()
     if not enlace:
         return None
@@ -265,9 +277,7 @@ def de_un_libro(book_id: int, db: Session = Depends(get_db), p: Player = Depends
     except HTTPException:
         return None
     datos = _para_escuchar(db, ab, p)
-    if datos["status"] == "borrador" and not datos["chapters_ready"]:
-        return None
-    return datos
+    return datos if datos["chapters_total"] else None
 
 
 @router.get("/{ab_id}")
@@ -288,6 +298,50 @@ def audio(ab_id: int, cap_id: int, db: Session = Depends(get_db), p: Player = De
                         headers={"Cache-Control": "private, max-age=86400"})
 
 
+@router.get("/{ab_id}/chapters/{cap_id}/text")
+def texto(ab_id: int, cap_id: int, db: Session = Depends(get_db), p: Player = Depends(get_current_player)):
+    """El texto de un capítulo para leerlo en la app (#78) y, si su audio
+    tiene mapa, en qué segundo empieza y acaba cada trozo. El texto de cada
+    trozo es el que se le mandó a Higgs (con comillas y espacios retocados): la
+    app lo casa con el texto original."""
+    _con_acceso(db, ab_id, p)
+    c = (db.query(AudiobookChapter)
+         .filter(AudiobookChapter.id == cap_id, AudiobookChapter.audiobook_id == ab_id).first())
+    if not c or not c.included:
+        raise HTTPException(status_code=404, detail="Ese capítulo no está")
+    trozos = None
+    if _con_mapa(c):
+        trozos = [{"text": t.get("texto") or "", "start": t.get("ini"), "end": t.get("fin")}
+                  for t in c.recipe["mapa"]]
+    return {"id": c.id, "title": c.title, "text": c.text, "generated_at": _iso(c.generated_at), "pieces": trozos}
+
+
+class Lectura(BaseModel):
+    chapter_id: int
+    para: int = 0
+
+
+@router.put("/{ab_id}/reading")
+def guardar_lectura(ab_id: int, cuerpo: Lectura, db: Session = Depends(get_db),
+                    p: Player = Depends(get_current_player)):
+    """Por dónde vas leyendo en la app (#78), para seguir ahí en otro
+    dispositivo. No toca lo escuchado ni la estantería."""
+    ab = _con_acceso(db, ab_id, p)
+    c = (db.query(AudiobookChapter.id)
+         .filter(AudiobookChapter.id == cuerpo.chapter_id, AudiobookChapter.audiobook_id == ab.id,
+                 AudiobookChapter.included.is_(True)).first())
+    if not c:
+        raise HTTPException(status_code=404, detail="Ese capítulo no es de este audiolibro")
+    prog = (db.query(AudiobookProgress)
+            .filter(AudiobookProgress.player_id == p.id, AudiobookProgress.audiobook_id == ab.id).first())
+    if not prog:
+        prog = AudiobookProgress(player_id=p.id, audiobook_id=ab.id)
+        db.add(prog)
+    prog.read_chapter_id, prog.read_para = cuerpo.chapter_id, max(0, cuerpo.para)
+    db.commit()
+    return {"ok": True}
+
+
 class Posicion(BaseModel):
     chapter_id: int
     position_s: float
@@ -304,7 +358,8 @@ async def guardar_posicion(ab_id: int, cuerpo: Posicion, db: Session = Depends(g
         raise HTTPException(status_code=404, detail="Ese capítulo no es de este audiolibro")
     prog = (db.query(AudiobookProgress)
             .filter(AudiobookProgress.player_id == p.id, AudiobookProgress.audiobook_id == ab.id).first())
-    primera_vez = prog is None
+    # Sin capítulo escuchado: la fila puede existir solo por lo leído en la app (#78).
+    primera_vez = prog is None or prog.chapter_id is None
     if not prog:
         prog = AudiobookProgress(player_id=p.id, audiobook_id=ab.id)
         db.add(prog)

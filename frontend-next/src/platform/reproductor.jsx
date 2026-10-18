@@ -31,6 +31,10 @@ export function ReproductorProvider({ children }) {
   const [t, setT] = useState(0)
   const [dur, setDur] = useState(0)
   const pantalla = useCapa()
+  // El lector del texto (#78): qué libro (datos de /listen) y por qué capítulo
+  // abrirlo. Se queda con el último aunque se cierre, para que baje entero.
+  const lector = useCapa()
+  const [lectura, setLectura] = useState(null)
   const [velocidad, ponerVelocidad] = usarPreferencia('audiolibro_velocidad', 1)
   // null | { fin: timestamp } | { capitulo: true }
   const [temporizador, setTemporizador] = useState(null)
@@ -121,6 +125,26 @@ export function ReproductorProvider({ children }) {
     guardar(true)
     cargar(actual.current.libro, c, 0, true)
   }, [cargar, guardar])
+
+  // Tocar una frase en el lector (#78): que suene desde ahí. Como cargar, va
+  // dentro del toque para que iOS deje sonar.
+  const ponerEn = useCallback((l, c, segundo) => {
+    const a = audio.current
+    if (!a || !c?.ready) return
+    if (actual.current.libro?.id === l.id && actual.current.capId === c.id && a.src) {
+      a.currentTime = segundo
+      setT(segundo)
+      if (a.paused) a.play().catch(() => {})
+    } else {
+      guardar(true)
+      cargar(l, c, segundo, true)
+    }
+  }, [cargar, guardar])
+
+  const leer = useCallback((l, capId = null) => {
+    setLectura({ libro: l, capId, vez: Date.now() })
+    lector.abrir()
+  }, [lector])
 
   const alternar = useCallback(() => {
     const a = audio.current
@@ -289,9 +313,10 @@ export function ReproductorProvider({ children }) {
   const valor = useMemo(() => ({
     libro, cap, sonando, cargando, t, dur, pantalla, velocidad, temporizador,
     abrir, elegir, alternar, saltar, buscar, siguiente, anterior, refrescar,
-    cambiarVelocidad, dormir, cerrar, recargarFuente,
+    cambiarVelocidad, dormir, cerrar, recargarFuente, ponerEn, leer, lector, lectura,
   }), [libro, cap, sonando, cargando, t, dur, pantalla, velocidad, temporizador, abrir, elegir, alternar,
-    saltar, buscar, siguiente, anterior, refrescar, cambiarVelocidad, dormir, cerrar, recargarFuente])
+    saltar, buscar, siguiente, anterior, refrescar, cambiarVelocidad, dormir, cerrar, recargarFuente,
+    ponerEn, leer, lector, lectura])
 
   return (
     <Ctx.Provider value={valor}>

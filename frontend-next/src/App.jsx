@@ -22,6 +22,7 @@ import { NotificacionesProvider } from './platform/notificaciones'
 import { HojaAvisos } from './screens/kokito/avisos/Avisos'
 import PantallaReproductor from './screens/kokito/escuchar/PantallaReproductor'
 import MiniReproductor from './screens/kokito/escuchar/MiniReproductor'
+import PantallaLectura from './screens/kokito/lectura/PantallaLectura'
 
 export default function App() {
   const { player, checking } = useAuth()
@@ -97,6 +98,7 @@ export default function App() {
                           <Shell />
                           <MiniReproductor />
                           <PantallaReproductor />
+                          <PantallaLectura />
                           <HojaAvisos />
                         </NotificacionesProvider>
                       </ReproductorProvider>

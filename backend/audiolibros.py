@@ -101,6 +101,10 @@ def migrar(engine) -> None:
         # Fase 9 (#71): retocar trozos sueltos.
         con.execute(sql("ALTER TABLE audiobook_chapters ADD COLUMN IF NOT EXISTS retoques JSON"))
         con.execute(sql("ALTER TABLE audiobook_chapters ADD COLUMN IF NOT EXISTS retoque_lease TIMESTAMP"))
+        # #78: leer el texto en la app, y por dónde vas.
+        con.execute(sql("ALTER TABLE audiobook_progress ADD COLUMN IF NOT EXISTS read_chapter_id INTEGER "
+                        "REFERENCES audiobook_chapters(id) ON DELETE SET NULL"))
+        con.execute(sql("ALTER TABLE audiobook_progress ADD COLUMN IF NOT EXISTS read_para INTEGER"))
         # Fase 6 (#68): por dónde quiere empezar quien lo pide.
         con.execute(sql("ALTER TABLE audiobook_requests ADD COLUMN IF NOT EXISTS start_page INTEGER"))
         con.execute(sql("ALTER TABLE audiobook_requests ADD COLUMN IF NOT EXISTS start_chapter VARCHAR"))
