@@ -128,7 +128,9 @@ const BLOQUES = [
   {
     id: 'movil',
     // El logo a color, algo más grande que los iconos de línea para que se lea.
+    // Su fondo no se oscurece al abrir: sobre el acento se perdía el contorno.
     Icon: () => <Logo className="h-7 w-7" />,
+    fondoFijo: true,
     titulo: 'Puchi en tu móvil',
     resumen: 'Instálala y se abre como una app más.',
     funciones: [
@@ -205,7 +207,7 @@ function Bloque({ bloque: b, orden, abierto, onAlternar }) {
       style={{ '--entra-desde': 'translateY(10px)', '--entra-dura': '300ms', '--entra-espera': `${Math.min(orden * 40, 200)}ms` }}
     >
       <button onClick={onAlternar} aria-expanded={abierto} className="flex w-full items-center gap-3 p-4 text-left">
-        <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl2 transition-colors ${abierto ? 'bg-accent text-on-accent' : 'bg-accent-soft text-accent'}`}>
+        <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl2 transition-colors ${abierto && !b.fondoFijo ? 'bg-accent text-on-accent' : 'bg-accent-soft text-accent'}`}>
           <Icon className="h-5 w-5" />
         </span>
         <span className="min-w-0 flex-1">
