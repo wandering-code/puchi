@@ -53,6 +53,7 @@ const TIPOS = [
 ]
 const TIPOS_ADMIN = [
   { id: 'adm_request', etiqueta: 'Peticiones nuevas', nota: 'Cuando alguien pide un audiolibro' },
+  { id: 'adm_request_cancelled', etiqueta: 'Peticiones anuladas', nota: 'Cuando alguien anula lo que había pedido' },
   { id: 'adm_ab_done', etiqueta: 'Audiolibro generado', nota: 'Cuando el sobremesa termina un libro entero' },
   { id: 'adm_ch_error', etiqueta: 'Capítulo que falla', nota: 'Cuando un capítulo falla todas las veces' },
 ]

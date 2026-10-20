@@ -313,17 +313,58 @@ function Peticion({ bookId, peticion, onCambio }) {
           {!rechazado && <span className="mt-1 block text-[11px] font-semibold text-accent">Cambiar</span>}
         </button>
         {status === 'pedido' && (
-          <button
-            disabled={enviando}
-            onClick={() => cambiar('DELETE')}
-            className="shrink-0 rounded-full px-2.5 py-1.5 text-xs font-medium text-ink-mute active:bg-surface-2 disabled:opacity-60"
-          >
-            {enviando ? <Girando className="h-3.5 w-3.5" /> : 'Anular'}
-          </button>
+          <BotonAnular enviando={enviando} onAnular={() => cambiar('DELETE')} />
         )}
       </div>
       {hojaDesde}
     </motion.div>
+  )
+}
+
+// «Anular» sale justo donde estaba «Pedir», y un toque de más la anulaba
+// sin darse cuenta (le pasó a Bea, 6 s después de pedirla). Ahora el primer
+// toque solo pregunta; el segundo anula, pero no si llega casi a la vez que
+// el primero (un doble toque sin querer), y si no se confirma se vuelve solo.
+const ANULAR_ESPERA = 600
+const ANULAR_VUELVE = 4000
+
+function BotonAnular({ enviando, onAnular }) {
+  const [preguntando, setPreguntando] = useState(null) // cuándo se tocó la primera vez
+  useEffect(() => {
+    if (!preguntando) return
+    const t = setTimeout(() => setPreguntando(null), ANULAR_VUELVE)
+    return () => clearTimeout(t)
+  }, [preguntando])
+
+  function tocar() {
+    if (!preguntando) return setPreguntando(Date.now())
+    if (Date.now() - preguntando < ANULAR_ESPERA) return
+    setPreguntando(null)
+    onAnular()
+  }
+
+  return (
+    <motion.button
+      layout
+      disabled={enviando}
+      onClick={tocar}
+      transition={SUAVE}
+      className={`shrink-0 overflow-hidden whitespace-nowrap rounded-full px-2.5 py-1.5 text-xs font-medium transition-colors disabled:opacity-60 ${
+        preguntando ? 'bg-danger/10 text-danger' : 'text-ink-mute active:bg-surface-2'}`}
+    >
+      <AnimatePresence initial={false} mode="popLayout">
+        <motion.span
+          key={enviando ? 'girando' : preguntando ? 'seguro' : 'anular'}
+          initial={{ opacity: 0, y: 4 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -4 }}
+          transition={{ duration: 0.15 }}
+          className="block"
+        >
+          {enviando ? <Girando className="h-3.5 w-3.5" /> : preguntando ? '¿Seguro? Anular' : 'Anular'}
+        </motion.span>
+      </AnimatePresence>
+    </motion.button>
   )
 }
 

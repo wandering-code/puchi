@@ -257,6 +257,22 @@ def admin_peticion(db: Session, r: AudiobookRequest, quien: Player) -> None:
     _repartir(db, nuevos)
 
 
+def admin_anulada(db: Session, book_id: int, quien: Player) -> None:
+    """Quien pidió un audiolibro se ha echado atrás. Sin esto, el aviso de
+    la petición se quedaba apuntando a algo que ya no está en la bandeja.
+    Hace commit."""
+    admins = [a for a in _admins(db, "adm_request_cancelled") if a != quien.id]
+    libro = db.query(Book).filter(Book.id == book_id).first()
+    if not admins or not libro:
+        return
+    nuevos = [PlayerNotice(player_id=a, kind="adm_request_cancelled", book_id=libro.id,
+                           title=f"{quien.name} anula su petición de «{libro.title}»",
+                           body="Ya no está en la bandeja de peticiones") for a in admins]
+    db.add_all(nuevos)
+    db.commit()
+    _repartir(db, nuevos)
+
+
 def admin_si_terminado(db: Session, ab_id: int) -> None:
     """Si con este capítulo ya está todo generado, avisa una vez. Hace commit."""
     caps = (db.query(AudiobookChapter)

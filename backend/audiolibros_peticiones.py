@@ -363,6 +363,12 @@ def anular(book_id: int, db: Session = Depends(get_db), p: Player = Depends(get_
             raise HTTPException(status_code=409, detail="Este libro ya tiene audiolibro")
         db.delete(mia)
         db.commit()
+        try:
+            from avisos_audiolibros import admin_anulada
+            admin_anulada(db, book_id, p)
+        except Exception as e:
+            db.rollback()
+            print(f"[avisos] no se pudo avisar al admin de la anulación: {e!r}", flush=True)
     return _de_un_libro(db, book_id, p)
 
 
