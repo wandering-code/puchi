@@ -25,7 +25,8 @@ import { SelectorSeparacion, usarSeparacion } from './luniteca/separacion'
 import { usarLomosTorcidos } from './luniteca/Lomos'
 import { usarPreferencia, usarTema } from '../platform/preferencias'
 import { cambiarDeTema } from '../platform/tema'
-import { IconExit, IconLuna, IconMenu, IconPaw, IconSol } from '../ui/icons'
+import { IconExit, IconLuna, IconMenu, IconSol } from '../ui/icons'
+import Logo from '../ui/Logo'
 // El catálogo de secciones y quién puede ver cada una vive aparte: lo comparten
 // el menú, la guía de Inicio y el selector de pantalla de arranque de Ajustes.
 import { SECCIONES, puedeVer, seccionesDe } from './secciones'
@@ -149,7 +150,6 @@ function usarPantallaDeArranque(location) {
 
 function TopBar({ titulo, onAbrirMenu }) {
   const { player } = useAuth()
-  const { version } = useVersion()
   return (
     <header className="relative z-20 shrink-0 border-b border-line bg-bg/85 backdrop-blur-xl pt-safe">
       <div className="flex h-14 items-center gap-3 px-3">
@@ -180,15 +180,11 @@ function TopBar({ titulo, onAbrirMenu }) {
               {titulo}
             </motion.p>
           </AnimatePresence>
-          {/* El commit, aquí a la vista mientras se está trasteando: evita
-              entrar en Ajustes cada vez para saber si el móvil ya tiene el
-              código nuevo. Fuera cuando esto se asiente. */}
-          <p className="truncate font-mono text-[10px] leading-none text-ink-mute/70">
-            {/* En /kokito, a la vista siempre: es la misma app que la normal y
-                sin esto no hay forma de saber en cuál se está. */}
-            {ES_KOKITO && <span className="font-sans font-semibold uppercase tracking-[0.14em] text-accent">Kokito · </span>}
-            {version}
-          </p>
+          {/* En /kokito, a la vista siempre: es la misma app que la normal y
+              sin esto no hay forma de saber en cuál se está. */}
+          {ES_KOKITO && (
+            <p className="truncate text-[10px] font-semibold uppercase leading-none tracking-[0.14em] text-accent">Kokito</p>
+          )}
         </div>
 
         {/* Solo el avatar: quién eres se ve al desplegar el menú, y el nombre
@@ -282,10 +278,9 @@ function MenuLateral({ abierto, onCerrar, onNavegar }) {
         }}
       >
       <div className="flex items-center gap-3 px-5 py-5">
-        <IconPaw className="h-7 w-7 text-accent" />
+        <Logo className="h-9 w-9" />
         <div className="min-w-0">
           <p className="font-display text-xl font-semibold leading-none tracking-[-0.02em]">Puchi</p>
-          <p className="mt-1 text-[10px] uppercase tracking-[0.18em] text-ink-mute">Versión nueva</p>
         </div>
       </div>
 

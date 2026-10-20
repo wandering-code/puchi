@@ -6,6 +6,7 @@ import { usarPreferencia } from '../../platform/preferencias'
 import { CON_AUDIOLIBROS } from '../../platform/variante'
 import { seccionesDe } from '../secciones'
 import MuestraDeVoz from '../kokito/escuchar/MuestraDeVoz'
+import Logo from '../../ui/Logo'
 import {
   IconActividad, IconArrow, IconAuriculares, IconBooks, IconCampana, IconChat, IconChevron, IconClub, IconPaw,
   IconSettings,
@@ -158,7 +159,7 @@ export default function Inicio() {
     <div className="py-6">
       <header className="mb-6">
         <div className="flex items-center gap-2.5">
-          <IconPaw className="h-7 w-7 shrink-0 text-accent" />
+          <Logo className="h-8 w-8 shrink-0" />
           <h2 className="font-display text-[1.75rem] font-bold leading-none tracking-[-0.02em]">
             Hola, {player?.name}
           </h2>

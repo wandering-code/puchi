@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { useAuth } from '../platform/auth'
 import { api } from '../platform/api'
-import { IconArrow, IconPaw } from '../ui/icons'
+import { IconArrow } from '../ui/icons'
+import Logo from '../ui/Logo'
 import Registro from './Registro'
 import { ES_KOKITO } from '../platform/variante'
 
@@ -80,7 +81,7 @@ export default function LoginScreen() {
               animate={{ scale: 1, rotate: 0 }}
               transition={{ type: 'spring', stiffness: 260, damping: 18, delay: 0.1 }}
             >
-              <IconPaw className="h-14 w-14 text-accent" />
+              <Logo className="h-16 w-16" />
             </motion.div>
             <div className="text-center">
               <h1 className="font-display text-[3.25rem] font-bold leading-none tracking-[-0.03em]">Puchi</h1>

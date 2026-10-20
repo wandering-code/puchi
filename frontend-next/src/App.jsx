@@ -17,6 +17,7 @@ import PastillaLlamada from './screens/diskordkito/PastillaLlamada'
 import LoginScreen from './screens/LoginScreen'
 import Shell from './screens/Shell'
 import UpdatePrompt from './ui/UpdatePrompt'
+import Logo from './ui/Logo'
 import { CON_AUDIOLIBROS } from './platform/variante'
 import { ReproductorProvider } from './platform/reproductor'
 import { NotificacionesProvider } from './platform/notificaciones'
@@ -133,20 +134,8 @@ function Splash() {
         animate={{ transform: ['scale(1)', 'scale(1.08)', 'scale(1)'], opacity: [0.5, 1, 0.5] }}
         transition={{ duration: 1.6, repeat: Infinity, ease: 'easeInOut' }}
       >
-        <PawMark className="h-10 w-10 text-accent" />
+        <Logo className="h-12 w-12" />
       </motion.div>
     </motion.div>
-  )
-}
-
-function PawMark({ className }) {
-  return (
-    <svg viewBox="0 0 64 64" className={className} fill="currentColor" aria-hidden="true">
-      <ellipse cx="32" cy="40" rx="16" ry="13" />
-      <ellipse cx="13" cy="26" rx="7" ry="8.5" transform="rotate(-18 13 26)" />
-      <ellipse cx="51" cy="26" rx="7" ry="8.5" transform="rotate(18 51 26)" />
-      <ellipse cx="22" cy="12" rx="6" ry="7.5" transform="rotate(-8 22 12)" />
-      <ellipse cx="42" cy="12" rx="6" ry="7.5" transform="rotate(8 42 12)" />
-    </svg>
   )
 }
