@@ -8,7 +8,7 @@ import { seccionesDe } from '../secciones'
 import MuestraDeVoz from '../kokito/escuchar/MuestraDeVoz'
 import Logo from '../../ui/Logo'
 import {
-  IconActividad, IconArrow, IconAuriculares, IconBooks, IconCampana, IconChat, IconChevron, IconClub, IconPaw,
+  IconActividad, IconArrow, IconAuriculares, IconBooks, IconCampana, IconChat, IconChevron, IconClub,
   IconSettings,
 } from '../../ui/icons'
 
@@ -127,7 +127,8 @@ const BLOQUES = [
   },
   {
     id: 'movil',
-    Icon: IconPaw,
+    // El logo a color, algo más grande que los iconos de línea para que se lea.
+    Icon: () => <Logo className="h-7 w-7" />,
     titulo: 'Puchi en tu móvil',
     resumen: 'Instálala y se abre como una app más.',
     funciones: [

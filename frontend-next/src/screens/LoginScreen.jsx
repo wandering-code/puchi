@@ -87,7 +87,7 @@ export default function LoginScreen() {
               <h1 className="font-display text-[3.25rem] font-bold leading-none tracking-[-0.03em]">Puchi</h1>
               {/* Versalitas espaciadas: a este tamaño un texto normal se lee
                   como una nota al pie: espaciado, se lee como parte de la marca. */}
-              <p className="mt-3 text-[11px] uppercase tracking-[0.22em] text-ink-mute">{ES_KOKITO ? 'Kokito · audiolibros' : 'Versión nueva'}</p>
+              {ES_KOKITO && <p className="mt-3 text-[11px] uppercase tracking-[0.22em] text-ink-mute">Kokito · audiolibros</p>}
             </div>
           </Fade>
 
