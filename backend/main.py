@@ -3572,7 +3572,14 @@ def get_activity_feed(
     # (proposed/voted) se oculta a quien no es club_member. player_id filtra
     # el feed a uno solo (barra de miembros de Amigos), sin tocar la
     # paginación de los demás.
-    base_query = db.query(Activity)
+    #
+    # Solo la de cuentas activas: al desactivar a alguien su actividad deja de
+    # verse, y al reactivarlo vuelve tal cual. No se borra nada.
+    base_query = (
+        db.query(Activity)
+        .join(Player, Activity.player_id == Player.id)
+        .filter(Player.status == "approved")
+    )
     if not current.club_member:
         base_query = base_query.filter(Activity.event_type.notin_(CLUB_ACTIVITY_EVENT_TYPES))
     if player_id is not None:

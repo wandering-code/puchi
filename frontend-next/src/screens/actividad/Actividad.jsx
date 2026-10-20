@@ -20,7 +20,8 @@ import { CON_AUDIOLIBROS } from '../../platform/variante'
 //
 // El backend ya decide qué se ve: /activity/feed devuelve la actividad de
 // estantería a cualquiera y esconde lo del club (propuestas y votos) a quien
-// no es socio. Aquí no hay que filtrar nada.
+// no es socio, y solo la de cuentas activas (/players, igual). Aquí no hay
+// que filtrar nada.
 
 const POR_PAGINA = 50
 
@@ -155,14 +156,26 @@ export default function Actividad() {
     return () => { vigente = false }
   }, [cargar])
 
-  useEffect(() => {
+  const cargarJugadores = useCallback(() => {
     api('/players').then(setJugadores).catch(() => {})
   }, [])
+  useEffect(cargarJugadores, [cargarJugadores])
 
   // Lo que pasa en otro dispositivo aparece aquí sin recargar, igual que en la
   // estantería: cualquier cambio de estantería deja rastro en el feed.
   const refrescar = useCallback(() => { cargar(0).catch(() => {}) }, [cargar])
   useLiveUpdates(['shelf'], refrescar)
+  // Activar o desactivar una cuenta en Administración: su actividad aparece o
+  // desaparece al momento, y su cara en la barra de arriba también.
+  const alCambiarCuentas = useCallback(() => {
+    cargarJugadores()
+    refrescar()
+  }, [cargarJugadores, refrescar])
+  useLiveUpdates(['players'], alCambiarCuentas)
+  // Si se desactiva justo la persona por la que se filtra, fuera el filtro.
+  useEffect(() => {
+    if (filtro && jugadores.length > 0 && !jugadores.some(j => j.id === filtro.id)) setFiltro(null)
+  }, [filtro, jugadores])
 
   const otros = jugadores.filter(j => j.id !== player?.id)
 
