@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { api } from '../../../platform/api'
 import { useCapa } from '../../../platform/capas'
@@ -9,6 +9,8 @@ import { Girando } from '../audiolibros/Audiolibros'
 import { duracion, reloj } from '../audiolibros/formato'
 import { Ecualizador } from './PantallaReproductor'
 import MuestraDeVoz from './MuestraDeVoz'
+import { tf } from '../../../ui/transformar'
+import Desplegable from '../../../ui/Desplegable'
 
 // En la ficha de un libro de tu estantería (/kokito):
 // - si tiene audiolibro, para escucharlo (fase 3, #65);
@@ -65,7 +67,7 @@ function BotonLeer({ r, datos }) {
   const etiqueta = leido ? `Seguir leyendo: «${leido.title}»` : 'Leer el libro aquí'
   return (
     <motion.button
-      whileTap={{ scale: 0.9 }}
+      whileTap={{ transform: tf({ scale: 0.9 }) }}
       onClick={() => r.leer(datos)}
       aria-label={etiqueta}
       title={etiqueta}
@@ -137,8 +139,8 @@ function Escuchar({ r, datos, pedido, leer }) {
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 6 }}
-      animate={{ opacity: 1, y: 0 }}
+      initial={{ opacity: 0, transform: tf({ y: 6 }) }}
+      animate={{ opacity: 1, transform: tf({ y: 0 }) }}
       exit={{ opacity: 0 }}
       transition={SUAVE}
       className="mt-6 w-full"
@@ -158,7 +160,7 @@ function Escuchar({ r, datos, pedido, leer }) {
         {leer && <BotonLeer r={r} datos={datos} />}
         {hayAlgo && (
           <motion.button
-            whileTap={{ scale: 0.9 }}
+            whileTap={{ transform: tf({ scale: 0.9 }) }}
             onClick={play}
             aria-label={sonando ? 'Pausa' : guardado ? 'Seguir escuchando' : 'Escuchar'}
             className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent text-on-accent shadow-sm"
@@ -167,15 +169,8 @@ function Escuchar({ r, datos, pedido, leer }) {
           </motion.button>
         )}
       </div>
-      <AnimatePresence initial={false}>
-        {noCoincide && capLectura && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={SUAVE}
-            className="overflow-hidden"
-          >
+      <Desplegable abierto={!!(noCoincide && capLectura)}>
+        <div className="overflow-hidden">
             <div className="mt-2 flex items-center gap-3 rounded-xl2 border border-line bg-surface px-3 py-2.5 text-left">
               <IconLibroAbierto className="h-4 w-4 shrink-0 text-ink-mute" />
               <span className="min-w-0 flex-1 text-xs leading-snug text-ink-dim">
@@ -195,9 +190,8 @@ function Escuchar({ r, datos, pedido, leer }) {
                 <span className="shrink-0 text-[11px] text-ink-mute">Aún no está listo</span>
               )}
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          </div>
+      </Desplegable>
     </motion.div>
   )
 }
@@ -283,7 +277,7 @@ function Peticion({ bookId, peticion, onCambio }) {
   // importante de la ficha. Una vez pedido toma el color del audiolibro.
   if (!status) {
     return (
-      <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={SUAVE} className="mt-6 w-full">
+      <motion.div initial={{ opacity: 0, transform: tf({ y: 6 }) }} animate={{ opacity: 1, transform: tf({ y: 0 }) }} exit={{ opacity: 0 }} transition={SUAVE} className="mt-6 w-full">
         <div className="flex items-center gap-3 rounded-xl3 border border-dashed border-line p-3 text-left">
           <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-surface-2 text-ink-dim">
             <IconAuriculares className="h-5 w-5" />
@@ -295,7 +289,7 @@ function Peticion({ bookId, peticion, onCambio }) {
             </span>
           </span>
           <motion.button
-            whileTap={{ scale: 0.94 }}
+            whileTap={{ transform: tf({ scale: 0.94 }) }}
             disabled={enviando}
             onClick={() => hoja.abrir()}
             className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-accent-line bg-accent-soft px-3.5 text-xs font-semibold text-accent disabled:opacity-70"
@@ -316,7 +310,7 @@ function Peticion({ bookId, peticion, onCambio }) {
   const nota = error || (rechazado ? (peticion.reason || t.nota) : deseo ? `${deseo} · ${base}` : base)
 
   return (
-    <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={SUAVE} className="mt-6 w-full">
+    <motion.div initial={{ opacity: 0, transform: tf({ y: 6 }) }} animate={{ opacity: 1, transform: tf({ y: 0 }) }} exit={{ opacity: 0 }} transition={SUAVE} className="mt-6 w-full">
       <div className={`flex items-center gap-3 rounded-xl3 border p-3 text-left ${
         rechazado ? 'border-line bg-surface-2/60' : 'border-accent-line bg-accent-soft/50'}`}
       >
@@ -361,6 +355,24 @@ function BotonAnular({ enviando, onAnular }) {
     return () => clearTimeout(t)
   }, [preguntando])
 
+  // El fondo rojo crece desde la derecha al preguntar: el botón cambia de
+  // ancho de golpe y una capa de fondo se estira desde el ancho de antes
+  // (scaleX, FLIP), en vez de `layout` de Motion, que lo hacía en JavaScript
+  // (a 60 en Safari).
+  const boton = useRef(null)
+  const fondo = useRef(null)
+  const anchoAntes = useRef(null)
+  if (boton.current) anchoAntes.current = boton.current.offsetWidth
+  useLayoutEffect(() => {
+    const b = boton.current
+    const f = fondo.current
+    const antes = anchoAntes.current
+    if (!b || !f || !antes || antes === b.offsetWidth) return
+    f.animate([{ transform: `scaleX(${antes / b.offsetWidth})` }, { transform: 'none' }], {
+      duration: SUAVE.duration * 1000, easing: `cubic-bezier(${SUAVE.ease.join(', ')})`,
+    })
+  }, [preguntando, enviando])
+
   function tocar() {
     if (!preguntando) return setPreguntando(Date.now())
     if (Date.now() - preguntando < ANULAR_ESPERA) return
@@ -369,27 +381,32 @@ function BotonAnular({ enviando, onAnular }) {
   }
 
   return (
-    <motion.button
-      layout
+    <button
+      ref={boton}
       disabled={enviando}
       onClick={tocar}
-      transition={SUAVE}
-      className={`shrink-0 overflow-hidden whitespace-nowrap rounded-full px-2.5 py-1.5 text-xs font-medium transition-colors disabled:opacity-60 ${
-        preguntando ? 'bg-danger/10 text-danger' : 'text-ink-mute active:bg-surface-2'}`}
+      className={`relative shrink-0 whitespace-nowrap rounded-full px-2.5 py-1.5 text-xs font-medium disabled:opacity-60 ${
+        preguntando ? 'text-danger' : 'text-ink-mute active:bg-surface-2'}`}
     >
+      <span
+        ref={fondo}
+        aria-hidden
+        className="absolute inset-0 origin-right rounded-full bg-danger/10"
+        style={{ opacity: preguntando ? 1 : 0, transition: 'opacity 0.2s ease' }}
+      />
       <AnimatePresence initial={false} mode="popLayout">
         <motion.span
           key={enviando ? 'girando' : preguntando ? 'seguro' : 'anular'}
-          initial={{ opacity: 0, y: 4 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -4 }}
+          initial={{ opacity: 0, transform: tf({ y: 4 }) }}
+          animate={{ opacity: 1, transform: tf({ y: 0 }) }}
+          exit={{ opacity: 0, transform: tf({ y: -4 }) }}
           transition={{ duration: 0.15 }}
-          className="block"
+          className="relative block"
         >
           {enviando ? <Girando className="h-3.5 w-3.5" /> : preguntando ? '¿Seguro? Anular' : 'Anular'}
         </motion.span>
       </AnimatePresence>
-    </motion.button>
+    </button>
   )
 }
 
@@ -446,7 +463,7 @@ function HojaDesde({ peticion, abierta, onCerrar, onGuardar }) {
       onCerrar={onCerrar}
       pie={
         <motion.button
-          whileTap={{ scale: 0.98 }}
+          whileTap={{ transform: tf({ scale: 0.98 }) }}
           onClick={guardar}
           disabled={!vale || enviando}
           className="flex h-12 flex-1 items-center justify-center gap-2 rounded-xl2 bg-accent text-sm font-semibold text-on-accent disabled:opacity-50"
@@ -475,15 +492,8 @@ function HojaDesde({ peticion, abierta, onCerrar, onGuardar }) {
                   {activa && <span className="h-1.5 w-1.5 rounded-full bg-on-accent" />}
                 </span>
               </button>
-              <AnimatePresence initial={false}>
-                {activa && o.id !== 'principio' && (
-                  <motion.div
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: 'auto', opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    transition={SUAVE}
-                    className="overflow-hidden"
-                  >
+              <Desplegable abierto={!!(activa && o.id !== 'principio')}>
+                <div className="overflow-hidden">
                     <div className="px-3.5 pb-3.5">
                       {o.id === 'pagina' ? (
                         <>
@@ -511,9 +521,8 @@ function HojaDesde({ peticion, abierta, onCerrar, onGuardar }) {
                         />
                       )}
                     </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
+                  </div>
+              </Desplegable>
             </div>
           )
         })}

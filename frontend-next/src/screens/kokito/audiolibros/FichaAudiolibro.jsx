@@ -15,6 +15,9 @@ import { Etiqueta, Girando } from './Audiolibros'
 import { duracion, duracionCorta, haceCuanto, palabras, reloj } from './formato'
 import { ESTADOS_AB, Generacion, HojaEmpezar, ReproductorCapitulo } from './Generacion'
 import RetocarTrozos from './RetocarTrozos'
+import { tf } from '../../../ui/transformar'
+import Pastilla from '../../../ui/Pastilla'
+import Lista from '../../../ui/Lista'
 
 // La ficha de un audiolibro: sus datos, la voz, con qué libros va y sus
 // capítulos. Todo lo que se toca aquí se guarda al momento; no hay botón de
@@ -130,7 +133,7 @@ export default function FichaAudiolibro({ id, onCerrar, onCambiar, onBorrar }) {
           <motion.button
             onClick={onCerrar}
             aria-label="Volver a los audiolibros"
-            whileTap={{ scale: 0.92 }}
+            whileTap={{ transform: tf({ scale: 0.92 }) }}
             className="pointer-events-auto mt-1 flex h-10 w-10 items-center justify-center rounded-full border border-line bg-surface/90 text-ink shadow-sm backdrop-blur"
           >
             <IconArrowLeft className="h-5 w-5" />
@@ -150,8 +153,8 @@ export default function FichaAudiolibro({ id, onCerrar, onCambiar, onBorrar }) {
         <AnimatePresence>
           {error && (
             <motion.p
-              initial={{ opacity: 0, y: -4 }}
-              animate={{ opacity: 1, y: 0 }}
+              initial={{ opacity: 0, transform: tf({ y: -4 }) }}
+              animate={{ opacity: 1, transform: tf({ y: 0 }) }}
               exit={{ opacity: 0 }}
               className="mt-2 rounded-xl2 bg-danger/10 px-4 py-2.5 text-sm text-danger"
             >
@@ -174,10 +177,10 @@ export default function FichaAudiolibro({ id, onCerrar, onCambiar, onBorrar }) {
             >
               <AnimatePresence initial={false} mode="popLayout">
                 {ab.books.map(libro => (
-                  <motion.div key={libro.id} layout initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.96 }} transition={SUAVE}>
+                  <motion.div key={libro.id} initial={{ opacity: 0, transform: tf({ y: -6 }) }} animate={{ opacity: 1, transform: tf({ y: 0 }) }} exit={{ opacity: 0, transform: tf({ scale: 0.96 }) }} transition={SUAVE}>
                     <FilaLibro libro={libro} enlazado>
                       <motion.button
-                        whileTap={{ scale: 0.9 }}
+                        whileTap={{ transform: tf({ scale: 0.9 }) }}
                         onClick={() => desenlazar(libro)}
                         aria-label={`Quitar ${libro.title}`}
                         className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-ink-mute active:bg-surface-2"
@@ -209,7 +212,7 @@ export default function FichaAudiolibro({ id, onCerrar, onCambiar, onBorrar }) {
               )}
 
               <motion.button
-                whileTap={{ scale: 0.98 }}
+                whileTap={{ transform: tf({ scale: 0.98 }) }}
                 onClick={hojaBuscar.abrir}
                 className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-xl2 border border-line text-sm font-medium text-ink-dim active:bg-surface-2"
               >
@@ -297,7 +300,7 @@ function Cabecera({ ab, onEditar }) {
       <h2 className="mt-5 font-display text-[1.6rem] font-bold leading-tight tracking-[-0.02em]">{ab.title}</h2>
       {ab.author && <p className="mt-1.5 text-[15px] text-ink-dim">{ab.author}</p>}
       <motion.button
-        whileTap={{ scale: 0.96 }}
+        whileTap={{ transform: tf({ scale: 0.96 }) }}
         onClick={() => onEditar()}
         className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-line px-3 py-1.5 text-xs text-ink-dim active:bg-surface-2"
       >
@@ -343,11 +346,7 @@ function Voz({ ab, onCambiar }) {
               className={`relative flex-1 rounded-[14px] py-2.5 text-sm transition-colors ${activa ? 'text-ink' : 'text-ink-dim'}`}
             >
               {activa && (
-                <motion.span
-                  layoutId={`voz-${ab.id}`}
-                  className="absolute inset-0 rounded-[14px] bg-surface shadow-sm"
-                  transition={{ type: 'spring', stiffness: 420, damping: 34 }}
-                />
+                <Pastilla grupo={`voz-${ab.id}`} className="absolute inset-0 rounded-[14px] bg-surface shadow-sm" />
               )}
               <span className="relative font-semibold">{info.nombre}</span>
               {info.nota && <span className="relative ml-1 text-xs text-ink-mute">{info.nota}</span>}
@@ -364,7 +363,7 @@ function Seccion({ titulo, nota, children }) {
     <section className="mt-9">
       <h3 className="px-1 font-display text-lg font-bold tracking-[-0.01em]">{titulo}</h3>
       {nota && <p className="mb-3 mt-0.5 px-1 text-[13px] leading-relaxed text-ink-dim">{nota}</p>}
-      <div className="space-y-2">{children}</div>
+      <Lista className="space-y-2">{children}</Lista>
     </section>
   )
 }
@@ -476,7 +475,7 @@ function BotonEnlazar({ libro, onEnlazar, yaEnlazado = false }) {
   }
   return (
     <motion.button
-      whileTap={{ scale: 0.94 }}
+      whileTap={{ transform: tf({ scale: 0.94 }) }}
       disabled={enviando}
       onClick={async () => { setEnviando(true); await onEnlazar(); setEnviando(false) }}
       className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-accent px-3.5 text-xs font-semibold text-on-accent shadow-sm disabled:opacity-70"
@@ -504,9 +503,9 @@ function FilaCapitulo({ cap, primera, onAbrir, onAlternar }) {
           {cap.status === 'generando' && (
             <span className="mt-1.5 block h-0.5 overflow-hidden rounded-full bg-surface-2">
               <motion.span
-                className="block h-full rounded-full bg-accent"
+                className="block h-full w-full rounded-full bg-accent"
                 initial={false}
-                animate={{ width: `${cap.progress * 100}%` }}
+                animate={{ transform: `translateX(${cap.progress * 100 - 100}%)` }}
                 transition={{ type: 'spring', stiffness: 120, damping: 24 }}
               />
             </span>
@@ -526,14 +525,14 @@ function FilaCapitulo({ cap, primera, onAbrir, onAlternar }) {
           animate={{
             backgroundColor: cap.included ? 'var(--color-accent)' : 'rgba(0,0,0,0)',
             borderColor: cap.included ? 'var(--color-accent)' : 'var(--color-line)',
-            scale: cap.included ? 1 : 0.92,
+            transform: tf({ scale: cap.included ? 1 : 0.92 }),
           }}
           transition={{ type: 'spring', stiffness: 520, damping: 30 }}
           className="flex h-6 w-6 items-center justify-center rounded-full border-[1.5px] text-on-accent"
         >
           <AnimatePresence initial={false}>
             {cap.included && (
-              <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }} transition={{ duration: 0.15 }}>
+              <motion.span initial={{ transform: tf({ scale: 0 }) }} animate={{ transform: tf({ scale: 1 }) }} exit={{ transform: tf({ scale: 0 }) }} transition={{ duration: 0.15 }}>
                 <IconCheck className="h-3.5 w-3.5" />
               </motion.span>
             )}
@@ -699,7 +698,7 @@ function HojaCapitulo({ ab, cap, abierta, onCerrar, onAplicar }) {
 
       {cap.included && (cap.status === 'listo' || cap.status === 'error') && (
         <motion.button
-          whileTap={{ scale: 0.98 }}
+          whileTap={{ transform: tf({ scale: 0.98 }) }}
           onClick={() => onAplicar(api(`/audiobooks/${ab.id}/chapters/${cap.id}/regenerate`, { method: 'POST' }))}
           className="mt-3 flex w-full items-center gap-3 rounded-xl2 border border-line px-4 py-3 text-left active:bg-surface-2"
         >
@@ -722,7 +721,7 @@ function HojaCapitulo({ ab, cap, abierta, onCerrar, onAplicar }) {
 
       {siguiente && (
         <motion.button
-          whileTap={{ scale: 0.98 }}
+          whileTap={{ transform: tf({ scale: 0.98 }) }}
           onClick={unir}
           disabled={uniendo}
           className="mt-3 flex w-full items-center gap-3 rounded-xl2 border border-line px-4 py-3 text-left active:bg-surface-2 disabled:opacity-60"
@@ -785,7 +784,7 @@ function HojaDatos({ ab, abierta, onCerrar, onGuardar }) {
       onCerrar={onCerrar}
       pie={
         <motion.button
-          whileTap={{ scale: 0.98 }}
+          whileTap={{ transform: tf({ scale: 0.98 }) }}
           onClick={guardar}
           disabled={!titulo.trim()}
           className="h-12 flex-1 rounded-xl2 bg-accent text-sm font-semibold text-on-accent disabled:opacity-50"

@@ -262,7 +262,7 @@ export function precargarColores(urls) {
 // para que un libro se sienta como ESE libro y no como una fila más.
 //
 // Llega después (hay que descargar la portada y mirarla), así que la tarjeta
-// nace neutra y se tiñe con una transición (TARJETA_TENIDA) en vez de dar un
+// nace neutra y se tiñe con un fundido (ver TinteDePortada) en vez de dar un
 // salto de color. Si la portada es de un sitio que no deja leer sus píxeles
 // (Google Books), se queda neutra: esto es un adorno, no puede romper nada.
 export function usarTinteDePortada(url) {
@@ -280,5 +280,6 @@ export function usarTinteDePortada(url) {
   }
 }
 
-// La caja de esas tarjetas, con la transición del tinte.
-export const TARJETA_TENIDA = 'rounded-xl2 border border-line bg-surface transition-[background-color,border-color] duration-300'
+// La caja de esas tarjetas. El tinte va en una capa aparte (TinteDePortada),
+// que aparece con un fundido de opacidad.
+export const TARJETA_TENIDA = 'relative isolate rounded-xl2 border border-line bg-surface'

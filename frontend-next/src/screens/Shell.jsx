@@ -1,7 +1,8 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
-import { AnimatePresence, animate, motion, useMotionValue } from 'motion/react'
+import { AnimatePresence, motion, useMotionValue } from 'motion/react'
+import { cortar, volverASuSitio } from '../ui/volver'
 import { useAuth } from '../platform/auth'
 import { useVersion } from '../platform/version'
 import { isIOS, isStandalone, safeInsets } from '../platform/pwa'
@@ -32,6 +33,8 @@ import Logo from '../ui/Logo'
 import { SECCIONES, puedeVer, seccionesDe } from './secciones'
 import { useChat } from '../platform/chat'
 import { usePendientes } from '../platform/pendientes'
+import { tf } from '../ui/transformar'
+import Pastilla from '../ui/Pastilla'
 
 export default function Shell() {
   const location = useLocation()
@@ -211,6 +214,8 @@ function MenuLateral({ abierto, onCerrar, onNavegar }) {
   // Lo que se ha arrastrado el panel. Si se cerró arrastrando, se quedó donde
   // se soltó: vuelve a su sitio al abrirse, con el panel aún fuera.
   const arrastreX = useMotionValue(0)
+  const capaArrastre = useRef(null)
+  const vueltaX = useRef(null)
   useLayoutEffect(() => { if (abierto) arrastreX.set(0) }, [abierto, arrastreX])
   // El panel se queda SIEMPRE montado y solo se mueve. Montarlo y desmontarlo
   // con AnimatePresence salía medido: la primera apertura de cada sesión
@@ -258,7 +263,10 @@ function MenuLateral({ abierto, onCerrar, onNavegar }) {
       >
       <motion.div
         className="flex h-full flex-col border-r border-line bg-surface pt-safe pb-safe pl-safe"
+        ref={capaArrastre}
         style={{ x: arrastreX }}
+        // Antes que Motion lea dónde empieza el arrastre (fase de captura).
+        onPointerDownCapture={() => cortar(capaArrastre.current, arrastreX, vueltaX.current, 'x')}
         // Arrastrar hacia la izquierda para cerrarlo: es como se cierra un
         // panel así en cualquier app del móvil, y sin ello hay que apuntar
         // al velo con el pulgar. Solo hacia la izquierda (right: 0), para
@@ -274,7 +282,7 @@ function MenuLateral({ abierto, onCerrar, onNavegar }) {
           // capa se queda donde se soltó y es la de fuera la que se lleva el
           // panel desde ahí (sin salto); si no, vuelve a su sitio.
           if (info.offset.x < -70 || info.velocity.x < -420) onCerrar()
-          else animate(arrastreX, 0, { type: 'spring', stiffness: 500, damping: 40 })
+          else vueltaX.current = volverASuSitio(capaArrastre.current, arrastreX, 'x')
         }}
       >
       <div className="flex items-center gap-3 px-5 py-5">
@@ -305,11 +313,7 @@ function MenuLateral({ abierto, onCerrar, onNavegar }) {
                   // transform de salida del panel. De golpe, el panel sale ya
                   // con la pastilla en su sitio y no hay dos movimientos
                   // compitiendo.
-                  <motion.span
-                    layoutId="menu-activo"
-                    className="absolute inset-0 rounded-xl2 bg-accent-soft"
-                    transition={{ duration: 0 }}
-                  />
+                  <span className="absolute inset-0 rounded-xl2 bg-accent-soft" />
                 )}
                 <Icon className={`relative h-5 w-5 ${isActive ? 'text-accent' : 'text-ink-mute'}`} />
                 <span className={`relative text-[15px] ${isActive ? 'font-semibold text-accent' : 'text-ink-dim'}`}>
@@ -397,7 +401,7 @@ function Ajustes() {
       </div>
 
       <motion.button
-        whileTap={{ scale: 0.97 }}
+        whileTap={{ transform: tf({ scale: 0.97 }) }}
         onClick={logout}
         className="mt-6 flex h-12 w-full items-center justify-center gap-2 rounded-xl2 border border-line text-danger"
       >
@@ -444,7 +448,7 @@ function BotonDeTema() {
   }
   return (
     <motion.button
-      whileTap={{ scale: 0.92 }}
+      whileTap={{ transform: tf({ scale: 0.92 }) }}
       onClick={cambiar}
       aria-label={oscuro ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
       className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent"
@@ -499,11 +503,7 @@ function PantallaDeInicio() {
             >
               <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-colors ${activa ? 'border-accent bg-accent' : 'border-line'}`}>
                 {activa && (
-                  <motion.span
-                    layoutId="inicio-elegida"
-                    className="h-2 w-2 rounded-full bg-on-accent"
-                    transition={{ type: 'spring', stiffness: 420, damping: 34 }}
-                  />
+                  <Pastilla grupo="inicio-elegida" className="h-2 w-2 rounded-full bg-on-accent" />
                 )}
               </span>
               <Icon className={`h-[18px] w-[18px] shrink-0 ${activa ? 'text-accent' : 'text-ink-mute'}`} />

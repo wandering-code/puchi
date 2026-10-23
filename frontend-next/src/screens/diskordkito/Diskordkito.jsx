@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { AnimatePresence, motion } from 'motion/react'
+import { AnimatePresence } from 'motion/react'
 import { useAuth } from '../../platform/auth'
 import { nombreDeCanal, useChat } from '../../platform/chat'
 import { useCapa } from '../../platform/capas'
@@ -9,6 +9,7 @@ import Avatar from '../../ui/Avatar'
 import { IconChat, IconClub } from '../../ui/icons'
 import { PuntoConectado, hora } from './piezas'
 import Conversacion from './Conversacion'
+import Desplegable from '../../ui/Desplegable'
 
 // Diskordkito, rehecho.
 //
@@ -119,18 +120,11 @@ export default function Diskordkito() {
         />
       )}
 
-      <AnimatePresence>
-        {error && (
-          <motion.p
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            className="px-1 py-2 text-sm text-danger"
-          >
+      <Desplegable abierto={!!error}>
+        <p className="px-1 py-2 text-sm text-danger">
             {error}
-          </motion.p>
-        )}
-      </AnimatePresence>
+          </p>
+      </Desplegable>
 
       {gente.length === 0 ? (
         <p className="px-1 py-6 text-sm leading-relaxed text-ink-mute">

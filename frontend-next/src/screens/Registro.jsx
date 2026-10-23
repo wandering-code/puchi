@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import { AnimatePresence, motion } from 'motion/react'
+import { motion } from 'motion/react'
 import { IconArrow, IconCheck, IconPlus } from '../ui/icons'
+import { tf } from '../ui/transformar'
+import Desplegable from '../ui/Desplegable'
 
 // Crear cuenta, sin pasar por la Puchi actual.
 //
@@ -206,23 +208,16 @@ export default function Registro({ onVolver }) {
         />
       </div>
 
-      <AnimatePresence>
-        {error && (
-          <motion.p
-            className="mt-3 px-1 text-sm text-danger"
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-          >
+      <Desplegable abierto={!!error}>
+        <p className="mt-3 px-1 text-sm text-danger">
             {error}
-          </motion.p>
-        )}
-      </AnimatePresence>
+          </p>
+      </Desplegable>
 
       <motion.button
         type="submit"
         disabled={enviando}
-        whileTap={{ scale: 0.97 }}
+        whileTap={{ transform: tf({ scale: 0.97 }) }}
         className="mt-5 flex h-14 w-full items-center justify-center gap-2 rounded-xl2 bg-accent text-base font-semibold text-on-accent shadow-[0_10px_30px_-10px_var(--color-accent)] transition-colors disabled:bg-surface-2 disabled:text-ink-mute disabled:shadow-none"
       >
         {enviando ? 'Creando…' : 'Crear cuenta'}

@@ -7,6 +7,8 @@ import Avatar from '../../ui/Avatar'
 import { LLEGADA, SALIDA } from '../../ui/curvas'
 import { IconColgar, IconEncoger, IconMicro, IconMicroOff, IconVideoCamara, IconVideoCamaraOff } from '../../ui/icons'
 import { Cronometro, Video } from './Llamada'
+import { tf } from '../../ui/transformar'
+import Lista from '../../ui/Lista'
 
 // La llamada del club, en dos modos:
 //
@@ -138,7 +140,7 @@ export default function LlamadaGrupo() {
             </div>
             <motion.button
               onClick={encoger}
-              whileTap={{ scale: 0.9 }}
+              whileTap={{ transform: tf({ scale: 0.9 }) }}
               aria-label="Seguir en Puchi con la llamada en marcha"
               className="pointer-events-auto mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur"
             >
@@ -183,7 +185,10 @@ function Repartida({ ids, datosDe, conVideo, onElegir }) {
   return (
     <div className="absolute inset-0 p-2">
       <div ref={medir} className="flex h-full w-full items-center justify-center">
-        <div
+        {/* Al entrar o salir alguien, los cuadros se recolocan (y cambian de
+            tamaño) suaves: ver ui/Lista. */}
+        <Lista
+          escalar
           className="flex flex-wrap content-center items-center justify-center"
           style={{
             gap: HUECO,
@@ -199,7 +204,7 @@ function Repartida({ ids, datosDe, conVideo, onElegir }) {
               onTocar={() => onElegir(id)}
             />
           ))}
-        </div>
+        </Lista>
       </div>
     </div>
   )
@@ -222,11 +227,11 @@ function ConPrimerPlano({ id, ids, datosDe, conVideo, onElegir, onVolverAReparti
       {/* La fila, flotando sobre el vídeo y por encima de los mandos. Sin barra
           propia: antes ocupaba su franja y, con poca gente, era un desierto. */}
       <div className="pointer-events-none absolute inset-x-0 bottom-24 z-10 overflow-x-auto px-3">
-        <div className="pointer-events-auto flex items-end justify-center gap-2">
+        <Lista className="pointer-events-auto flex items-end justify-center gap-2">
           {resto.map(o => (
             <Cuadro key={o} {...datosDe(o)} conVideo={conVideo} onTocar={() => onElegir(o)} ancho={78} />
           ))}
-        </div>
+        </Lista>
       </div>
     </div>
   )
@@ -244,9 +249,7 @@ function Cuadro({
 
   return (
     <Etiqueta
-      {...(onTocar ? { onClick: onTocar, whileTap: { scale: 0.97 } } : {})}
-      layout
-      transition={{ type: 'spring', stiffness: 380, damping: 32 }}
+      {...(onTocar ? { onClick: onTocar, whileTap: { transform: tf({ scale: 0.97 }) } } : {})}
       aria-label={onTocar ? `Poner a ${mio ? 'ti' : persona?.name} en primer plano` : undefined}
       style={
         ancho ? { width: ancho, height: ancho / 0.75 }
@@ -286,8 +289,10 @@ function OndaHablando() {
       {[0, 0.15, 0.3].map(retraso => (
         <motion.span
           key={retraso}
-          className="w-[2.5px] rounded-full bg-read"
-          animate={{ height: [4, 11, 4] }}
+          // Alto fijo y escala, desde abajo: animar el alto va en el hilo
+          // principal (a 60 en Safari); la escala, en la GPU.
+          className="h-[11px] w-[2.5px] origin-bottom rounded-full bg-read"
+          animate={{ transform: tf({ scaleY: [4 / 11, 1, 4 / 11] }) }}
           transition={{ duration: 0.7, repeat: Infinity, delay: retraso, ease: 'easeInOut' }}
         />
       ))}
@@ -309,7 +314,7 @@ function Mandos({ conVideo, mudo, sinCamara, onMudo, onCamara, onSalir }) {
         )}
         <motion.button
           onClick={onSalir}
-          whileTap={{ scale: 0.9 }}
+          whileTap={{ transform: tf({ scale: 0.9 }) }}
           aria-label="Salir de la llamada"
           style={{ background: ROJO_COLGAR }}
           className="ml-1 flex h-12 w-12 items-center justify-center rounded-full text-white"
@@ -325,7 +330,7 @@ function Mando({ activo, onClick, etiqueta, children }) {
   return (
     <motion.button
       onClick={onClick}
-      whileTap={{ scale: 0.9 }}
+      whileTap={{ transform: tf({ scale: 0.9 }) }}
       aria-label={etiqueta}
       aria-pressed={!activo}
       className={`flex h-12 w-12 items-center justify-center rounded-full transition-colors ${

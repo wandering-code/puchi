@@ -56,7 +56,7 @@ export default function MuestraDeVoz({ className = '' }) {
         <p className="text-[13px] font-semibold leading-tight text-ink">Escucha cómo suena</p>
         <p className="text-[11px] text-ink-dim">Un fragmento con la voz de los audiolibros · 24 s</p>
         <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-surface">
-          <div className="h-full rounded-full bg-accent transition-[width] duration-200" style={{ width: `${pct}%` }} />
+          <div className="h-full w-full rounded-full bg-accent transition-transform duration-200" style={{ transform: `translateX(${pct - 100}%)` }} />
         </div>
       </div>
     </div>

@@ -6,6 +6,8 @@ import { Cover } from '../../luniteca/piezas'
 import { IconAuriculares, IconCheck, IconPausa, IconPlay, IconPlus } from '../../../ui/icons'
 import { Girando } from '../audiolibros/Audiolibros'
 import { capitulos, duracion } from '../audiolibros/formato'
+import { tf } from '../../../ui/transformar'
+import Lista from '../../../ui/Lista'
 
 // Escuchar (#74): todos los audiolibros que ya se pueden escuchar, estén o
 // no en tu estantería. Los avisos solo le llegan a quien pidió cada uno
@@ -74,9 +76,9 @@ function Grupo({ titulo, nota, children }) {
     <section className="mb-7">
       <h3 className="px-1 font-display text-lg font-bold tracking-[-0.01em]">{titulo}</h3>
       {nota && <p className="mt-0.5 px-1 text-[13px] text-ink-dim">{nota}</p>}
-      <div className="mt-3 space-y-2.5">
+      <Lista className="mt-3 space-y-2.5">
         <AnimatePresence initial={false} mode="popLayout">{children}</AnimatePresence>
-      </div>
+      </Lista>
     </section>
   )
 }
@@ -134,7 +136,7 @@ function Tarjeta({ a, r, onCambio }) {
   }
 
   return (
-    <motion.div layout initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.97 }} transition={ENTRA}>
+    <motion.div initial={{ opacity: 0, transform: tf({ y: 6 }) }} animate={{ opacity: 1, transform: tf({ y: 0 }) }} exit={{ opacity: 0, transform: tf({ scale: 0.97 }) }} transition={ENTRA}>
       <div className={`flex items-center gap-3.5 rounded-xl2 border p-3 ${
         sonando ? 'border-accent-line bg-accent-soft/40' : 'border-line bg-surface'} shadow-[0_1px_0_rgb(var(--color-sombra)/0.04)]`}
       >
@@ -156,7 +158,7 @@ function Tarjeta({ a, r, onCambio }) {
         </button>
         {a.mine ? (
           <motion.button
-            whileTap={{ scale: 0.9 }}
+            whileTap={{ transform: tf({ scale: 0.9 }) }}
             onClick={play}
             aria-label={sonando ? 'Pausa' : 'Escuchar'}
             className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent text-on-accent shadow-sm"
@@ -165,7 +167,7 @@ function Tarjeta({ a, r, onCambio }) {
           </motion.button>
         ) : (
           <motion.button
-            whileTap={{ scale: 0.94 }}
+            whileTap={{ transform: tf({ scale: 0.94 }) }}
             disabled={ocupado}
             onClick={anadir}
             className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-accent-line bg-accent-soft px-3 text-xs font-semibold text-accent disabled:opacity-70"

@@ -10,6 +10,8 @@ import BookDetail from '../luniteca/BookDetail'
 import { copiarAMiEstanteria } from '../luniteca/shelf'
 import { IconBooks, IconFilter } from '../../ui/icons'
 import { CON_AUDIOLIBROS } from '../../platform/variante'
+import { tf } from '../../ui/transformar'
+import Lista from '../../ui/Lista'
 
 // Lo que va pasando en las estanterías de todos: quién añade, empieza o
 // termina un libro.
@@ -230,15 +232,14 @@ export default function Actividad() {
       )}
 
       <AnimatePresence initial={false}>
-        <div className="space-y-2.5">
+        <Lista className="space-y-2.5">
           {items?.map(item => {
             const tuyo = item.player?.id === player?.id
             return (
               <motion.button
                 key={item.id}
-                layout="position"
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
+                initial={{ opacity: 0, transform: tf({ y: 6 }) }}
+                animate={{ opacity: 1, transform: tf({ y: 0 }) }}
                 transition={{ duration: 0.18 }}
                 onClick={() => abrirElLibro(item, tuyo)}
                 className={`flex w-full gap-3 rounded-xl2 border p-3 text-left transition-[transform,opacity] active:scale-[0.99] ${abriendo === item.id ? 'opacity-60' : ''} ${tuyo ? 'border-accent/30 bg-accent/5' : 'border-line bg-surface'}`}
@@ -265,7 +266,7 @@ export default function Actividad() {
               </motion.button>
             )
           })}
-        </div>
+        </Lista>
       </AnimatePresence>
 
       {enFicha && (

@@ -1,5 +1,6 @@
 import { useRef } from 'react'
-import { animate, useMotionValue } from 'motion/react'
+import { useMotionValue } from 'motion/react'
+import { cortar, volverASuSitio } from './volver'
 
 // Cerrar una capa tirando de ella hacia abajo, con el gesto puesto SOLO en su
 // asa y no en el panel entero.
@@ -15,12 +16,18 @@ import { animate, useMotionValue } from 'motion/react'
 // contenido se desplaza con normalidad.
 export function useArrastreParaCerrar(onCerrar, { umbral = 100, velocidadMin = 500 } = {}) {
   const y = useMotionValue(0)
+  // Lo que se mueve (quien usa esto le pone `ref={arrastre.panel}`), para que
+  // la vuelta la anime el navegador (ver ui/volver.js).
+  const panel = useRef(null)
+  const vuelta = useRef(null)
   const inicioY = useRef(null)
   const inicioT = useRef(0)
 
   function alEmpezar(ev) {
     try { ev.currentTarget.setPointerCapture(ev.pointerId) } catch { /* el navegador puede negarlo */ }
-    inicioY.current = ev.clientY
+    cortar(panel.current, y, vuelta.current)
+    // Cogido a medio volver: se sigue desde donde se ve.
+    inicioY.current = ev.clientY - y.get()
     inicioT.current = performance.now()
   }
   function alMover(ev) {
@@ -35,11 +42,12 @@ export function useArrastreParaCerrar(onCerrar, { umbral = 100, velocidadMin = 5
     inicioY.current = null
     // Distancia O velocidad: un tirón corto y rápido también cierra.
     if (recorrido > umbral || velocidad > velocidadMin) onCerrar()
-    else animate(y, 0, { type: 'spring', stiffness: 500, damping: 40 })
+    else vuelta.current = volverASuSitio(panel.current, y)
   }
 
   return {
     y,
+    panel,
     // Se reparten sobre el asa. touch-action:none ahí es inofensivo: el asa no
     // scrollea nada.
     asa: {

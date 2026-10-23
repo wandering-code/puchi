@@ -5,6 +5,8 @@ import { useAuth } from '../../platform/auth'
 import { useLiveUpdates } from '../../platform/live'
 import { EditableRating, StarRating } from '../luniteca/piezas'
 import Avatar, { NombreJugador } from '../../ui/Avatar'
+import { tf } from '../../ui/transformar'
+import { Aparece } from '../../ui/Desplegable'
 
 // Lo que le pareció a cada uno. No hay secreto ni "revelar": cada puntuación
 // se ve en cuanto se pone, y se puede cambiar siempre. (El modelo del backend
@@ -71,8 +73,8 @@ export default function Puntuaciones({ entradaId, onCambiado }) {
           {media != null && (
             <motion.span
               key={media}
-              initial={{ opacity: 0, y: -3 }}
-              animate={{ opacity: 1, y: 0 }}
+              initial={{ opacity: 0, transform: tf({ y: -3 }) }}
+              animate={{ opacity: 1, transform: tf({ y: 0 }) }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
               className="rounded-full bg-accent-soft px-2 py-0.5 text-xs font-semibold tabular-nums text-accent"
@@ -102,15 +104,7 @@ export default function Puntuaciones({ entradaId, onCambiado }) {
 
         <AnimatePresence initial={false}>
           {otros.map(v => (
-            <motion.div
-              key={v.player.id}
-              layout
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
-              className="overflow-hidden border-t border-line"
-            >
+            <Aparece key={v.player.id} className="border-t border-line">
               <div className="flex items-center justify-between gap-3 px-4 py-2.5">
                 <div className="flex min-w-0 items-center gap-2">
                   <Avatar jugador={v.player} size={22} />
@@ -118,7 +112,7 @@ export default function Puntuaciones({ entradaId, onCambiado }) {
                 </div>
                 <StarRating rating={v.rating} size={13} className="shrink-0" />
               </div>
-            </motion.div>
+            </Aparece>
           ))}
         </AnimatePresence>
       </div>

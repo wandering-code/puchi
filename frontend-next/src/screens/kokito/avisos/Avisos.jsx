@@ -11,6 +11,7 @@ import HojaInferior from '../../luniteca/HojaInferior'
 import { Cover } from '../../luniteca/piezas'
 import { IconCampana } from '../../../ui/icons'
 import { haceCuanto } from '../audiolibros/formato'
+import { tf } from '../../../ui/transformar'
 
 // La campana de la barra de arriba y la hoja con los avisos (fase 7, #69).
 
@@ -28,9 +29,9 @@ export function Campana() {
         {n.sinLeer > 0 && (
           <motion.span
             key="numero"
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            exit={{ scale: 0 }}
+            initial={{ transform: tf({ scale: 0 }) }}
+            animate={{ transform: tf({ scale: 1 }) }}
+            exit={{ transform: tf({ scale: 0 }) }}
             transition={{ type: 'spring', stiffness: 520, damping: 26 }}
             className="absolute right-1 top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-accent px-1 text-[10px] font-bold tabular-nums text-on-accent ring-2 ring-bg"
           >
@@ -173,7 +174,7 @@ function EnEsteMovil({ abierta }) {
         {nota || 'Te llegará una notificación al móvil cuando tu audiolibro se pueda escuchar.'}
       </p>
       <motion.button
-        whileTap={{ scale: 0.97 }}
+        whileTap={{ transform: tf({ scale: 0.97 }) }}
         disabled={ocupado}
         onClick={() => hacer(async () => setEstado(await activarPush()))}
         className="mt-3 inline-flex h-10 items-center gap-2 rounded-xl2 bg-accent px-4 text-sm font-semibold text-on-accent shadow-sm disabled:opacity-70"

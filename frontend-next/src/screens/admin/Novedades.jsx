@@ -132,7 +132,7 @@ function TarjetaAviso({ aviso: a, abierto, onAlternar, onEditar, onCambio, onBor
           </span>
           <span className="mt-2.5 flex items-center gap-2.5">
             <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-2">
-              <span className="block h-full rounded-full bg-accent transition-[width] duration-500" style={{ width: `${pct}%` }} />
+              <span className="block h-full w-full rounded-full bg-accent transition-transform duration-500" style={{ transform: `translateX(${pct - 100}%)` }} />
             </span>
             <span className="shrink-0 text-[11px] tabular-nums text-ink-dim">
               {a.total ? `${a.accepted} de ${a.total} lo han visto` : 'No va a nadie'}

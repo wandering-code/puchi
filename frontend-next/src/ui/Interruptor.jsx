@@ -1,4 +1,4 @@
-import { motion } from 'motion/react'
+import { LLEGADA, enCss } from './curvas'
 
 // Un interruptor de verdad y no un <input type="checkbox">: se toca con el
 // pulgar, se ve encendido o apagado de un vistazo y se mueve al cambiar, que
@@ -13,15 +13,18 @@ export default function Interruptor({ puesto, onCambiar, etiqueta, nota = null, 
       onClick={() => onCambiar(!puesto)}
       className="flex w-full items-center gap-3 text-left disabled:opacity-50"
     >
-      <span
-        className="flex h-6 w-10 shrink-0 items-center rounded-full p-0.5 transition-colors"
-        style={{ background: puesto ? 'var(--color-accent)' : 'var(--color-surface-2)' }}
-      >
-        <motion.span
-          layout
-          transition={{ type: 'spring', stiffness: 520, damping: 34 }}
-          className="h-5 w-5 rounded-full bg-surface shadow-sm"
-          style={{ marginLeft: puesto ? 'auto' : 0 }}
+      {/* Todo transform y opacity, a la frecuencia de la pantalla: la bola se
+          desliza (antes `layout` de Motion, en JavaScript, a 60 en Safari) y
+          el color encendido es una capa encima que aparece con un fundido. */}
+      <span className="relative flex h-6 w-10 shrink-0 items-center rounded-full bg-surface-2 p-0.5">
+        <span
+          aria-hidden
+          className="absolute inset-0 rounded-full bg-accent"
+          style={{ opacity: puesto ? 1 : 0, transition: `opacity ${enCss(LLEGADA)}` }}
+        />
+        <span
+          className="relative h-5 w-5 rounded-full bg-surface shadow-sm"
+          style={{ transform: puesto ? 'translateX(16px)' : 'none', transition: `transform ${enCss(LLEGADA)}` }}
         />
       </span>
       <span className="min-w-0">

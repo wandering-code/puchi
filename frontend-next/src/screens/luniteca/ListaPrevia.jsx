@@ -1,11 +1,14 @@
 import { memo, useMemo, useState } from 'react'
-import { AnimatePresence, motion } from 'motion/react'
+import { motion } from 'motion/react'
 import { Cover } from './piezas'
-import { TARJETA_TENIDA, usarTinteDePortada } from './colorPortada'
+import { TARJETA_TENIDA } from './colorPortada'
 import { CamposFecha } from './editores'
 import { TamanoLibro } from './BookEditForm'
 import { FORMATO_LABEL, STATUS_LABEL } from './shelf'
 import { IconCheck, IconChevron, IconX } from '../../ui/icons'
+import { tf } from '../../ui/transformar'
+import Desplegable from '../../ui/Desplegable'
+import TinteDePortada from './TinteDePortada'
 
 // Revisar antes de importar. Es el paso común a las tres formas de traer
 // libros en bloque —el CSV de Goodreads, una hoja de cálculo cualquiera y el
@@ -68,7 +71,7 @@ export default function ListaPrevia({
         <motion.button
           onClick={onImportar}
           disabled={enviando || nuevas === 0}
-          whileTap={{ scale: 0.98 }}
+          whileTap={{ transform: tf({ scale: 0.98 }) }}
           className="h-12 w-full rounded-xl2 bg-accent text-[15px] font-semibold text-on-accent disabled:opacity-60"
         >
           {enviando
@@ -99,10 +102,9 @@ const Fila = memo(function Fila({ fila, incluida, abierta, onAlternar, onAbrir, 
 
   // Con el color de su portada, como en la búsqueda (#85). Las portadas van
   // llegando mientras se completan los datos, y cada tarjeta se tiñe sola.
-  const tinte = usarTinteDePortada(fila.cover_url)
-
   return (
-    <div style={tinte} className={`${TARJETA_TENIDA} p-3 ${incluida ? '' : 'opacity-55'}`}>
+    <div className={`${TARJETA_TENIDA} p-3 ${incluida ? '' : 'opacity-55'}`}>
+      <TinteDePortada url={fila.cover_url} />
       <div className="flex items-start gap-3">
         <button
           onClick={onAlternar}
@@ -143,19 +145,11 @@ const Fila = memo(function Fila({ fila, incluida, abierta, onAlternar, onAbrir, 
         </button>
       </div>
 
-      <AnimatePresence initial={false}>
-        {abierta && (
-          <motion.div
-            className="overflow-hidden"
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
-          >
+      <Desplegable abierto={!!abierta}>
+        <div className="overflow-hidden">
             <Editor fila={fila} onParche={onParche} generos={generos} carpetas={carpetas} />
-          </motion.div>
-        )}
-      </AnimatePresence>
+          </div>
+      </Desplegable>
     </div>
   )
 })

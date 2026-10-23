@@ -8,6 +8,7 @@ import SelectorLomo from './SelectorLomo'
 import { MM_MAX, MM_MIN, TAMANOS, medidas, usarAnchoLomo } from './Lomos'
 import { IconRefresh, IconX } from '../../ui/icons'
 import BotonPeligro from '../../ui/BotonPeligro'
+import { tf } from '../../ui/transformar'
 
 // Editar los datos del LIBRO: título, autor, género, año, páginas, sinopsis y
 // portada. Son datos compartidos con todo el club (PATCH /books/{id}), a
@@ -110,7 +111,7 @@ export default function BookEditForm({ entry, generos, onGuardar, onCancelar, on
       <div className="mt-3 flex items-end gap-4">
         <motion.button
           onClick={portada.abrir}
-          whileTap={{ scale: 0.96 }}
+          whileTap={{ transform: tf({ scale: 0.96 }) }}
           className="w-24 shrink-0"
           aria-label="Cambiar la portada"
         >
@@ -118,7 +119,7 @@ export default function BookEditForm({ entry, generos, onGuardar, onCancelar, on
         </motion.button>
         <motion.button
           onClick={lomo.abrir}
-          whileTap={{ scale: 0.96 }}
+          whileTap={{ transform: tf({ scale: 0.96 }) }}
           className="shrink-0 overflow-hidden rounded-sm bg-surface-2"
           style={{ width: anchoLomo, height: altoLomo }}
           aria-label="Cambiar el lomo"
@@ -203,7 +204,7 @@ export default function BookEditForm({ entry, generos, onGuardar, onCancelar, on
         <motion.button
           onClick={guardar}
           disabled={guardando}
-          whileTap={{ scale: 0.98 }}
+          whileTap={{ transform: tf({ scale: 0.98 }) }}
           className="h-12 flex-1 rounded-xl2 bg-accent text-[15px] font-semibold text-on-accent disabled:opacity-60"
         >
           {guardando ? 'Guardando…' : 'Guardar'}

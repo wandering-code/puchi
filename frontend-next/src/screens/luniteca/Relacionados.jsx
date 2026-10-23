@@ -7,6 +7,8 @@ import { Cover } from './piezas'
 import { IconCheck } from '../../ui/icons'
 import HojaInferior from './HojaInferior'
 import { useDeshacerAlta } from './deshacerAlta'
+import { tf } from '../../ui/transformar'
+import { Aparece } from '../../ui/Desplegable'
 
 // Libros relacionados con el de la ficha (issue #7): la saga entera, en
 // orden y con este libro señalado, y más libros del mismo autor. Sirven
@@ -215,20 +217,11 @@ function ReservaSaga() {
   )
 }
 
-// Aparecer y desaparecer abriendo su hueco poco a poco, no de golpe: lo que
-// hay debajo baja acompañando en vez de saltar.
+// Aparecer y desaparecer abriendo su hueco: lo que hay debajo baja
+// acompañando en vez de saltar. Con el telón de ui/Desplegable (transform y
+// opacity, a la frecuencia de la pantalla), no animando la altura.
 function Desplegable({ children }) {
-  return (
-    <motion.div
-      initial={{ height: 0, opacity: 0 }}
-      animate={{ height: 'auto', opacity: 1 }}
-      exit={{ height: 0, opacity: 0 }}
-      transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
-      className="overflow-hidden"
-    >
-      {children}
-    </motion.div>
-  )
+  return <Aparece>{children}</Aparece>
 }
 
 // Fila de portadas que se desliza de lado y llega hasta el borde de la
@@ -361,7 +354,7 @@ function Sugerencia({ s, onElegir, etiqueta, linea, refNodo }) {
       <motion.button
         onClick={() => !actual && onElegir(s)}
         disabled={actual}
-        whileTap={actual ? undefined : { scale: 0.96 }}
+        whileTap={actual ? undefined : { transform: tf({ scale: 0.96 }) }}
         aria-label={actual ? `${s.title} (este libro)` : s.title}
         className="block w-full text-left"
       >

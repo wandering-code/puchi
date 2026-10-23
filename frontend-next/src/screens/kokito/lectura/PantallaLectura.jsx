@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { AnimatePresence, motion } from 'motion/react'
+import { motion } from 'motion/react'
 import { api } from '../../../platform/api'
 import { useCapa } from '../../../platform/capas'
 import { usarPreferencia } from '../../../platform/preferencias'
@@ -16,6 +16,7 @@ import {
   Ecualizador, HojaDormir, HojaVelocidad, Pastilla, PastillaIcono, formatoVelocidad, textoDormir,
 } from '../escuchar/PantallaReproductor'
 import { arreglar, caracterDe, casar, fraseEn, segundoDe, trocear } from './sincro'
+import { tf } from '../../../ui/transformar'
 
 // Leer el libro en la app (#78). Para quien tenga el libro en su estantería y
 // el EPUB esté subido, tenga audio o no.
@@ -240,7 +241,7 @@ export default function PantallaLectura() {
           <motion.button
             onClick={cerrar}
             aria-label="Cerrar la lectura"
-            whileTap={{ scale: 0.92 }}
+            whileTap={{ transform: tf({ scale: 0.92 }) }}
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-line bg-surface text-ink"
           >
             <IconChevron className="h-5 w-5" />
@@ -252,7 +253,7 @@ export default function PantallaLectura() {
           <motion.button
             onClick={() => ponerLetra((letra + 1) % LETRAS.length)}
             aria-label="Tamaño de la letra"
-            whileTap={{ scale: 0.92 }}
+            whileTap={{ transform: tf({ scale: 0.92 }) }}
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-line bg-surface font-serif text-ink"
           >
             <span className="text-[13px]">A</span><span className="text-[17px]">a</span>
@@ -260,7 +261,7 @@ export default function PantallaLectura() {
           <motion.button
             onClick={hojaCapitulos.abrir}
             aria-label="Capítulos"
-            whileTap={{ scale: 0.92 }}
+            whileTap={{ transform: tf({ scale: 0.92 }) }}
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-line bg-surface text-ink"
           >
             <IconList className="h-[18px] w-[18px]" />
@@ -310,7 +311,7 @@ export default function PantallaLectura() {
         )}
         {datos && sig && (
           <motion.button
-            whileTap={{ scale: 0.98 }}
+            whileTap={{ transform: tf({ scale: 0.98 }) }}
             onClick={() => { guardar(true); setCapId(sig.id); setSeguir(false) }}
             className="mt-12 flex w-full items-center gap-3 rounded-xl2 border border-line bg-surface px-4 py-3.5 text-left active:bg-surface-2"
           >

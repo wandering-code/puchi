@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
+import { tf } from './transformar'
 
 // Lo que no tiene vuelta atrás: borrar un libro de la estantería, borrar una
 // sesión del club, borrar la cuenta de alguien.
@@ -102,7 +103,7 @@ export function IconoPeligro({ etiqueta, onConfirmar, children }) {
   return (
     <motion.button
       onClick={alPulsar}
-      whileTap={{ scale: 0.9 }}
+      whileTap={{ transform: tf({ scale: 0.9 }) }}
       aria-label={confirmando ? `Confirmar: ${etiqueta}` : etiqueta}
       title={confirmando ? '¿Seguro?' : etiqueta}
       animate={{ opacity: confirmando && !armado ? 0.45 : 1 }}

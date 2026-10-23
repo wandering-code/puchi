@@ -5,6 +5,7 @@ import Avatar from '../../../ui/Avatar'
 import { IconCheck, IconPausa, IconPlay } from '../../../ui/icons'
 import { Girando } from './Audiolibros'
 import { duracion, reloj } from './formato'
+import { tf } from '../../../ui/transformar'
 export { ESTADOS_AB } from './formato'
 
 // La generación de un audiolibro (fase 2, #64 de puchi): en qué va, si el
@@ -64,9 +65,10 @@ export function Generacion({ ab, sobremesa, onGenerar, onPausar, onRetener, onRe
         {/* La barra de todo el libro: lo hecho, y encima lo que va del actual. */}
         <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-surface-2">
           <motion.div
-            className="h-full rounded-full bg-accent"
+            className="h-full w-full rounded-full bg-accent"
             initial={false}
-            animate={{ width: `${Math.max(pct * 100, ab.chapters_ready ? 2 : 0)}%` }}
+            // Corrida y no estirada: ver ProgressBar (luniteca/piezas.jsx).
+            animate={{ transform: `translateX(${Math.max(pct * 100, ab.chapters_ready ? 2 : 0) - 100}%)` }}
             transition={{ type: 'spring', stiffness: 120, damping: 24 }}
           />
         </div>
@@ -79,9 +81,9 @@ export function Generacion({ ab, sobremesa, onGenerar, onPausar, onRetener, onRe
           {actual ? (
             <motion.div
               key={`actual-${actual.id}`}
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -4 }}
+              initial={{ opacity: 0, transform: tf({ y: 6 }) }}
+              animate={{ opacity: 1, transform: tf({ y: 0 }) }}
+              exit={{ opacity: 0, transform: tf({ y: -4 }) }}
               className="mt-3.5 rounded-xl2 bg-accent-soft/60 px-3.5 py-3"
             >
               <div className="flex items-center gap-2.5">
@@ -91,9 +93,9 @@ export function Generacion({ ab, sobremesa, onGenerar, onPausar, onRetener, onRe
               </div>
               <div className="mt-2 h-1 overflow-hidden rounded-full bg-surface/70">
                 <motion.div
-                  className="h-full rounded-full bg-accent"
+                  className="h-full w-full rounded-full bg-accent"
                   initial={false}
-                  animate={{ width: `${actual.progress * 100}%` }}
+                  animate={{ transform: `translateX(${actual.progress * 100 - 100}%)` }}
                   transition={{ type: 'spring', stiffness: 120, damping: 24 }}
                 />
               </div>
@@ -130,7 +132,7 @@ export function Generacion({ ab, sobremesa, onGenerar, onPausar, onRetener, onRe
           <div className="mt-4 flex items-center gap-3">
             {retenido ? (
               <motion.button
-                whileTap={{ scale: 0.97 }}
+                whileTap={{ transform: tf({ scale: 0.97 }) }}
                 onClick={onReanudar}
                 className={`flex h-11 flex-1 items-center justify-center gap-2 rounded-xl2 text-sm font-semibold ${
                   actual ? 'border border-line text-ink-dim active:bg-surface-2' : 'bg-accent text-on-accent shadow-sm'}`}
@@ -142,7 +144,7 @@ export function Generacion({ ab, sobremesa, onGenerar, onPausar, onRetener, onRe
                 <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-mute">Pausar</p>
                 <div className="flex gap-2">
                   <motion.button
-                    whileTap={{ scale: 0.97 }}
+                    whileTap={{ transform: tf({ scale: 0.97 }) }}
                     onClick={() => onRetener(false)}
                     className="flex min-h-11 flex-1 flex-col items-center justify-center rounded-xl2 border border-line px-2 py-1.5 text-sm font-semibold text-ink active:bg-surface-2"
                   >
@@ -150,7 +152,7 @@ export function Generacion({ ab, sobremesa, onGenerar, onPausar, onRetener, onRe
                     <span className="text-[10px] font-normal text-ink-mute">no empieza el siguiente</span>
                   </motion.button>
                   <motion.button
-                    whileTap={{ scale: 0.97 }}
+                    whileTap={{ transform: tf({ scale: 0.97 }) }}
                     onClick={() => onRetener(true)}
                     className="flex min-h-11 flex-1 flex-col items-center justify-center rounded-xl2 border border-line px-2 py-1.5 text-sm font-semibold text-ink active:bg-surface-2"
                   >
@@ -161,7 +163,7 @@ export function Generacion({ ab, sobremesa, onGenerar, onPausar, onRetener, onRe
               </div>
             ) : enMarcha ? (
               <motion.button
-                whileTap={{ scale: 0.97 }}
+                whileTap={{ transform: tf({ scale: 0.97 }) }}
                 onClick={() => onRetener(false)}
                 className="flex h-11 flex-1 items-center justify-center gap-2 rounded-xl2 border border-line text-sm font-semibold text-ink-dim active:bg-surface-2"
               >
@@ -169,7 +171,7 @@ export function Generacion({ ab, sobremesa, onGenerar, onPausar, onRetener, onRe
               </motion.button>
             ) : (
               <motion.button
-                whileTap={{ scale: 0.97 }}
+                whileTap={{ transform: tf({ scale: 0.97 }) }}
                 onClick={onGenerar}
                 disabled={!faltan.length}
                 className="flex h-11 flex-1 items-center justify-center gap-2 rounded-xl2 bg-accent text-sm font-semibold text-on-accent shadow-sm disabled:opacity-50"
@@ -244,7 +246,7 @@ export function HojaEmpezar({ ab, abierta, onCerrar, onGenerar }) {
       onCerrar={onCerrar}
       pie={
         <motion.button
-          whileTap={{ scale: 0.98 }}
+          whileTap={{ transform: tf({ scale: 0.98 }) }}
           onClick={generar}
           disabled={!cap || enviando}
           className="flex h-12 min-w-0 flex-1 items-center justify-center gap-2 rounded-xl2 bg-accent px-4 text-sm font-semibold text-on-accent disabled:opacity-60"
@@ -362,7 +364,7 @@ export function ReproductorCapitulo({ src, duracionS, irA = null, onTiempo = nul
         onLoadedMetadata={e => Number.isFinite(e.currentTarget.duration) && setDur(e.currentTarget.duration)}
       />
       <motion.button
-        whileTap={{ scale: 0.9 }}
+        whileTap={{ transform: tf({ scale: 0.9 }) }}
         onClick={alternar}
         aria-label={sonando ? 'Pausa' : 'Escuchar'}
         className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-on-accent shadow-sm"

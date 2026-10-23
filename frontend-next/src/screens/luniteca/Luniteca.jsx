@@ -15,7 +15,7 @@ import {
 import HojaFiltros from './HojaFiltros'
 import AnadirLibro from './AnadirLibro'
 import Lomos from './Lomos'
-import { precargarColores, usarTinteDePortada } from './colorPortada'
+import { precargarColores } from './colorPortada'
 import { precargarProporciones } from './proporcionLomo'
 import { generarYSubirLomo } from './generarLomo'
 import { usarVuelo } from './usarVuelo'
@@ -25,6 +25,12 @@ import { LLEGADA, enCss } from '../../ui/curvas'
 import { useHoja } from './HojaInferior'
 import { useCapa } from '../../platform/capas'
 import { usarLibrosConAudio } from '../kokito/escuchar/librosConAudio'
+import { tf } from '../../ui/transformar'
+import Desplegable from '../../ui/Desplegable'
+import TinteDePortada from './TinteDePortada'
+
+// La de los paneles del sistema (LLEGADA en ui/curvas.js), para el campo de buscar.
+const CURVA_BUSCAR = 'cubic-bezier(0.32, 0.72, 0, 1)'
 
 const VISTAS = [['grid', IconGrid, 'Cuadrícula'], ['list', IconList, 'Lista'], ['lomos', IconLomos, 'Estantería']]
 
@@ -598,51 +604,73 @@ export function Herramientas({
           </motion.div>
 
           {/* Crece desde la lupa, que es de donde sale, en vez de encenderse
-              sin más. Lo que se anima es el ANCHO, con lo de dentro recortado:
-              escalarlo (el primer intento) estiraba el texto del campo, que
-              salía aplastado y se iba estirando hasta su sitio.
+              sin más. Escalar la caja entera (el primer intento) estiraba el
+              texto del campo, y animar el ANCHO (el segundo) va en el hilo
+              principal, a 60 en Safari. Ahora la caja son tres piezas: los dos
+              extremos redondos no cambian de forma, el del final se desliza
+              (translate) y el tramo de en medio se estira (scaleX, una raya
+              horizontal estirada no se deforma). Lo de dentro llega con un
+              fundido. Todo transform y opacity, en la GPU, a la frecuencia de
+              la pantalla. El ancho lo da la propia barra (100cqw).
               Puede animarse a gusto porque aquí ya no se construye nada: el
               campo vive montado y solo se enciende y se apaga. */}
-          <motion.div
-            className="absolute inset-y-0 left-0 flex min-w-0 items-center gap-2 overflow-hidden rounded-xl2 border border-line bg-surface"
-            initial={false}
-            animate={{ width: buscando ? '100%' : 40, opacity: buscando ? 1 : 0 }}
-            transition={{
-              width: { duration: 0.24, ease: [0.32, 0.72, 0, 1] },
-              // La opacidad va por delante al abrir y por detrás al cerrar, para
-              // que no se vea la caja vacía ni al empezar ni al acabar.
-              opacity: { duration: 0.14, delay: buscando ? 0 : 0.08 },
+          <div
+            className="absolute inset-y-0 left-0 right-0 [container-type:inline-size]"
+            style={{
+              pointerEvents: buscando ? 'auto' : 'none',
+              // La opacidad va por delante al abrir y por detrás al cerrar,
+              // para que no se vea la caja vacía ni al empezar ni al acabar.
+              opacity: buscando ? 1 : 0,
+              transition: `opacity 0.14s ease ${buscando ? '0s' : '0.08s'}`,
             }}
-            style={{ pointerEvents: buscando ? 'auto' : 'none', paddingLeft: 12, paddingRight: 12 }}
             inert={!buscando}
           >
-            <input
-              ref={campo}
-              value={query}
-              onChange={e => onQuery(e.target.value)}
-              placeholder="Título o autor"
-              // Con nombre propio: ahora este campo vive siempre montado y
-              // convive con el de "añadir libro", que lleva el mismo texto de
-              // ayuda. Uno busca en TU estantería y el otro en el catálogo.
-              aria-label="Buscar en tu estantería"
-              className="h-10 w-full min-w-0 bg-transparent text-[15px] outline-none placeholder:text-ink-mute"
+            <span aria-hidden className="absolute inset-y-0 left-0 w-5 rounded-l-xl2 border border-r-0 border-line bg-surface" />
+            <span
+              aria-hidden
+              className="absolute inset-y-0 left-5 right-5 origin-left border-y border-line bg-surface"
+              style={{ transform: buscando ? 'none' : 'scaleX(0)', transition: `transform 0.24s ${CURVA_BUSCAR}` }}
             />
-            <AnimatePresence>
-              {query && (
-                <motion.button
-                  onClick={() => onQuery('')}
-                  aria-label="Limpiar"
-                  className="shrink-0 p-1 text-ink-mute"
-                  initial={{ opacity: 0, transform: 'scale(0.6)' }}
-                  animate={{ opacity: 1, transform: 'scale(1)' }}
-                  exit={{ opacity: 0, transform: 'scale(0.6)' }}
-                  transition={{ duration: 0.15 }}
-                >
-                  <IconX className="h-4 w-4" />
-                </motion.button>
-              )}
-            </AnimatePresence>
-          </motion.div>
+            <span
+              aria-hidden
+              className="absolute inset-y-0 right-0 w-5 rounded-r-xl2 border border-l-0 border-line bg-surface"
+              style={{ transform: buscando ? 'none' : 'translateX(calc(40px - 100cqw))', transition: `transform 0.24s ${CURVA_BUSCAR}` }}
+            />
+            <div
+              className="relative flex h-full min-w-0 items-center gap-2 px-3"
+              style={{
+                transform: buscando ? 'none' : 'translateX(-10px)',
+                transition: `transform 0.24s ${CURVA_BUSCAR}`,
+              }}
+            >
+              <input
+                ref={campo}
+                value={query}
+                onChange={e => onQuery(e.target.value)}
+                placeholder="Título o autor"
+                // Con nombre propio: ahora este campo vive siempre montado y
+                // convive con el de "añadir libro", que lleva el mismo texto de
+                // ayuda. Uno busca en TU estantería y el otro en el catálogo.
+                aria-label="Buscar en tu estantería"
+                className="h-10 w-full min-w-0 bg-transparent text-[15px] outline-none placeholder:text-ink-mute"
+              />
+              <AnimatePresence>
+                {query && (
+                  <motion.button
+                    onClick={() => onQuery('')}
+                    aria-label="Limpiar"
+                    className="shrink-0 p-1 text-ink-mute"
+                    initial={{ opacity: 0, transform: 'scale(0.6)' }}
+                    animate={{ opacity: 1, transform: 'scale(1)' }}
+                    exit={{ opacity: 0, transform: 'scale(0.6)' }}
+                    transition={{ duration: 0.15 }}
+                  >
+                    <IconX className="h-4 w-4" />
+                  </motion.button>
+                )}
+              </AnimatePresence>
+            </div>
+          </div>
 
           <div className="flex-1" />
 
@@ -709,7 +737,7 @@ function Cifras({ shelf, onIr }) {
       {cifras.map(c => (
         <motion.button
           key={c.estado}
-          whileTap={{ scale: 0.95 }}
+          whileTap={{ transform: tf({ scale: 0.95 }) }}
           onClick={() => onIr(c.estado)}
           aria-label={`${c.n} ${c.etiqueta || c.texto}`}
           className="inline-flex h-8 items-center gap-1.5 rounded-full border border-line bg-surface pl-2.5 pr-3 text-[13px] text-ink-dim sombra-pastilla"
@@ -764,19 +792,11 @@ function BotonHerramienta({ activo, principal, agrupado, onClick, etiqueta, clas
 // y sale se anima; nada aparece de golpe.
 export function Plegable({ abierta, children }) {
   return (
-    <AnimatePresence initial={false}>
-      {abierta && (
-        <motion.div
-          className="overflow-hidden"
-          initial={{ height: 0, opacity: 0 }}
-          animate={{ height: 'auto', opacity: 1 }}
-          exit={{ height: 0, opacity: 0 }}
-          transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
-        >
+    <Desplegable abierto={!!abierta}>
+      <div className="overflow-hidden">
           {children}
-        </motion.div>
-      )}
-    </AnimatePresence>
+        </div>
+    </Desplegable>
   )
 }
 
@@ -785,7 +805,7 @@ export function BotonPlegarAnos({ todosPlegados, onAlternar }) {
   return (
     <motion.button
       onClick={onAlternar}
-      whileTap={{ scale: 0.9 }}
+      whileTap={{ transform: tf({ scale: 0.9 }) }}
       aria-label={todosPlegados ? 'Desplegar todos los años' : 'Plegar todos los años'}
       title={todosPlegados ? 'Desplegar todos los años' : 'Plegar todos los años'}
       className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-ink-mute transition-colors active:bg-surface-2"
@@ -939,7 +959,6 @@ export const TarjetaLeyendo = memo(function TarjetaLeyendo({ entry, onAbrir, fue
   // nace neutra y se tiñe con una transición en vez de dar un salto de color.
   // Si la portada es de fuera y el navegador no deja leerla, se queda neutra:
   // esto es un adorno, no puede romper nada.
-  const tinte = usarTinteDePortada(entry.book.cover_url)
   // Páginas o porcentaje, a gusto de quien mira: un toque en la propia
   // etiqueta cambia de una a otra. Va con la cuenta, como la vista, porque es
   // la misma clase de gusto ("cómo prefiero mirar esto") y no tiene sentido
@@ -950,9 +969,9 @@ export const TarjetaLeyendo = memo(function TarjetaLeyendo({ entry, onAbrir, fue
   return (
     <button
       onClick={() => onAbrir(entry)}
-      style={tinte}
-      className={`flex w-full items-stretch gap-3 rounded-xl2 border border-line bg-surface p-3 text-left transition-[transform,background-color,border-color] duration-300 active:scale-[0.985] ${fuera ? 'invisible' : ''}`}
+      className={`relative isolate flex w-full items-stretch gap-3 rounded-xl2 border border-line bg-surface p-3 text-left transition-transform duration-300 active:scale-[0.985] ${fuera ? 'invisible' : ''}`}
     >
+      <TinteDePortada url={entry.book.cover_url} />
       <div className="w-14 shrink-0">
         <Cover url={entry.book.cover_url} priority />
       </div>
@@ -992,7 +1011,7 @@ export const TarjetaLeyendo = memo(function TarjetaLeyendo({ entry, onAbrir, fue
                   initial={false}
                   animate={{
                     opacity: porcentaje === esPorcentaje ? 1 : 0,
-                    y: porcentaje === esPorcentaje ? 0 : (esPorcentaje ? 4 : -4),
+                    transform: tf({ y: porcentaje === esPorcentaje ? 0 : (esPorcentaje ? 4 : -4) }),
                   }}
                   transition={{ duration: 0.22, ease: [0.32, 0.72, 0, 1] }}
                   aria-hidden={porcentaje !== esPorcentaje}

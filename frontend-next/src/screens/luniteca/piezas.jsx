@@ -3,6 +3,7 @@ import { motion } from 'motion/react'
 import { STATUS_COLOR, STATUS_LABEL, progressPct, totalPages } from './shelf'
 import { IconX } from '../../ui/icons'
 import { proporcionConocida, recordarProporcion } from './proporcionLomo'
+import { tf } from '../../ui/transformar'
 
 // ─── Portada ───────────────────────────────────────────────────────────────
 // Proporción de libro fija (2/3) para que la cuadrícula sea una rejilla de
@@ -160,7 +161,7 @@ export function BotonBorrarEsquina({ etiqueta = 'Borrar', onConfirmar }) {
     <motion.button
       type="button"
       onClick={alPulsar}
-      whileTap={{ scale: 0.85 }}
+      whileTap={{ transform: tf({ scale: 0.85 }) }}
       aria-label={confirmando ? `Confirmar: ${etiqueta}` : etiqueta}
       title={confirmando ? '¿Seguro?' : etiqueta}
       animate={{ opacity: confirmando && !armado ? 0.5 : 1 }}
@@ -325,10 +326,14 @@ export function ProgressBar({ entry, pct: pctProp, className = '' }) {
   const pct = pctProp ?? progressPct(entry)
   return (
     <div className={`h-1 w-full overflow-hidden rounded-full bg-surface-2 ${className}`}>
+      {/* La barra entera, corrida hacia la izquierda lo que falta: un
+          transform, que va en la GPU a la frecuencia de la pantalla (animar
+          el ancho va en el hilo principal, a 60 en Safari). La pista la
+          recorta, y la punta redonda no se deforma. */}
       <motion.div
-        className="h-full rounded-full bg-accent"
+        className="h-full w-full rounded-full bg-accent"
         initial={false}
-        animate={{ width: `${pct}%` }}
+        animate={{ transform: `translateX(${pct - 100}%)` }}
         transition={{ type: 'spring', stiffness: 260, damping: 30 }}
       />
     </div>

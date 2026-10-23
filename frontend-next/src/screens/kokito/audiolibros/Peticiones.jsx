@@ -8,6 +8,9 @@ import Avatar from '../../../ui/Avatar'
 import { IconChevron, IconEnlace, IconSubir, IconX } from '../../../ui/icons'
 import { Etiqueta, Girando } from './Audiolibros'
 import { ESTADOS_AB, haceCuanto, nombres } from './formato'
+import { tf } from '../../../ui/transformar'
+import Desplegable from '../../../ui/Desplegable'
+import Lista from '../../../ui/Lista'
 
 // La bandeja de peticiones del admin (fase 6, #68). Cada tarjeta es una
 // novela, aunque la hayan pedido varias personas con libros distintos del
@@ -107,18 +110,11 @@ export default function Peticiones({ audiolibros, version, onAbrir, onSubido }) 
         )}
       </div>
 
-      <AnimatePresence>
-        {error && (
-          <motion.p
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            className="mb-3 rounded-xl2 bg-danger/10 px-4 py-2.5 text-sm text-danger"
-          >
+      <Desplegable abierto={!!error}>
+        <p className="mb-3 rounded-xl2 bg-danger/10 px-4 py-2.5 text-sm text-danger">
             {error}
-          </motion.p>
-        )}
-      </AnimatePresence>
+          </p>
+      </Desplegable>
 
       {abiertas.length === 0 && (
         <p className="rounded-xl2 border border-dashed border-line px-4 py-3 text-sm text-ink-dim">
@@ -126,10 +122,10 @@ export default function Peticiones({ audiolibros, version, onAbrir, onSubido }) 
         </p>
       )}
 
-      <div className="space-y-2.5">
+      <Lista className="space-y-2.5">
         <AnimatePresence initial={false} mode="popLayout">
           {abiertas.map(g => (
-            <motion.div key={g.key} layout initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.96 }} transition={ENTRA}>
+            <motion.div key={g.key} initial={{ opacity: 0, transform: tf({ y: -8 }) }} animate={{ opacity: 1, transform: tf({ y: 0 }) }} exit={{ opacity: 0, transform: tf({ scale: 0.96 }) }} transition={ENTRA}>
               <Tarjeta
                 g={g}
                 subiendo={subiendo === g.key}
@@ -142,7 +138,7 @@ export default function Peticiones({ audiolibros, version, onAbrir, onSubido }) 
             </motion.div>
           ))}
         </AnimatePresence>
-      </div>
+      </Lista>
 
       {atendidas.length > 0 && (
         <div className="mt-3">
@@ -153,23 +149,15 @@ export default function Peticiones({ audiolibros, version, onAbrir, onSubido }) 
             <span>Atendidas y rechazadas · {atendidas.length}</span>
             <IconChevron className={`h-4 w-4 transition-transform ${verAtendidas ? 'rotate-180' : ''}`} />
           </button>
-          <AnimatePresence initial={false}>
-            {verAtendidas && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                exit={{ opacity: 0, height: 0 }}
-                transition={ENTRA}
-                className="overflow-hidden"
-              >
+          <Desplegable abierto={!!verAtendidas}>
+            <div className="overflow-hidden">
                 <div className="space-y-2 pt-1">
                   {atendidas.map(g => (
                     <Atendida key={g.key} g={g} onAbrir={() => g.audiobook && onAbrir(g.audiobook.id)} onDeshacer={() => deshacerRechazo(g)} />
                   ))}
                 </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+              </div>
+          </Desplegable>
         </div>
       )}
 
@@ -269,7 +257,7 @@ function Tarjeta({ g, subiendo, onSubir, onEnlazar, onSugerencia, onRechazar, on
     return (
       <motion.button
         onClick={onAbrir}
-        whileTap={{ scale: 0.985 }}
+        whileTap={{ transform: tf({ scale: 0.985 }) }}
         className="w-full rounded-xl2 border border-line bg-surface p-3 text-left shadow-[0_1px_0_rgb(var(--color-sombra)/0.04)]"
       >
         {cuerpo}
@@ -287,7 +275,7 @@ function Tarjeta({ g, subiendo, onSubir, onEnlazar, onSugerencia, onRechazar, on
             Parece <span className="font-semibold text-ink">«{g.suggestion.title}»</span>, que ya existe
           </p>
           <motion.button
-            whileTap={{ scale: 0.94 }}
+            whileTap={{ transform: tf({ scale: 0.94 }) }}
             disabled={enlazando}
             onClick={async () => { setEnlazando(true); await onSugerencia(); setEnlazando(false) }}
             className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full bg-accent px-3 text-xs font-semibold text-on-accent shadow-sm disabled:opacity-70"
@@ -300,7 +288,7 @@ function Tarjeta({ g, subiendo, onSubir, onEnlazar, onSugerencia, onRechazar, on
 
       <div className="mt-3 flex gap-2">
         <motion.button
-          whileTap={{ scale: 0.97 }}
+          whileTap={{ transform: tf({ scale: 0.97 }) }}
           disabled={subiendo}
           onClick={onSubir}
           className="inline-flex h-10 flex-1 items-center justify-center gap-1.5 rounded-xl2 border border-accent-line bg-accent-soft text-sm font-semibold text-accent disabled:cursor-wait disabled:opacity-80"
@@ -309,7 +297,7 @@ function Tarjeta({ g, subiendo, onSubir, onEnlazar, onSugerencia, onRechazar, on
           {subiendo ? 'Leyendo…' : 'Subir EPUB'}
         </motion.button>
         <motion.button
-          whileTap={{ scale: 0.97 }}
+          whileTap={{ transform: tf({ scale: 0.97 }) }}
           onClick={onEnlazar}
           className="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl2 border border-line px-3.5 text-sm font-medium text-ink active:bg-surface-2"
         >
@@ -317,7 +305,7 @@ function Tarjeta({ g, subiendo, onSubir, onEnlazar, onSugerencia, onRechazar, on
           Enlazar
         </motion.button>
         <motion.button
-          whileTap={{ scale: 0.97 }}
+          whileTap={{ transform: tf({ scale: 0.97 }) }}
           onClick={onRechazar}
           aria-label="Rechazar"
           className="inline-flex h-10 w-10 items-center justify-center rounded-xl2 border border-line text-ink-mute active:bg-surface-2"
@@ -399,7 +387,7 @@ function HojaRechazar({ g: actual, onCerrar, onRechazar }) {
       onCerrar={onCerrar}
       pie={
         <motion.button
-          whileTap={{ scale: 0.98 }}
+          whileTap={{ transform: tf({ scale: 0.98 }) }}
           disabled={enviando}
           onClick={async () => { setEnviando(true); await onRechazar(motivo); setEnviando(false) }}
           className="inline-flex h-12 flex-1 items-center justify-center gap-2 rounded-xl2 bg-danger text-sm font-semibold text-white disabled:opacity-70"

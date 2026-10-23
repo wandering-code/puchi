@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { motion } from 'motion/react'
 import { IconChevron } from '../../ui/icons'
 import { usarPreferencia } from '../../platform/preferencias'
+import Pastilla from '../../ui/Pastilla'
 
 // Cuatro formas de separar las secciones de la estantería (estados y años),
 // para probarlas y quedarse con una. Se elige en Ajustes y se guarda en la
@@ -287,11 +287,7 @@ export function SelectorSeparacion({ elegida, onElegir }) {
           <button key={v.id} onClick={() => onElegir(v.id)} className="flex items-start gap-3 px-4 py-3 text-left">
             <span className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-colors ${activa ? 'border-accent bg-accent' : 'border-line'}`}>
               {activa && (
-                <motion.span
-                  layoutId="separacion-elegida"
-                  className="h-2 w-2 rounded-full bg-on-accent"
-                  transition={{ type: 'spring', stiffness: 420, damping: 34 }}
-                />
+                <Pastilla grupo="separacion-elegida" className="h-2 w-2 rounded-full bg-on-accent" />
               )}
             </span>
             <span className="min-w-0">

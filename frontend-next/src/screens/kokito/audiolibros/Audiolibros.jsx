@@ -9,6 +9,9 @@ import { IconAudiolibro, IconEnlace, IconSubir } from '../../../ui/icons'
 import FichaAudiolibro from './FichaAudiolibro'
 import Peticiones from './Peticiones'
 import { capitulos, duracion, ESTADOS_AB } from './formato'
+import { tf } from '../../../ui/transformar'
+import Desplegable from '../../../ui/Desplegable'
+import Lista from '../../../ui/Lista'
 
 // Audiolibros, la parte del admin (fase 1, issue #63 de puchi): subir el
 // EPUB, repasar sus capítulos y enlazarlo con los libros del catálogo. Aquí
@@ -105,7 +108,7 @@ export default function Audiolibros() {
       <motion.button
         onClick={() => entrada.current?.click()}
         disabled={!!subiendo}
-        whileTap={subiendo ? undefined : { scale: 0.985 }}
+        whileTap={subiendo ? undefined : { transform: tf({ scale: 0.985 }) }}
         className="relative flex w-full items-center gap-4 overflow-hidden rounded-xl3 border border-dashed border-accent-line bg-accent-soft/60 px-5 py-4 text-left disabled:cursor-wait"
       >
         <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent text-on-accent shadow-sm">
@@ -120,25 +123,18 @@ export default function Audiolibros() {
         {subiendo && (
           <motion.span
             className="absolute inset-x-0 bottom-0 h-0.5 bg-accent"
-            initial={{ scaleX: 0, originX: 0 }}
-            animate={{ scaleX: 0.9 }}
+            initial={{ transform: tf({ scaleX: 0 }), originX: 0 }}
+            animate={{ transform: tf({ scaleX: 0.9 }) }}
             transition={{ duration: 6, ease: [0.1, 0.6, 0.3, 1] }}
           />
         )}
       </motion.button>
 
-      <AnimatePresence>
-        {error && (
-          <motion.p
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            className="mt-3 rounded-xl2 bg-danger/10 px-4 py-2.5 text-sm text-danger"
-          >
+      <Desplegable abierto={!!error}>
+        <p className="mt-3 rounded-xl2 bg-danger/10 px-4 py-2.5 text-sm text-danger">
             {error}
-          </motion.p>
-        )}
-      </AnimatePresence>
+          </p>
+      </Desplegable>
 
       <Peticiones
         audiolibros={lista}
@@ -174,22 +170,21 @@ export default function Audiolibros() {
         </div>
       )}
 
-      <div className="space-y-2.5">
+      <Lista className="space-y-2.5">
         <AnimatePresence initial={false} mode="popLayout">
           {(lista || []).map(ab => (
             <motion.div
               key={ab.id}
-              layout
-              initial={{ opacity: 0, y: -8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.96 }}
+              initial={{ opacity: 0, transform: tf({ y: -8 }) }}
+              animate={{ opacity: 1, transform: tf({ y: 0 }) }}
+              exit={{ opacity: 0, transform: tf({ scale: 0.96 }) }}
               transition={ENTRA}
             >
               <Tarjeta ab={ab} onAbrir={() => ficha.abrir(ab.id)} />
             </motion.div>
           ))}
         </AnimatePresence>
-      </div>
+      </Lista>
 
       <CopiaDeSeguridad />
 
@@ -208,7 +203,7 @@ function Tarjeta({ ab, onAbrir }) {
   return (
     <motion.button
       onClick={onAbrir}
-      whileTap={{ scale: 0.985 }}
+      whileTap={{ transform: tf({ scale: 0.985 }) }}
       className="flex w-full items-start gap-4 rounded-xl2 border border-line bg-surface p-3 text-left shadow-[0_1px_0_rgb(var(--color-sombra)/0.04)]"
     >
       <Cover url={ab.cover_url} title={ab.title} className="w-[60px] shrink-0" />

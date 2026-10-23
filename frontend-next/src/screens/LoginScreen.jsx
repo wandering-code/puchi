@@ -6,6 +6,8 @@ import { IconArrow } from '../ui/icons'
 import Logo from '../ui/Logo'
 import Registro from './Registro'
 import { ES_KOKITO } from '../platform/variante'
+import { tf } from '../ui/transformar'
+import Desplegable from '../ui/Desplegable'
 
 export default function LoginScreen() {
   const { login } = useAuth()
@@ -77,8 +79,8 @@ export default function LoginScreen() {
         >
           <Fade className="mb-10 flex flex-col items-center gap-4">
             <motion.div
-              initial={{ scale: 0.7, rotate: -8 }}
-              animate={{ scale: 1, rotate: 0 }}
+              initial={{ transform: tf({ scale: 0.7, rotate: -8 }) }}
+              animate={{ transform: tf({ scale: 1, rotate: 0 }) }}
               transition={{ type: 'spring', stiffness: 260, damping: 18, delay: 0.1 }}
             >
               <Logo className="h-16 w-16" />
@@ -118,25 +120,17 @@ export default function LoginScreen() {
               />
             </Fade>
 
-            <AnimatePresence>
-              {error && (
-                <motion.p
-                  className="px-1 text-sm text-danger"
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
-                  transition={{ duration: 0.2 }}
-                >
+            <Desplegable abierto={!!error}>
+              <p className="px-1 text-sm text-danger">
                   {error}
-                </motion.p>
-              )}
-            </AnimatePresence>
+                </p>
+            </Desplegable>
 
             <Fade>
               <motion.button
                 type="submit"
                 disabled={loading || !name.trim() || !pin}
-                whileTap={{ scale: 0.97 }}
+                whileTap={{ transform: tf({ scale: 0.97 }) }}
                 className="mt-2 flex h-14 w-full items-center justify-center gap-2 rounded-xl2 bg-accent text-base font-semibold text-on-accent shadow-[0_10px_30px_-10px_var(--color-accent)] transition-colors disabled:bg-surface-2 disabled:text-ink-mute disabled:shadow-none"
               >
                 {loading ? 'Entrando…' : 'Entrar'}

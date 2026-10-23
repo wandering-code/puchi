@@ -18,6 +18,8 @@ import { HojaSugerencia, Relacionados, useRelacionados } from './Relacionados'
 import { useDeshacerAlta } from './deshacerAlta'
 import { CON_AUDIOLIBROS } from '../../platform/variante'
 import BloqueAudiolibro from '../kokito/escuchar/BloqueAudiolibro'
+import { tf } from '../../ui/transformar'
+import Pastilla from '../../ui/Pastilla'
 
 // Distribución tomada de la Luniteca nueva de la Puchi actual: portada grande
 // centrada, título y autor debajo, la ficha técnica en una línea y los datos
@@ -109,7 +111,7 @@ export default function BookDetail({
           <motion.button
             onClick={() => (editando ? setEditando(false) : onCerrar())}
             aria-label={editando ? 'Descartar cambios' : 'Volver a la estantería'}
-            whileTap={{ scale: 0.92 }}
+            whileTap={{ transform: tf({ scale: 0.92 }) }}
             className="pointer-events-auto mt-1 flex h-10 w-10 items-center justify-center rounded-full border border-line bg-surface/90 text-ink shadow-sm backdrop-blur"
           >
             <IconArrowLeft className="h-5 w-5" />
@@ -122,7 +124,7 @@ export default function BookDetail({
             <motion.button
               onClick={() => setEditando(true)}
               aria-label="Editar los datos del libro"
-              whileTap={{ scale: 0.92 }}
+              whileTap={{ transform: tf({ scale: 0.92 }) }}
               className="pointer-events-auto mt-1 flex h-10 w-10 items-center justify-center rounded-full border border-line bg-surface/90 text-ink shadow-sm backdrop-blur"
             >
               <IconPencil className="h-[18px] w-[18px]" />
@@ -445,11 +447,7 @@ function InterruptorLado({ lado, onCambiar }) {
           className="relative px-3 py-1 font-semibold"
         >
           {lado === id && (
-            <motion.span
-              layoutId="progreso-lado"
-              className="absolute inset-0 rounded-full bg-accent"
-              transition={{ type: 'spring', stiffness: 420, damping: 34 }}
-            />
+            <Pastilla grupo="progreso-lado" className="absolute inset-0 rounded-full bg-accent" />
           )}
           <span className={`relative ${lado === id ? 'text-on-accent' : 'text-ink-dim'}`}>{etiqueta}</span>
         </button>

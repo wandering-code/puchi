@@ -12,6 +12,7 @@ import { Girando } from '../audiolibros/Audiolibros'
 import { duracion, reloj } from '../audiolibros/formato'
 import { borrarLibro, descargados, descargarCapitulo, hayDescargas, megas, pedirQueSeQueden } from '../../../platform/descargas'
 import { IconBajar } from '../../../ui/icons'
+import { tf } from '../../../ui/transformar'
 
 // La pantalla del reproductor (fase 3, #65): sube desde abajo como el resto
 // de la app. Cerrarla no para el audio: el <audio> es del reproductor global
@@ -48,7 +49,7 @@ export default function PantallaReproductor() {
           <motion.button
             onClick={r.pantalla.cerrar}
             aria-label="Cerrar el reproductor"
-            whileTap={{ scale: 0.92 }}
+            whileTap={{ transform: tf({ scale: 0.92 }) }}
             className="pointer-events-auto mt-1 flex h-10 w-10 items-center justify-center rounded-full border border-line bg-surface/90 text-ink shadow-sm backdrop-blur"
           >
             <IconChevron className="h-5 w-5" />
@@ -63,7 +64,7 @@ export default function PantallaReproductor() {
                 ve de lejos si está en marcha. */}
             <motion.div
               className="w-[210px]"
-              animate={{ scale: sonando ? 1 : 0.92 }}
+              animate={{ transform: tf({ scale: sonando ? 1 : 0.92 }) }}
               transition={{ type: 'spring', stiffness: 220, damping: 24 }}
             >
               <Cover url={libro.cover_url} title={libro.title} priority relieve realce={false} ajustar className="sombra-portada" />
@@ -100,15 +101,15 @@ export default function PantallaReproductor() {
                 <motion.button
                   onClick={r.alternar}
                   aria-label={sonando ? 'Pausa' : 'Reproducir'}
-                  whileTap={{ scale: 0.93 }}
+                  whileTap={{ transform: tf({ scale: 0.93 }) }}
                   className="flex h-[76px] w-[76px] items-center justify-center rounded-full bg-accent text-on-accent shadow-lg"
                 >
                   <AnimatePresence mode="wait" initial={false}>
                     <motion.span
                       key={cargando && !sonando ? 'cargando' : sonando ? 'pausa' : 'play'}
-                      initial={{ scale: 0.6, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                      exit={{ scale: 0.6, opacity: 0 }}
+                      initial={{ transform: tf({ scale: 0.6 }), opacity: 0 }}
+                      animate={{ transform: tf({ scale: 1 }), opacity: 1 }}
+                      exit={{ transform: tf({ scale: 0.6 }), opacity: 0 }}
                       transition={{ duration: 0.14 }}
                     >
                       {cargando && !sonando ? <Girando className="h-7 w-7" />
@@ -207,7 +208,7 @@ export const formatoVelocidad = (v) => `${String(v).replace('.', ',')}×`
 export function Pastilla({ onClick, activa, children }) {
   return (
     <motion.button
-      whileTap={{ scale: 0.95 }}
+      whileTap={{ transform: tf({ scale: 0.95 }) }}
       onClick={onClick}
       className={`inline-flex h-9 items-center gap-1.5 rounded-full border px-3.5 text-[13px] font-semibold tabular-nums transition-colors ${
         activa ? 'border-accent-line bg-accent-soft text-accent' : 'border-line text-ink-dim'
@@ -221,7 +222,7 @@ export function Pastilla({ onClick, activa, children }) {
 export function PastillaIcono({ onClick, activa = false, etiqueta, children }) {
   return (
     <motion.button
-      whileTap={{ scale: 0.92 }}
+      whileTap={{ transform: tf({ scale: 0.92 }) }}
       onClick={onClick}
       aria-label={etiqueta}
       title={etiqueta}
@@ -253,7 +254,7 @@ export function HojaVelocidad({ abierta, onCerrar }) {
           return (
             <motion.button
               key={v}
-              whileTap={{ scale: 0.95 }}
+              whileTap={{ transform: tf({ scale: 0.95 }) }}
               onClick={() => { r.cambiarVelocidad(v); onCerrar() }}
               className={`h-12 rounded-xl2 border text-[15px] font-semibold tabular-nums transition-colors ${
                 activa ? 'border-accent bg-accent text-on-accent' : 'border-line bg-surface text-ink'
@@ -301,7 +302,7 @@ export function HojaDormir({ abierta, onCerrar }) {
       </div>
       {t && (
         <motion.button
-          whileTap={{ scale: 0.98 }}
+          whileTap={{ transform: tf({ scale: 0.98 }) }}
           onClick={() => { r.dormir(null); onCerrar() }}
           className="mt-3 h-12 w-full rounded-xl2 border border-line text-sm font-semibold text-ink-dim active:bg-surface-2"
         >
@@ -317,7 +318,7 @@ function Boton({ onClick, etiqueta, pequeno = false, children }) {
     <motion.button
       onClick={onClick}
       aria-label={etiqueta}
-      whileTap={{ scale: 0.88 }}
+      whileTap={{ transform: tf({ scale: 0.88 }) }}
       className={`flex items-center justify-center rounded-full active:bg-surface-2 ${pequeno ? 'h-11 w-11 text-ink-dim' : 'h-14 w-14 text-ink'}`}
     >
       {children}
@@ -334,7 +335,7 @@ export function Ecualizador({ activo }) {
           key={i}
           className="w-[3px] rounded-full bg-accent"
           style={{ height: '100%', originY: 1 }}
-          animate={activo ? { scaleY: [alto * 0.4, alto, alto * 0.5, alto * 0.9, alto * 0.4] } : { scaleY: 0.3 }}
+          animate={activo ? { transform: tf({ scaleY: [alto * 0.4, alto, alto * 0.5, alto * 0.9, alto * 0.4] }) } : { transform: tf({ scaleY: 0.3 }) }}
           transition={activo ? { duration: 1.1 + i * 0.15, repeat: Infinity, ease: 'easeInOut' } : { duration: 0.2 }}
         />
       ))}
@@ -435,7 +436,7 @@ function Descargas({ libro, estado: d }) {
           </button>
         </div>
         <div className="mt-2.5 h-1 overflow-hidden rounded-full bg-surface/80">
-          <motion.div className="h-full rounded-full bg-accent" initial={false} animate={{ width: `${Math.max(3, pct)}%` }} />
+          <motion.div className="h-full w-full rounded-full bg-accent" initial={false} animate={{ transform: `translateX(${Math.max(3, pct) - 100}%)` }} />
         </div>
       </div>
     )

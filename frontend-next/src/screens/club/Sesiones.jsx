@@ -7,6 +7,9 @@ import { IconCalendario, IconPencil, IconPlus, IconTrash } from '../../ui/icons'
 import { IconoPeligro } from '../../ui/BotonPeligro'
 import { fechaLarga } from './clubShelf'
 import { CampoPagina } from './ObjetivoDeLectura'
+import { tf } from '../../ui/transformar'
+import Desplegable from '../../ui/Desplegable'
+import Lista from '../../ui/Lista'
 
 // Las sesiones de un libro del club: cuándo se quedó, qué parte tocaba, qué se
 // dijo y —lo último que se acuerda antes de levantarse— hasta qué página hay
@@ -49,7 +52,7 @@ export default function Sesiones({ entradaId, sesiones, totalPaginas, esAdmin, o
         {esAdmin && (
           <motion.button
             onClick={abrirNueva}
-            whileTap={{ scale: 0.9 }}
+            whileTap={{ transform: tf({ scale: 0.9 }) }}
             aria-label="Añadir sesión"
             className="flex h-8 w-8 items-center justify-center rounded-full bg-accent-soft text-accent"
           >
@@ -76,15 +79,14 @@ export default function Sesiones({ entradaId, sesiones, totalPaginas, esAdmin, o
 
       {/* popLayout: al borrar una, las de abajo suben a su sitio en vez de dar
           un salto cuando la que se va deja de ocupar. */}
-      <div className="space-y-2">
+      <Lista className="space-y-2">
         <AnimatePresence initial={false} mode="popLayout">
           {(sesiones || []).map(s => (
             <motion.div
               key={s.id}
-              layout
-              initial={{ opacity: 0, y: -6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.96 }}
+              initial={{ opacity: 0, transform: tf({ y: -6 }) }}
+              animate={{ opacity: 1, transform: tf({ y: 0 }) }}
+              exit={{ opacity: 0, transform: tf({ scale: 0.96 }) }}
               transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
             >
               <TarjetaSesion
@@ -96,7 +98,7 @@ export default function Sesiones({ entradaId, sesiones, totalPaginas, esAdmin, o
             </motion.div>
           ))}
         </AnimatePresence>
-      </div>
+      </Lista>
 
       <HojaInferior
         abierta={hoja.abierta}
@@ -155,7 +157,7 @@ function TarjetaSesion({ sesion, esAdmin, onEditar, onBorrar }) {
         <div className="flex shrink-0 gap-1.5">
           <motion.button
             onClick={onEditar}
-            whileTap={{ scale: 0.9 }}
+            whileTap={{ transform: tf({ scale: 0.9 }) }}
             aria-label="Editar sesión"
             className="flex h-9 w-9 items-center justify-center rounded-full border border-line text-ink-mute"
           >
@@ -272,18 +274,11 @@ function FormularioSesion({ inicial, totalPaginas, onGuardar, onCancelar }) {
         </Campo>
       </Bloque>
 
-      <AnimatePresence>
-        {error && (
-          <motion.p
-            className="mt-3 text-sm text-danger"
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-          >
+      <Desplegable abierto={!!error}>
+        <p className="mt-3 text-sm text-danger">
             {error}
-          </motion.p>
-        )}
-      </AnimatePresence>
+          </p>
+      </Desplegable>
 
       <div className="mt-5 flex gap-2">
         <button
@@ -296,7 +291,7 @@ function FormularioSesion({ inicial, totalPaginas, onGuardar, onCancelar }) {
         <motion.button
           type="submit"
           disabled={guardando || !dia}
-          whileTap={{ scale: 0.98 }}
+          whileTap={{ transform: tf({ scale: 0.98 }) }}
           className="h-12 flex-[1.4] rounded-xl2 bg-accent text-[15px] font-semibold text-on-accent transition-colors disabled:bg-surface-2 disabled:text-ink-mute"
         >
           {guardando ? 'Guardando…' : 'Guardar sesión'}

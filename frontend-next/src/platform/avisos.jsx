@@ -2,6 +2,8 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { createPortal } from 'react-dom'
 import { AnimatePresence, motion } from 'motion/react'
 import { LLEGADA, SALIDA } from '../ui/curvas'
+import { tf } from '../ui/transformar'
+import Lista from '../ui/Lista'
 
 // Los avisos de toda Puchi: un mensaje nuevo mientras estás en la Luniteca,
 // una llamada entrante mientras miras el club.
@@ -82,13 +84,14 @@ export function useAvisos() {
 // y z-60.
 function Pila({ avisos, onCerrar }) {
   return createPortal(
-    <div className="pointer-events-none fixed inset-x-0 top-0 z-[70] flex flex-col items-center gap-2 px-3 pt-safe">
+    // Al llegar o irse uno, los demás se recolocan suaves (ver ui/Lista).
+    <Lista className="pointer-events-none !fixed inset-x-0 top-0 z-[70] flex flex-col items-center gap-2 px-3 pt-safe">
       <AnimatePresence initial={false}>
         {avisos.map(aviso => (
           <Tarjeta key={aviso.id} aviso={aviso} onCerrar={() => onCerrar(aviso.id)} />
         ))}
       </AnimatePresence>
-    </div>,
+    </Lista>,
     document.body,
   )
 }
@@ -98,10 +101,9 @@ function Tarjeta({ aviso, onCerrar }) {
 
   return (
     <motion.div
-      layout
-      initial={{ opacity: 0, y: -24, scale: 0.97 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, y: -16, scale: 0.97, transition: SALIDA }}
+      initial={{ opacity: 0, transform: tf({ y: -24, scale: 0.97 }) }}
+      animate={{ opacity: 1, transform: tf({ y: 0, scale: 1 }) }}
+      exit={{ opacity: 0, transform: tf({ y: -16, scale: 0.97 }), transition: SALIDA }}
       transition={LLEGADA}
       // Solo hacia arriba, que es de donde ha venido: un aviso de paso se
       // aparta con el mismo gesto con el que llegó. El que espera no se

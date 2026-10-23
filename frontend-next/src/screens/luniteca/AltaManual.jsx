@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import { motion } from 'motion/react'
 import { api } from '../../platform/api'
 import { FORMATO_LABEL, STATUS_LABEL, subirLomo, subirPortada } from './shelf'
@@ -6,7 +6,7 @@ import { Cover } from './piezas'
 import { CamposFecha } from './editores'
 import { RellenarDatos, TamanoLibro } from './BookEditForm'
 import { Chip, usarSugerencias } from './ListaPrevia'
-import { TARJETA_TENIDA, usarTinteDePortada } from './colorPortada'
+import { TARJETA_TENIDA } from './colorPortada'
 import { medidas, usarAnchoLomo } from './Lomos'
 import HojaInferior, { useHoja } from './HojaInferior'
 import RecortarFoto from './RecortarFoto'
@@ -15,7 +15,10 @@ import { AccionesFoto } from './FotoLibro'
 import { useDeshacerAlta } from './deshacerAlta'
 import { IconChevron } from '../../ui/icons'
 import Desplegable from '../../ui/Desplegable'
-import { LLEGADA, enCss } from '../../ui/curvas'
+import { LLEGADA } from '../../ui/curvas'
+import { tf } from '../../ui/transformar'
+import TinteDePortada from './TinteDePortada'
+import Marco from '../../ui/Marco'
 
 // Dar de alta un libro a mano: para lo que la búsqueda no encuentra —
 // ediciones raras, libros que no están en Open Library, o cosas que no son
@@ -196,16 +199,16 @@ export default function AltaManual({ onAnadido, onHecho, alClub, estanteria }) {
   const libroParaFoto = { num_pages: num(datos.num_pages), height_mm: mm, cover_url: portada }
   // El libro que se está creando toma el color de su portada en cuanto la
   // tiene, como las tarjetas de la búsqueda (#85).
-  const tinte = usarTinteDePortada(portada)
 
   return (
     <>
     <form onSubmit={guardar} className="pb-2">
-      <div style={tinte} className={`${TARJETA_TENIDA} flex items-end gap-4 p-3`}>
+      <div className={`${TARJETA_TENIDA} flex items-end gap-4 p-3`}>
+        <TinteDePortada url={portada} />
         <motion.button
           type="button"
           onClick={hojaPortada.abrir}
-          whileTap={{ scale: 0.96 }}
+          whileTap={{ transform: tf({ scale: 0.96 }) }}
           className="w-24 shrink-0"
           aria-label="Poner una portada"
         >
@@ -215,7 +218,7 @@ export default function AltaManual({ onAnadido, onHecho, alClub, estanteria }) {
           <motion.button
             type="button"
             onClick={hojaLomo.abrir}
-            whileTap={{ scale: 0.96 }}
+            whileTap={{ transform: tf({ scale: 0.96 }) }}
             className="shrink-0 overflow-hidden rounded-sm border border-dashed border-line bg-surface-2"
             style={{ width: anchoLomo, height: altoLomo }}
             aria-label="Poner una foto del lomo"
@@ -430,7 +433,7 @@ export default function AltaManual({ onAnadido, onHecho, alClub, estanteria }) {
       <motion.button
         type="submit"
         disabled={guardando}
-        whileTap={{ scale: 0.98 }}
+        whileTap={{ transform: tf({ scale: 0.98 }) }}
         className="mt-5 h-12 w-full rounded-xl2 bg-accent text-[15px] font-semibold text-on-accent disabled:opacity-60"
       >
         {guardando
@@ -550,8 +553,12 @@ function HojaFoto({ hoja, tipo, libro, titulo, ayuda, hayFoto, onArchivo, onQuit
 // la frecuencia de la pantalla, y no Motion desde JavaScript, que en Safari
 // va a 60.
 function Bloque({ titulo, resumen, abierto, onAlternar, children }) {
+  // El fondo y el borde los pone el Marco, que encoge y crece con el telón
+  // del Desplegable en vez de quedarse grande hasta el final (ver ui/Marco).
+  const marco = useRef(null)
   return (
-    <section className={`mt-3 overflow-hidden rounded-xl3 border bg-surface transition-colors ${abierto ? 'border-accent-line' : 'border-line'}`}>
+    <section className="relative isolate mt-3">
+      <Marco ref={marco} radio={28} resaltado={abierto} />
       <button type="button" onClick={onAlternar} aria-expanded={abierto} className="flex w-full items-center gap-3 px-4 py-3.5 text-left">
         <span className="min-w-0 flex-1">
           <span className="block font-display text-[16px] font-bold leading-tight tracking-[-0.01em]">{titulo}</span>
@@ -559,7 +566,7 @@ function Bloque({ titulo, resumen, abierto, onAlternar, children }) {
         </span>
         <IconChevron className={`h-4 w-4 shrink-0 text-ink-mute transition-transform duration-200 ${abierto ? 'rotate-180' : ''}`} />
       </button>
-      <Desplegable abierto={abierto}>
+      <Desplegable abierto={abierto} onTelon={t => marco.current?.telon(t)}>
         <div className="-mt-2 px-4 pb-4">{children}</div>
       </Desplegable>
     </section>
@@ -567,16 +574,18 @@ function Bloque({ titulo, resumen, abierto, onAlternar, children }) {
 }
 
 // El estado con el que entra. La pastilla de fondo se desliza hasta el
-// elegido, como antes, pero la mueve el navegador en CSS (a la frecuencia de
-// la pantalla) en vez de Motion con layoutId, que en Safari va a 60. Se mide
-// dónde cae el botón elegido, también si las pastillas saltan de línea.
+// elegido, como antes, a la frecuencia de la pantalla: se planta de golpe en
+// su sitio y tamaño nuevos, y lo que se anima es un transform desde donde
+// estaba (FLIP), que lo hace la GPU. Ni Motion con layoutId (JavaScript, a 60
+// en Safari) ni transiciones de ancho (hilo principal, también a 60).
 const ESTADOS = ['want_to_read', 'reading', 'read', 'dropped']
 
 function PastillasEstado({ estado, onElegir }) {
   const caja = useRef(null)
+  const pastilla = useRef(null)
   const botones = useRef({})
   const [sitio, setSitio] = useState(null)
-  const [conTransicion, setConTransicion] = useState(false)
+  const anterior = useRef(null)
 
   useLayoutEffect(() => {
     const medir = () => {
@@ -588,25 +597,27 @@ function PastillasEstado({ estado, onElegir }) {
     if (caja.current) ro.observe(caja.current)
     return () => ro.disconnect()
   }, [estado])
-  // La primera vez se planta en su sitio; a partir de ahí, se desliza.
-  useEffect(() => {
-    if (!sitio || conTransicion) return
-    const id = requestAnimationFrame(() => setConTransicion(true))
-    return () => cancelAnimationFrame(id)
-  }, [sitio, conTransicion])
 
-  const curva = enCss(LLEGADA)
+  // De dónde viene: el sitio de antes, escalado al tamaño nuevo.
+  useLayoutEffect(() => {
+    const p = pastilla.current
+    const de = anterior.current
+    anterior.current = sitio
+    if (!p || !de || !sitio || (de.x === sitio.x && de.y === sitio.y && de.w === sitio.w)) return
+    const desde = `translate(${de.x - sitio.x}px, ${de.y - sitio.y}px) scale(${de.w / sitio.w}, ${de.h / sitio.h})`
+    p.animate([{ transform: desde }, { transform: 'none' }], {
+      duration: LLEGADA.duration * 1000, easing: `cubic-bezier(${LLEGADA.ease.join(', ')})`,
+    })
+  }, [sitio])
+
   return (
     <div ref={caja} className="relative flex flex-wrap gap-2">
       {sitio && (
         <span
+          ref={pastilla}
           aria-hidden
-          className="absolute left-0 top-0 rounded-full bg-accent-soft"
-          style={{
-            width: sitio.w, height: sitio.h,
-            transform: `translate(${sitio.x}px, ${sitio.y}px)`,
-            transition: conTransicion ? `transform ${curva}, width ${curva}, height ${curva}` : 'none',
-          }}
+          className="absolute origin-top-left rounded-full bg-accent-soft"
+          style={{ left: sitio.x, top: sitio.y, width: sitio.w, height: sitio.h }}
         />
       )}
       {ESTADOS.map(id => (
@@ -615,7 +626,7 @@ function PastillasEstado({ estado, onElegir }) {
           ref={n => { botones.current[id] = n }}
           type="button"
           onClick={() => onElegir(id)}
-          className={`relative rounded-full border px-3.5 py-2 text-sm transition-colors ${
+          className={`relative rounded-full border px-3.5 py-2 text-sm ${
             estado === id ? 'border-accent-line text-accent' : 'border-line text-ink-dim'
           }`}
         >

@@ -1,5 +1,7 @@
 import { motion } from 'motion/react'
 import { IconCamara, IconCheck, IconImagen } from '../../ui/icons'
+import { tf } from '../../ui/transformar'
+import Pastilla from '../../ui/Pastilla'
 
 // Las piezas que comparten las hojas de lomo y portada (SelectorLomo,
 // SelectorPortada y las del alta a mano): arriba, lo que hay puesto AHORA y
@@ -31,7 +33,7 @@ export function AccionesFoto({ tipo, onCamara, onGaleria, desactivado = false })
         type="button"
         onClick={onCamara}
         disabled={desactivado}
-        whileTap={{ scale: 0.98 }}
+        whileTap={{ transform: tf({ scale: 0.98 }) }}
         className="flex items-center gap-3.5 rounded-2xl bg-accent px-4 py-3.5 text-left text-on-accent disabled:opacity-60"
       >
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/15">
@@ -48,7 +50,7 @@ export function AccionesFoto({ tipo, onCamara, onGaleria, desactivado = false })
         type="button"
         onClick={onGaleria}
         disabled={desactivado}
-        whileTap={{ scale: 0.98 }}
+        whileTap={{ transform: tf({ scale: 0.98 }) }}
         className="flex items-center gap-3.5 rounded-2xl border border-line px-4 py-3 text-left disabled:opacity-60"
       >
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-surface-2 text-ink-dim">
@@ -81,11 +83,10 @@ export function Tanda({ titulo, cuantas = null, children }) {
 export function MarcaElegida({ grupo, redondeo = 6 }) {
   return (
     <>
-      <motion.span
-        layoutId={`elegida-${grupo}`}
+      <Pastilla
+        grupo={`elegida-${grupo}`}
         className="pointer-events-none absolute -inset-[3px] border-2 border-accent"
         style={{ borderRadius: redondeo + 3 }}
-        transition={{ type: 'spring', stiffness: 500, damping: 38 }}
       />
       <motion.span
         className="pointer-events-none absolute -right-2 -top-2 flex h-5 w-5 items-center justify-center rounded-full bg-accent text-on-accent shadow"

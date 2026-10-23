@@ -1,10 +1,13 @@
-import { useEffect, useRef, useState } from 'react'
-import { AnimatePresence, motion } from 'motion/react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { motion } from 'motion/react'
 import { CON_AUDIOLIBROS } from '../../platform/variante'
 import Interruptor from '../../ui/Interruptor'
 import { FORMATO_LABEL, etiquetaFormato, STATUS_COLOR, STATUS_LABEL, STATUS_ORDER, formatoPrecio, readingDatesLabel, statusPatch } from './shelf'
 import { IconChevron } from '../../ui/icons'
 import HojaInferior, { useHoja } from './HojaInferior'
+import { tf } from '../../ui/transformar'
+import { LLEGADA, SALIDA } from '../../ui/curvas'
+import { deslizar, fotografiar, movimientoReducido } from '../../ui/telon'
 
 // Los datos de la ficha se editan tocando el dato en sí, no rellenando un
 // formulario aparte: cada uno es una pastilla que enseña su valor y abre un
@@ -22,7 +25,7 @@ export function Pastilla({ children, onClick, color }) {
   return (
     <motion.button
       onClick={onClick}
-      whileTap={{ scale: 0.96 }}
+      whileTap={{ transform: tf({ scale: 0.96 }) }}
       transition={{ type: 'spring', stiffness: 500, damping: 30 }}
       className="inline-flex items-center gap-1.5 rounded-full border bg-accent-soft px-3 py-1.5 text-xs transition-colors"
       style={{
@@ -485,13 +488,18 @@ function BotonPaso({ onClick, deshabilitado, etiqueta, children }) {
 // ─── Sinopsis ──────────────────────────────────────────────────────────────
 const LINEAS_PLEGADA = 6
 
-// Se anima la altura real (medida del texto completo), no un line-clamp: así
-// el despliegue es un movimiento continuo y no un salto. Con un degradado
-// hacia el fondo mientras está plegada, para que se vea que hay más texto.
+// Plegada enseña unas líneas con un degradado hacia el fondo, para que se vea
+// que hay más texto. Al desplegarla no se anima la altura (va en el hilo
+// principal, y Safari la deja a 60): cambia de golpe, y un telón del color del
+// fondo que tapa el texto nuevo se desliza hacia abajo, destapándolo, junto
+// con lo que hay debajo (ver ui/telon.js). Se ve igual que si creciera, pero
+// es todo `transform`, a la frecuencia de la pantalla. Al plegar, al revés.
 export function Sinopsis({ texto }) {
   const [abierta, setAbierta] = useState(false)
   const [altura, setAltura] = useState(null)
   const [nodo, setNodo] = useState(null)
+  const caja = useRef(null)
+  const cortina = useRef(null)
   const alturaPlegada = Math.round(15 * 1.7 * LINEAS_PLEGADA)
 
   useEffect(() => {
@@ -499,35 +507,91 @@ export function Sinopsis({ texto }) {
     if (nodo) setAltura(nodo.scrollHeight)
   }, [texto, nodo])
 
+  // Como Desplegable: foto antes del cambio, telón después.
+  const previo = useRef(abierta)
+  const foto = useRef(null)
+  if (previo.current !== abierta) {
+    previo.current = abierta
+    if (caja.current) foto.current = fotografiar(caja.current)
+  }
+  // Desde el toque hasta que acaba el telón (abriendo o plegando).
+  const [animando, setAnimando] = useState(false)
+  const animaciones = useRef([])
+  const parar = () => { animaciones.current.forEach(a => a.cancel()); animaciones.current = [] }
+
+  useLayoutEffect(() => {
+    const f = foto.current
+    foto.current = null
+    const el = caja.current
+    if (!f || !el || altura == null) return
+    parar()
+    if (movimientoReducido()) { setAnimando(false); return }
+    const t = abierta ? LLEGADA : SALIDA
+    const { animaciones: hechas, opciones } = deslizar(f, {
+      abriendo: abierta,
+      t,
+      plegar: si => { el.style.height = si ? `${alturaPlegada}px` : '' },
+    })
+    // El telón tapa lo que hay entre la altura plegada y la entera, y se va
+    // hacia abajo (abriendo) o vuelve a subir (plegando). La caja recorta lo
+    // que se sale, así que nunca tapa lo de debajo.
+    const delta = altura - alturaPlegada
+    const tapa = cortina.current.animate(
+      abierta
+        ? [{ transform: 'translateY(0px)' }, { transform: `translateY(${delta}px)` }]
+        : [{ transform: `translateY(${delta}px)` }, { transform: 'translateY(0px)' }],
+      opciones,
+    )
+    animaciones.current = [...hechas, tapa]
+    tapa.onfinish = () => setAnimando(false)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [abierta])
+  useLayoutEffect(() => { if (!animando) parar() }, [animando])
+
   if (!texto) return <p className="text-sm text-ink-mute">Este libro todavía no tiene sinopsis.</p>
 
   const desborda = altura != null && altura > alturaPlegada + 4
+  // Plegándose sigue con la altura entera hasta que el telón ha bajado del
+  // todo; entonces se pliega de verdad (y se quitan las animaciones en el
+  // mismo fotograma).
+  const entera = abierta || animando
 
   return (
     <div>
-      <motion.div
+      <div
+        ref={caja}
         className="relative overflow-hidden"
-        initial={false}
-        animate={{ height: abierta ? (altura ?? 'auto') : Math.min(altura ?? alturaPlegada, alturaPlegada) }}
-        transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
+        style={{ height: entera || !desborda ? undefined : alturaPlegada }}
       >
         <p ref={setNodo} className="whitespace-pre-line text-[15px] leading-[1.7] text-ink-dim">
           {texto}
         </p>
-        <AnimatePresence>
-          {!abierta && desborda && (
-            <motion.div
-              className="pointer-events-none absolute inset-x-0 bottom-0 h-10"
-              style={{ background: 'linear-gradient(to bottom, transparent, var(--color-bg))' }}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
+        {desborda && (
+          <>
+            {/* El degradado de "hay más": en la línea de corte, no abajo del
+                todo, para que no salte al cambiar la altura de golpe. */}
+            <div
+              className="pointer-events-none absolute inset-x-0 h-10 transition-opacity duration-200"
+              style={{
+                top: alturaPlegada - 40,
+                background: 'linear-gradient(to bottom, transparent, var(--color-bg))',
+                opacity: abierta ? 0 : 1,
+              }}
             />
-          )}
-        </AnimatePresence>
-      </motion.div>
+            <div
+              ref={cortina}
+              aria-hidden
+              className="pointer-events-none absolute inset-x-0 bg-bg"
+              style={{ top: alturaPlegada, height: Math.max(0, altura - alturaPlegada), visibility: animando ? 'visible' : 'hidden' }}
+            />
+          </>
+        )}
+      </div>
       {desborda && (
-        <button onClick={() => setAbierta(v => !v)} className="mt-2 flex items-center gap-1 text-sm font-semibold text-accent">
+        <button
+          onClick={() => { setAnimando(true); setAbierta(v => !v) }}
+          className="mt-2 flex items-center gap-1 text-sm font-semibold text-accent"
+        >
           {abierta ? 'Leer menos' : 'Leer más'}
           <IconChevron className={`h-3.5 w-3.5 transition-transform ${abierta ? 'rotate-180' : ''}`} />
         </button>

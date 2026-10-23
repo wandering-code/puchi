@@ -87,6 +87,7 @@ export default function HojaInferior({ abierta, titulo, onCerrar, children, pie 
           >
           <motion.div
             className="flex max-h-[85dvh] flex-col rounded-t-[28px] border-t border-line bg-surface pb-safe"
+            ref={arrastre.panel}
             style={{ y: arrastre.y }}
           >
             {/* El asa: indica que se puede arrastrar y es, además, el único

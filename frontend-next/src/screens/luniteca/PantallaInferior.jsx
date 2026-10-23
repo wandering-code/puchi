@@ -204,6 +204,7 @@ export default function PantallaInferior({
       >
       <motion.div
         className="flex h-full flex-col rounded-t-[28px] border-t border-line bg-bg sombra-panel"
+        ref={arrastre.panel}
         style={{ y: arrastre.y }}
       >
         {/* El asa ya no necesita apartarse de la zona segura: el panel entero

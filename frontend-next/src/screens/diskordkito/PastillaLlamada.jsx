@@ -6,6 +6,7 @@ import Avatar from '../../ui/Avatar'
 import { LLEGADA, SALIDA } from '../../ui/curvas'
 import { IconClub, IconColgar, IconMicroOff } from '../../ui/icons'
 import { Cronometro, Video } from './Llamada'
+import { tf } from '../../ui/transformar'
 
 // La llamada encogida: una pastilla que te sigue por Puchi.
 //
@@ -44,9 +45,9 @@ export default function PastillaLlamada() {
     <AnimatePresence>
       {aLaVista && (
         <motion.div
-          initial={{ opacity: 0, y: 24, scale: 0.9 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, y: 24, scale: 0.9, transition: SALIDA }}
+          initial={{ opacity: 0, transform: tf({ y: 24, scale: 0.9 }) }}
+          animate={{ opacity: 1, transform: tf({ y: 0, scale: 1 }) }}
+          exit={{ opacity: 0, transform: tf({ y: 24, scale: 0.9 }), transition: SALIDA }}
           transition={LLEGADA}
           // Arrastrable: en un móvil estrecho, una pastilla fija abajo a la
           // derecha tapa justo el botón de añadir libro de la Luniteca.
@@ -96,7 +97,7 @@ export default function PastillaLlamada() {
 
           <motion.button
             onClick={salirse}
-            whileTap={{ scale: 0.9 }}
+            whileTap={{ transform: tf({ scale: 0.9 }) }}
             aria-label={enGrupo ? 'Salir de la llamada' : 'Colgar'}
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-danger text-white"
           >

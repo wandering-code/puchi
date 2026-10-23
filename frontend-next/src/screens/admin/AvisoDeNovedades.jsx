@@ -5,6 +5,7 @@ import { api } from '../../platform/api'
 import { useAuth } from '../../platform/auth'
 import { IconCampana } from '../../ui/icons'
 import TextoNovedad from './TextoNovedad'
+import { tf } from '../../ui/transformar'
 
 // Los avisos de novedades que escribe el admin (#72): le salen a cada uno
 // hasta que le da a "Entendido", uno detrás de otro si hay varios. No se
@@ -68,9 +69,9 @@ export default function AvisoDeNovedades() {
             <motion.div
               key={actual.id}
               className="w-full max-w-sm overflow-hidden rounded-xl3 border border-line bg-surface shadow-xl"
-              initial={{ opacity: 0, y: 18, scale: 0.97 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -10, scale: 0.98 }}
+              initial={{ opacity: 0, transform: tf({ y: 18, scale: 0.97 }) }}
+              animate={{ opacity: 1, transform: tf({ y: 0, scale: 1 }) }}
+              exit={{ opacity: 0, transform: tf({ y: -10, scale: 0.98 }) }}
               transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
             >
               <div className="bg-[color-mix(in_srgb,var(--color-accent)_11%,var(--color-surface))] px-6 pb-4 pt-5">
@@ -92,7 +93,7 @@ export default function AvisoDeNovedades() {
               )}
               <div className="px-6 pb-6 pt-5">
                 <motion.button
-                  whileTap={{ scale: 0.98 }}
+                  whileTap={{ transform: tf({ scale: 0.98 }) }}
                   onClick={aceptar}
                   className="h-12 w-full rounded-xl2 bg-accent text-[15px] font-semibold text-on-accent shadow-sm"
                 >

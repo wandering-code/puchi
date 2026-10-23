@@ -5,6 +5,7 @@ import ListaPrevia, { ENTRADA, usarSugerencias } from './ListaPrevia'
 import { entradasImportadas, filaDeLibro, importarFilas, marcarDuplicados } from './importar'
 import { useDeshacerAlta } from './deshacerAlta'
 import { IconCamara } from '../../ui/icons'
+import { tf } from '../../ui/transformar'
 
 const NODO_CAMARA = 'puchi-escaner-isbn'
 
@@ -100,7 +101,7 @@ export default function EscanerISBN({ estanteria, onImportado }) {
                   </p>
                   <motion.button
                     onClick={() => setCamara(true)}
-                    whileTap={{ scale: 0.98 }}
+                    whileTap={{ transform: tf({ scale: 0.98 }) }}
                     className="mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-xl2 bg-accent text-[15px] font-semibold text-on-accent"
                   >
                     <IconCamara className="h-5 w-5" />

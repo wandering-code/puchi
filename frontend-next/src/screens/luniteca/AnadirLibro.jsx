@@ -2,7 +2,7 @@ import { useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { api } from '../../platform/api'
 import { Cover } from './piezas'
-import { TARJETA_TENIDA, usarTinteDePortada } from './colorPortada'
+import { TARJETA_TENIDA } from './colorPortada'
 import PantallaInferior from './PantallaInferior'
 import AltaManual from './AltaManual'
 import EscanerISBN from './EscanerISBN'
@@ -11,6 +11,8 @@ import { useDeshacerAlta } from './deshacerAlta'
 import { IconCheck, IconPlus, IconSearch, IconX } from '../../ui/icons'
 import { LLEGADA, enCss } from '../../ui/curvas'
 import { LunaDelPanel, TINTE, usarCabeceraConPanel } from './panel'
+import { tf } from '../../ui/transformar'
+import TinteDePortada from './TinteDePortada'
 
 // Añadir un libro: buscándolo (en lo que ya tiene el club y en Open Library) o
 // escribiéndolo a mano cuando la búsqueda no lo encuentra.
@@ -259,10 +261,10 @@ function Resultado({ libro, onAnadido, alClub }) {
 
   // Cada resultado con el color de su portada, como las tarjetas de
   // «Leyendo» de la estantería (#85).
-  const tinte = usarTinteDePortada(libro.cover_url)
 
   return (
-    <div style={tinte} className={`${TARJETA_TENIDA} flex items-center gap-3 p-3`}>
+    <div className={`${TARJETA_TENIDA} flex items-center gap-3 p-3`}>
+      <TinteDePortada url={libro.cover_url} />
       <div className="w-12 shrink-0">
         <Cover url={libro.cover_url} title={libro.title} />
       </div>
@@ -303,7 +305,7 @@ function BotonAnadir({ estado, onAnadir, etiqueta }) {
     <motion.button
       onClick={onAnadir}
       disabled={estado === 'anadiendo'}
-      whileTap={{ scale: 0.92 }}
+      whileTap={{ transform: tf({ scale: 0.92 }) }}
       aria-label={etiqueta}
       className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border transition-colors ${
         estado === 'error' ? 'border-danger bg-surface text-danger' : 'border-accent-line bg-surface text-accent'

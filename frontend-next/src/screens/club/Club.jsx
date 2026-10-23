@@ -1,5 +1,5 @@
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { AnimatePresence, motion } from 'motion/react'
+import { AnimatePresence } from 'motion/react'
 import { api } from '../../platform/api'
 import { esAdmin as esElAdmin, useAuth } from '../../platform/auth'
 import { useLiveUpdates } from '../../platform/live'
@@ -9,7 +9,7 @@ import { EMPTY_FILTERS, generosDeAutores, opcionesDeFiltro } from '../luniteca/s
 import { BotonPlegarAnos, Coleccion, Herramientas, Plegable } from '../luniteca/Luniteca'
 import { CajaSeccion, TituloSeccion, huecoEntreSecciones, usarSeparacion } from '../luniteca/separacion'
 import { Cover } from '../luniteca/piezas'
-import { colorDePortada, precargarColores } from '../luniteca/colorPortada'
+import { precargarColores } from '../luniteca/colorPortada'
 import { usarVuelo } from '../luniteca/usarVuelo'
 import { LunaDelPanel, usarPanel } from '../luniteca/panel'
 import HojaFiltros from '../luniteca/HojaFiltros'
@@ -20,6 +20,7 @@ import { IconMarcador } from '../../ui/icons'
 import { agruparClub, comoEntrada, fechaCorta, textoSesiones } from './clubShelf'
 import ClubBookDetail from './ClubBookDetail'
 import ObjetivoDeLectura from './ObjetivoDeLectura'
+import TinteDePortada from '../luniteca/TinteDePortada'
 
 // La estantería del club de lectura.
 //
@@ -290,19 +291,8 @@ function TarjetaLecturaActual({ entrada, esAdmin, onAbrir, onCambiado, fuera = f
   // Se tiñe del color de su propia portada, igual que las tarjetas de
   // "Leyendo" de tu estantería: el libro que se está leyendo se siente como
   // ESE libro y no como una ficha más. Llega después (hay que descargar la
-  // portada y mirarla), así que nace neutra y se tiñe con una transición.
-  const [paleta, setPaleta] = useState(null)
-  useEffect(() => {
-    let vigente = true
-    colorDePortada(libro.cover_url).then(p => { if (vigente && p) setPaleta(p) })
-    return () => { vigente = false }
-  }, [libro.cover_url])
-  const tinte = paleta
-    ? {
-        backgroundColor: `color-mix(in srgb, ${paleta.color} var(--tinte-libro), var(--color-surface))`,
-        borderColor: `color-mix(in srgb, ${paleta.color} var(--tinte-libro-borde), var(--color-line))`,
-      }
-    : undefined
+  // portada y mirarla), así que nace neutra y se tiñe con un fundido (ver
+  // TinteDePortada: una capa que aparece con opacidad, en la GPU).
 
   const desde = fechaCorta(club.activated_at)
   const sesiones = textoSesiones(club.session_count)
@@ -314,9 +304,9 @@ function TarjetaLecturaActual({ entrada, esAdmin, onAbrir, onCambiado, fuera = f
   return (
     <button
       onClick={() => onAbrir(entrada)}
-      style={tinte}
-      className={`flex w-full items-stretch gap-3 rounded-xl2 border border-line bg-surface p-3 text-left transition-[transform,background-color,border-color] duration-300 active:scale-[0.985] ${fuera ? 'invisible' : ''}`}
+      className={`relative isolate flex w-full items-stretch gap-3 rounded-xl2 border border-line bg-surface p-3 text-left transition-transform duration-300 active:scale-[0.985] ${fuera ? 'invisible' : ''}`}
     >
+      <TinteDePortada url={libro.cover_url} />
       <div className="w-16 shrink-0">
         <Cover url={libro.cover_url} title={libro.title} priority />
       </div>
