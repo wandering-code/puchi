@@ -615,8 +615,9 @@ def ver_trozos(ab_id: int, cap_id: int, db: Session = Depends(get_db), _: Player
 class Retoque(BaseModel):
     # El texto a decir. Sin él, el mismo de antes (solo cambia la semilla).
     text: Optional[str] = None
-    # La emoción: "same" (la que tenía), "none" (ninguna) o una de las que
-    # entiende Higgs (affection, anger). Cambiarla quita el estilo (shouting).
+    # La emoción: "same" (la que tenía), "none" (ninguna) o "affection". El
+    # enfado se quitó (#87); si un trozo viejo lo trae, el servidor de Higgs lo
+    # ignora. Cambiarla quita el estilo (shouting).
     emotion: str = "same"
 
 
@@ -638,10 +639,10 @@ def pedir_retoque(ab_id: int, cap_id: int, i: int, cuerpo: Retoque, db: Session 
         emocion, estilo = t.get("emocion"), t.get("estilo")
     elif cuerpo.emotion == "none":
         emocion, estilo = None, None
-    elif cuerpo.emotion in ("affection", "anger"):
+    elif cuerpo.emotion == "affection":
         emocion, estilo = cuerpo.emotion, None
     else:
-        raise HTTPException(status_code=422, detail="Emoción: same, none, affection o anger")
+        raise HTTPException(status_code=422, detail="Emoción: same, none o affection")
     pendientes = [r for r in (c.retoques or []) if r["i"] != i]
     pendientes.append({
         "i": i, "texto": texto, "emocion": emocion, "estilo": estilo,

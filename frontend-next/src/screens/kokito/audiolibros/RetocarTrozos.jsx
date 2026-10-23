@@ -510,9 +510,9 @@ function Tarjeta({ rehechos, posicion, enRonda, onAnterior, onSiguiente, onOirTo
   )
 }
 
-// Con qué emoción rehacerlo. Las que entiende Higgs con esta voz sin pasarse
-// (#73): ninguna, cariño o enfado. «Como estaban», solo al rehacer varios.
-const EMOCIONES = [['none', 'Ninguna'], ['affection', 'Cariño'], ['anger', 'Enfado']]
+// Con qué emoción rehacerlo: ninguna o cariño. El enfado se quitó (#87):
+// cambiaba la voz del narrador y gritaba. «Como estaban», solo al rehacer varios.
+const EMOCIONES = [['none', 'Ninguna'], ['affection', 'Cariño']]
 
 function Emociones({ valor, onCambiar, conIgual = false }) {
   const opciones = conIgual ? [['same', 'Como estaban'], ...EMOCIONES] : EMOCIONES
