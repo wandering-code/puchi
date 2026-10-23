@@ -1,3 +1,5 @@
+import { useEffect, useState } from 'react'
+
 // Saca el color del lomo de la propia portada, para que el libro de la balda
 // se parezca al que tienes en la mano.
 //
@@ -254,3 +256,29 @@ export function precargarColores(urls) {
   for (const url of new Set((urls || []).filter(Boolean))) colorDePortada(url)
   return () => {}
 }
+
+// El tinte de una tarjeta con el color de la portada de su libro: el de las
+// tarjetas de «Leyendo» en la estantería, y el de las vistas de añadir (#85),
+// para que un libro se sienta como ESE libro y no como una fila más.
+//
+// Llega después (hay que descargar la portada y mirarla), así que la tarjeta
+// nace neutra y se tiñe con una transición (TARJETA_TENIDA) en vez de dar un
+// salto de color. Si la portada es de un sitio que no deja leer sus píxeles
+// (Google Books), se queda neutra: esto es un adorno, no puede romper nada.
+export function usarTinteDePortada(url) {
+  const [paleta, setPaleta] = useState(() => colorConocido(url) || null)
+  useEffect(() => {
+    let vigente = true
+    setPaleta(colorConocido(url) || null)
+    colorDePortada(url).then(p => { if (vigente) setPaleta(p || null) })
+    return () => { vigente = false }
+  }, [url])
+  if (!paleta) return undefined
+  return {
+    backgroundColor: `color-mix(in srgb, ${paleta.color} var(--tinte-libro), var(--color-surface))`,
+    borderColor: `color-mix(in srgb, ${paleta.color} var(--tinte-libro-borde), var(--color-line))`,
+  }
+}
+
+// La caja de esas tarjetas, con la transición del tinte.
+export const TARJETA_TENIDA = 'rounded-xl2 border border-line bg-surface transition-[background-color,border-color] duration-300'

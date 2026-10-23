@@ -1,11 +1,12 @@
-import { useRef, useState } from 'react'
-import { AnimatePresence, motion } from 'motion/react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { motion } from 'motion/react'
 import { api } from '../../platform/api'
 import { FORMATO_LABEL, STATUS_LABEL, subirLomo, subirPortada } from './shelf'
 import { Cover } from './piezas'
 import { CamposFecha } from './editores'
 import { RellenarDatos, TamanoLibro } from './BookEditForm'
 import { Chip, usarSugerencias } from './ListaPrevia'
+import { TARJETA_TENIDA, usarTinteDePortada } from './colorPortada'
 import { medidas, usarAnchoLomo } from './Lomos'
 import HojaInferior, { useHoja } from './HojaInferior'
 import RecortarFoto from './RecortarFoto'
@@ -13,6 +14,8 @@ import CamaraGuiada, { pedirSensores, proporcionEsperada } from './CamaraGuiada'
 import { AccionesFoto } from './FotoLibro'
 import { useDeshacerAlta } from './deshacerAlta'
 import { IconChevron } from '../../ui/icons'
+import Desplegable from '../../ui/Desplegable'
+import { LLEGADA, enCss } from '../../ui/curvas'
 
 // Dar de alta un libro a mano: para lo que la búsqueda no encuentra —
 // ediciones raras, libros que no están en Open Library, o cosas que no son
@@ -56,8 +59,10 @@ export default function AltaManual({ onAnadido, onHecho, alClub, estanteria }) {
   const [fotoPortada, setFotoPortada] = useState(null)
   const [fotoLomo, setFotoLomo] = useState(null)
   const [recorte, setRecorte] = useState(null)   // { file, cual } esperando encuadre
-  const [masLibro, setMasLibro] = useState(false)
-  const [masCopia, setMasCopia] = useState(false)
+  // Qué bloques están abiertos (#85). Lo que hace falta casi siempre empieza
+  // abierto; lo demás, plegado, como antes.
+  const [abiertos, setAbiertos] = useState({ basico: true, libro: false, estanteria: true, copia: false })
+  const alternar = id => setAbiertos(a => ({ ...a, [id]: !a[id] }))
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState(null)
   const primero = useRef(null)
@@ -133,7 +138,12 @@ export default function AltaManual({ onAnadido, onHecho, alClub, estanteria }) {
 
   async function guardar(ev) {
     ev.preventDefault()
-    if (!datos.title.trim()) { setError('El título es lo único imprescindible'); primero.current?.focus(); return }
+    if (!datos.title.trim()) {
+      setError('El título es lo único imprescindible')
+      setAbiertos(a => ({ ...a, basico: true }))
+      primero.current?.focus()
+      return
+    }
     setGuardando(true); setError(null)
     // Lo del libro va en el alta misma; sin open_lib_key aunque el botón de
     // rellenar haya encontrado el libro fuera: un alta a mano crea SU libro,
@@ -184,11 +194,14 @@ export default function AltaManual({ onAnadido, onHecho, alClub, estanteria }) {
   const portada = fotoPortada?.url || datos.cover_url
   // Lo que ya se sabe del libro, para dar forma al marco de la cámara.
   const libroParaFoto = { num_pages: num(datos.num_pages), height_mm: mm, cover_url: portada }
+  // El libro que se está creando toma el color de su portada en cuanto la
+  // tiene, como las tarjetas de la búsqueda (#85).
+  const tinte = usarTinteDePortada(portada)
 
   return (
     <>
     <form onSubmit={guardar} className="pb-2">
-      <div className="flex items-end gap-4">
+      <div style={tinte} className={`${TARJETA_TENIDA} flex items-end gap-4 p-3`}>
         <motion.button
           type="button"
           onClick={hojaPortada.abrir}
@@ -219,6 +232,12 @@ export default function AltaManual({ onAnadido, onHecho, alClub, estanteria }) {
         </p>
       </div>
 
+      <Bloque
+        titulo="Lo básico"
+        resumen={resumen([datos.title.trim(), datos.author.trim()], 'Título, autor, género, año y páginas')}
+        abierto={abiertos.basico}
+        onAlternar={() => alternar('basico')}
+      >
       <Campo etiqueta="Título">
         <input ref={primero} value={datos.title} onChange={set('title')} className={ENTRADA} />
       </Campo>
@@ -252,7 +271,14 @@ export default function AltaManual({ onAnadido, onHecho, alClub, estanteria }) {
         </Campo>
       </div>
 
-      <Seccion titulo="Más datos del libro" abierta={masLibro} onAlternar={() => setMasLibro(v => !v)}>
+      </Bloque>
+
+      <Bloque
+        titulo="Más datos del libro"
+        resumen={resumen([datos.isbn && 'ISBN', mm && 'tamaño', datos.synopsis.trim() && 'sinopsis'], 'ISBN, tamaño y sinopsis', 'Con ')}
+        abierto={abiertos.libro}
+        onAlternar={() => alternar('libro')}
+      >
         <Campo etiqueta="ISBN">
           <input
             value={datos.isbn}
@@ -273,51 +299,50 @@ export default function AltaManual({ onAnadido, onHecho, alClub, estanteria }) {
             className={ENTRADA + ' h-auto resize-none py-3 leading-relaxed'}
           />
         </Campo>
-      </Seccion>
+      </Bloque>
 
       {!alClub && (
-        <Campo etiqueta="Cómo entra en tu estantería">
-          <div className="flex flex-wrap gap-2">
-            {['want_to_read', 'reading', 'read', 'dropped'].map(id => (
-              <button
-                key={id}
-                type="button"
-                onClick={() => setDatos(d => ({ ...d, status: id }))}
-                className={`relative rounded-full border px-3.5 py-2 text-sm transition-colors ${
-                  datos.status === id ? 'border-accent-line text-accent' : 'border-line text-ink-dim'
-                }`}
-              >
-                {datos.status === id && (
-                  <motion.span
-                    layoutId="alta-estado"
-                    className="absolute inset-0 rounded-full bg-accent-soft"
-                    transition={{ type: 'spring', stiffness: 420, damping: 34 }}
-                  />
-                )}
-                <span className="relative">{STATUS_LABEL[id]}</span>
-              </button>
-            ))}
-          </div>
+        <Bloque
+          titulo="En tu estantería"
+          resumen={STATUS_LABEL[datos.status]}
+          abierto={abiertos.estanteria}
+          onAlternar={() => alternar('estanteria')}
+        >
+        <Campo etiqueta="Cómo entra">
+          <PastillasEstado estado={datos.status} onElegir={id => setDatos(d => ({ ...d, status: id }))} />
         </Campo>
+
+        {/* Las fechas que tienen sentido para el estado elegido, y solo esas:
+            un libro por leer no tiene ninguna, uno que estás leyendo tiene
+            cuándo lo empezaste, y uno leído o dropeado tiene las dos. Se pueden
+            dejar en blanco — se guarda lo que pongas. */}
+        <Desplegable abierto={llevaInicio}>
+          <Campo etiqueta="Empezado">
+            <CamposFecha value={datos.started_at} onChange={v => setDatos(d => ({ ...d, started_at: v }))} />
+          </Campo>
+        </Desplegable>
+        <Desplegable abierto={llevaFin}>
+          <Campo etiqueta="Terminado">
+            <CamposFecha value={datos.finished_at} onChange={v => setDatos(d => ({ ...d, finished_at: v }))} />
+          </Campo>
+        </Desplegable>
+        </Bloque>
       )}
 
-      {/* Las fechas que tienen sentido para el estado elegido, y solo esas:
-          un libro por leer no tiene ninguna, uno que estás leyendo tiene
-          cuándo lo empezaste, y uno leído o dropeado tiene las dos. Se pueden
-          dejar en blanco — se guarda lo que pongas. */}
-      <Plegable abierta={llevaInicio}>
-        <Campo etiqueta="Empezado">
-          <CamposFecha value={datos.started_at} onChange={v => setDatos(d => ({ ...d, started_at: v }))} />
-        </Campo>
-      </Plegable>
-      <Plegable abierta={llevaFin}>
-        <Campo etiqueta="Terminado">
-          <CamposFecha value={datos.finished_at} onChange={v => setDatos(d => ({ ...d, finished_at: v }))} />
-        </Campo>
-      </Plegable>
-
       {!alClub && (
-        <Seccion titulo="Más datos de tu copia" abierta={masCopia} onAlternar={() => setMasCopia(v => !v)}>
+        <Bloque
+          titulo="Tu copia"
+          resumen={resumen([
+            datos.rating && `${String(datos.rating).replace('.', ',')} ★`,
+            datos.reading_format && FORMATO_LABEL[datos.reading_format],
+            datos.current_page && `pág. ${datos.current_page}`,
+            datos.folder.trim(),
+            datos.price && `${datos.price} €`,
+            datos.notes.trim() && 'notas',
+          ], 'Puntuación, formato, páginas, precio, carpeta y notas')}
+          abierto={abiertos.copia}
+          onAlternar={() => alternar('copia')}
+        >
           <Campo etiqueta="Puntuación">
             <select
               value={datos.rating}
@@ -347,16 +372,16 @@ export default function AltaManual({ onAnadido, onHecho, alClub, estanteria }) {
 
           {/* La paginación de TU edición: la del libro compartido es la de la
               ficha, y la tuya puede no ser esa (otra editorial, el eReader). */}
-          <Plegable abierta={datos.reading_format === 'fisico' || datos.reading_format === 'ambos'}>
+          <Desplegable abierto={datos.reading_format === 'fisico' || datos.reading_format === 'ambos'}>
             <Campo etiqueta="Páginas de tu edición">
               <input value={datos.custom_total_pages} onChange={entero('custom_total_pages')} inputMode="numeric" placeholder={datos.num_pages || '—'} className={ENTRADA} />
             </Campo>
-          </Plegable>
-          <Plegable abierta={datos.reading_format === 'ereader' || datos.reading_format === 'ambos'}>
+          </Desplegable>
+          <Desplegable abierto={datos.reading_format === 'ereader' || datos.reading_format === 'ambos'}>
             <Campo etiqueta="Páginas en el eReader">
               <input value={datos.ereader_total_pages} onChange={entero('ereader_total_pages')} inputMode="numeric" placeholder="—" className={ENTRADA} />
             </Campo>
-          </Plegable>
+          </Desplegable>
 
           <div className="flex gap-3">
             <Campo etiqueta="Página actual" className="flex-1">
@@ -395,21 +420,12 @@ export default function AltaManual({ onAnadido, onHecho, alClub, estanteria }) {
               className={ENTRADA + ' h-auto resize-none py-3 leading-relaxed'}
             />
           </Campo>
-        </Seccion>
+        </Bloque>
       )}
 
-      <AnimatePresence>
-        {error && (
-          <motion.p
-            className="mt-3 text-sm text-danger"
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-          >
-            {error}
-          </motion.p>
-        )}
-      </AnimatePresence>
+      <Desplegable abierto={!!error}>
+        <p className="pt-3 text-sm text-danger">{error}</p>
+      </Desplegable>
 
       <motion.button
         type="submit"
@@ -528,45 +544,98 @@ function HojaFoto({ hoja, tipo, libro, titulo, ayuda, hayFoto, onArchivo, onQuit
   )
 }
 
-// Un grupo de campos que empieza plegado: los que no hacen falta para añadir
-// el libro, pero que si los tienes delante es ahora cuando quieres ponerlos.
-function Seccion({ titulo, abierta, onAlternar, children }) {
+// Cada grupo de campos en su bloque, como los de Inicio (#85), y todos se
+// pueden plegar. Plegado dice lo que lleva puesto, para no tener que abrirlo
+// a mirar. El despliegue va en CSS (ui/Desplegable): lo hace el navegador a
+// la frecuencia de la pantalla, y no Motion desde JavaScript, que en Safari
+// va a 60.
+function Bloque({ titulo, resumen, abierto, onAlternar, children }) {
   return (
-    <div className="mt-5 border-t border-line pt-1">
-      <button
-        type="button"
-        onClick={onAlternar}
-        className="flex w-full items-center justify-between py-3 text-left text-sm font-semibold text-accent"
-      >
-        {titulo}
-        <IconChevron className={`h-4 w-4 transition-transform ${abierta ? 'rotate-180' : ''}`} />
+    <section className={`mt-3 overflow-hidden rounded-xl3 border bg-surface transition-colors ${abierto ? 'border-accent-line' : 'border-line'}`}>
+      <button type="button" onClick={onAlternar} aria-expanded={abierto} className="flex w-full items-center gap-3 px-4 py-3.5 text-left">
+        <span className="min-w-0 flex-1">
+          <span className="block font-display text-[16px] font-bold leading-tight tracking-[-0.01em]">{titulo}</span>
+          {resumen && <span className="mt-0.5 block truncate text-[12.5px] text-ink-dim">{resumen}</span>}
+        </span>
+        <IconChevron className={`h-4 w-4 shrink-0 text-ink-mute transition-transform duration-200 ${abierto ? 'rotate-180' : ''}`} />
       </button>
-      <Plegable abierta={abierta}>{children}</Plegable>
+      <Desplegable abierto={abierto}>
+        <div className="-mt-2 px-4 pb-4">{children}</div>
+      </Desplegable>
+    </section>
+  )
+}
+
+// El estado con el que entra. La pastilla de fondo se desliza hasta el
+// elegido, como antes, pero la mueve el navegador en CSS (a la frecuencia de
+// la pantalla) en vez de Motion con layoutId, que en Safari va a 60. Se mide
+// dónde cae el botón elegido, también si las pastillas saltan de línea.
+const ESTADOS = ['want_to_read', 'reading', 'read', 'dropped']
+
+function PastillasEstado({ estado, onElegir }) {
+  const caja = useRef(null)
+  const botones = useRef({})
+  const [sitio, setSitio] = useState(null)
+  const [conTransicion, setConTransicion] = useState(false)
+
+  useLayoutEffect(() => {
+    const medir = () => {
+      const b = botones.current[estado]
+      if (b) setSitio({ x: b.offsetLeft, y: b.offsetTop, w: b.offsetWidth, h: b.offsetHeight })
+    }
+    medir()
+    const ro = new ResizeObserver(medir)
+    if (caja.current) ro.observe(caja.current)
+    return () => ro.disconnect()
+  }, [estado])
+  // La primera vez se planta en su sitio; a partir de ahí, se desliza.
+  useEffect(() => {
+    if (!sitio || conTransicion) return
+    const id = requestAnimationFrame(() => setConTransicion(true))
+    return () => cancelAnimationFrame(id)
+  }, [sitio, conTransicion])
+
+  const curva = enCss(LLEGADA)
+  return (
+    <div ref={caja} className="relative flex flex-wrap gap-2">
+      {sitio && (
+        <span
+          aria-hidden
+          className="absolute left-0 top-0 rounded-full bg-accent-soft"
+          style={{
+            width: sitio.w, height: sitio.h,
+            transform: `translate(${sitio.x}px, ${sitio.y}px)`,
+            transition: conTransicion ? `transform ${curva}, width ${curva}, height ${curva}` : 'none',
+          }}
+        />
+      )}
+      {ESTADOS.map(id => (
+        <button
+          key={id}
+          ref={n => { botones.current[id] = n }}
+          type="button"
+          onClick={() => onElegir(id)}
+          className={`relative rounded-full border px-3.5 py-2 text-sm transition-colors ${
+            estado === id ? 'border-accent-line text-accent' : 'border-line text-ink-dim'
+          }`}
+        >
+          {STATUS_LABEL[id]}
+        </button>
+      ))}
     </div>
   )
 }
 
-// Alto animado con height:auto, que motion sí sabe interpolar: los campos
-// entran y salen, no aparecen de golpe.
-function Plegable({ abierta, children }) {
-  return (
-    <AnimatePresence initial={false}>
-      {abierta && (
-        <motion.div
-          className="overflow-hidden"
-          initial={{ height: 0, opacity: 0 }}
-          animate={{ height: 'auto', opacity: 1 }}
-          exit={{ height: 0, opacity: 0 }}
-          transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
-        >
-          {children}
-        </motion.div>
-      )}
-    </AnimatePresence>
-  )
+// Lo que va puesto en un bloque, en una línea: "Dune, Frank Herbert", o lo
+// que se puede poner si todavía no hay nada.
+function resumen(partes, vacio, antes = '') {
+  const puestas = partes.filter(Boolean)
+  if (!puestas.length) return vacio
+  const texto = puestas.join(', ')
+  return antes + (antes ? texto : texto.charAt(0).toUpperCase() + texto.slice(1))
 }
 
-const ENTRADA = 'h-12 w-full rounded-xl2 border border-line bg-surface px-3.5 text-[15px] text-ink outline-none transition-colors placeholder:text-ink-mute focus:border-accent-line'
+const ENTRADA = 'h-12 w-full rounded-xl2 border border-line bg-bg/60 px-3.5 text-[15px] text-ink outline-none transition-colors placeholder:text-ink-mute focus:border-accent-line'
 
 function Campo({ etiqueta, className = '', children }) {
   return (

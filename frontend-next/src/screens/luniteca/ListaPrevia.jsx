@@ -1,6 +1,7 @@
 import { memo, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { Cover } from './piezas'
+import { TARJETA_TENIDA, usarTinteDePortada } from './colorPortada'
 import { CamposFecha } from './editores'
 import { TamanoLibro } from './BookEditForm'
 import { FORMATO_LABEL, STATUS_LABEL } from './shelf'
@@ -47,7 +48,7 @@ export default function ListaPrevia({
         </div>
       </div>
 
-      <div className="divide-y divide-[color:var(--color-line)]">
+      <div className="mt-2 space-y-2">
         {filas.map(fila => (
           <Fila
             key={fila.clave}
@@ -96,8 +97,12 @@ const Fila = memo(function Fila({ fila, incluida, abierta, onAlternar, onAbrir, 
     fila.num_pages ? `${fila.num_pages} pág.` : null,
   ].filter(Boolean).join(' · ')
 
+  // Con el color de su portada, como en la búsqueda (#85). Las portadas van
+  // llegando mientras se completan los datos, y cada tarjeta se tiñe sola.
+  const tinte = usarTinteDePortada(fila.cover_url)
+
   return (
-    <div className={`py-3 ${incluida ? '' : 'opacity-55'}`}>
+    <div style={tinte} className={`${TARJETA_TENIDA} p-3 ${incluida ? '' : 'opacity-55'}`}>
       <div className="flex items-start gap-3">
         <button
           onClick={onAlternar}
@@ -115,7 +120,7 @@ const Fila = memo(function Fila({ fila, incluida, abierta, onAlternar, onAbrir, 
             <Cover url={fila.cover_url} title={fila.title} realce={false} />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-[15px] leading-tight">{fila.title || <span className="text-danger">Sin título</span>}</p>
+            <p className="font-display text-[15px] font-semibold leading-tight">{fila.title || <span className="text-danger">Sin título</span>}</p>
             {meta && <p className="mt-0.5 truncate text-xs text-ink-mute">{meta}</p>}
             <div className="mt-1 flex flex-wrap items-center gap-1.5">
               <Etiqueta>{STATUS_LABEL[fila.status]}</Etiqueta>

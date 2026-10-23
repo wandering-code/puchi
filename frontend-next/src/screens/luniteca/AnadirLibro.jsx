@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { api } from '../../platform/api'
 import { Cover } from './piezas'
+import { TARJETA_TENIDA, usarTinteDePortada } from './colorPortada'
 import PantallaInferior from './PantallaInferior'
 import AltaManual from './AltaManual'
 import EscanerISBN from './EscanerISBN'
@@ -9,6 +10,7 @@ import ImportarLibros from './ImportarLibros'
 import { useDeshacerAlta } from './deshacerAlta'
 import { IconCheck, IconPlus, IconSearch, IconX } from '../../ui/icons'
 import { LLEGADA, enCss } from '../../ui/curvas'
+import { LunaDelPanel, TINTE, usarCabeceraConPanel } from './panel'
 
 // Añadir un libro: buscándolo (en lo que ya tiene el club y en Open Library) o
 // escribiéndolo a mano cuando la búsqueda no lo encuentra.
@@ -44,12 +46,22 @@ export default function AnadirLibro({ onCerrar, onAnadido, onImportado, estanter
   const cambiada = useRef(false)
   if (indice !== previo.current) cambiada.current = true
   previo.current = indice
+  // La cabecera como la de la Luniteca con el panel de la prueba #79: teñida
+  // del color de la app, con la luna, acabando en esquinas redondeadas (#85).
+  // Va con el mismo ajuste, para que las dos se vean igual.
+  const [conPanel] = usarCabeceraConPanel()
 
   return (
     <PantallaInferior
       onCerrar={onCerrar}
+      cabeceraTenida={conPanel}
       cabecera={
-        <div className="mx-auto w-full max-w-md px-6">
+        <div className={conPanel
+          ? `relative mb-5 overflow-hidden rounded-b-[26px] shadow-[0_10px_24px_-14px_rgb(var(--color-sombra)/.45)] ${TINTE}`
+          : ''}
+        >
+        <LunaDelPanel conPanel={conPanel} />
+        <div className="relative mx-auto w-full max-w-md px-6">
           <div className="flex items-center gap-3 py-3">
             <h2 className="flex-1 font-display text-xl font-bold tracking-[-0.01em]">
               {alClub ? 'Proponer al club' : 'Añadir libro'}
@@ -63,7 +75,11 @@ export default function AnadirLibro({ onCerrar, onAnadido, onImportado, estanter
             </button>
           </div>
 
-          <div className="relative mb-4 flex gap-1">
+          {/* Con el panel, las pestañas van sobre su propia superficie, como
+              los botones de la barra de la Luniteca. El relleno va fuera: la
+              pastilla mide su ancho y su sitio contra la caja de dentro. */}
+          <div className={conPanel ? 'mb-4 rounded-[18px] bg-surface/70 p-1' : 'mb-4'}>
+          <div className="relative flex gap-1">
             {/* Una sola pastilla que se desliza con una transición CSS, en la
                 GPU (con layoutId Motion la movía desde JavaScript, a 60
                 fotogramas en Safari). Las pestañas miden lo mismo (flex-1), así
@@ -89,6 +105,8 @@ export default function AnadirLibro({ onCerrar, onAnadido, onImportado, estanter
               </button>
             ))}
           </div>
+          </div>
+        </div>
         </div>
       }
     >
@@ -175,9 +193,9 @@ function Buscador({ onAnadido, alClub }) {
       {error && <p className="mt-3 text-sm text-danger">{error}</p>}
 
       {buscando && (
-        <div className="mt-4 space-y-3">
+        <div className="mt-4 space-y-2">
           {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="flex gap-3">
+            <div key={i} className={`${TARJETA_TENIDA} flex gap-3 p-3`}>
               <div className="h-[72px] w-12 animate-pulse rounded-md bg-surface-2" />
               <div className="flex-1 space-y-2 py-1">
                 <div className="h-4 w-3/4 animate-pulse rounded bg-surface-2" />
@@ -189,7 +207,7 @@ function Buscador({ onAnadido, alClub }) {
       )}
 
       {resultados && !buscando && (
-        <div className="mt-4 divide-y divide-[color:var(--color-line)]">
+        <div className="mt-4 space-y-2">
           {resultados.map((libro, i) => (
             <Resultado key={libro.book_id ?? libro.open_lib_key ?? i} libro={libro} onAnadido={onAnadido} alClub={alClub} />
           ))}
@@ -239,13 +257,17 @@ function Resultado({ libro, onAnadido, alClub }) {
       ? `lo tiene ${libro.added_by.slice(0, 2).join(', ')}${libro.added_by.length > 2 ? ` y ${libro.added_by.length - 2} más` : ''}`
       : null
 
+  // Cada resultado con el color de su portada, como las tarjetas de
+  // «Leyendo» de la estantería (#85).
+  const tinte = usarTinteDePortada(libro.cover_url)
+
   return (
-    <div className="flex items-center gap-3 py-3">
+    <div style={tinte} className={`${TARJETA_TENIDA} flex items-center gap-3 p-3`}>
       <div className="w-12 shrink-0">
         <Cover url={libro.cover_url} title={libro.title} />
       </div>
       <div className="min-w-0 flex-1">
-        <p className="text-[15px] leading-tight">{libro.title}</p>
+        <p className="font-display text-[15px] font-semibold leading-tight">{libro.title}</p>
         <p className="mt-0.5 truncate text-xs text-ink-mute">{libro.author || 'Sin autor'}</p>
         {nota && <p className="mt-0.5 truncate text-[11px] text-ink-mute/80">{nota}</p>}
       </div>
@@ -284,7 +306,7 @@ function BotonAnadir({ estado, onAnadir, etiqueta }) {
       whileTap={{ scale: 0.92 }}
       aria-label={etiqueta}
       className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border transition-colors ${
-        estado === 'error' ? 'border-danger text-danger' : 'border-accent-line text-accent'
+        estado === 'error' ? 'border-danger bg-surface text-danger' : 'border-accent-line bg-surface text-accent'
       }`}
     >
       {estado === 'anadiendo'

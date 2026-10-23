@@ -4,6 +4,7 @@ import { LLEGADA, SALIDA, enCss } from '../../ui/curvas'
 import { createPortal } from 'react-dom'
 import { motion, usePresence } from 'motion/react'
 import { useArrastreParaCerrar } from '../../ui/arrastre'
+import { FONDO_REBOTE, TINTE } from './panel'
 
 // Una pantalla completa que sube desde abajo: la ficha de un libro y añadir
 // libro. Es la hermana mayor de HojaInferior — misma llegada y mismo gesto para
@@ -30,6 +31,10 @@ export default function PantallaInferior({
   // ficha de un libro, que también es una PantallaInferior, y tiene que
   // quedar encima aunque esté montado antes en la página.
   nivel = 50,
+  // Para quien pone arriba una cabecera teñida (añadir libro, #85): la
+  // franja del asa va del mismo tinte, y el rebote de iOS al tirar hacia
+  // abajo estando arriba no enseña el fondo claro (ver más abajo).
+  cabeceraTenida = false,
 }) {
   // `aparicion`: 'subir' es la de siempre. 'fundido' es para cuando el libro ya
   // ha volado hasta aquí desde la estantería: la pantalla no puede subir
@@ -203,13 +208,31 @@ export default function PantallaInferior({
       >
         {/* El asa ya no necesita apartarse de la zona segura: el panel entero
             empieza por debajo de ella. */}
-        <div {...arrastre.asa} className="flex shrink-0 cursor-grab justify-center pb-1 pt-2 active:cursor-grabbing">
+        <div {...arrastre.asa} className={`flex shrink-0 cursor-grab justify-center pb-1 pt-2 active:cursor-grabbing ${cabeceraTenida ? `rounded-t-[28px] ${TINTE}` : ''}`}>
           <span className="h-1 w-10 rounded-full bg-line" />
         </div>
 
-        <div ref={ponerCuerpo} className="flex-1 overflow-y-auto overscroll-contain">
-          {cabecera}
-          {children}
+        {/* Con cabecera teñida, lo mismo que en la Luniteca (ver usarPanel):
+            el rebote de iOS al tirar hacia abajo enseña el fondo de la zona
+            que se desplaza, no lo que hay encima, así que ese fondo es del
+            tinte en su mitad de arriba y el contenido lleva el suyo propio
+            (también bajo las esquinas redondeadas de la cabecera). */}
+        <div
+          ref={ponerCuerpo}
+          className="flex-1 overflow-y-auto overscroll-contain"
+          style={cabeceraTenida ? { background: FONDO_REBOTE } : undefined}
+        >
+          {cabeceraTenida ? (
+            <div className="min-h-full bg-bg">
+              {cabecera}
+              {children}
+            </div>
+          ) : (
+            <>
+              {cabecera}
+              {children}
+            </>
+          )}
         </div>
 
         {/* El pie va FUERA del scroll: lo usa la conversación del chat para

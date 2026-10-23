@@ -15,7 +15,7 @@ import {
 import HojaFiltros from './HojaFiltros'
 import AnadirLibro from './AnadirLibro'
 import Lomos from './Lomos'
-import { colorDePortada, precargarColores } from './colorPortada'
+import { precargarColores, usarTinteDePortada } from './colorPortada'
 import { precargarProporciones } from './proporcionLomo'
 import { generarYSubirLomo } from './generarLomo'
 import { usarVuelo } from './usarVuelo'
@@ -939,18 +939,7 @@ export const TarjetaLeyendo = memo(function TarjetaLeyendo({ entry, onAbrir, fue
   // nace neutra y se tiñe con una transición en vez de dar un salto de color.
   // Si la portada es de fuera y el navegador no deja leerla, se queda neutra:
   // esto es un adorno, no puede romper nada.
-  const [paleta, setPaleta] = useState(null)
-  useEffect(() => {
-    let vigente = true
-    colorDePortada(entry.book.cover_url).then(p => { if (vigente && p) setPaleta(p) })
-    return () => { vigente = false }
-  }, [entry.book.cover_url])
-  const tinte = paleta
-    ? {
-        backgroundColor: `color-mix(in srgb, ${paleta.color} var(--tinte-libro), var(--color-surface))`,
-        borderColor: `color-mix(in srgb, ${paleta.color} var(--tinte-libro-borde), var(--color-line))`,
-      }
-    : undefined
+  const tinte = usarTinteDePortada(entry.book.cover_url)
   // Páginas o porcentaje, a gusto de quien mira: un toque en la propia
   // etiqueta cambia de una a otra. Va con la cuenta, como la vista, porque es
   // la misma clase de gusto ("cómo prefiero mirar esto") y no tiene sentido

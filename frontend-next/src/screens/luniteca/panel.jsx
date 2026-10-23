@@ -8,6 +8,10 @@ import { IconLuna } from '../../ui/icons'
 // en Ajustes y va con la cuenta; apagado, la de antes.
 
 export const TINTE = 'bg-[color-mix(in_srgb,var(--color-accent)_11%,var(--color-bg))]'
+// El mismo color, para un `style`.
+export const COLOR_TINTE = 'color-mix(in srgb, var(--color-accent) 11%, var(--color-bg))'
+// El fondo de la zona que se desplaza bajo una cabecera teñida: ver usarPanel.
+export const FONDO_REBOTE = `linear-gradient(to bottom, ${COLOR_TINTE} 50%, var(--color-bg) 50%)`
 const PANEL = `${TINTE} rounded-b-[26px] shadow-[0_10px_24px_-14px_rgb(var(--color-sombra)/.45)]`
 
 export function usarCabeceraConPanel() {
@@ -27,7 +31,7 @@ export function usarPanel(listo = true) {
   useEffect(() => {
     const zona = conPanel && listo && raiz.current?.closest('[data-scroll="pantalla"]')
     if (!zona) return
-    zona.style.background = 'linear-gradient(to bottom, color-mix(in srgb, var(--color-accent) 11%, var(--color-bg)) 50%, var(--color-bg) 50%)'
+    zona.style.background = FONDO_REBOTE
     return () => { zona.style.background = '' }
   }, [conPanel, listo])
 
