@@ -16,20 +16,24 @@ import MuestraDeVoz from './MuestraDeVoz'
 
 const SUAVE = { duration: 0.24, ease: [0.22, 1, 0.36, 1] }
 
-export default function BloqueAudiolibro({ bookId, abierta }) {
+export default function BloqueAudiolibro({ bookId, abierta, version = 0, pagina = null }) {
   const r = useReproductor()
   const [datos, setDatos] = useState(null)
   const [peticion, setPeticion] = useState(null)
 
   // Cada vez que se abre la ficha: puede haber capítulos nuevos, se ha
   // seguido escuchando en otro dispositivo o el admin ha atendido la petición.
+  // Y cada vez que se guarda en la ficha por dónde vas leyendo (`version`) o
+  // cambia la página por otro lado (escuchar la va moviendo, `pagina`): si
+  // no, comparando con lo que suena, el aviso de que no coinciden saltaba
+  // solo a los pocos minutos de escuchar.
   useEffect(() => {
     if (!r || !abierta) return
     let vivo = true
     api(`/listen/book/${bookId}`).then(d => vivo && setDatos(d)).catch(() => vivo && setDatos(null))
     api(`/audiobook-requests/book/${bookId}`).then(d => vivo && setPeticion(d)).catch(() => vivo && setPeticion(null))
     return () => { vivo = false }
-  }, [bookId, abierta, r])
+  }, [bookId, abierta, r, version, pagina])
 
   if (!r) return null
   // Con el EPUB subido llega aunque no haya nada generado (#78): entonces se
@@ -114,16 +118,22 @@ function Escuchar({ r, datos, pedido, leer }) {
     else r.abrir(datos, { reproducir: true, mostrar: false })
   }
 
-  // Leyendo vas por delante de lo escuchado (#71): escuchar desde el capítulo
-  // de tu página. Si este libro ya está cargado, basta con cambiar de
-  // capítulo; si no, se abre empezando ahí.
+  // Siempre que tu página marcada y el audio no coincidan, por delante o por
+  // detrás (#71, #84), se ofrece llevar el audio a tu página: al segundo del
+  // capítulo en el que cae, no a su principio.
   const lectura = datos.reading
   const capLectura = lectura && datos.chapters.find(c => c.id === lectura.chapter_id)
+  const desdeSegundo = lectura?.position_s || 0
   function desdeLectura() {
     if (!capLectura?.ready) return
-    if (r.libro?.id === datos.id) r.elegir(capLectura)
-    else r.abrir({ ...datos, progress: { chapter_id: capLectura.id, position_s: 0 } }, { reproducir: true, mostrar: false })
+    r.ponerEn(datos, capLectura, desdeSegundo)
   }
+  // Sonando este libro, se compara con lo que suena ahora mismo, no con lo
+  // último guardado; si no, lo dice el servidor.
+  const enDirecto = esteSuena && capLectura ? distancia(datos.chapters, r.cap.id, r.t, capLectura.id, desdeSegundo) : null
+  const margen = 2 * (lectura?.page_s || 90)
+  const noCoincide = enDirecto != null ? Math.abs(enDirecto) > margen : !!lectura?.differs
+  const audioPorDelante = enDirecto != null ? enDirecto > 0 : lectura?.direction === 'behind'
 
   return (
     <motion.div
@@ -158,7 +168,7 @@ function Escuchar({ r, datos, pedido, leer }) {
         )}
       </div>
       <AnimatePresence initial={false}>
-        {lectura?.ahead && capLectura && r.cap?.id !== capLectura.id && (
+        {noCoincide && capLectura && (
           <motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
@@ -169,7 +179,9 @@ function Escuchar({ r, datos, pedido, leer }) {
             <div className="mt-2 flex items-center gap-3 rounded-xl2 border border-line bg-surface px-3 py-2.5 text-left">
               <IconLibroAbierto className="h-4 w-4 shrink-0 text-ink-mute" />
               <span className="min-w-0 flex-1 text-xs leading-snug text-ink-dim">
-                Leyendo vas por la pág. {lectura.page} de {lectura.of}
+                {audioPorDelante
+                  ? <>Tienes marcada la pág. {lectura.page} de {lectura.of}, y el audio va más adelante</>
+                  : <>Leyendo vas por la pág. {lectura.page} de {lectura.of}</>}
                 <span className="block truncate text-ink-mute">«{capLectura.title}»</span>
               </span>
               {capLectura.ready ? (
@@ -188,6 +200,19 @@ function Escuchar({ r, datos, pedido, leer }) {
       </AnimatePresence>
     </motion.div>
   )
+}
+
+// Cuántos segundos de audio hay de tu página a lo que suena: positivo si el
+// audio va por delante. Con las duraciones de los capítulos de en medio, para
+// que justo en el cambio de capítulo no parezca que no coinciden.
+function distancia(caps, capAudio, tAudio, capPagina, tPagina) {
+  const i = caps.findIndex(c => c.id === capAudio)
+  const j = caps.findIndex(c => c.id === capPagina)
+  if (i < 0 || j < 0) return null
+  const dur = n => caps[n].duration_s || 0
+  let d = tAudio - tPagina
+  for (let n = Math.min(i, j); n < Math.max(i, j); n++) d += (i > j ? 1 : -1) * dur(n)
+  return d
 }
 
 // Lo que se dice en cada momento de la petición.

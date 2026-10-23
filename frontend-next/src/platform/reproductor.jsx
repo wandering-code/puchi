@@ -107,7 +107,9 @@ export function ReproductorProvider({ children }) {
       const desde = !guardado && l.start_chapter_id ? l.chapters.findIndex(c => c.id === l.start_chapter_id) : -1
       const pedido = desde >= 0 ? l.chapters.slice(desde).find(c => c.ready) : null
       let c = guardado || pedido || l.chapters.find(c => c.ready)
-      let pos = guardado ? l.progress.position_s : 0
+      // Si empieza por donde vas leyendo, en el segundo de tu página (#84).
+      let pos = guardado ? l.progress.position_s
+        : c && c === pedido && c.id === l.start_chapter_id ? (l.start_position_s || 0) : 0
       // Se dejó al final de un capítulo: se sigue por el siguiente que esté
       // listo, o por el principio de este si todavía no hay otro. Si no, el
       // play terminaba al instante y parecía que no hacía nada.

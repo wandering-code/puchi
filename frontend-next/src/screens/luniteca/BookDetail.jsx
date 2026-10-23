@@ -36,6 +36,16 @@ export default function BookDetail({
   const libro = entry.book
   const paginas = totalPages(entry)
 
+  // Cada vez que se guarda por dónde vas (o el estado), el bloque del
+  // audiolibro vuelve a preguntar: si no, el aviso de «leyendo vas por…» no
+  // se enteraba hasta salir del libro y volver a entrar (#84). Se espera al
+  // PATCH, no al cambio optimista, para que el servidor ya lo tenga.
+  const [lecturaGuardada, setLecturaGuardada] = useState(0)
+  const actualizar = async patch => {
+    await onActualizar?.(patch)
+    if ('current_page' in patch || 'status' in patch) setLecturaGuardada(v => v + 1)
+  }
+
   // Puntuar algo que aún no has empezado no significa nada; en cuanto se ha
   // leído (o se ha dejado a medias) sí.
   const puedePuntuar = entry.status !== 'want_to_read'
@@ -197,7 +207,7 @@ export default function BookDetail({
               </>
             ) : (
               <>
-                <EditorEstado entry={entry} onActualizar={onActualizar} />
+                <EditorEstado entry={entry} onActualizar={actualizar} />
                 <EditorFechas entry={entry} onActualizar={onActualizar} />
                 <EditorCarpeta entry={entry} carpetas={carpetas} onActualizar={onActualizar} />
                 <EditorFormato entry={entry} onActualizar={onActualizar} />
@@ -222,13 +232,13 @@ export default function BookDetail({
             <div className="mt-6 w-full">
               {soloLectura
                 ? <VisorProgreso entry={entry} />
-                : <EditorProgreso entry={entry} onActualizar={onActualizar} />}
+                : <EditorProgreso entry={entry} onActualizar={actualizar} />}
             </div>
           )}
 
           {/* El audiolibro, si lo hay: solo en tu propia ficha (escucharlo
               depende de tenerlo en tu estantería) y de momento solo en /kokito. */}
-          {CON_AUDIOLIBROS && !soloLectura && <BloqueAudiolibro bookId={libro.id} abierta={abierta} />}
+          {CON_AUDIOLIBROS && !soloLectura && <BloqueAudiolibro bookId={libro.id} abierta={abierta} version={lecturaGuardada} pagina={entry.current_page} />}
 
           {/* Lo que se puede hacer con el libro de otro: quedárselo. */}
           {/* La key ata el botón al libro: la ficha ya no se desmonta al

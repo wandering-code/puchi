@@ -79,9 +79,38 @@ def _porcentaje(caps: list, cap_id: Optional[int], segundo: float) -> Optional[f
     return min(1.0, (sum(c.words for c in caps[:i]) + fraccion * actual.words) / total)
 
 
-# Margen para decir que la lectura va "por delante" del audio: lo que se lee
-# de más en una sentada, no una página suelta.
-POR_DELANTE = 0.01
+# Cuándo lo leído y lo escuchado "no coinciden" (#84), hacia delante o hacia
+# atrás: más de dos páginas. Escuchar ya mueve la página marcada, pero
+# redondeando hacia abajo, así que va hasta una página y pico por detrás del
+# audio; con menos margen el aviso saldría todo el rato mientras se escucha.
+MARGEN_PAGINAS = 2
+
+# Sin mapa la cuenta es una regla de tres con todo el capítulo, y puede caer
+# en mitad de una frase o un poco más allá: se empieza algo antes.
+ANTES_SIN_MAPA = 15
+
+
+def _segundo_en(c: AudiobookChapter, fraccion: float) -> float:
+    """En qué segundo del audio de un capítulo cae esa parte de su texto
+    (0 = el principio, 1 = el final), para escuchar desde donde vas leyendo
+    y no desde el principio del capítulo (#84). Con mapa, el principio del
+    trozo (la frase o el párrafo) en el que cae, contando palabras; sin él,
+    por la duración."""
+    fraccion = min(1.0, max(0.0, fraccion))
+    trozos = [t for t in ((c.recipe or {}).get("mapa") or []) if t.get("ini") is not None] \
+        if isinstance(c.recipe, dict) else []
+    if trozos:
+        palabras = [len((t.get("texto") or "").split()) for t in trozos]
+        objetivo = fraccion * (sum(palabras) or 1)
+        llevado = 0
+        for t, n in zip(trozos, palabras):
+            if llevado + n > objetivo:
+                return float(t["ini"])
+            llevado += n
+        return float(trozos[-1]["ini"])
+    if not c.duration_s:
+        return 0.0
+    return max(0.0, fraccion * c.duration_s - ANTES_SIN_MAPA)
 
 
 def _donde_lees(db: Session, ab: Audiobook, p: Player, caps: list) -> Optional[dict]:
@@ -101,15 +130,27 @@ def _donde_lees(db: Session, ab: Audiobook, p: Player, caps: list) -> Optional[d
     cap, _como = capitulo_deseado(caps, e.current_page, None, total)
     if not cap:
         return None
+    # Qué parte de ese capítulo llevas: la misma cuenta por palabras que
+    # capitulo_deseado, ya dentro del capítulo.
+    fraccion = min(1.0, max(0.0, (e.current_page - 1) / total))
+    antes = sum(c.words for c in caps[:caps.index(cap)])
+    dentro = (fraccion * sum(c.words for c in caps) - antes) / cap.words if cap.words else 0.0
     # La página como la ve quien lee: en las de su eReader si lee ahí (la
     # misma regla de tres que la ficha del libro).
     pagina, de = e.current_page, total
     er = e.ereader_total_pages
     if e.reading_format == "ereader" and er and er != total:
         pagina, de = max(1, round(e.current_page * er / total)), er
-    return {"page": pagina, "of": de, "fraction": min(1.0, (e.current_page - 1) / total),
+    # Lo que dura una página en este capítulo, para que la app compare con
+    # lo que va sonando en directo con el mismo margen.
+    por_pagina = sum(c.words for c in caps) / total
+    pagina_s = cap.duration_s * por_pagina / cap.words if cap.duration_s and cap.words else None
+    return {"page": pagina, "of": de, "fraction": fraccion, "_total": total,
+            "page_s": round(pagina_s, 1) if pagina_s else None,
             "chapter_id": cap.id, "chapter_title": cap.title,
-            "ready": _suena(cap)}
+            "ready": _suena(cap),
+            # El segundo de ese capítulo en el que cae tu página (#84).
+            "position_s": round(_segundo_en(cap, dentro), 1) if _suena(cap) else 0}
 
 
 def _para_escuchar(db: Session, ab: Audiobook, p: Player) -> dict:
@@ -138,7 +179,8 @@ def _para_escuchar(db: Session, ab: Audiobook, p: Player) -> dict:
 
     # Lo que llevas leído (#71). La primera vez, si vas más adelante que lo
     # que pediste (o no pediste nada), se empieza por donde lees. Después,
-    # si lees por delante de lo escuchado, se ofrece saltar ahí.
+    # si lo leído y lo escuchado no coinciden, por delante o por detrás, se
+    # ofrece llevar el audio a tu página (#84).
     lectura = _donde_lees(db, ab, p, caps)
     if lectura and not (prog and prog.chapter_id):
         pos = {c.id: c.position for c in caps}
@@ -146,8 +188,12 @@ def _para_escuchar(db: Session, ab: Audiobook, p: Player) -> dict:
             empezar, motivo = lectura["chapter_id"], "lectura"
     if lectura:
         escuchado = _porcentaje(caps, prog.chapter_id, prog.position_s) if prog and prog.chapter_id else None
-        lectura["ahead"] = escuchado is not None and lectura["fraction"] > escuchado + POR_DELANTE
-        del lectura["fraction"]
+        total = lectura.pop("_total")
+        fraccion = lectura.pop("fraction")
+        lectura["differs"] = escuchado is not None and abs(fraccion - escuchado) * total > MARGEN_PAGINAS
+        # Hacia dónde: "ahead" si lees por delante del audio, "behind" si el
+        # audio va por delante de tu página.
+        lectura["direction"] = None if not lectura["differs"] else "ahead" if fraccion > escuchado else "behind"
     # La del EPUB; si no trae, la de alguno de los libros enlazados.
     portada = ab.cover_url or (db.query(Book.cover_url)
                                .join(AudiobookBook, AudiobookBook.book_id == Book.id)
@@ -160,6 +206,8 @@ def _para_escuchar(db: Session, ab: Audiobook, p: Player) -> dict:
         # Por qué empieza ahí: "peticion" (lo pidió así) o "lectura" (por
         # donde va leyendo).
         "start_reason": motivo,
+        # Empezando por donde lees, también el segundo (#84).
+        "start_position_s": lectura["position_s"] if motivo == "lectura" else 0,
         "reading": lectura,
         "chapters_total": len(caps), "chapters_ready": len(listos),
         "audio_minutes": round(sum(c.duration_s or 0 for c in listos) / 60),
