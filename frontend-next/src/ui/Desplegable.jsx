@@ -3,7 +3,7 @@ import { PresenceContext, usePresence } from 'motion/react'
 import { LLEGADA, SALIDA } from './curvas'
 import { deslizar, fotografiar, movimientoReducido } from './telon'
 
-// El aviso de que algo se acaba de plegar del todo (ver más abajo).
+// El aviso de que algo empieza a plegarse, con cuánto encoge (ver más abajo).
 export const ENCOGE = 'puchi:encoge'
 
 // Abrir y cerrar un trozo de contenido a la frecuencia de la pantalla (120 en
@@ -27,7 +27,11 @@ export const ENCOGE = 'puchi:encoge'
 // `onTelon`: para quien tenga que acompañar el cambio de alto (el marco de la
 // tarjeta en la que va, ver ui/Marco.jsx). Recibe { abriendo, delta, opciones }
 // y devuelve sus animaciones, que se quitan a la vez que estas.
-export default function Desplegable({ abierto = true, children, className = '', onTelon = null }) {
+// `extraAlPlegar`: si se da (aunque sea 0), quien lo usa garantiza que al
+// plegarse lo de debajo sube justo lo que mide esto más ese extra (lo que
+// encoja además a la vez, como la franja de una sección), y el telón se
+// ahorra medirlo plegando de mentira (ver `encoge` en ui/telon.js).
+export default function Desplegable({ abierto = true, children, className = '', onTelon = null, extraAlPlegar = null }) {
   const raiz = useRef(null)
   const [visible, setVisible] = useState(abierto)
   if (abierto && !visible) setVisible(true)
@@ -58,6 +62,7 @@ export default function Desplegable({ abierto = true, children, className = '', 
     const { animaciones: hechas, opciones } = deslizar(f, {
       abriendo: abierto,
       t: abierto ? LLEGADA : SALIDA,
+      encoge: extraAlPlegar == null ? null : el.offsetHeight + extraAlPlegar,
       // El atributo también: la tarjeta de una sección cambia de forma al
       // quedarse plegada (ver .titulo-banda en index.css), y el telón tiene
       // que medir ese final para llevar ahí lo de debajo.
@@ -73,6 +78,12 @@ export default function Desplegable({ abierto = true, children, className = '', 
       opciones,
     )
     const delMarco = onTelon?.({ abriendo: abierto, delta: el.offsetHeight, opciones }) || []
+    // Al empezar a plegar se avisa de cuánto va a encoger la página: lo que se
+    // estira con el contenido (CapaDeContenido, en eventos/Adorno) encoge ya,
+    // sin medir nada. Si encogiera al final, ese fotograma tendría que
+    // recolocar la página dos veces (o, sin esperar, el scroll se recolocaría
+    // un fotograma tarde: medido, un salto de 580px y vuelta).
+    if (!abierto) window.dispatchEvent(new CustomEvent(ENCOGE, { detail: el.offsetHeight + (extraAlPlegar || 0) }))
     animaciones.current = [...hechas, fundido, ...delMarco]
     fundido.onfinish = () => {
       if (abierto) parar()
@@ -83,21 +94,11 @@ export default function Desplegable({ abierto = true, children, className = '', 
 
   // Ya plegado de verdad: ahora sí se quitan las animaciones, en el mismo
   // fotograma en que el contenido desaparece. No hay salto.
-  //
-  // Y se avisa de que el contenido ha encogido, antes de pintar: lo que se
-  // estira con el contenido (CapaDeContenido, en eventos/Adorno) tiene que
-  // encoger en este mismo fotograma. Si no, el scroll aún no se recoloca, el
-  // telón ya ha quitado sus animaciones, y se ve un fotograma con todo en el
-  // sitio de antes (medido: un salto de 580px y vuelta).
-  useLayoutEffect(() => {
-    if (visible) return
-    parar()
-    window.dispatchEvent(new Event(ENCOGE))
-  }, [visible])
+  useLayoutEffect(() => { if (!visible) parar() }, [visible])
   useLayoutEffect(() => parar, [])
 
   return (
-    <div ref={raiz} className={className} style={visible ? undefined : { display: 'none' }} data-plegado={visible ? undefined : ''} inert={!abierto}>
+    <div ref={raiz} className={className} style={visible ? undefined : { display: 'none' }} data-plegado={visible ? undefined : ''} inert={!visible}>
       {abierto ? children : ultimo.current}
     </div>
   )

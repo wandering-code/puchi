@@ -801,11 +801,14 @@ const DentroDePlegable = createContext(false)
 export function Plegable({ abierta, children }) {
   const caja = useContext(MarcoDeSeccion)
   const anidada = useContext(DentroDePlegable)
+  const extra = caja && !anidada ? caja.extra : 0
   const onTelon = useMemo(() => (caja
-    ? t => caja.marco.current?.telon({ ...t, delta: t.delta + (anidada ? 0 : caja.extra) }) || []
-    : null), [caja, anidada])
+    ? t => caja.marco.current?.telon({ ...t, delta: t.delta + extra }) || []
+    : null), [caja, extra])
+  // Lo de debajo sube lo que mide el contenido más la franja (si la hay): se
+  // le dice al telón para que no tenga que medirlo (ver ui/telon.js).
   return (
-    <Desplegable abierto={!!abierta} onTelon={onTelon}>
+    <Desplegable abierto={!!abierta} onTelon={onTelon} extraAlPlegar={extra}>
       <DentroDePlegable.Provider value={true}>{children}</DentroDePlegable.Provider>
     </Desplegable>
   )

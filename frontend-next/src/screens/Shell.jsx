@@ -88,7 +88,11 @@ export default function Shell() {
         // overflow-x-hidden: la pantalla nunca se arrastra de lado. Lo que asome
         // un poco por el borde (la luz de una vela de Halloween junto al filo)
         // se recorta ahí, en vez de convertirse en un scroll horizontal falso.
-        className={`absolute inset-0 overflow-y-auto overflow-x-hidden overscroll-contain px-5 pb-kb ${navegado.current ? 'entra' : ''}`}
+        // [overflow-anchor:none]: el anclaje de scroll de Chrome movía el
+        // scroll por su cuenta al desplegar una sección y se peleaba con el
+        // telón (ui/telon.js), que ya coloca lo de debajo: lo de abajo salía
+        // disparado hacia arriba y volvía. Safari no lo tiene; así van igual.
+        className={`absolute inset-0 overflow-y-auto overflow-x-hidden overscroll-contain [overflow-anchor:none] px-5 pb-kb ${navegado.current ? 'entra' : ''}`}
         style={{ '--entra-desde': 'translateY(10px)' }}
         exit={{ opacity: 0, transform: 'translateY(-6px)' }}
         transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}

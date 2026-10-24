@@ -54,11 +54,26 @@ export function CapaDeContenido() {
     // esperara al render de React iría un fotograma tarde, y al plegar una
     // sección el scroll se recolocaba de golpe. El estado es solo para
     // repartir los murciélagos, que pueden ir un fotograma por detrás.
+    let ultimo = 0
+    const poner = fondo => {
+      if (fondo === ultimo) return
+      ultimo = fondo
+      el.style.height = `${fondo}px`
+      setAlto(fondo)
+    }
     const medir = () => {
       let fondo = padre.clientHeight
       for (const h of padre.children) if (h !== el) fondo = Math.max(fondo, h.offsetTop + h.offsetHeight)
-      el.style.height = `${fondo}px`
-      setAlto(fondo)
+      poner(fondo)
+    }
+    // Al empezar a plegarse algo, la capa encoge ya lo que va a encoger, sin
+    // medir nada (ver ENCOGE en ui/Desplegable); nunca por debajo del alto de
+    // la pantalla. Solo el elemento, no el reparto de murciélagos: los que se
+    // queden por debajo los recorta la propia capa. Si la cuenta no fuera
+    // exacta, el ResizeObserver la corrige en cuanto el contenido cambie.
+    const encoger = e => {
+      ultimo = Math.max(padre.clientHeight, ultimo - (e.detail || 0))
+      el.style.height = `${ultimo}px`
     }
     // Se vigila lo que mide cada hermano y, además, si cambian los hermanos:
     // la pantalla puede sustituir su elemento raíz (la Luniteca lo hace al
@@ -76,9 +91,8 @@ export function CapaDeContenido() {
     vigilar()
     const mo = new MutationObserver(vigilar)
     mo.observe(padre, { childList: true })
-    // Al plegarse algo, se mide al momento (ver ENCOGE en ui/Desplegable).
-    window.addEventListener(ENCOGE, medir)
-    return () => { ro.disconnect(); mo.disconnect(); window.removeEventListener(ENCOGE, medir) }
+    window.addEventListener(ENCOGE, encoger)
+    return () => { ro.disconnect(); mo.disconnect(); window.removeEventListener(ENCOGE, encoger) }
   }, [Pieza])
   if (!Pieza) return null
   return (

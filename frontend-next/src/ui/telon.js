@@ -95,7 +95,17 @@ export function fotografiar(nodo) {
 // plegado (`plegar(true)` / `plegar(false)`) sin que llegue a pintarse.
 // Devuelve las animaciones (con fill: 'both': se quedan en su último
 // fotograma hasta que se cancelan, justo al plegar de verdad).
-export function deslizar(foto, { abriendo, plegar, t }) {
+//
+// `encoge` (opcional, al cerrar): cuánto va a encoger exactamente lo que se
+// pliega, si quien llama lo sabe. Entonces no hace falta plegar de mentira
+// para medir dónde acabará todo: lo de debajo sube eso mismo. Plegar y
+// desplegar de mentira obliga al navegador a recolocar la página entera dos
+// veces más dentro del mismo toque; con la estantería de lomos era lo que se
+// comía el primer fotograma (medido: 64 de 81ms, CPU frenada x4) y el
+// plegado parecía instantáneo. Solo vale dentro de una pantalla que hace
+// scroll (la capa que lo contiene no cambia de tamaño); en una hoja que se
+// ajusta a su contenido se sigue midiendo.
+export function deslizar(foto, { abriendo, plegar, t, encoge = null }) {
   const { zona, contenido } = foto
   const ahora = posiciones(foto)
   let plegado = null
@@ -104,7 +114,11 @@ export function deslizar(foto, { abriendo, plegar, t }) {
   // golpe al acabar. Así que eso se hace durante la animación: el contenido
   // entero baja poco a poco lo que vaya a subir el scroll.
   let bajada = 0
-  if (!abriendo) {
+  if (!abriendo && encoge != null && foto.ancla === zona) {
+    const scroll = zona.scrollTop
+    plegado = { ancla: ahora.ancla, tops: ahora.tops.map(top => top - encoge) }
+    bajada = Math.max(0, scroll - (Math.max(zona.clientHeight, finDelContenido(zona) - encoge) - zona.clientHeight))
+  } else if (!abriendo) {
     const scroll = zona.scrollTop
     plegar(true)
     plegado = posiciones(foto)
