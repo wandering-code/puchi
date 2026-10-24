@@ -3,6 +3,20 @@ import { PresenceContext, usePresence } from 'motion/react'
 import { LLEGADA, SALIDA } from './curvas'
 import { deslizar, fotografiar, movimientoReducido } from './telon'
 
+// Llama a `seguir` en cuanto el navegador dé un fotograma corto (menos de
+// ~2 a 60Hz), sin esperar nunca más de 600ms. Los fotogramas se miden por la
+// distancia entre dos requestAnimationFrame seguidos.
+function cuandoHayaFluidez(seguir) {
+  const limite = performance.now() + 600
+  let antes = null
+  const mirar = ahora => {
+    if ((antes != null && ahora - antes < 34) || ahora > limite) return seguir()
+    antes = ahora
+    requestAnimationFrame(mirar)
+  }
+  requestAnimationFrame(mirar)
+}
+
 // El aviso de que algo empieza a plegarse, con cuánto encoge (ver más abajo).
 export const ENCOGE = 'puchi:encoge'
 
@@ -84,7 +98,18 @@ export default function Desplegable({ abierto = true, children, className = '', 
     // recolocar la página dos veces (o, sin esperar, el scroll se recolocaría
     // un fotograma tarde: medido, un salto de 580px y vuelta).
     if (!abierto) window.dispatchEvent(new CustomEvent(ENCOGE, { detail: el.offsetHeight + (extraAlPlegar || 0) }))
-    animaciones.current = [...hechas, fundido, ...delMarco]
+    const todas = [...hechas, fundido, ...delMarco]
+    animaciones.current = todas
+    // No arrancan todavía: se quedan en su primer fotograma (el estado de
+    // antes, gracias a fill) hasta que el navegador vuelve a dar fotogramas
+    // fluidos. Mostrar u ocultar de golpe una sección llena de lomos le cuesta
+    // a Safari de iOS uno o dos fotogramas larguísimos de pintar (medido en
+    // el simulador: 150-300ms), y como el reloj de la animación ya corría,
+    // cuando por fin se pintaba la animación había terminado: el despliegue
+    // se veía de golpe y el plegado a saltos. Así se ve entera y suave, un
+    // instante después del toque.
+    todas.forEach(a => a.pause())
+    cuandoHayaFluidez(() => { if (animaciones.current === todas) todas.forEach(a => a.play()) })
     fundido.onfinish = () => {
       if (abierto) parar()
       else setVisible(false)
@@ -98,7 +123,7 @@ export default function Desplegable({ abierto = true, children, className = '', 
   useLayoutEffect(() => parar, [])
 
   return (
-    <div ref={raiz} className={className} style={visible ? undefined : { display: 'none' }} data-plegado={visible ? undefined : ''} inert={!visible}>
+    <div ref={raiz} data-desplegable className={className} style={visible ? undefined : { display: 'none' }} data-plegado={visible ? undefined : ''} inert={!visible}>
       {abierto ? children : ultimo.current}
     </div>
   )

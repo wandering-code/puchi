@@ -147,7 +147,19 @@ export function deslizar(foto, { abriendo, plegar, t, encoge = null }) {
   const enLista = new Set(foto.lista)
   if (bajada > 0.5) {
     for (const hijo of zona === document.scrollingElement ? [contenido] : zona.children) {
-      if (hijo && !enLista.has(hijo)) mover(hijo, 0, bajada)
+      if (!hijo || enLista.has(hijo)) continue
+      mover(hijo, 0, bajada)
+      // La capa de adornos (los murciélagos, ver CapaDeContenido) va pegada a
+      // la página y tiene que bajar con ella, porque al acabar el scroll se
+      // recoloca. Pero vista bajando, un murciélago recorría 2.000px en un
+      // cuarto de segundo, como un bicho rarísimo. Así que se desvanece
+      // mientras dura el viaje y reaparece ya en su sitio.
+      if (hijo.hasAttribute('data-fuera-del-alto')) {
+        hechas.push(hijo.animate(
+          [{ opacity: 1 }, { opacity: 0, offset: 0.15 }, { opacity: 0, offset: 0.8 }, { opacity: 1 }],
+          opciones,
+        ))
+      }
     }
   }
   foto.lista.forEach((n, i) => {
