@@ -18,3 +18,9 @@ export default function Adorno({ sitio, ...props }) {
 export function usarHayAdorno(sitio) {
   return !!usarEvento()?.adornos?.[sitio]
 }
+
+// La pieza misma, para quien la pinta muchas veces seguidas (una por libro en
+// la estantería): así se pregunta por el evento una vez y no en cada hueco.
+export function usarPiezaDeAdorno(sitio) {
+  return usarEvento()?.adornos?.[sitio] || null
+}

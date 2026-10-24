@@ -111,3 +111,48 @@ export function Calabaza({ className = '', style, cara = true }) {
     </svg>
   )
 }
+
+// ── Vela ────────────────────────────────────────────────────────────────
+// Cera con un par de goterones, la mecha y la llama. La llama tiembla sola
+// (.hw-llama: solo transform, desde su base). `alto` es el de la cera en
+// unidades del dibujo, para tener velas de varios tamaños con el mismo dibujo.
+export function Vela({ className = '', style, alto = 26 }) {
+  const arriba = 40 - alto
+  return (
+    <svg {...deco} viewBox="0 0 16 40" className={className} style={style}>
+      <path
+        d={`M3.5 ${arriba + 1.5}Q3.5 ${arriba} 5 ${arriba}H11Q12.5 ${arriba} 12.5 ${arriba + 1.5}V40H3.5Z`}
+        fill="var(--hw-cera)"
+      />
+      {/* Los goterones, del tono de la sombra de la cera. */}
+      <path
+        d={`M3.5 ${arriba + 1}Q4.8 ${arriba + 2.5} 5 ${arriba + 6}Q5.2 ${arriba + 7.5} 6 ${arriba + 6}Q6.3 ${arriba + 3} 8 ${arriba + 2}Q9.6 ${arriba + 3} 9.8 ${arriba + 4.5}Q10 ${arriba + 5.5} 10.6 ${arriba + 4.5}Q11 ${arriba + 2} 12.5 ${arriba + 1}V${arriba}H3.5Z`}
+        fill="var(--hw-cera-sombra)"
+      />
+      <path d={`M8 ${arriba}V${arriba - 2.2}`} stroke="var(--hw-silueta)" strokeWidth="0.9" strokeLinecap="round" />
+      <g className="hw-llama">
+        <path d={`M8 ${arriba - 1.6}C5.6 ${arriba - 3.6} 6.4 ${arriba - 7} 8 ${arriba - 10.5}C9.6 ${arriba - 7} 10.4 ${arriba - 3.6} 8 ${arriba - 1.6}Z`} fill="var(--hw-llama)" />
+        <path d={`M8 ${arriba - 2}C7 ${arriba - 3.2} 7.3 ${arriba - 5} 8 ${arriba - 6.6}C8.7 ${arriba - 5} 9 ${arriba - 3.2} 8 ${arriba - 2}Z`} fill="var(--hw-llama-centro)" />
+      </g>
+    </svg>
+  )
+}
+
+// ── Luz ─────────────────────────────────────────────────────────────────
+// El resplandor de una llama: un círculo de luz cálida que se desvanece hacia
+// fuera y parpadea (.hw-halo, solo opacity). Va POR ENCIMA de lo de alrededor
+// —los lomos vecinos— para que se vea que los ilumina; no se puede tocar.
+// `x`/`y` es el centro, relativo a la caja que lo contiene.
+export function Luz({ x = '50%', y = '50%', tam = 120, retraso = 0 }) {
+  return (
+    <span
+      aria-hidden
+      className="hw-halo pointer-events-none absolute rounded-full"
+      style={{
+        left: x, top: y, width: tam, height: tam, marginLeft: -tam / 2, marginTop: -tam / 2,
+        background: 'radial-gradient(circle, var(--hw-halo) 0%, var(--hw-halo-medio) 32%, transparent 70%)',
+        animationDelay: `${retraso}s`,
+      }}
+    />
+  )
+}

@@ -1,7 +1,8 @@
 import { Link } from 'react-router-dom'
 import { useAuth } from '../../platform/auth'
 import { IconArrow } from '../../ui/icons'
-import { Arana, Calabaza, Murcielago, Sombrero, Telarana } from './piezas'
+import { memo } from 'react'
+import { Arana, Calabaza, Luz, Murcielago, Sombrero, Telarana, Vela } from './piezas'
 import './halloween.css'
 
 // Halloween: del 1 de octubre al 2 de noviembre (Difuntos), cada año.
@@ -74,7 +75,10 @@ function MenuFondo() {
   return (
     <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
       <Telarana className="absolute right-0 h-[110px] w-[110px]" style={{ top: 'env(safe-area-inset-top, 0px)' }} />
-      <Calabaza className="absolute bottom-[84px] right-4 h-9 w-11 opacity-80" style={{ marginBottom: 'env(safe-area-inset-bottom, 0px)' }} />
+      <div className="absolute bottom-[84px] right-4 h-9 w-11" style={{ marginBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+        <Luz tam={110} />
+        <Calabaza className="relative h-full w-full" />
+      </div>
     </div>
   )
 }
@@ -100,7 +104,10 @@ function Inicio() {
       style={{ '--entra-desde': 'translateY(10px)', '--entra-dura': '300ms' }}
     >
       <Telarana className="pointer-events-none absolute -right-1 -top-1 h-20 w-20" />
-      <Calabaza className="pointer-events-none absolute bottom-3 right-4 h-14 w-[68px]" />
+      <div className="pointer-events-none absolute bottom-3 right-4 h-14 w-[68px]">
+        <Luz tam={150} />
+        <Calabaza className="relative h-full w-full" />
+      </div>
       <Calabaza cara={false} className="pointer-events-none absolute bottom-3 right-[72px] h-7 w-[34px] opacity-90" />
       <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-accent">Temporada</p>
       <h3 className="mt-1 font-display text-[19px] font-bold leading-tight tracking-[-0.01em]">{titulo}</h3>
@@ -117,16 +124,78 @@ function Inicio() {
   )
 }
 
-// Dos calabazas al final de la estantería de lomos, apoyadas como un libro
-// más. `alto` es el de la fila (ALTO_FILA de Lomos.jsx).
-function Balda({ alto }) {
+// Lo que se apoya en la balda de la vista de lomos. `alto` es el de la fila
+// (ALTO_FILA de Lomos.jsx): cada pieza ocupa una fila entera y se asienta
+// abajo, como un libro más.
+//
+// La luz va dentro de una caja con z-index propio para pintarse por encima de
+// los lomos de alrededor: es lo que hace que se vea que los ilumina.
+function Hueco({ alto, children }) {
   return (
-    <div aria-hidden className="pointer-events-none flex items-end gap-0.5 pl-2" style={{ height: alto }}>
-      <Calabaza className="h-[46px] w-[56px]" />
-      <Calabaza cara={false} className="h-[26px] w-[31px]" />
+    <div aria-hidden className="pointer-events-none relative z-[1] flex items-end gap-0.5 px-1" style={{ height: alto }}>
+      {children}
     </div>
   )
 }
+
+// La luz de una vela, a la altura de su llama: la vela mide `h` px y la
+// llama queda a ~78% de su altura desde abajo.
+const luzDeVela = (h, x, retraso) => <Luz x={x} y={`calc(100% - ${Math.round(h * 0.78)}px)`} tam={h * 2.4} retraso={retraso} />
+
+function DosVelas({ alto, retraso = 0 }) {
+  return (
+    <Hueco alto={alto}>
+      {luzDeVela(52, '35%', retraso)}
+      <Vela alto={26} className="relative h-[52px] w-[21px]" />
+      <Vela alto={18} className="relative h-[52px] w-[21px]" />
+    </Hueco>
+  )
+}
+
+function UnaVela({ alto, retraso = 0 }) {
+  return (
+    <Hueco alto={alto}>
+      {luzDeVela(64, '50%', retraso)}
+      <Vela alto={30} className="relative h-[64px] w-[26px]" />
+    </Hueco>
+  )
+}
+
+function CalabazaEncendida({ alto, retraso = 0, ancho = 56 }) {
+  const h = Math.round(ancho * 40 / 48)
+  return (
+    <Hueco alto={alto}>
+      <Luz y={`calc(100% - ${Math.round(h * 0.4)}px)`} tam={ancho * 2.6} retraso={retraso} />
+      <Calabaza className="relative" style={{ width: ancho, height: h }} />
+    </Hueco>
+  )
+}
+
+// Al final de cada estantería, la calabaza grande encendida con una vela al
+// lado, en un solo hueco estrecho: si fueran varias piezas sueltas, a menudo
+// no cabrían detrás del último libro y abrirían una balda nueva solo para ellas.
+function Balda({ alto }) {
+  return (
+    <Hueco alto={alto}>
+      <Luz x="40%" y="calc(100% - 26px)" tam={150} />
+      <Calabaza className="relative h-[46px] w-[56px]" />
+      <Vela alto={22} className="relative -ml-1 h-[44px] w-[18px]" />
+    </Hueco>
+  )
+}
+
+// Entre los libros, de vez en cuando, algo apoyado. Siempre en los mismos
+// sitios (sale de la posición del libro, no del azar), para que la balda no
+// cambie cada vez que se abre. Pocas, para que no se coman la estantería.
+// Memo: hay una por libro y casi todas no pintan nada.
+const EntreLibros = memo(function EntreLibros({ indice, alto }) {
+  if (indice === 0) return null
+  const retraso = -((indice * 0.37) % 2.8)   // que no parpadeen todas a la vez
+  if (indice % 31 === 19) return <CalabazaEncendida alto={alto} ancho={44} retraso={retraso} />
+  if (indice % 14 === 6) return <DosVelas alto={alto} retraso={retraso} />
+  if (indice % 23 === 12) return <UnaVela alto={alto} retraso={retraso} />
+  return null
+})
 
 export default {
   id: 'halloween',
@@ -137,5 +206,5 @@ export default {
   descripcion: 'Murciélagos, telarañas y calabazas por toda la app, con los colores de la noche. Se adapta al tema claro y al oscuro.',
   // La barra de estado de iOS, a juego con --color-bg de cada tema.
   barra: { claro: '#f3eadb', oscuro: '#120c17' },
-  adornos: { fondo: Fondo, cabecera: Cabecera, logo: Logo, menu: Menu, menuFondo: MenuFondo, inicio: Inicio, balda: Balda },
+  adornos: { fondo: Fondo, cabecera: Cabecera, logo: Logo, menu: Menu, menuFondo: MenuFondo, inicio: Inicio, balda: Balda, entreLibros: EntreLibros },
 }

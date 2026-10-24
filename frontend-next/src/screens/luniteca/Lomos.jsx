@@ -1,7 +1,7 @@
-import { memo, useEffect, useRef, useState } from 'react'
+import { Fragment, memo, useEffect, useRef, useState } from 'react'
 import { claveDeAutor, totalPages } from './shelf'
 import { usarPreferencia } from '../../platform/preferencias'
-import Adorno from '../../eventos/Adorno'
+import Adorno, { usarPiezaDeAdorno } from '../../eventos/Adorno'
 import { colorConocido, colorDePortada } from './colorPortada'
 import { proporcionConocida, proporcionFoto } from './proporcionLomo'
 import { imagenLista as imagenYaLista, imagenRota, precargarImagen, precargarImagenes, usarImagenLista } from './imagenesListas'
@@ -605,6 +605,7 @@ export function usarLomosTorcidos() {
 
 export default function Lomos({ entries, onAbrir, fueraId = null, generosDeAutor = null }) {
   const [torcidos] = usarLomosTorcidos()
+  const EntreLibros = usarPiezaDeAdorno('entreLibros')
   // Las medidas del texto dependen de la fuente, y las fuentes propias llegan
   // un momento después. Al llegar, se repinta con las medidas buenas.
   //
@@ -684,8 +685,8 @@ export default function Lomos({ entries, onAbrir, fueraId = null, generosDeAutor
       }}
     >
       {entries.map((e, i) => (
+        <Fragment key={e.id}>
         <Lomo
-          key={e.id}
           entry={e}
           onAbrir={onAbrir}
           revision={revision}
@@ -700,6 +701,9 @@ export default function Lomos({ entries, onAbrir, fueraId = null, generosDeAutor
           conContenido={arrancada && i < pintados}
           torcidos={torcidos}
         />
+        {/* Lo que el evento de temporada apoya entre los libros (src/eventos). */}
+        {EntreLibros && <EntreLibros indice={i} alto={ALTO_FILA} />}
+        </Fragment>
       ))}
       {/* Lo que el evento de temporada apoya en la balda (src/eventos). */}
       <Adorno sitio="balda" alto={ALTO_FILA} />

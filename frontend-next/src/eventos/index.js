@@ -24,7 +24,9 @@ import halloween from './halloween'
 //   menu       debajo del nombre "Puchi" en el menú lateral.
 //   menuFondo  dentro del panel del menú, detrás de las entradas.
 //   inicio     una tarjeta al principio de Inicio.
-//   balda      un objeto apoyado al final de la estantería de lomos.
+//   balda      lo que se apoya al final de la estantería de lomos.
+//   entreLibros  se llama detrás de CADA lomo con su `indice`; devuelve algo
+//              solo en los sitios que quiera (velas cada tantos libros…).
 // Un evento no tiene por qué llenarlos todos: el que no traiga, no se pinta.
 export const EVENTOS = [halloween]
 
