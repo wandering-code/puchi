@@ -83,7 +83,10 @@ export default function Shell() {
         // con `transform` entero, las dos en la GPU. Con y: 10 / y: -6 Motion
         // la movía desde JavaScript, y en Safari eso va a 60 fotogramas.
         // La primera sección de la sesión no entra: llega con la app.
-        className={`absolute inset-0 overflow-y-auto overscroll-contain px-5 pb-kb ${navegado.current ? 'entra' : ''}`}
+        // overflow-x-hidden: la pantalla nunca se arrastra de lado. Lo que asome
+        // un poco por el borde (la luz de una vela de Halloween junto al filo)
+        // se recorta ahí, en vez de convertirse en un scroll horizontal falso.
+        className={`absolute inset-0 overflow-y-auto overflow-x-hidden overscroll-contain px-5 pb-kb ${navegado.current ? 'entra' : ''}`}
         style={{ '--entra-desde': 'translateY(10px)' }}
         exit={{ opacity: 0, transform: 'translateY(-6px)' }}
         transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
