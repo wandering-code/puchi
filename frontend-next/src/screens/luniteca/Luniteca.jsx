@@ -529,7 +529,7 @@ export function Herramientas({
   // Se queda pegada arriba al bajar por una estantería larga: con 300 libros,
   // volver arriba solo para filtrar es la diferencia entre usarlo y no usarlo.
   return (
-    <div className={`sticky top-0 z-20 -mx-5 px-5 py-2 ${panel ? `${panel} pb-3` : 'border-b border-line bg-bg/85 backdrop-blur-xl'}`}>
+    <div className={`deja-la-barra sticky top-0 z-20 -mx-5 px-5 py-2 ${panel ? `${panel} pb-3` : 'border-b border-line bg-bg/85 backdrop-blur-xl'}`}>
       {/* Al buscar, el campo ocupa la fila entera y el resto de botones se
           van: antes la barra se desplegaba DEBAJO y empujaba la estantería,
           que es el mismo salto que ya se quitó de los filtros. La lupa se

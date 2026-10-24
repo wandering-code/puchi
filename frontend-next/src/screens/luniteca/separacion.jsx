@@ -119,7 +119,7 @@ export function TituloSeccion({ variante, label, cuenta, plegada, onAlternar, an
   const clasePegada = anidado
     ? ''
     : variante === 'pegada'
-      ? `sticky ${desde} z-[5] -mx-5 w-[calc(100%+2.5rem)] border-b border-line bg-bg px-5 py-2.5`
+      ? `deja-la-barra deja-la-barra-ancho sticky ${desde} z-[5] -mx-5 w-[calc(100%+2.5rem)] border-b border-line bg-bg px-5 py-2.5`
       : variante === 'color'
         // Como en "mixto", pegado dentro de su tarjeta, pero sin raya: lo que
         // lo separa de los libros es su fondo teñido.

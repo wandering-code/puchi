@@ -110,7 +110,7 @@ export default function Admin() {
       {/* Pegada arriba, como la barra de herramientas de la estantería: con
           varias cuentas hay que bajar, y cambiar de pestaña sin volver arriba
           es la diferencia entre usarlo y no usarlo. */}
-      <div className="sticky top-0 z-20 -mx-5 border-b border-line bg-bg/85 px-5 py-2 backdrop-blur-xl">
+      <div className="deja-la-barra sticky top-0 z-20 -mx-5 border-b border-line bg-bg/85 px-5 py-2 backdrop-blur-xl">
         <div className="relative flex gap-1">
           {/* Una sola pastilla que se desliza con una transición CSS (en la GPU,
               a la frecuencia de la pantalla), como el selector de vista de la

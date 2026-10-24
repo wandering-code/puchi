@@ -449,6 +449,21 @@
   [data-pulsa]:disabled:active { scale: none; }
 }
 
+/* ── Barras pegadas y la barra de scroll ─────────────────────────────────
+   Las barras pegadas arriba (la de buscar/filtrar/vista, los títulos de
+   sección…) se estiran con margen negativo hasta el borde mismo de la
+   pantalla. En el ordenador la barra de scroll va superpuesta justo en ese
+   borde, y Safari pinta encima lo que va pegado con nivel propio: la barra
+   la tapaba. Con ratón o trackpad se quedan a 10px del borde derecho, que es
+   el sitio de la barra de scroll; el contenido va metido 20px, así que por
+   ese hueco solo asoma el fondo. En el móvil no cambia nada. */
+@layer utilities {
+  @media (hover: hover) and (pointer: fine) {
+    .deja-la-barra { margin-right: -0.625rem; padding-right: 0.625rem; }
+    .deja-la-barra-ancho { width: calc(100% + 1.875rem); }
+  }
+}
+
 /* ── Safe areas ──────────────────────────────────────────────────────────
    Solo valen algo con viewport-fit=cover en el meta viewport (index.html).
    Instalada en el iPhone no hay barra de Safari debajo: sin esto, la barra de
