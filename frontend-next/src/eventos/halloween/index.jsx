@@ -1,20 +1,21 @@
 import { Link } from 'react-router-dom'
 import { useAuth } from '../../platform/auth'
 import { IconArrow } from '../../ui/icons'
-import { memo } from 'react'
-import { Arana, Calabaza, Luz, Murcielago, Sombrero, Telarana, Vela } from './piezas'
+import { memo, useLayoutEffect, useRef, useState } from 'react'
+import { Arana, Calabaza, Humo, Luz, Murcielago, Sombrero, Telarana, Vela } from './piezas'
 import './halloween.css'
 
 // Halloween: del 1 de octubre al 2 de noviembre (Difuntos), cada año.
 // Para el siguiente evento, ver eventos/index.js.
 
-// Los murciélagos de paso: dónde vuelan, cuánto tardan en volver y hacia qué
-// lado. Las esperas negativas hacen que al abrir la app no salgan todos a la
-// vez desde el borde.
+// Los murciélagos, cada uno revoloteando en su sitio de la pantalla (no la
+// cruzan). Están en la capa del fondo, fuera de lo que hace scroll: al bajar
+// por una lista se quedan donde están. Duraciones y esperas distintas para que
+// no se muevan a la vez.
 const MURCIELAGOS = [
-  { y: '18vh', sube: '22px', dura: '26s', espera: '-4s', ancho: 52 },
-  { y: '46vh', sube: '34px', dura: '34s', espera: '-19s', ancho: 38, alReves: true },
-  { y: '72vh', sube: '18px', dura: '41s', espera: '-30s', ancho: 44 },
+  { left: '70%', top: '24%', ancho: 46, dura: '5.6s', espera: '-1.2s' },
+  { left: '8%', top: '50%', ancho: 34, dura: '6.8s', espera: '-3.1s' },
+  { left: '74%', top: '76%', ancho: 40, dura: '7.4s', espera: '-4.6s' },
 ]
 
 function Fondo() {
@@ -27,8 +28,8 @@ function Fondo() {
       {MURCIELAGOS.map((m, i) => (
         <div
           key={i}
-          className={`hw-vuelo ${m.alReves ? 'hw-al-reves' : ''}`}
-          style={{ '--hw-y': m.y, '--hw-sube': m.sube, '--hw-dura': m.dura, '--hw-espera': m.espera, opacity: 'var(--hw-silueta-o)' }}
+          className="hw-revoloteo absolute"
+          style={{ left: m.left, top: m.top, '--hw-dura': m.dura, '--hw-espera': m.espera, opacity: 'var(--hw-silueta-o)' }}
         >
           <Murcielago style={{ width: m.ancho, height: m.ancho * 26 / 64 }} />
         </div>
@@ -73,11 +74,12 @@ function Menu() {
 
 function MenuFondo() {
   return (
-    <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
+    <div className="pointer-events-none absolute inset-0 overflow-hidden">
       <Telarana className="absolute right-0 h-[110px] w-[110px]" style={{ top: 'env(safe-area-inset-top, 0px)' }} />
-      <div className="absolute bottom-[84px] right-4 h-9 w-11" style={{ marginBottom: 'env(safe-area-inset-bottom, 0px)' }}>
-        <Luz tam={110} />
-        <Calabaza className="relative h-full w-full" />
+      {/* z-[2]: por encima de la lista de secciones, que va después y si no
+          se quedaría con el toque. */}
+      <div className="pointer-events-auto absolute bottom-[84px] right-4 z-[2]" style={{ marginBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+        <CalabazaEncendible ancho={44} luz={2.5} ajustar={false} />
       </div>
     </div>
   )
@@ -104,9 +106,8 @@ function Inicio() {
       style={{ '--entra-desde': 'translateY(10px)', '--entra-dura': '300ms' }}
     >
       <Telarana className="pointer-events-none absolute -right-1 -top-1 h-20 w-20" />
-      <div className="pointer-events-none absolute bottom-3 right-4 h-14 w-[68px]">
-        <Luz tam={150} />
-        <Calabaza className="relative h-full w-full" />
+      <div className="absolute bottom-3 right-4">
+        <CalabazaEncendible ancho={68} luz={2.2} ajustar={false} />
       </div>
       <Calabaza cara={false} className="pointer-events-none absolute bottom-3 right-[72px] h-7 w-[34px] opacity-90" />
       <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-accent">Temporada</p>
@@ -124,30 +125,106 @@ function Inicio() {
   )
 }
 
+// ── Encender y apagar con un toque ──────────────────────────────────────
+// Cada vela y cada calabaza encendida se apaga y se enciende tocándola. No se
+// guarda: al volver a abrir la app están todas encendidas, como al llegar a
+// una fiesta.
+//
+// Al apagar: la llama se recoge, la luz se va y sube un hilo de humo. Al
+// encender: la llama prende con un estirón y la luz vuelve. Las dos cosas con
+// un pequeño balanceo de la pieza (Web Animations, solo transform).
+const BALANCEO = {
+  vela: [
+    { transform: 'rotate(0deg)' }, { transform: 'rotate(-5deg)' }, { transform: 'rotate(3deg)' },
+    { transform: 'rotate(-1.5deg)' }, { transform: 'rotate(0deg)' },
+  ],
+  calabaza: [
+    { transform: 'rotate(0deg) scale(1)' }, { transform: 'rotate(-7deg) scale(0.94, 1.04)' },
+    { transform: 'rotate(5deg) scale(1.04, 0.96)' }, { transform: 'rotate(-2deg) scale(1)' },
+    { transform: 'rotate(0deg) scale(1)' },
+  ],
+}
+
+function usarEncendida(tipo) {
+  const [encendida, poner] = useState(true)
+  const [humos, setHumos] = useState([])
+  const pieza = useRef(null)
+  const alternar = () => {
+    const sigue = !encendida
+    poner(sigue)
+    if (!sigue) setHumos(h => [...h, Date.now()])
+    pieza.current?.animate(BALANCEO[tipo], { duration: 520, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' })
+  }
+  const quitarHumo = id => setHumos(h => h.filter(x => x !== id))
+  return { encendida, alternar, humos, quitarHumo, pieza }
+}
+
+// La luz, que entra y sale con un fundido por encima de su propio parpadeo.
+function LuzQueSeApaga({ encendida, ...props }) {
+  return (
+    <span style={{ opacity: encendida ? 1 : 0, transition: `opacity ${encendida ? 520 : 260}ms ease-out` }}>
+      <Luz {...props} />
+    </span>
+  )
+}
+
+const tocable = 'pointer-events-auto relative block h-full w-full origin-bottom [touch-action:manipulation]'
+
+// `cera`: alto de la cera en unidades del dibujo (40 de alto); `h`/`w`, px.
+function VelaEncendible({ cera = 26, h = 52, w = 21, retraso = 0, ajustar = true }) {
+  const { encendida, alternar, humos, quitarHumo, pieza } = usarEncendida('vela')
+  const arriba = 40 - cera
+  const llama = Math.round(((arriba - 6) / 40) * h)   // centro de la llama, desde arriba
+  const mecha = Math.round(((arriba - 2) / 40) * h)
+  return (
+    <span className="relative inline-block shrink-0" style={{ width: w, height: h }}>
+      <LuzQueSeApaga encendida={encendida} ajustar={ajustar} x="50%" y={llama} tam={h * 2.4} retraso={retraso} />
+      <button ref={pieza} type="button" onClick={alternar} aria-label={encendida ? 'Apagar la vela' : 'Encender la vela'} className={tocable}>
+        <Vela alto={cera} encendida={encendida} className="h-full w-full" />
+      </button>
+      {humos.map(id => (
+        <Humo key={id} onFin={() => quitarHumo(id)} className="absolute left-1/2 h-10 w-4 -translate-x-1/2" style={{ top: mecha - 40 }} />
+      ))}
+    </span>
+  )
+}
+
+function CalabazaEncendible({ ancho = 56, retraso = 0, luz = 2.6, ajustar = true }) {
+  const { encendida, alternar, humos, quitarHumo, pieza } = usarEncendida('calabaza')
+  const h = Math.round(ancho * 40 / 48)
+  return (
+    <span className="relative inline-block shrink-0" style={{ width: ancho, height: h }}>
+      <LuzQueSeApaga encendida={encendida} ajustar={ajustar} y="58%" tam={ancho * luz} retraso={retraso} />
+      <button ref={pieza} type="button" onClick={alternar} aria-label={encendida ? 'Apagar la calabaza' : 'Encender la calabaza'} className={tocable}>
+        <Calabaza encendida={encendida} className="h-full w-full" />
+      </button>
+      {humos.map(id => (
+        <Humo key={id} onFin={() => quitarHumo(id)} className="absolute left-1/2 h-12 w-5 -translate-x-1/2" style={{ top: -Math.round(h * 0.55) }} />
+      ))}
+    </span>
+  )
+}
+
 // Lo que se apoya en la balda de la vista de lomos. `alto` es el de la fila
 // (ALTO_FILA de Lomos.jsx): cada pieza ocupa una fila entera y se asienta
 // abajo, como un libro más.
 //
-// La luz va dentro de una caja con z-index propio para pintarse por encima de
-// los lomos de alrededor: es lo que hace que se vea que los ilumina.
+// La caja lleva z-index propio para que la luz se pinte por encima de los
+// lomos de alrededor: es lo que hace que se vea que los ilumina. Ella misma no
+// se puede tocar; las velas y calabazas sí.
 function Hueco({ alto, children }) {
   return (
-    <div aria-hidden className="pointer-events-none relative z-[1] flex items-end gap-0.5 px-1" style={{ height: alto }}>
+    <div className="pointer-events-none relative z-[1] flex items-end gap-0.5 px-1" style={{ height: alto }}>
       {children}
     </div>
   )
 }
 
-// La luz de una vela, a la altura de su llama: la vela mide `h` px y la
-// llama queda a ~78% de su altura desde abajo.
-const luzDeVela = (h, x, retraso) => <Luz x={x} y={`calc(100% - ${Math.round(h * 0.78)}px)`} tam={h * 2.4} retraso={retraso} />
-
 function DosVelas({ alto, retraso = 0 }) {
   return (
     <Hueco alto={alto}>
-      {luzDeVela(52, '35%', retraso)}
-      <Vela alto={26} className="relative h-[52px] w-[21px]" />
-      <Vela alto={18} className="relative h-[52px] w-[21px]" />
+      <VelaEncendible cera={26} retraso={retraso} />
+      <VelaEncendible cera={18} retraso={retraso - 0.9} />
     </Hueco>
   )
 }
@@ -155,32 +232,54 @@ function DosVelas({ alto, retraso = 0 }) {
 function UnaVela({ alto, retraso = 0 }) {
   return (
     <Hueco alto={alto}>
-      {luzDeVela(64, '50%', retraso)}
-      <Vela alto={30} className="relative h-[64px] w-[26px]" />
+      <VelaEncendible cera={30} h={64} w={26} retraso={retraso} />
     </Hueco>
   )
 }
 
-function CalabazaEncendida({ alto, retraso = 0, ancho = 56 }) {
-  const h = Math.round(ancho * 40 / 48)
+function CalabazaEnLaBalda({ alto, retraso = 0, ancho = 56 }) {
   return (
     <Hueco alto={alto}>
-      <Luz y={`calc(100% - ${Math.round(h * 0.4)}px)`} tam={ancho * 2.6} retraso={retraso} />
-      <Calabaza className="relative" style={{ width: ancho, height: h }} />
+      <CalabazaEncendible ancho={ancho} retraso={retraso} />
     </Hueco>
   )
 }
 
-// Al final de cada estantería, la calabaza grande encendida con una vela al
-// lado, en un solo hueco estrecho: si fueran varias piezas sueltas, a menudo
-// no cabrían detrás del último libro y abrirían una balda nueva solo para ellas.
+// Al final de cada estantería, la calabaza grande con una vela al lado.
+//
+// Solo si cabe detrás del último libro: si no, abriría una balda nueva solo
+// para ella, y una balda vacía con una calabaza se ve como un hueco raro.
+// Cuando no cabe se saca del reparto (absolute) y no se ve; se vuelve a mirar
+// si cambia el ancho.
 function Balda({ alto }) {
+  const caja = useRef(null)
+  const [cabe, setCabe] = useState(true)
+  useLayoutEffect(() => {
+    const el = caja.current
+    const padre = el?.parentElement
+    if (!padre) return
+    const medir = () => {
+      const anterior = el.previousElementSibling
+      if (!anterior) return setCabe(true)
+      const estilo = getComputedStyle(padre)
+      const hueco = parseFloat(estilo.columnGap) || 0
+      const p = padre.getBoundingClientRect()
+      const fin = anterior.getBoundingClientRect().right - p.left
+      const libre = p.width - parseFloat(estilo.paddingRight || 0) - fin - hueco
+      setCabe(libre >= el.offsetWidth)
+    }
+    medir()
+    const ro = new ResizeObserver(medir)
+    ro.observe(padre)
+    return () => ro.disconnect()
+  }, [])
   return (
-    <Hueco alto={alto}>
-      <Luz x="40%" y="calc(100% - 26px)" tam={150} />
-      <Calabaza className="relative h-[46px] w-[56px]" />
-      <Vela alto={22} className="relative -ml-1 h-[44px] w-[18px]" />
-    </Hueco>
+    <div ref={caja} style={cabe ? undefined : { position: 'absolute', visibility: 'hidden' }}>
+      <Hueco alto={alto}>
+        <CalabazaEncendible ancho={56} />
+        <span className="-ml-1"><VelaEncendible cera={22} h={44} w={18} retraso={-1.3} /></span>
+      </Hueco>
+    </div>
   )
 }
 
@@ -191,7 +290,7 @@ function Balda({ alto }) {
 const EntreLibros = memo(function EntreLibros({ indice, alto }) {
   if (indice === 0) return null
   const retraso = -((indice * 0.37) % 2.8)   // que no parpadeen todas a la vez
-  if (indice % 31 === 19) return <CalabazaEncendida alto={alto} ancho={44} retraso={retraso} />
+  if (indice % 31 === 19) return <CalabazaEnLaBalda alto={alto} ancho={44} retraso={retraso} />
   if (indice % 14 === 6) return <DosVelas alto={alto} retraso={retraso} />
   if (indice % 23 === 12) return <UnaVela alto={alto} retraso={retraso} />
   return null

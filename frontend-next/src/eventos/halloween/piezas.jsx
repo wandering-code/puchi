@@ -1,3 +1,5 @@
+import { useLayoutEffect, useRef, useState } from 'react'
+
 // Los dibujos de Halloween. Siluetas planas y sin degradados, con los colores
 // de la paleta del evento (--hw-*, en halloween.css), para que cada pieza se
 // vea bien con el tema claro y con el oscuro sin tener dos versiones.
@@ -94,19 +96,26 @@ export function Sombrero({ className = '', style }) {
 // ── Calabaza ────────────────────────────────────────────────────────────
 // Tres gajos (los de los lados, más oscuros), el rabo y la cara tallada. De
 // noche la cara es la luz de la vela y parpadea (ver .hw-vela).
-export function Calabaza({ className = '', style, cara = true }) {
+export function Calabaza({ className = '', style, cara = true, encendida }) {
+  // `encendida` sin decir: la cara de siempre (--hw-cara: apagada de día,
+  // con vela de noche). true/false: la de una calabaza que se enciende y
+  // apaga con un toque — las dos caras están puestas y se funden una en otra.
+  const CARA = 'M14.5 21H20L17.3 16.5ZM28 21H33.5L30.7 16.5ZM22.5 25.5H25.5L24 23ZM13.5 28Q24 36.5 34.5 28L31.5 29.6L29.8 28.2L27.2 30.8L24 29.3L20.8 30.8L18.2 28.2L16.5 29.6Z'
+  const fundido = { transition: 'opacity 420ms cubic-bezier(0.22, 1, 0.36, 1)' }
   return (
     <svg {...deco} viewBox="0 0 48 40" className={className} style={style}>
       <path d="M22.5 11.5Q22 6 25 3.5L27.2 5.2Q25 7.5 25.6 11.5Z" fill="var(--hw-tallo)" />
       <ellipse cx="15.5" cy="25" rx="11.5" ry="13" fill="var(--hw-calabaza-sombra)" />
       <ellipse cx="32.5" cy="25" rx="11.5" ry="13" fill="var(--hw-calabaza-sombra)" />
       <ellipse cx="24" cy="25" rx="11" ry="14.5" fill="var(--hw-calabaza)" />
-      {cara && (
-        <path
-          className="hw-vela"
-          fill="var(--hw-cara)"
-          d="M14.5 21H20L17.3 16.5ZM28 21H33.5L30.7 16.5ZM22.5 25.5H25.5L24 23ZM13.5 28Q24 36.5 34.5 28L31.5 29.6L29.8 28.2L27.2 30.8L24 29.3L20.8 30.8L18.2 28.2L16.5 29.6Z"
-        />
+      {cara && encendida === undefined && <path className="hw-vela" fill="var(--hw-cara)" d={CARA} />}
+      {cara && encendida !== undefined && (
+        <>
+          <path fill="var(--hw-cara-apagada)" d={CARA} />
+          <g style={{ ...fundido, opacity: encendida ? 1 : 0 }}>
+            <path className="hw-vela" fill="var(--hw-cara-luz)" d={CARA} />
+          </g>
+        </>
       )}
     </svg>
   )
@@ -116,7 +125,7 @@ export function Calabaza({ className = '', style, cara = true }) {
 // Cera con un par de goterones, la mecha y la llama. La llama tiembla sola
 // (.hw-llama: solo transform, desde su base). `alto` es el de la cera en
 // unidades del dibujo, para tener velas de varios tamaños con el mismo dibujo.
-export function Vela({ className = '', style, alto = 26 }) {
+export function Vela({ className = '', style, alto = 26, encendida = true }) {
   const arriba = 40 - alto
   return (
     <svg {...deco} viewBox="0 0 16 40" className={className} style={style}>
@@ -130,9 +139,23 @@ export function Vela({ className = '', style, alto = 26 }) {
         fill="var(--hw-cera-sombra)"
       />
       <path d={`M8 ${arriba}V${arriba - 2.2}`} stroke="var(--hw-silueta)" strokeWidth="0.9" strokeLinecap="round" />
+      {/* Dos capas: la de fuera enciende y apaga (la llama prende con un
+          estirón o se recoge hacia la mecha), la de dentro tiembla. */}
+      <g
+        style={{
+          transformBox: 'fill-box',
+          transformOrigin: '50% 100%',
+          transform: encendida ? 'scale(1)' : 'scale(0.2, 0)',
+          opacity: encendida ? 1 : 0,
+          transition: encendida
+            ? 'transform 420ms cubic-bezier(0.34, 1.7, 0.64, 1), opacity 160ms ease-out'
+            : 'transform 200ms cubic-bezier(0.4, 0, 1, 1), opacity 200ms ease-in',
+        }}
+      >
       <g className="hw-llama">
         <path d={`M8 ${arriba - 1.6}C5.6 ${arriba - 3.6} 6.4 ${arriba - 7} 8 ${arriba - 10.5}C9.6 ${arriba - 7} 10.4 ${arriba - 3.6} 8 ${arriba - 1.6}Z`} fill="var(--hw-llama)" />
         <path d={`M8 ${arriba - 2}C7 ${arriba - 3.2} 7.3 ${arriba - 5} 8 ${arriba - 6.6}C8.7 ${arriba - 5} 9 ${arriba - 3.2} 8 ${arriba - 2}Z`} fill="var(--hw-llama-centro)" />
+      </g>
       </g>
     </svg>
   )
@@ -143,16 +166,79 @@ export function Vela({ className = '', style, alto = 26 }) {
 // fuera y parpadea (.hw-halo, solo opacity). Va POR ENCIMA de lo de alrededor
 // —los lomos vecinos— para que se vea que los ilumina; no se puede tocar.
 // `x`/`y` es el centro, relativo a la caja que lo contiene.
-export function Luz({ x = '50%', y = '50%', tam = 120, retraso = 0 }) {
+//
+// `ajustar`: en la estantería las piezas caen donde las deja el reparto de
+// los libros, a veces pegadas al borde de la tarjeta, que recorta lo que se
+// sale: la luz se cortaba en seco. Con esto mide cuánto sitio tiene hasta el
+// borde que la recorta y encoge lo justo para apagarse ANTES de llegar a él.
+// Si casi no tiene sitio, no se enciende.
+const ALCANCE = 0.36      // el degradado llega a transparente al 70% del radio
+const MINIMO = 48
+
+function recortador(el) {
+  for (let p = el.parentElement; p && p !== document.body; p = p.parentElement) {
+    const o = getComputedStyle(p)
+    if (o.overflowX !== 'visible' || o.overflowY !== 'visible') {
+      return { caja: p, desplaza: /(auto|scroll)/.test(o.overflowY) }
+    }
+  }
+  return null
+}
+
+export function Luz({ x = '50%', y = '50%', tam = 120, retraso = 0, ajustar = false }) {
+  const ref = useRef(null)
+  const [escala, setEscala] = useState(1)
+
+  useLayoutEffect(() => {
+    if (!ajustar) return
+    const el = ref.current
+    const r = recortador(el)
+    if (!r) return
+    const medir = () => {
+      const a = el.getBoundingClientRect()
+      const c = r.caja.getBoundingClientRect()
+      const cx = a.left + a.width / 2
+      const cy = a.top + a.height / 2
+      let sitio = Math.min(cx - c.left, c.right - cx)
+      // Arriba y abajo solo cuenta si la caja no hace scroll: si lo hace, lo
+      // que queda fuera es lo que no se ve todavía, no un borde.
+      if (!r.desplaza) sitio = Math.min(sitio, cy - c.top, c.bottom - cy)
+      const t = Math.max(0, sitio) / ALCANCE
+      setEscala(t >= tam ? 1 : t < MINIMO ? 0 : Math.floor((t / tam) * 100) / 100)
+    }
+    medir()
+    // Si cambia el ancho (girar el móvil) los libros se reparten de nuevo.
+    const ro = new ResizeObserver(medir)
+    ro.observe(r.caja)
+    return () => ro.disconnect()
+  }, [ajustar, tam])
+
   return (
     <span
+      ref={ref}
       aria-hidden
       className="hw-halo pointer-events-none absolute rounded-full"
       style={{
         left: x, top: y, width: tam, height: tam, marginLeft: -tam / 2, marginTop: -tam / 2,
+        // Se encoge con scale y no con el tamaño: el centro (que es lo que se
+        // mide) no se mueve, y no hace falta volver a maquetar nada.
+        transform: escala === 1 ? undefined : `scale(${escala})`,
+        visibility: escala === 0 ? 'hidden' : undefined,
         background: 'radial-gradient(circle, var(--hw-halo) 0%, var(--hw-halo-medio) 32%, transparent 70%)',
         animationDelay: `${retraso}s`,
       }}
     />
+  )
+}
+
+// ── Humo ────────────────────────────────────────────────────────────────
+// Dos hilos de humo que suben, se ensanchan y se deshacen. Se monta al apagar
+// algo y se quita solo al acabar (onFin). Solo transform y opacity.
+export function Humo({ className = '', style, onFin }) {
+  return (
+    <svg {...deco} viewBox="0 0 20 48" className={`pointer-events-none ${className}`} style={style}>
+      <path className="hw-humo" d="M10 46C7 40 13 36 10 30C7 24 13 20 10 14" fill="none" stroke="var(--hw-humo)" strokeWidth="1.8" strokeLinecap="round" />
+      <path className="hw-humo hw-humo-2" onAnimationEnd={onFin} d="M10 46C13 41 7 37 10.5 31C14 25 8 21 11 15" fill="none" stroke="var(--hw-humo)" strokeWidth="1.3" strokeLinecap="round" />
+    </svg>
   )
 }
