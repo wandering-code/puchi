@@ -2,7 +2,6 @@ import { Fragment, memo, useEffect, useRef, useState } from 'react'
 import { claveDeAutor, totalPages } from './shelf'
 import { usarPreferencia } from '../../platform/preferencias'
 import Adorno, { usarPiezaDeAdorno } from '../../eventos/Adorno'
-import { PastillaProgreso } from './piezas'
 import { progressPct } from './shelf'
 import { colorConocido, colorDePortada } from './colorPortada'
 import { proporcionConocida, proporcionFoto } from './proporcionLomo'
@@ -1112,7 +1111,7 @@ const Lomo = memo(function Lomo({ entry, onAbrir, volando = false, sinPrisa = fa
         {progreso && <CantoLeido entry={entry} />}
         </>)}
       </button>
-      {progreso && lleno && <Marcapaginas entry={entry} progreso={progreso} />}
+      {progreso && lleno && <Marcapaginas />}
       </span>
     </div>
   )
@@ -1120,45 +1119,38 @@ const Lomo = memo(function Lomo({ entry, onAbrir, volando = false, sinPrisa = fa
 
 // ─── «Leyendo» en la vista de lomos ─────────────────────────────────────
 // Cuando «Leyendo» se ve como el resto (Ajustes), cada libro que estás leyendo
-// lleva por dónde vas de dos formas: una línea en el canto del lomo que sube
-// desde abajo hasta lo leído, para comparar de un vistazo, y un marcapáginas
-// que asoma por arriba con el número (tocarlo cambia entre % y páginas).
+// lleva por dónde vas en una línea en el canto del lomo que sube desde abajo
+// hasta lo leído, para comparar de un vistazo, y una cintita de marcapáginas
+// que asoma por arriba. Sin número: se probó con una pastilla encima del
+// marcapáginas y recargaba la balda; el número exacto está en la ficha.
 
 // La línea del canto: el lomo entero de alto, encogida con scaleY hasta lo
-// leído (transform: GPU, y se anima sola si cambia el progreso).
+// leído (transform: GPU, y se anima sola si cambia el progreso). Más clara
+// que el acento y algo translúcida, para que acompañe al lomo sin gritar.
 function CantoLeido({ entry }) {
   const pct = progressPct(entry)
   return (
-    <span aria-hidden className="pointer-events-none absolute inset-y-0 right-0 w-[3px] bg-black/25">
+    <span aria-hidden className="pointer-events-none absolute inset-y-0 right-0 w-[3px] bg-black/15">
       <span
-        className="absolute inset-0 origin-bottom bg-accent"
+        className="absolute inset-0 origin-bottom"
         style={{
+          background: 'color-mix(in srgb, var(--color-accent) 60%, white)',
+          opacity: 0.75,
           transform: `scaleY(${pct / 100})`,
           transition: 'transform 500ms cubic-bezier(0.22, 1, 0.36, 1)',
-          boxShadow: '0 0 6px var(--color-accent)',
+          boxShadow: '0 0 4px color-mix(in srgb, var(--color-accent) 50%, transparent)',
         }}
       />
     </span>
   )
 }
 
-// La cinta que asoma por arriba del libro, con la cola en V, y la pastilla
-// apoyada encima. z-[2] para pintarse por encima de los vecinos si es más
-// ancha que el lomo.
-function Marcapaginas({ entry, progreso }) {
+// La cinta que asoma por arriba del libro, con la cola en V.
+function Marcapaginas() {
   return (
-    <span className="pointer-events-none absolute bottom-full left-1/2 z-[2] flex -translate-x-1/2 flex-col items-center" style={{ marginBottom: -6 }}>
-      <PastillaProgreso
-        entry={entry}
-        compacta
-        porcentaje={progreso.porcentaje}
-        onAlternar={progreso.alternar}
-        className="pointer-events-auto -mb-0.5 whitespace-nowrap px-1 text-[9px]"
-      />
-      <svg aria-hidden viewBox="0 0 8 16" width="8" height="16">
-        <path d="M0 0H8V16H0Z" fill="var(--color-accent)" />
-        <path d="M0 0H8V16H0Z" fill="black" opacity="0.2" />
-      </svg>
-    </span>
+    <svg aria-hidden viewBox="0 0 8 14" width="7" height="13" className="pointer-events-none absolute bottom-full left-1/2 z-[2] -translate-x-1/2" style={{ marginBottom: -4 }}>
+      <path d="M0 0L4 3L8 0V14H0Z" fill="var(--color-accent)" />
+      <path d="M0 0L4 3L8 0V14H0Z" fill="black" opacity="0.15" />
+    </svg>
   )
 }
