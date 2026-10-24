@@ -4,7 +4,6 @@ import { api } from '../../platform/api'
 import HojaInferior, { useHoja } from '../luniteca/HojaInferior'
 import { IconObjetivo, IconPencil } from '../../ui/icons'
 import { diaDeSesion } from './clubShelf'
-import { tf } from '../../ui/transformar'
 import Desplegable from '../../ui/Desplegable'
 
 // Hasta qué página hay que llevar leído para la próxima quedada.
@@ -265,7 +264,7 @@ function FormularioObjetivo({ pagina, total, onGuardar, onCancelar }) {
         <motion.button
           type="submit"
           disabled={guardando}
-          whileTap={{ transform: tf({ scale: 0.98 }) }}
+          data-pulsa="0.98"
           className="h-12 flex-[1.4] rounded-xl2 bg-accent text-[15px] font-semibold text-on-accent disabled:opacity-60"
         >
           {guardando ? 'Guardando…' : 'Guardar'}

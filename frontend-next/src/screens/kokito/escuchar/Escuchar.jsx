@@ -158,7 +158,7 @@ function Tarjeta({ a, r, onCambio }) {
         </button>
         {a.mine ? (
           <motion.button
-            whileTap={{ transform: tf({ scale: 0.9 }) }}
+            data-pulsa="0.9"
             onClick={play}
             aria-label={sonando ? 'Pausa' : 'Escuchar'}
             className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent text-on-accent shadow-sm"
@@ -167,7 +167,7 @@ function Tarjeta({ a, r, onCambio }) {
           </motion.button>
         ) : (
           <motion.button
-            whileTap={{ transform: tf({ scale: 0.94 }) }}
+            data-pulsa="0.94"
             disabled={ocupado}
             onClick={anadir}
             className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-accent-line bg-accent-soft px-3 text-xs font-semibold text-accent disabled:opacity-70"

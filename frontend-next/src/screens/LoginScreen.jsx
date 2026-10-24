@@ -133,7 +133,7 @@ export default function LoginScreen() {
               <motion.button
                 type="submit"
                 disabled={loading || !name.trim() || !pin}
-                whileTap={{ transform: tf({ scale: 0.97 }) }}
+                data-pulsa="0.97"
                 className="mt-2 flex h-14 w-full items-center justify-center gap-2 rounded-xl2 bg-accent text-base font-semibold text-on-accent shadow-[0_10px_30px_-10px_var(--color-accent)] transition-colors disabled:bg-surface-2 disabled:text-ink-mute disabled:shadow-none"
               >
                 {loading ? 'Entrando…' : 'Entrar'}

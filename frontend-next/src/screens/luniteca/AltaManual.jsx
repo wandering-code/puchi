@@ -16,7 +16,6 @@ import { useDeshacerAlta } from './deshacerAlta'
 import { IconChevron } from '../../ui/icons'
 import Desplegable from '../../ui/Desplegable'
 import { LLEGADA } from '../../ui/curvas'
-import { tf } from '../../ui/transformar'
 import TinteDePortada from './TinteDePortada'
 import Marco from '../../ui/Marco'
 
@@ -208,7 +207,7 @@ export default function AltaManual({ onAnadido, onHecho, alClub, estanteria }) {
         <motion.button
           type="button"
           onClick={hojaPortada.abrir}
-          whileTap={{ transform: tf({ scale: 0.96 }) }}
+          data-pulsa="0.96"
           className="w-24 shrink-0"
           aria-label="Poner una portada"
         >
@@ -218,7 +217,7 @@ export default function AltaManual({ onAnadido, onHecho, alClub, estanteria }) {
           <motion.button
             type="button"
             onClick={hojaLomo.abrir}
-            whileTap={{ transform: tf({ scale: 0.96 }) }}
+            data-pulsa="0.96"
             className="shrink-0 overflow-hidden rounded-sm border border-dashed border-line bg-surface-2"
             style={{ width: anchoLomo, height: altoLomo }}
             aria-label="Poner una foto del lomo"
@@ -433,7 +432,7 @@ export default function AltaManual({ onAnadido, onHecho, alClub, estanteria }) {
       <motion.button
         type="submit"
         disabled={guardando}
-        whileTap={{ transform: tf({ scale: 0.98 }) }}
+        data-pulsa="0.98"
         className="mt-5 h-12 w-full rounded-xl2 bg-accent text-[15px] font-semibold text-on-accent disabled:opacity-60"
       >
         {guardando

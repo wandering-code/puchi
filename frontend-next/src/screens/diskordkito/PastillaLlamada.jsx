@@ -97,7 +97,7 @@ export default function PastillaLlamada() {
 
           <motion.button
             onClick={salirse}
-            whileTap={{ transform: tf({ scale: 0.9 }) }}
+            data-pulsa="0.9"
             aria-label={enGrupo ? 'Salir de la llamada' : 'Colgar'}
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-danger text-white"
           >

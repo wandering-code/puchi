@@ -84,7 +84,7 @@ export default function MiniReproductor() {
             </button>
 
             <motion.button
-              whileTap={{ transform: tf({ scale: 0.88 }) }}
+              data-pulsa="0.88"
               onClick={r.alternar}
               aria-label={sonando ? 'Pausa' : 'Reproducir'}
               className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent text-on-accent"
@@ -93,7 +93,7 @@ export default function MiniReproductor() {
                 : sonando ? <IconPausa className="h-5 w-5" /> : <IconPlay className="ml-0.5 h-5 w-5" />}
             </motion.button>
             <motion.button
-              whileTap={{ transform: tf({ scale: 0.88 }) }}
+              data-pulsa="0.88"
               onClick={r.cerrar}
               aria-label="Quitar el reproductor"
               className="flex h-9 w-8 shrink-0 items-center justify-center rounded-full text-ink-mute"

@@ -140,7 +140,7 @@ export default function LlamadaGrupo() {
             </div>
             <motion.button
               onClick={encoger}
-              whileTap={{ transform: tf({ scale: 0.9 }) }}
+              data-pulsa="0.9"
               aria-label="Seguir en Puchi con la llamada en marcha"
               className="pointer-events-auto mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur"
             >
@@ -249,7 +249,7 @@ function Cuadro({
 
   return (
     <Etiqueta
-      {...(onTocar ? { onClick: onTocar, whileTap: { transform: tf({ scale: 0.97 }) } } : {})}
+      {...(onTocar ? { onClick: onTocar, 'data-pulsa': '0.97' } : {})}
       aria-label={onTocar ? `Poner a ${mio ? 'ti' : persona?.name} en primer plano` : undefined}
       style={
         ancho ? { width: ancho, height: ancho / 0.75 }
@@ -314,7 +314,7 @@ function Mandos({ conVideo, mudo, sinCamara, onMudo, onCamara, onSalir }) {
         )}
         <motion.button
           onClick={onSalir}
-          whileTap={{ transform: tf({ scale: 0.9 }) }}
+          data-pulsa="0.9"
           aria-label="Salir de la llamada"
           style={{ background: ROJO_COLGAR }}
           className="ml-1 flex h-12 w-12 items-center justify-center rounded-full text-white"
@@ -330,7 +330,7 @@ function Mando({ activo, onClick, etiqueta, children }) {
   return (
     <motion.button
       onClick={onClick}
-      whileTap={{ transform: tf({ scale: 0.9 }) }}
+      data-pulsa="0.9"
       aria-label={etiqueta}
       aria-pressed={!activo}
       className={`flex h-12 w-12 items-center justify-center rounded-full transition-colors ${

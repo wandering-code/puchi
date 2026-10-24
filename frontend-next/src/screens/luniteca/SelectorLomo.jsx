@@ -9,7 +9,6 @@ import { BotonBorrarEsquina } from './piezas'
 import { usarAnchoLomo } from './Lomos'
 import { AccionesFoto, Actual, MarcaElegida, Tanda, aparecer } from './FotoLibro'
 import { generarLomoImagen } from './generarLomo'
-import { tf } from '../../ui/transformar'
 
 // Elegir el lomo de TU copia del libro: igual que SelectorPortada, lo que se
 // pone aquí va a tu entrada de la estantería (PersonalShelf.spine_url), no al
@@ -257,7 +256,7 @@ function Opcion({ indice, url, ancho, alto, foto, pie, elegida, onElegir, onBorr
           anidados es HTML inválido, y aquí además tocar la cruz no debe
           elegir también el lomo. */}
       <div className="relative">
-        <motion.button onClick={onElegir} whileTap={{ transform: tf({ scale: 0.95 }) }} className="relative block" aria-label={`Elegir: ${pie}`} aria-pressed={elegida}>
+        <motion.button onClick={onElegir} data-pulsa="0.95" className="relative block" aria-label={`Elegir: ${pie}`} aria-pressed={elegida}>
           <MiniLomo url={url} ancho={ancho} alto={alto} altoVisto={ALTO_OPCION} foto={foto} />
           {elegida && <MarcaElegida grupo="lomo" redondeo={3} />}
         </motion.button>

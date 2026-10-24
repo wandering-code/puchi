@@ -93,7 +93,7 @@ export default function AvisoDeNovedades() {
               )}
               <div className="px-6 pb-6 pt-5">
                 <motion.button
-                  whileTap={{ transform: tf({ scale: 0.98 }) }}
+                  data-pulsa="0.98"
                   onClick={aceptar}
                   className="h-12 w-full rounded-xl2 bg-accent text-[15px] font-semibold text-on-accent shadow-sm"
                 >

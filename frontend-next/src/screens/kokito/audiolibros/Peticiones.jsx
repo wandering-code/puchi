@@ -257,7 +257,7 @@ function Tarjeta({ g, subiendo, onSubir, onEnlazar, onSugerencia, onRechazar, on
     return (
       <motion.button
         onClick={onAbrir}
-        whileTap={{ transform: tf({ scale: 0.985 }) }}
+        data-pulsa="0.985"
         className="w-full rounded-xl2 border border-line bg-surface p-3 text-left shadow-[0_1px_0_rgb(var(--color-sombra)/0.04)]"
       >
         {cuerpo}
@@ -275,7 +275,7 @@ function Tarjeta({ g, subiendo, onSubir, onEnlazar, onSugerencia, onRechazar, on
             Parece <span className="font-semibold text-ink">«{g.suggestion.title}»</span>, que ya existe
           </p>
           <motion.button
-            whileTap={{ transform: tf({ scale: 0.94 }) }}
+            data-pulsa="0.94"
             disabled={enlazando}
             onClick={async () => { setEnlazando(true); await onSugerencia(); setEnlazando(false) }}
             className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full bg-accent px-3 text-xs font-semibold text-on-accent shadow-sm disabled:opacity-70"
@@ -288,7 +288,7 @@ function Tarjeta({ g, subiendo, onSubir, onEnlazar, onSugerencia, onRechazar, on
 
       <div className="mt-3 flex gap-2">
         <motion.button
-          whileTap={{ transform: tf({ scale: 0.97 }) }}
+          data-pulsa="0.97"
           disabled={subiendo}
           onClick={onSubir}
           className="inline-flex h-10 flex-1 items-center justify-center gap-1.5 rounded-xl2 border border-accent-line bg-accent-soft text-sm font-semibold text-accent disabled:cursor-wait disabled:opacity-80"
@@ -297,7 +297,7 @@ function Tarjeta({ g, subiendo, onSubir, onEnlazar, onSugerencia, onRechazar, on
           {subiendo ? 'Leyendo…' : 'Subir EPUB'}
         </motion.button>
         <motion.button
-          whileTap={{ transform: tf({ scale: 0.97 }) }}
+          data-pulsa="0.97"
           onClick={onEnlazar}
           className="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl2 border border-line px-3.5 text-sm font-medium text-ink active:bg-surface-2"
         >
@@ -305,7 +305,7 @@ function Tarjeta({ g, subiendo, onSubir, onEnlazar, onSugerencia, onRechazar, on
           Enlazar
         </motion.button>
         <motion.button
-          whileTap={{ transform: tf({ scale: 0.97 }) }}
+          data-pulsa="0.97"
           onClick={onRechazar}
           aria-label="Rechazar"
           className="inline-flex h-10 w-10 items-center justify-center rounded-xl2 border border-line text-ink-mute active:bg-surface-2"
@@ -387,7 +387,7 @@ function HojaRechazar({ g: actual, onCerrar, onRechazar }) {
       onCerrar={onCerrar}
       pie={
         <motion.button
-          whileTap={{ transform: tf({ scale: 0.98 }) }}
+          data-pulsa="0.98"
           disabled={enviando}
           onClick={async () => { setEnviando(true); await onRechazar(motivo); setEnviando(false) }}
           className="inline-flex h-12 flex-1 items-center justify-center gap-2 rounded-xl2 bg-danger text-sm font-semibold text-white disabled:opacity-70"

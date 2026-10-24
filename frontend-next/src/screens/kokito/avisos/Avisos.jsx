@@ -174,7 +174,7 @@ function EnEsteMovil({ abierta }) {
         {nota || 'Te llegará una notificación al móvil cuando tu audiolibro se pueda escuchar.'}
       </p>
       <motion.button
-        whileTap={{ transform: tf({ scale: 0.97 }) }}
+        data-pulsa="0.97"
         disabled={ocupado}
         onClick={() => hacer(async () => setEstado(await activarPush()))}
         className="mt-3 inline-flex h-10 items-center gap-2 rounded-xl2 bg-accent px-4 text-sm font-semibold text-on-accent shadow-sm disabled:opacity-70"

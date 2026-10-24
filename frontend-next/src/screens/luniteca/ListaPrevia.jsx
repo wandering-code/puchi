@@ -6,7 +6,6 @@ import { CamposFecha } from './editores'
 import { TamanoLibro } from './BookEditForm'
 import { FORMATO_LABEL, STATUS_LABEL } from './shelf'
 import { IconCheck, IconChevron, IconX } from '../../ui/icons'
-import { tf } from '../../ui/transformar'
 import Desplegable from '../../ui/Desplegable'
 import TinteDePortada from './TinteDePortada'
 
@@ -71,7 +70,7 @@ export default function ListaPrevia({
         <motion.button
           onClick={onImportar}
           disabled={enviando || nuevas === 0}
-          whileTap={{ transform: tf({ scale: 0.98 }) }}
+          data-pulsa="0.98"
           className="h-12 w-full rounded-xl2 bg-accent text-[15px] font-semibold text-on-accent disabled:opacity-60"
         >
           {enviando

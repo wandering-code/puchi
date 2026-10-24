@@ -7,7 +7,6 @@ import { Cover } from './piezas'
 import { IconCheck } from '../../ui/icons'
 import HojaInferior from './HojaInferior'
 import { useDeshacerAlta } from './deshacerAlta'
-import { tf } from '../../ui/transformar'
 import { Aparece } from '../../ui/Desplegable'
 
 // Libros relacionados con el de la ficha (issue #7): la saga entera, en
@@ -354,7 +353,7 @@ function Sugerencia({ s, onElegir, etiqueta, linea, refNodo }) {
       <motion.button
         onClick={() => !actual && onElegir(s)}
         disabled={actual}
-        whileTap={actual ? undefined : { transform: tf({ scale: 0.96 }) }}
+        data-pulsa={actual ? undefined : '0.96'}
         aria-label={actual ? `${s.title} (este libro)` : s.title}
         className="block w-full text-left"
       >

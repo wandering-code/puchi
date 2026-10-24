@@ -108,7 +108,7 @@ export default function Audiolibros() {
       <motion.button
         onClick={() => entrada.current?.click()}
         disabled={!!subiendo}
-        whileTap={subiendo ? undefined : { transform: tf({ scale: 0.985 }) }}
+        data-pulsa={subiendo ? undefined : '0.985'}
         className="relative flex w-full items-center gap-4 overflow-hidden rounded-xl3 border border-dashed border-accent-line bg-accent-soft/60 px-5 py-4 text-left disabled:cursor-wait"
       >
         <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent text-on-accent shadow-sm">
@@ -203,7 +203,7 @@ function Tarjeta({ ab, onAbrir }) {
   return (
     <motion.button
       onClick={onAbrir}
-      whileTap={{ transform: tf({ scale: 0.985 }) }}
+      data-pulsa="0.985"
       className="flex w-full items-start gap-4 rounded-xl2 border border-line bg-surface p-3 text-left shadow-[0_1px_0_rgb(var(--color-sombra)/0.04)]"
     >
       <Cover url={ab.cover_url} title={ab.title} className="w-[60px] shrink-0" />

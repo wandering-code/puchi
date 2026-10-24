@@ -133,7 +133,7 @@ export default function FichaAudiolibro({ id, onCerrar, onCambiar, onBorrar }) {
           <motion.button
             onClick={onCerrar}
             aria-label="Volver a los audiolibros"
-            whileTap={{ transform: tf({ scale: 0.92 }) }}
+            data-pulsa="0.92"
             className="pointer-events-auto mt-1 flex h-10 w-10 items-center justify-center rounded-full border border-line bg-surface/90 text-ink shadow-sm backdrop-blur"
           >
             <IconArrowLeft className="h-5 w-5" />
@@ -180,7 +180,7 @@ export default function FichaAudiolibro({ id, onCerrar, onCambiar, onBorrar }) {
                   <motion.div key={libro.id} initial={{ opacity: 0, transform: tf({ y: -6 }) }} animate={{ opacity: 1, transform: tf({ y: 0 }) }} exit={{ opacity: 0, transform: tf({ scale: 0.96 }) }} transition={SUAVE}>
                     <FilaLibro libro={libro} enlazado>
                       <motion.button
-                        whileTap={{ transform: tf({ scale: 0.9 }) }}
+                        data-pulsa="0.9"
                         onClick={() => desenlazar(libro)}
                         aria-label={`Quitar ${libro.title}`}
                         className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-ink-mute active:bg-surface-2"
@@ -212,7 +212,7 @@ export default function FichaAudiolibro({ id, onCerrar, onCambiar, onBorrar }) {
               )}
 
               <motion.button
-                whileTap={{ transform: tf({ scale: 0.98 }) }}
+                data-pulsa="0.98"
                 onClick={hojaBuscar.abrir}
                 className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-xl2 border border-line text-sm font-medium text-ink-dim active:bg-surface-2"
               >
@@ -300,7 +300,7 @@ function Cabecera({ ab, onEditar }) {
       <h2 className="mt-5 font-display text-[1.6rem] font-bold leading-tight tracking-[-0.02em]">{ab.title}</h2>
       {ab.author && <p className="mt-1.5 text-[15px] text-ink-dim">{ab.author}</p>}
       <motion.button
-        whileTap={{ transform: tf({ scale: 0.96 }) }}
+        data-pulsa="0.96"
         onClick={() => onEditar()}
         className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-line px-3 py-1.5 text-xs text-ink-dim active:bg-surface-2"
       >
@@ -475,7 +475,7 @@ function BotonEnlazar({ libro, onEnlazar, yaEnlazado = false }) {
   }
   return (
     <motion.button
-      whileTap={{ transform: tf({ scale: 0.94 }) }}
+      data-pulsa="0.94"
       disabled={enviando}
       onClick={async () => { setEnviando(true); await onEnlazar(); setEnviando(false) }}
       className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-accent px-3.5 text-xs font-semibold text-on-accent shadow-sm disabled:opacity-70"
@@ -698,7 +698,7 @@ function HojaCapitulo({ ab, cap, abierta, onCerrar, onAplicar }) {
 
       {cap.included && (cap.status === 'listo' || cap.status === 'error') && (
         <motion.button
-          whileTap={{ transform: tf({ scale: 0.98 }) }}
+          data-pulsa="0.98"
           onClick={() => onAplicar(api(`/audiobooks/${ab.id}/chapters/${cap.id}/regenerate`, { method: 'POST' }))}
           className="mt-3 flex w-full items-center gap-3 rounded-xl2 border border-line px-4 py-3 text-left active:bg-surface-2"
         >
@@ -721,7 +721,7 @@ function HojaCapitulo({ ab, cap, abierta, onCerrar, onAplicar }) {
 
       {siguiente && (
         <motion.button
-          whileTap={{ transform: tf({ scale: 0.98 }) }}
+          data-pulsa="0.98"
           onClick={unir}
           disabled={uniendo}
           className="mt-3 flex w-full items-center gap-3 rounded-xl2 border border-line px-4 py-3 text-left active:bg-surface-2 disabled:opacity-60"
@@ -784,7 +784,7 @@ function HojaDatos({ ab, abierta, onCerrar, onGuardar }) {
       onCerrar={onCerrar}
       pie={
         <motion.button
-          whileTap={{ transform: tf({ scale: 0.98 }) }}
+          data-pulsa="0.98"
           onClick={guardar}
           disabled={!titulo.trim()}
           className="h-12 flex-1 rounded-xl2 bg-accent text-sm font-semibold text-on-accent disabled:opacity-50"

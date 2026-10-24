@@ -132,7 +132,7 @@ export function Generacion({ ab, sobremesa, onGenerar, onPausar, onRetener, onRe
           <div className="mt-4 flex items-center gap-3">
             {retenido ? (
               <motion.button
-                whileTap={{ transform: tf({ scale: 0.97 }) }}
+                data-pulsa="0.97"
                 onClick={onReanudar}
                 className={`flex h-11 flex-1 items-center justify-center gap-2 rounded-xl2 text-sm font-semibold ${
                   actual ? 'border border-line text-ink-dim active:bg-surface-2' : 'bg-accent text-on-accent shadow-sm'}`}
@@ -144,7 +144,7 @@ export function Generacion({ ab, sobremesa, onGenerar, onPausar, onRetener, onRe
                 <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-mute">Pausar</p>
                 <div className="flex gap-2">
                   <motion.button
-                    whileTap={{ transform: tf({ scale: 0.97 }) }}
+                    data-pulsa="0.97"
                     onClick={() => onRetener(false)}
                     className="flex min-h-11 flex-1 flex-col items-center justify-center rounded-xl2 border border-line px-2 py-1.5 text-sm font-semibold text-ink active:bg-surface-2"
                   >
@@ -152,7 +152,7 @@ export function Generacion({ ab, sobremesa, onGenerar, onPausar, onRetener, onRe
                     <span className="text-[10px] font-normal text-ink-mute">no empieza el siguiente</span>
                   </motion.button>
                   <motion.button
-                    whileTap={{ transform: tf({ scale: 0.97 }) }}
+                    data-pulsa="0.97"
                     onClick={() => onRetener(true)}
                     className="flex min-h-11 flex-1 flex-col items-center justify-center rounded-xl2 border border-line px-2 py-1.5 text-sm font-semibold text-ink active:bg-surface-2"
                   >
@@ -163,7 +163,7 @@ export function Generacion({ ab, sobremesa, onGenerar, onPausar, onRetener, onRe
               </div>
             ) : enMarcha ? (
               <motion.button
-                whileTap={{ transform: tf({ scale: 0.97 }) }}
+                data-pulsa="0.97"
                 onClick={() => onRetener(false)}
                 className="flex h-11 flex-1 items-center justify-center gap-2 rounded-xl2 border border-line text-sm font-semibold text-ink-dim active:bg-surface-2"
               >
@@ -171,7 +171,7 @@ export function Generacion({ ab, sobremesa, onGenerar, onPausar, onRetener, onRe
               </motion.button>
             ) : (
               <motion.button
-                whileTap={{ transform: tf({ scale: 0.97 }) }}
+                data-pulsa="0.97"
                 onClick={onGenerar}
                 disabled={!faltan.length}
                 className="flex h-11 flex-1 items-center justify-center gap-2 rounded-xl2 bg-accent text-sm font-semibold text-on-accent shadow-sm disabled:opacity-50"
@@ -246,7 +246,7 @@ export function HojaEmpezar({ ab, abierta, onCerrar, onGenerar }) {
       onCerrar={onCerrar}
       pie={
         <motion.button
-          whileTap={{ transform: tf({ scale: 0.98 }) }}
+          data-pulsa="0.98"
           onClick={generar}
           disabled={!cap || enviando}
           className="flex h-12 min-w-0 flex-1 items-center justify-center gap-2 rounded-xl2 bg-accent px-4 text-sm font-semibold text-on-accent disabled:opacity-60"
@@ -364,7 +364,7 @@ export function ReproductorCapitulo({ src, duracionS, irA = null, onTiempo = nul
         onLoadedMetadata={e => Number.isFinite(e.currentTarget.duration) && setDur(e.currentTarget.duration)}
       />
       <motion.button
-        whileTap={{ transform: tf({ scale: 0.9 }) }}
+        data-pulsa="0.9"
         onClick={alternar}
         aria-label={sonando ? 'Pausa' : 'Escuchar'}
         className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-on-accent shadow-sm"
