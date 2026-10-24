@@ -34,6 +34,12 @@ export function usarPiezaDeAdorno(sitio) {
 // que mide hasta dónde llega lo que hay a su lado y se estira hasta ahí. Mide
 // a los hermanos y no el scrollHeight, que la incluye a ella misma: si no,
 // nunca podría encoger. Recorta lo que se salga, para no alargar el scroll.
+//
+// z-[30]: por encima de las barras pegadas de las pantallas (sticky, hasta
+// z-20: la de buscar/filtrar/vista de la Luniteca). Debajo, un murciélago se
+// metía tras su fondo, que es del color de la página: desaparecía detrás de
+// algo que no se ve. Y por debajo de todo lo que se abre encima (hojas, la
+// ficha, avisos: z-40 en adelante).
 export function CapaDeContenido() {
   const Pieza = usarPiezaDeAdorno('contenido')
   const capa = useRef(null)
@@ -55,7 +61,7 @@ export function CapaDeContenido() {
   }, [Pieza])
   if (!Pieza) return null
   return (
-    <div ref={capa} aria-hidden className="pointer-events-none absolute inset-x-0 top-0 z-[4] overflow-hidden" style={{ height: alto }}>
+    <div ref={capa} aria-hidden className="pointer-events-none absolute inset-x-0 top-0 z-[30] overflow-hidden" style={{ height: alto }}>
       <Pieza alto={alto} />
     </div>
   )
