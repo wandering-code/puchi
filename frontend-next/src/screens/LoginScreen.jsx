@@ -4,6 +4,7 @@ import { useAuth } from '../platform/auth'
 import { api } from '../platform/api'
 import { IconArrow } from '../ui/icons'
 import Logo from '../ui/Logo'
+import Adorno from '../eventos/Adorno'
 import Registro from './Registro'
 import { ES_KOKITO } from '../platform/variante'
 import { tf } from '../ui/transformar'
@@ -44,6 +45,8 @@ export default function LoginScreen() {
   return (
     <div className="relative flex h-full w-full flex-col overflow-hidden bg-bg">
       <Aurora />
+      {/* La decoración de temporada, si la hay (src/eventos). */}
+      <Adorno sitio="fondo" />
 
       {/* pb-kb aparta el contenido del teclado con padding, sin encoger la
           caja: encogiéndola se corta el fondo y asoma lo de detrás. */}

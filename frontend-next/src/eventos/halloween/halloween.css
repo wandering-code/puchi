@@ -1,0 +1,128 @@
+/* ── Halloween ───────────────────────────────────────────────────────────
+   Una capa encima del tema que tenga cada uno, no un tema aparte: con el claro
+   es un pergamino tostado con calabaza; con el oscuro, la noche morada con la
+   calabaza encendida. Los nombres son los mismos tokens de index.css, así que
+   todo lo que ya pinta con ellos (botones, pastillas, interruptores, fichas,
+   el reproductor…) se disfraza solo.
+
+   Los selectores llevan los dos atributos (o el :not) a propósito: así ganan
+   por especificidad a los de index.css, sin depender de en qué orden acabe el
+   CSS en el build. */
+
+:root[data-evento="halloween"]:not([data-tema="oscuro"]) {
+  --color-bg:        #f3eadb;
+  --color-surface:   #fffaf2;
+  --color-surface-2: #e9d8c0;
+  --color-line:      #ddc8aa;
+  --color-ink:       #241a24;   /* tinta con un punto morado */
+  --color-ink-dim:   #75646f;
+  --color-ink-mute:  #8b7a83;
+  --color-accent:    #c4541a;   /* calabaza; 4.6 sobre el crema */
+  --color-accent-soft: rgba(196,84,26,0.13);
+  --color-accent-line: rgba(196,84,26,0.38);
+  --color-on-accent: #fffaf2;
+  --color-accent-2:  #5c4683;   /* morado bruja */
+  --color-read:      #4c7337;   /* verde poción */
+  --color-danger:    #a3362b;
+  --color-velo: rgba(36,20,40,0.28);
+
+  --balda-cara: #dcc6a6;
+
+  /* Los de las piezas (piezas.jsx). */
+  --hw-silueta:   #3a2a43;      /* murciélagos y araña */
+  --hw-silueta-o: 0.5;
+  --hw-tela:      rgba(58,42,67,0.22);
+  --hw-sombrero:  #3a2a43;
+  --hw-calabaza:  #e07a2c;
+  --hw-calabaza-sombra: #c25f1c;
+  --hw-tallo:     #5f6b2e;
+  --hw-cara:      #3a2210;      /* de día la cara está apagada */
+}
+
+:root[data-evento="halloween"][data-tema="oscuro"] {
+  --color-bg:        #120c17;   /* noche morada, no el pardo de siempre */
+  --color-surface:   #1f1627;
+  --color-surface-2: #2e2239;
+  --color-line:      #423350;
+  --color-ink:       #f3ebe7;
+  --color-ink-dim:   #bcaab9;
+  --color-ink-mute:  #8f7e91;
+  --color-accent:    #f28b35;   /* calabaza encendida */
+  --color-accent-soft: rgba(242,139,53,0.16);
+  --color-accent-line: rgba(242,139,53,0.45);
+  --color-on-accent: #1d0f06;
+  --color-accent-2:  #a98bd6;
+  --color-read:      #8cc26a;
+  --color-want:      #8f7e91;
+  --color-danger:    #ec6f5c;
+  --color-velo: rgba(5,0,10,0.6);
+
+  --balda-cara: #2b2033;
+
+  --hw-silueta:   #7d68a0;
+  --hw-silueta-o: 0.55;
+  --hw-tela:      rgba(210,190,235,0.16);
+  --hw-sombrero:  #5a4580;
+  --hw-calabaza:  #e8792a;
+  --hw-calabaza-sombra: #b85a1a;
+  --hw-tallo:     #6f7d36;
+  --hw-cara:      #ffd36b;      /* de noche, la vela dentro */
+}
+
+/* ── Movimiento ──────────────────────────────────────────────────────────
+   Solo transform y opacity: lo mueve la GPU a la frecuencia de la pantalla y
+   no repinta nada de lo que hay debajo. */
+
+/* Un murciélago cruza la pantalla y desaparece un buen rato: si siempre hubiera
+   alguno a la vista, molestaría para leer. --hw-y (altura) y --hw-sube (cuánto
+   ondula) los pone cada uno. */
+@keyframes hw-vuelo {
+  0%      { transform: translate3d(-12vw, var(--hw-y), 0); }
+  10%     { transform: translate3d(22vw, calc(var(--hw-y) - var(--hw-sube)), 0); }
+  20%     { transform: translate3d(55vw, calc(var(--hw-y) + var(--hw-sube)), 0); }
+  30%     { transform: translate3d(88vw, calc(var(--hw-y) - var(--hw-sube)), 0); }
+  36%, 100% { transform: translate3d(112vw, var(--hw-y), 0); }
+}
+.hw-vuelo {
+  position: absolute;
+  left: 0;
+  top: 0;
+  will-change: transform;
+  animation: hw-vuelo var(--hw-dura, 24s) linear var(--hw-espera, 0s) infinite;
+}
+/* Al revés: de derecha a izquierda, para que no vayan todos en fila. */
+.hw-vuelo.hw-al-reves { animation-direction: reverse; }
+
+@keyframes hw-aleteo {
+  from { transform: scaleY(1); }
+  to   { transform: scaleY(0.45); }
+}
+.hw-aleteo {
+  /* Es un <g> de SVG: sin fill-box el origen sería la esquina del dibujo. */
+  transform-box: fill-box;
+  transform-origin: 50% 45%;
+  animation: hw-aleteo 0.22s ease-in-out infinite alternate;
+}
+
+/* La araña sube y baja por su hilo. */
+@keyframes hw-arana {
+  0%, 100% { transform: translateY(-14px); }
+  50%      { transform: translateY(10px); }
+}
+.hw-arana { animation: hw-arana 7s cubic-bezier(0.45, 0, 0.55, 1) infinite; }
+
+/* La vela dentro de la calabaza parpadea. Solo de noche: de día está apagada. */
+@keyframes hw-vela {
+  0%, 100% { opacity: 1; }
+  40%      { opacity: 0.7; }
+  55%      { opacity: 0.95; }
+  70%      { opacity: 0.78; }
+}
+:root[data-tema="oscuro"] .hw-vela { animation: hw-vela 2.6s ease-in-out infinite; }
+
+/* Quien pide menos movimiento ve la decoración quieta, sin murciélagos de
+   paso (la regla global de index.css los dejaría parpadeando). */
+@media (prefers-reduced-motion: reduce) {
+  .hw-vuelo { display: none; }
+  .hw-aleteo, .hw-arana, .hw-vela { animation: none !important; }
+}

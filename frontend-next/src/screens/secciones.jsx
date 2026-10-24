@@ -93,6 +93,7 @@ export const SECCIONES = [
       'Claro y oscuro. También está a un toque en el pie del menú lateral.',
       'Cómo se separan las secciones de la estantería.',
       'Con qué pantalla quieres que arranque Puchi.',
+      'La decoración de temporada (Halloween, Navidad…), que viene puesta y se puede quitar.',
     ],
   },
   {

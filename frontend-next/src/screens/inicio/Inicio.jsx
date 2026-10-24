@@ -8,6 +8,7 @@ import { CON_AUDIOLIBROS } from '../../platform/variante'
 import { seccionesDe } from '../secciones'
 import MuestraDeVoz from '../kokito/escuchar/MuestraDeVoz'
 import Logo from '../../ui/Logo'
+import Adorno from '../../eventos/Adorno'
 import {
   IconActividad, IconArrow, IconAuriculares, IconBooks, IconCampana, IconChat, IconChevron, IconClub,
   IconSettings,
@@ -178,6 +179,9 @@ export default function Inicio() {
           ¿Quieres conocerla mejor? Despliega cualquier apartado.
         </p>
       </header>
+
+      {/* La tarjeta del evento de temporada, si lo hay (src/eventos). */}
+      <Adorno sitio="inicio" />
 
       <div className="space-y-2.5">
         {visibles.map((b, i) => (

@@ -28,6 +28,10 @@ import { usarPreferencia, usarTema } from '../platform/preferencias'
 import { cambiarDeTema } from '../platform/tema'
 import { IconExit, IconLuna, IconMenu, IconSol } from '../ui/icons'
 import Logo from '../ui/Logo'
+import Adorno from '../eventos/Adorno'
+import { EVENTO_DE_TEMPORADA } from '../eventos'
+import { usarDecoracion } from '../eventos/usarEvento'
+import { conCirculo } from '../platform/tema'
 // El catálogo de secciones y quién puede ver cada una vive aparte: lo comparten
 // el menú, la guía de Inicio y el selector de pantalla de arranque de Ajustes.
 import { SECCIONES, puedeVer, seccionesDe } from './secciones'
@@ -116,6 +120,18 @@ export default function Shell() {
       <TopBar titulo={seccion?.label} onAbrirMenu={menu.abrir} />
 
       <main className="relative z-10 flex-1 overflow-hidden">{contenido}</main>
+
+      {/* La decoración de temporada (src/eventos): por encima del contenido
+          y por debajo de la barra de arriba y del menú, sin poder tocarse.
+          Sin evento no pinta nada. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 z-[15] overflow-hidden"
+        style={{ '--hw-arriba': 'calc(env(safe-area-inset-top, 0px) + 3.5rem)' }}
+      >
+        <Adorno sitio="fondo" />
+        <Adorno sitio="cabecera" />
+      </div>
 
       <MenuLateral abierto={menu.abierta} onCerrar={menu.cerrar} onNavegar={cerrarMenuAlNavegar} />
     </div>
@@ -262,7 +278,7 @@ function MenuLateral({ abierto, onCerrar, onNavegar }) {
         }}
       >
       <motion.div
-        className="flex h-full flex-col border-r border-line bg-surface pt-safe pb-safe pl-safe"
+        className="relative flex h-full flex-col border-r border-line bg-surface pt-safe pb-safe pl-safe"
         ref={capaArrastre}
         style={{ x: arrastreX }}
         // Antes que Motion lea dónde empieza el arrastre (fase de captura).
@@ -285,14 +301,16 @@ function MenuLateral({ abierto, onCerrar, onNavegar }) {
           else vueltaX.current = volverASuSitio(capaArrastre.current, arrastreX, 'x')
         }}
       >
-      <div className="flex items-center gap-3 px-5 py-5">
+      <Adorno sitio="menuFondo" />
+      <div className="relative flex items-center gap-3 px-5 py-5">
         <Logo className="h-9 w-9" />
         <div className="min-w-0">
           <p className="font-display text-xl font-semibold leading-none tracking-[-0.02em]">Puchi</p>
+          <Adorno sitio="menu" />
         </div>
       </div>
 
-      <nav className="flex-1 overflow-y-auto overscroll-contain px-3">
+      <nav className="relative flex-1 overflow-y-auto overscroll-contain px-3">
         {secciones.map(({ to, label, Icon }) => (
           <NavLink
             key={to}
@@ -334,7 +352,7 @@ function MenuLateral({ abierto, onCerrar, onNavegar }) {
         ))}
       </nav>
 
-      <div className="flex items-center gap-3 border-t border-line px-5 py-4">
+      <div className="relative flex items-center gap-3 border-t border-line bg-surface px-5 py-4">
         <Avatar jugador={player} size={36} />
         <div className="min-w-0 flex-1">
           <p className="truncate font-display font-semibold leading-tight">{player?.name}</p>
@@ -379,6 +397,8 @@ function Ajustes() {
     <div className="py-8">
       <h2 className="font-display text-[1.75rem] font-bold tracking-[-0.02em]">Ajustes</h2>
       <p className="mt-2 text-sm text-ink-dim">Sesión de {player?.name}.</p>
+
+      {EVENTO_DE_TEMPORADA && <DecoracionDeTemporada />}
 
       <PantallaDeInicio />
 
@@ -470,6 +490,40 @@ function BotonDeTema() {
         </motion.span>
       </AnimatePresence>
     </motion.button>
+  )
+}
+
+// La decoración del evento de ahora (Halloween, Navidad…: ver src/eventos).
+// Solo sale mientras hay uno en temporada; encendida por defecto y con la
+// cuenta, como el resto. Al cambiarla, la app se repinta con el mismo círculo
+// que el tema, abierto desde el interruptor.
+function DecoracionDeTemporada() {
+  const evento = EVENTO_DE_TEMPORADA
+  const [puesta, poner] = usarDecoracion(evento)
+  const dedo = useRef(null)
+  const [d, m] = evento.hasta.split('-').map(Number).reverse()
+  const hasta = new Date(2000, m - 1, d).toLocaleDateString('es-ES', { day: 'numeric', month: 'long' })
+  const cambiar = v => conCirculo(dedo.current, 'encendiendo', () => flushSync(() => poner(v)))
+  return (
+    <div className="mt-6 overflow-hidden rounded-xl2 border border-line bg-surface">
+      <p className="border-b border-line px-4 py-2 text-xs uppercase tracking-wider text-ink-mute">
+        Temporada
+      </p>
+      <div
+        className="px-4 py-3"
+        onPointerDown={e => { dedo.current = { x: e.clientX, y: e.clientY } }}
+      >
+        <Interruptor
+          puesto={puesta}
+          onCambiar={cambiar}
+          etiqueta={`Decoración de ${evento.nombre}`}
+          nota={evento.descripcion}
+        />
+      </div>
+      <p className="border-t border-line px-4 py-2.5 text-xs text-ink-mute">
+        Se quita sola después del {hasta}.
+      </p>
+    </div>
   )
 }
 

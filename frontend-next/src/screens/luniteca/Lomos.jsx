@@ -1,6 +1,7 @@
 import { memo, useEffect, useRef, useState } from 'react'
 import { claveDeAutor, totalPages } from './shelf'
 import { usarPreferencia } from '../../platform/preferencias'
+import Adorno from '../../eventos/Adorno'
 import { colorConocido, colorDePortada } from './colorPortada'
 import { proporcionConocida, proporcionFoto } from './proporcionLomo'
 import { imagenLista as imagenYaLista, imagenRota, precargarImagen, precargarImagenes, usarImagenLista } from './imagenesListas'
@@ -700,6 +701,8 @@ export default function Lomos({ entries, onAbrir, fueraId = null, generosDeAutor
           torcidos={torcidos}
         />
       ))}
+      {/* Lo que el evento de temporada apoya en la balda (src/eventos). */}
+      <Adorno sitio="balda" alto={ALTO_FILA} />
     </div>
   )
 }
