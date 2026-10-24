@@ -1,4 +1,4 @@
-import { memo, startTransition, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { createContext, memo, startTransition, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { AnimatePresence, motion } from 'motion/react'
 import { useAuth } from '../../platform/auth'
@@ -20,7 +20,7 @@ import { precargarProporciones } from './proporcionLomo'
 import { generarYSubirLomo } from './generarLomo'
 import { usarVuelo } from './usarVuelo'
 import { LunaDelPanel, usarPanel } from './panel'
-import { COLOR_DE_ESTADO, CajaSeccion, TituloSeccion, huecoEntreSecciones, usarSeparacion } from './separacion'
+import { COLOR_DE_ESTADO, CajaSeccion, MarcoDeSeccion, TituloSeccion, huecoEntreSecciones, usarSeparacion } from './separacion'
 import { LLEGADA, enCss } from '../../ui/curvas'
 import { useHoja } from './HojaInferior'
 import { useCapa } from '../../platform/capas'
@@ -791,10 +791,22 @@ function BotonHerramienta({ activo, principal, agrupado, onClick, etiqueta, clas
 // golpe y no hay nada que recortar, y el recorte, que caía unos 17px por dentro
 // del borde de la tarjeta, cortaba en seco lo que tiene que poder asomar un
 // poco: la luz de las velas de Halloween sobre la estantería (src/eventos).
+//
+// Lleva consigo el marco de la tarjeta en la que va (MarcoDeSeccion), para que
+// la tarjeta encoja y crezca con el telón. La de la sección entera suma lo que
+// encoge además la franja del título al quedar plegada (`extra`); la de un año,
+// dentro de otra, no.
+const DentroDePlegable = createContext(false)
+
 export function Plegable({ abierta, children }) {
+  const caja = useContext(MarcoDeSeccion)
+  const anidada = useContext(DentroDePlegable)
+  const onTelon = useMemo(() => (caja
+    ? t => caja.marco.current?.telon({ ...t, delta: t.delta + (anidada ? 0 : caja.extra) }) || []
+    : null), [caja, anidada])
   return (
-    <Desplegable abierto={!!abierta}>
-      {children}
+    <Desplegable abierto={!!abierta} onTelon={onTelon}>
+      <DentroDePlegable.Provider value={true}>{children}</DentroDePlegable.Provider>
     </Desplegable>
   )
 }

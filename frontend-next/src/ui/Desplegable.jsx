@@ -3,6 +3,9 @@ import { PresenceContext, usePresence } from 'motion/react'
 import { LLEGADA, SALIDA } from './curvas'
 import { deslizar, fotografiar, movimientoReducido } from './telon'
 
+// El aviso de que algo se acaba de plegar del todo (ver más abajo).
+export const ENCOGE = 'puchi:encoge'
+
 // Abrir y cerrar un trozo de contenido a la frecuencia de la pantalla (120 en
 // los iPhone Pro).
 //
@@ -55,7 +58,10 @@ export default function Desplegable({ abierto = true, children, className = '', 
     const { animaciones: hechas, opciones } = deslizar(f, {
       abriendo: abierto,
       t: abierto ? LLEGADA : SALIDA,
-      plegar: si => { el.style.display = si ? 'none' : '' },
+      // El atributo también: la tarjeta de una sección cambia de forma al
+      // quedarse plegada (ver .titulo-banda en index.css), y el telón tiene
+      // que medir ese final para llevar ahí lo de debajo.
+      plegar: si => { el.style.display = si ? 'none' : ''; el.toggleAttribute('data-plegado', si) },
     })
     // El contenido, con el fundido a destiempo: abriendo aparece cuando lo de
     // debajo ya casi ha pasado, y cerrando se va antes de que lo tape. Así no
@@ -77,11 +83,21 @@ export default function Desplegable({ abierto = true, children, className = '', 
 
   // Ya plegado de verdad: ahora sí se quitan las animaciones, en el mismo
   // fotograma en que el contenido desaparece. No hay salto.
-  useLayoutEffect(() => { if (!visible) parar() }, [visible])
+  //
+  // Y se avisa de que el contenido ha encogido, antes de pintar: lo que se
+  // estira con el contenido (CapaDeContenido, en eventos/Adorno) tiene que
+  // encoger en este mismo fotograma. Si no, el scroll aún no se recoloca, el
+  // telón ya ha quitado sus animaciones, y se ve un fotograma con todo en el
+  // sitio de antes (medido: un salto de 580px y vuelta).
+  useLayoutEffect(() => {
+    if (visible) return
+    parar()
+    window.dispatchEvent(new Event(ENCOGE))
+  }, [visible])
   useLayoutEffect(() => parar, [])
 
   return (
-    <div ref={raiz} className={className} style={visible ? undefined : { display: 'none' }} inert={!abierto}>
+    <div ref={raiz} className={className} style={visible ? undefined : { display: 'none' }} data-plegado={visible ? undefined : ''} inert={!abierto}>
       {abierto ? children : ultimo.current}
     </div>
   )

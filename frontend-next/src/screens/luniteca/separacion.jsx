@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
+import { createContext, useEffect, useMemo, useRef, useState } from 'react'
+import Marco from '../../ui/Marco'
 import { IconChevron } from '../../ui/icons'
 import { usarPreferencia } from '../../platform/preferencias'
 import Pastilla from '../../ui/Pastilla'
@@ -75,23 +76,32 @@ export function huecoEntreSecciones(variante) {
 }
 
 // La caja que envuelve una sección entera.
+// El marco de la tarjeta de la sección, para quien se pliega dentro de ella
+// (Plegable, en Luniteca.jsx): así la tarjeta encoge y crece CON el telón, en
+// vez de quedarse con su tamaño y cambiar de golpe al final. `extra`: lo que
+// además encoge la tarjeta cuando se pliega la sección entera (la franja del
+// título baja hasta el borde, ver .titulo-banda en index.css).
+export const MarcoDeSeccion = createContext(null)
+
 export function CajaSeccion({ variante, estado = null, children }) {
+  const marco = useRef(null)
+  const conBanda = variante === 'color' || variante === 'mixto'
+  const valor = useMemo(() => ({ marco, extra: conBanda ? 16 : 0 }), [conBanda])
   if (!CON_BLOQUE.includes(variante)) return <section>{children}</section>
-  if (variante === 'color') {
-    // El borde, un poco del color de la sección: la tarjeta entera se lee
-    // como suya, no solo la franja de arriba.
-    return (
-      <section className="rounded-xl3 border bg-surface p-4" style={{ borderColor: mezcla(colorDe(estado), 28, 'var(--color-line)') }}>
-        {children}
-      </section>
-    )
-  }
-  // El fondo de la tarjeta es opaco y no translúcido en la variante mixta: su
-  // título se queda pegado por encima de los libros de la propia sección, y
-  // con transparencia se verían pasar por debajo del texto.
-  const fondo = variante === 'mixto' ? 'bg-surface' : 'bg-surface/60'
+  // El fondo y el borde los pinta el Marco (tres piezas que encogen con
+  // transform). La sección guarda el redondeo, que los títulos heredan.
+  //
+  // En "color", el borde va un poco del color de la sección: la tarjeta
+  // entera se lee como suya, no solo la franja de arriba. En "mixto" el fondo
+  // es opaco y no translúcido: su título se queda pegado por encima de los
+  // libros de la propia sección, y con transparencia se verían pasar.
+  const borde = variante === 'color' ? mezcla(colorDe(estado), 28, 'var(--color-line)') : null
+  const fondo = variante === 'bloque' ? 'bg-surface/60' : 'bg-surface'
   return (
-    <section className={`rounded-xl3 border border-line p-4 ${fondo}`}>{children}</section>
+    <section data-caja-seccion className="relative isolate rounded-xl3 p-4">
+      <Marco ref={marco} radio={28} fondo={fondo} borde={borde} />
+      <MarcoDeSeccion.Provider value={valor}>{children}</MarcoDeSeccion.Provider>
+    </section>
   )
 }
 
@@ -137,7 +147,12 @@ export function TituloSeccion({ variante, label, cuenta, plegada, onAlternar, an
   // propiedad y gana la que Tailwind ponga después en su hoja, no la que vaya
   // después en esta cadena — con w-full puesto, el título pegado se quedaba
   // corto por la derecha y por ahí asomaban los libros de detrás.
-  const base = `flex items-center gap-2 text-left ${clasePegada || 'w-full'}`
+  // `titulo-banda`: el que es una franja dentro de su tarjeta. Con la sección
+  // plegada del todo baja hasta el borde de abajo y se redondea como ella
+  // (index.css): sin eso quedaba una tira de tarjeta debajo y sus esquinas
+  // rectas asomaban por fuera de las redondas.
+  const banda = !anidado && (variante === 'color' || variante === 'mixto') ? 'titulo-banda' : ''
+  const base = `flex items-center gap-2 text-left ${banda} ${clasePegada || 'w-full'}`
   // Las cifras de arriba (Luniteca) bajan hasta aquí: `data-seccion` es a
   // dónde, y el margen es para que no quede debajo de la barra pegada.
   const ancla = anidado || !estado ? {} : { 'data-seccion': estado, style: { scrollMarginTop: 64 } }

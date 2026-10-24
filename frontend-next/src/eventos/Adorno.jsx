@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import { usarEvento } from './usarEvento'
+import { ENCOGE } from '../ui/Desplegable'
 
 // El hueco donde un evento de temporada cuelga su pieza para este sitio (la
 // lista de sitios está en eventos/index.js). Sin evento, o sin pieza para
@@ -48,20 +49,40 @@ export function CapaDeContenido() {
     const el = capa.current
     const padre = el?.parentElement
     if (!Pieza || !padre) return
+    // El alto se pone directamente en el elemento, en el mismo fotograma en
+    // que cambia el contenido (los ResizeObserver avisan antes de pintar): si
+    // esperara al render de React iría un fotograma tarde, y al plegar una
+    // sección el scroll se recolocaba de golpe. El estado es solo para
+    // repartir los murciélagos, que pueden ir un fotograma por detrás.
     const medir = () => {
       let fondo = padre.clientHeight
       for (const h of padre.children) if (h !== el) fondo = Math.max(fondo, h.offsetTop + h.offsetHeight)
+      el.style.height = `${fondo}px`
       setAlto(fondo)
     }
-    medir()
+    // Se vigila lo que mide cada hermano y, además, si cambian los hermanos:
+    // la pantalla puede sustituir su elemento raíz (la Luniteca lo hace al
+    // terminar de cargar), y vigilando solo el de al montarse esta capa se
+    // quedaba con el alto de antes. Pasó: con todas las secciones plegadas
+    // seguía midiendo 4.110px sobre un contenido de 875, y esos 3.000px de
+    // más se podían recorrer con el scroll, enseñando el fondo de debajo.
     const ro = new ResizeObserver(medir)
-    ro.observe(padre)
-    for (const h of padre.children) if (h !== el) ro.observe(h)
-    return () => ro.disconnect()
+    const vigilar = () => {
+      ro.disconnect()
+      ro.observe(padre)
+      for (const h of padre.children) if (h !== el) ro.observe(h)
+      medir()
+    }
+    vigilar()
+    const mo = new MutationObserver(vigilar)
+    mo.observe(padre, { childList: true })
+    // Al plegarse algo, se mide al momento (ver ENCOGE en ui/Desplegable).
+    window.addEventListener(ENCOGE, medir)
+    return () => { ro.disconnect(); mo.disconnect(); window.removeEventListener(ENCOGE, medir) }
   }, [Pieza])
   if (!Pieza) return null
   return (
-    <div ref={capa} aria-hidden className="pointer-events-none absolute inset-x-0 top-0 z-[30] overflow-hidden" style={{ height: alto }}>
+    <div ref={capa} aria-hidden data-fuera-del-alto className="pointer-events-none absolute inset-x-0 top-0 z-[30] overflow-hidden">
       <Pieza alto={alto} />
     </div>
   )

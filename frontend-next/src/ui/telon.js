@@ -44,6 +44,22 @@ function hijoDe(padre, nodo) {
   return n
 }
 
+// Hasta dónde llega de verdad lo desplazable. No vale scrollHeight a secas:
+// lo que va marcado con data-fuera-del-alto (la capa de adornos que se estira
+// hasta el final del contenido, ver CapaDeContenido en eventos/Adorno) va un
+// fotograma por detrás de lo que mide, y al medir cómo quedará plegado aún
+// tiene el alto de antes. Con él contado, el telón creía que el scroll no
+// tendría que moverse y al acabar todo saltaba de golpe (medido: 581px).
+function finDelContenido(zona) {
+  if (zona === document.scrollingElement) return zona.scrollHeight
+  let fin = 0
+  for (const h of zona.children) {
+    if (h.hasAttribute('data-fuera-del-alto')) continue
+    fin = Math.max(fin, h.offsetTop + h.offsetHeight)
+  }
+  return Math.max(zona.clientHeight, fin + (parseFloat(getComputedStyle(zona).paddingBottom) || 0))
+}
+
 // Dónde empieza lo desplazable de la zona, en la pantalla: lo de dentro se
 // mide contra esto, así que no cuenta cuánto esté desplazado (y da igual si el
 // navegador mueve el scroll mientras se mide).
@@ -92,7 +108,7 @@ export function deslizar(foto, { abriendo, plegar, t }) {
     const scroll = zona.scrollTop
     plegar(true)
     plegado = posiciones(foto)
-    bajada = Math.max(0, scroll - (zona.scrollHeight - zona.clientHeight))
+    bajada = Math.max(0, scroll - (finDelContenido(zona) - zona.clientHeight))
     plegar(false)
     zona.scrollTop = scroll   // por si medirlo ya lo había movido
   }

@@ -23,14 +23,15 @@ import { useImperativeHandle, useRef } from 'react'
 //
 // `resaltado`: el borde de color de abierta, como una capa que aparece con un
 // fundido de opacidad (fundir el color del borde va en el hilo principal).
+// `fondo` (una clase) y `borde` (un color): por defecto, los de una tarjeta.
 
-const PIEZA = 'pointer-events-none absolute inset-x-0 -z-10 border-line bg-surface'
+const PIEZA = 'pointer-events-none absolute inset-x-0 -z-10'
 const RESALTE = 'pointer-events-none absolute border-accent-line transition-opacity duration-200'
 // El tramo de en medio se solapa un píxel con las otras dos, para que a mitad
 // de camino no asome una raya entre piezas.
 const SOLAPE = 1
 
-export default function Marco({ ref, radio = 28, resaltado = false }) {
+export default function Marco({ ref, radio = 28, resaltado = false, fondo = 'bg-surface', borde = null }) {
   const caja = useRef(null)
   const cuerpo = useRef(null)
   const pie = useRef(null)
@@ -58,15 +59,17 @@ export default function Marco({ ref, radio = 28, resaltado = false }) {
 
   const r = `${radio}px`
   const resalte = { opacity: resaltado ? 1 : 0 }
+  const pieza = `${PIEZA} ${fondo} ${borde ? '' : 'border-line'}`
+  const color = borde ? { borderColor: borde } : null
   return (
     <span ref={caja} aria-hidden className="contents">
-      <span className={`${PIEZA} top-0 border-x border-t`} style={{ height: r, borderTopLeftRadius: r, borderTopRightRadius: r }}>
+      <span className={`${pieza} top-0 border-x border-t`} style={{ ...color, height: r, borderTopLeftRadius: r, borderTopRightRadius: r }}>
         <span className={`${RESALTE} -inset-x-px -top-px border-x border-t`} style={{ ...resalte, bottom: 0, borderTopLeftRadius: r, borderTopRightRadius: r }} />
       </span>
-      <span ref={cuerpo} className={`${PIEZA} origin-top border-x`} style={{ top: radio - SOLAPE, bottom: radio - SOLAPE }}>
+      <span ref={cuerpo} className={`${pieza} origin-top border-x`} style={{ ...color, top: radio - SOLAPE, bottom: radio - SOLAPE }}>
         <span className={`${RESALTE} -inset-x-px inset-y-0 border-x`} style={resalte} />
       </span>
-      <span ref={pie} className={`${PIEZA} bottom-0 border-x border-b`} style={{ height: r, borderBottomLeftRadius: r, borderBottomRightRadius: r }}>
+      <span ref={pie} className={`${pieza} bottom-0 border-x border-b`} style={{ ...color, height: r, borderBottomLeftRadius: r, borderBottomRightRadius: r }}>
         <span className={`${RESALTE} -inset-x-px -bottom-px border-x border-b`} style={{ ...resalte, top: 0, borderBottomLeftRadius: r, borderBottomRightRadius: r }} />
       </span>
     </span>
