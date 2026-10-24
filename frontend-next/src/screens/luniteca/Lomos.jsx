@@ -700,8 +700,7 @@ export default function Lomos({ entries, onAbrir, fueraId = null, generosDeAutor
           // (1.421px de 9.401 con 300 libros) e iba creciendo a saltos: si
           // bajabas deprisa te topabas con el fondo y el fondo se alejaba.
           conContenido={arrancada && i < pintados}
-          // Los que estás leyendo, rectos: así el marcapáginas asoma limpio.
-          torcidos={torcidos && !progreso}
+          torcidos={torcidos}
           progreso={progreso}
         />
         {/* Lo que el evento de temporada apoya entre los libros (src/eventos). */}
@@ -926,9 +925,6 @@ const Lomo = memo(function Lomo({ entry, onAbrir, volando = false, sinPrisa = fa
       }}
       onClick={holgura ? (ev => { if (!boton.current?.contains(ev.target)) onAbrir(entry, boton.current) }) : undefined}
     >
-      {/* Caja del propio libro: el marcapáginas de «Leyendo» se cuelga de
-          ella, por fuera del botón (que recorta lo que se sale). */}
-      <span className="relative flex items-end">
       <button
         ref={boton}
         // Se pasa el nodo: la animación de abrir clona este mismo lomo para
@@ -1111,8 +1107,6 @@ const Lomo = memo(function Lomo({ entry, onAbrir, volando = false, sinPrisa = fa
         {progreso && <CantoLeido entry={entry} />}
         </>)}
       </button>
-      {progreso && lleno && <Marcapaginas />}
-      </span>
     </div>
   )
 })
@@ -1120,9 +1114,9 @@ const Lomo = memo(function Lomo({ entry, onAbrir, volando = false, sinPrisa = fa
 // ─── «Leyendo» en la vista de lomos ─────────────────────────────────────
 // Cuando «Leyendo» se ve como el resto (Ajustes), cada libro que estás leyendo
 // lleva por dónde vas en una línea en el canto del lomo que sube desde abajo
-// hasta lo leído, para comparar de un vistazo, y una cintita de marcapáginas
-// que asoma por arriba. Sin número: se probó con una pastilla encima del
-// marcapáginas y recargaba la balda; el número exacto está en la ficha.
+// hasta lo leído, para comparar de un vistazo. Nada más: se probó con un
+// marcapáginas asomando por arriba, con y sin número, y recargaba la balda;
+// el número exacto está en la ficha.
 
 // La línea del canto: el lomo entero de alto, encogida con scaleY hasta lo
 // leído (transform: GPU, y se anima sola si cambia el progreso). Más clara
@@ -1142,15 +1136,5 @@ function CantoLeido({ entry }) {
         }}
       />
     </span>
-  )
-}
-
-// La cinta que asoma por arriba del libro, con la cola en V.
-function Marcapaginas() {
-  return (
-    <svg aria-hidden viewBox="0 0 8 14" width="7" height="13" className="pointer-events-none absolute bottom-full left-1/2 z-[2] -translate-x-1/2" style={{ marginBottom: -4 }}>
-      <path d="M0 0L4 3L8 0V14H0Z" fill="var(--color-accent)" />
-      <path d="M0 0L4 3L8 0V14H0Z" fill="black" opacity="0.15" />
-    </svg>
   )
 }
