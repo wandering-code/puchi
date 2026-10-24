@@ -28,7 +28,7 @@ import { usarPreferencia, usarTema } from '../platform/preferencias'
 import { cambiarDeTema } from '../platform/tema'
 import { IconExit, IconLuna, IconMenu, IconSol } from '../ui/icons'
 import Logo from '../ui/Logo'
-import Adorno from '../eventos/Adorno'
+import Adorno, { CapaDeContenido } from '../eventos/Adorno'
 import { EVENTO_DE_TEMPORADA } from '../eventos'
 import { usarDecoracion } from '../eventos/usarEvento'
 import { conCirculo } from '../platform/tema'
@@ -106,6 +106,9 @@ export default function Shell() {
           <Route path="/ajustes"    element={<Ajustes />} />
           <Route path="*"           element={<Placeholder title="Nada por aquí" nota="Esa ruta no existe (todavía)." />} />
         </Routes>
+        {/* Lo que la decoración de temporada pega a la página (src/eventos):
+            se va con el scroll, como el contenido. */}
+        <CapaDeContenido />
       </motion.div>
     </AnimatePresence>
   ), [location])

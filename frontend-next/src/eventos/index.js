@@ -17,8 +17,10 @@ import halloween from './halloween'
 // la paleta y los sitios donde se cuelgan los adornos ya lo recogen solos.
 //
 // Los sitios donde un evento puede colgar algo (ver <Adorno sitio="…">):
-//   fondo      capa a pantalla completa, por encima del contenido y sin
-//              poder tocarse (murciélagos, nieve…). También en el login.
+//   fondo      capa fija a la pantalla, por encima del contenido y sin
+//              poder tocarse (telarañas en las esquinas…). También en el login.
+//   contenido  capa pegada a la PÁGINA: se va con el scroll (murciélagos).
+//              Recibe `alto`, lo que mide el contenido. También en el login.
 //   cabecera   colgando de la barra de arriba.
 //   logo       encima del logo, allí donde salga (menú, Inicio, login, splash).
 //   menu       debajo del nombre "Puchi" en el menú lateral.

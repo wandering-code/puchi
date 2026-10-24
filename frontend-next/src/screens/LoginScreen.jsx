@@ -47,6 +47,9 @@ export default function LoginScreen() {
       <Aurora />
       {/* La decoración de temporada, si la hay (src/eventos). */}
       <Adorno sitio="fondo" />
+      <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
+        <Adorno sitio="contenido" alto={typeof window === 'undefined' ? 800 : window.innerHeight} />
+      </div>
 
       {/* pb-kb aparta el contenido del teclado con padding, sin encoger la
           caja: encogiéndola se corta el fondo y asoma lo de detrás. */}

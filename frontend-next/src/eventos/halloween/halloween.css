@@ -92,17 +92,36 @@
    Solo transform y opacity: lo mueve la GPU a la frecuencia de la pantalla y
    no repinta nada de lo que hay debajo. */
 
-/* Cada murciélago revolotea en su sitio: un lazo pequeño, ladeándose. */
-@keyframes hw-revoloteo {
+/* La ruta de cada murciélago: un lazo amplio alrededor de su sitio de la
+   página, ladeándose en las curvas. Tres distintas para que no vayan iguales. */
+@keyframes hw-ruta-a {
   0%, 100% { transform: translate(0, 0) rotate(-4deg); }
-  25%      { transform: translate(14px, -10px) rotate(3deg); }
-  50%      { transform: translate(4px, -18px) rotate(-2deg); }
-  75%      { transform: translate(-12px, -6px) rotate(4deg); }
+  25%      { transform: translate(70px, -30px) rotate(5deg); }
+  50%      { transform: translate(120px, 10px) rotate(-3deg); }
+  75%      { transform: translate(50px, 40px) rotate(6deg); }
+}
+@keyframes hw-ruta-b {
+  0%, 100% { transform: translate(0, 0) rotate(3deg); }
+  30%      { transform: translate(-40px, -35px) rotate(-5deg); }
+  55%      { transform: translate(30px, -60px) rotate(4deg); }
+  80%      { transform: translate(60px, -10px) rotate(-4deg); }
+}
+@keyframes hw-ruta-c {
+  0%, 100% { transform: translate(0, 0) rotate(0deg); }
+  20%      { transform: translate(50px, 25px) rotate(6deg); }
+  45%      { transform: translate(-10px, 50px) rotate(-5deg); }
+  70%      { transform: translate(-60px, 15px) rotate(4deg); }
 }
 .hw-revoloteo {
   will-change: transform;
-  animation: hw-revoloteo var(--hw-dura, 6s) ease-in-out var(--hw-espera, 0s) infinite;
+  animation-duration: var(--hw-dura, 10s);
+  animation-delay: var(--hw-espera, 0s);
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
 }
+.hw-ruta-a { animation-name: hw-ruta-a; }
+.hw-ruta-b { animation-name: hw-ruta-b; }
+.hw-ruta-c { animation-name: hw-ruta-c; }
 
 @keyframes hw-aleteo {
   from { transform: scaleY(1); }

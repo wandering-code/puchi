@@ -9,15 +9,36 @@ import './halloween.css'
 // Halloween: del 1 de octubre al 2 de noviembre (Difuntos), cada año.
 // Para el siguiente evento, ver eventos/index.js.
 
-// Los murciélagos, cada uno revoloteando en su sitio de la pantalla (no la
-// cruzan). Están en la capa del fondo, fuera de lo que hace scroll: al bajar
-// por una lista se quedan donde están. Duraciones y esperas distintas para que
+// Los murciélagos van pegados a la PÁGINA, no a la pantalla: cada uno tiene
+// su sitio en el contenido y su ruta, y al hacer scroll se queda allí aunque
+// salga de la vista (sitio `contenido`). Uno cada ~650px de página, a un lado
+// y a otro; cada ruta es un lazo amplio, con su duración y su espera para que
 // no se muevan a la vez.
-const MURCIELAGOS = [
-  { left: '70%', top: '24%', ancho: 46, dura: '5.6s', espera: '-1.2s' },
-  { left: '8%', top: '50%', ancho: 34, dura: '6.8s', espera: '-3.1s' },
-  { left: '74%', top: '76%', ancho: 40, dura: '7.4s', espera: '-4.6s' },
-]
+const RUTAS = ['hw-ruta-a', 'hw-ruta-b', 'hw-ruta-c']
+const SITIOS_X = ['62%', '6%', '38%', '70%', '14%']
+
+function Contenido({ alto }) {
+  const murcielagos = []
+  for (let y = 150, i = 0; y < alto - 40; y += 650, i++) {
+    murcielagos.push({
+      top: y + (i % 2) * 90,
+      left: SITIOS_X[i % SITIOS_X.length],
+      ancho: [44, 34, 40, 30, 38][i % 5],
+      ruta: RUTAS[i % RUTAS.length],
+      dura: `${9 + (i % 3) * 1.7}s`,
+      espera: `${-((i * 2.3) % 9)}s`,
+    })
+  }
+  return murcielagos.map((m, i) => (
+    <div
+      key={i}
+      className={`hw-revoloteo ${m.ruta} absolute`}
+      style={{ left: m.left, top: m.top, '--hw-dura': m.dura, '--hw-espera': m.espera, opacity: 'var(--hw-silueta-o)' }}
+    >
+      <Murcielago style={{ width: m.ancho, height: m.ancho * 26 / 64 }} />
+    </div>
+  ))
+}
 
 function Fondo() {
   return (
@@ -26,15 +47,6 @@ function Fondo() {
           la barra superior con --hw-arriba (lo pone quien monta el fondo). */}
       <Telarana className="absolute right-0 h-[120px] w-[120px]" style={{ top: 'var(--hw-arriba, env(safe-area-inset-top, 0px))' }} />
       <Telarana className="absolute bottom-0 left-0 h-[96px] w-[96px]" style={{ transform: 'scale(-1, -1)' }} />
-      {MURCIELAGOS.map((m, i) => (
-        <div
-          key={i}
-          className="hw-revoloteo absolute"
-          style={{ left: m.left, top: m.top, '--hw-dura': m.dura, '--hw-espera': m.espera, opacity: 'var(--hw-silueta-o)' }}
-        >
-          <Murcielago style={{ width: m.ancho, height: m.ancho * 26 / 64 }} />
-        </div>
-      ))}
     </div>
   )
 }
@@ -337,5 +349,5 @@ export default {
   descripcion: 'Murciélagos, telarañas y calabazas por toda la app, con los colores de la noche. Se adapta al tema claro y al oscuro.',
   // La barra de estado de iOS, a juego con --color-bg de cada tema.
   barra: { claro: '#f3eadb', oscuro: '#120c17' },
-  adornos: { fondo: Fondo, cabecera: Cabecera, logo: Logo, menu: Menu, menuFondo: MenuFondo, inicio: Inicio, balda: Balda, entreLibros: EntreLibros },
+  adornos: { fondo: Fondo, contenido: Contenido, cabecera: Cabecera, logo: Logo, menu: Menu, menuFondo: MenuFondo, inicio: Inicio, balda: Balda, entreLibros: EntreLibros },
 }
