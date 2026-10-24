@@ -24,6 +24,7 @@ import Avatar from '../ui/Avatar'
 import Interruptor from '../ui/Interruptor'
 import { SelectorSeparacion, usarSeparacion } from './luniteca/separacion'
 import { usarLomosTorcidos } from './luniteca/Lomos'
+import { usarLeyendoComoLaVista } from './luniteca/Luniteca'
 import { usarPreferencia, usarTema } from '../platform/preferencias'
 import { cambiarDeTema } from '../platform/tema'
 import { IconExit, IconLuna, IconMenu, IconSol } from '../ui/icons'
@@ -409,6 +410,8 @@ function Ajustes() {
 
       <SeparacionDeSecciones />
 
+      <ComoSeVeLeyendo />
+
       <VistaDeLomos />
 
       {CON_AUDIOLIBROS && <AvisosEnAjustes />}
@@ -607,6 +610,29 @@ function SeparacionDeSecciones() {
       <p className="border-t border-line px-4 py-2.5 text-xs text-ink-mute">
         Vuelve a Luniteca para verlo. Cuando decidas, quito lo que sobre.
       </p>
+    </div>
+  )
+}
+
+// «Leyendo» con sus tarjetas grandes o con la misma vista que el resto de la
+// estantería (cuadrícula, lista o lomos), sin perder por dónde vas: ver
+// LibrosLeyendo en Luniteca.jsx. Vale para tu estantería y para la de los
+// demás cuando te asomas, como la vista.
+function ComoSeVeLeyendo() {
+  const [comoLaVista, poner] = usarLeyendoComoLaVista()
+  return (
+    <div className="mt-6 overflow-hidden rounded-xl2 border border-line bg-surface">
+      <p className="border-b border-line px-4 py-2 text-xs uppercase tracking-wider text-ink-mute">
+        Leyendo
+      </p>
+      <div className="px-4 py-3">
+        <Interruptor
+          puesto={comoLaVista}
+          onCambiar={poner}
+          etiqueta="Con la misma vista que el resto"
+          nota="Cuadrícula, lista o lomos, con por dónde vas encima de cada libro. Apagado, las tarjetas grandes de siempre."
+        />
+      </div>
     </div>
   )
 }

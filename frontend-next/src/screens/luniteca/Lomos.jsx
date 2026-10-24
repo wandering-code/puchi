@@ -2,6 +2,8 @@ import { Fragment, memo, useEffect, useRef, useState } from 'react'
 import { claveDeAutor, totalPages } from './shelf'
 import { usarPreferencia } from '../../platform/preferencias'
 import Adorno, { usarPiezaDeAdorno } from '../../eventos/Adorno'
+import { PastillaProgreso } from './piezas'
+import { progressPct } from './shelf'
 import { colorConocido, colorDePortada } from './colorPortada'
 import { proporcionConocida, proporcionFoto } from './proporcionLomo'
 import { imagenLista as imagenYaLista, imagenRota, precargarImagen, precargarImagenes, usarImagenLista } from './imagenesListas'
@@ -603,7 +605,7 @@ export function usarLomosTorcidos() {
   return [torcidos !== false, poner]
 }
 
-export default function Lomos({ entries, onAbrir, fueraId = null, generosDeAutor = null }) {
+export default function Lomos({ entries, onAbrir, fueraId = null, generosDeAutor = null, progreso = null }) {
   const [torcidos] = usarLomosTorcidos()
   const EntreLibros = usarPiezaDeAdorno('entreLibros')
   // Las medidas del texto dependen de la fuente, y las fuentes propias llegan
@@ -699,7 +701,9 @@ export default function Lomos({ entries, onAbrir, fueraId = null, generosDeAutor
           // (1.421px de 9.401 con 300 libros) e iba creciendo a saltos: si
           // bajabas deprisa te topabas con el fondo y el fondo se alejaba.
           conContenido={arrancada && i < pintados}
-          torcidos={torcidos}
+          // Los que estás leyendo, rectos: así el marcapáginas asoma limpio.
+          torcidos={torcidos && !progreso}
+          progreso={progreso}
         />
         {/* Lo que el evento de temporada apoya entre los libros (src/eventos). */}
         {EntreLibros && <EntreLibros indice={i} clave={e.id} alto={ALTO_FILA} />}
@@ -814,7 +818,7 @@ function capasDeFondo({ libro, paleta, claro, alto, conNervios, tapaDura }) {
   }
 }
 
-const Lomo = memo(function Lomo({ entry, onAbrir, volando = false, sinPrisa = false, generoDelAutor = null, conContenido = true, torcidos = true }) {
+const Lomo = memo(function Lomo({ entry, onAbrir, volando = false, sinPrisa = false, generoDelAutor = null, conContenido = true, torcidos = true, progreso = null }) {
   // Una sola vez: antes se medía aquí y otra vez dentro de argumentosDeTexto,
   // y con la balda entera montada eso era el doble de trabajo por lomo.
   const medido = medidas(entry, generoDelAutor)
@@ -923,6 +927,9 @@ const Lomo = memo(function Lomo({ entry, onAbrir, volando = false, sinPrisa = fa
       }}
       onClick={holgura ? (ev => { if (!boton.current?.contains(ev.target)) onAbrir(entry, boton.current) }) : undefined}
     >
+      {/* Caja del propio libro: el marcapáginas de «Leyendo» se cuelga de
+          ella, por fuera del botón (que recorta lo que se sale). */}
+      <span className="relative flex items-end">
       <button
         ref={boton}
         // Se pasa el nodo: la animación de abrir clona este mismo lomo para
@@ -1102,8 +1109,56 @@ const Lomo = memo(function Lomo({ entry, onAbrir, volando = false, sinPrisa = fa
             <span className="h-1.5 w-1.5 rounded-full bg-accent ring-1 ring-black/20" />
           </span>
         )}
+        {progreso && <CantoLeido entry={entry} />}
         </>)}
       </button>
+      {progreso && lleno && <Marcapaginas entry={entry} progreso={progreso} />}
+      </span>
     </div>
   )
 })
+
+// ─── «Leyendo» en la vista de lomos ─────────────────────────────────────
+// Cuando «Leyendo» se ve como el resto (Ajustes), cada libro que estás leyendo
+// lleva por dónde vas de dos formas: una línea en el canto del lomo que sube
+// desde abajo hasta lo leído, para comparar de un vistazo, y un marcapáginas
+// que asoma por arriba con el número (tocarlo cambia entre % y páginas).
+
+// La línea del canto: el lomo entero de alto, encogida con scaleY hasta lo
+// leído (transform: GPU, y se anima sola si cambia el progreso).
+function CantoLeido({ entry }) {
+  const pct = progressPct(entry)
+  return (
+    <span aria-hidden className="pointer-events-none absolute inset-y-0 right-0 w-[3px] bg-black/25">
+      <span
+        className="absolute inset-0 origin-bottom bg-accent"
+        style={{
+          transform: `scaleY(${pct / 100})`,
+          transition: 'transform 500ms cubic-bezier(0.22, 1, 0.36, 1)',
+          boxShadow: '0 0 6px var(--color-accent)',
+        }}
+      />
+    </span>
+  )
+}
+
+// La cinta que asoma por arriba del libro, con la cola en V, y la pastilla
+// apoyada encima. z-[2] para pintarse por encima de los vecinos si es más
+// ancha que el lomo.
+function Marcapaginas({ entry, progreso }) {
+  return (
+    <span className="pointer-events-none absolute bottom-full left-1/2 z-[2] flex -translate-x-1/2 flex-col items-center" style={{ marginBottom: -6 }}>
+      <PastillaProgreso
+        entry={entry}
+        compacta
+        porcentaje={progreso.porcentaje}
+        onAlternar={progreso.alternar}
+        className="pointer-events-auto -mb-0.5 whitespace-nowrap px-1 text-[9px]"
+      />
+      <svg aria-hidden viewBox="0 0 8 16" width="8" height="16">
+        <path d="M0 0H8V16H0Z" fill="var(--color-accent)" />
+        <path d="M0 0H8V16H0Z" fill="black" opacity="0.2" />
+      </svg>
+    </span>
+  )
+}
