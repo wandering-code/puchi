@@ -46,7 +46,7 @@
   --hw-halo-medio:  rgba(255,170,60,0.18);
   --hw-cara-luz:     #ffcf55;
   --hw-cara-apagada: #3a2210;
-  --hw-humo:         rgba(80,68,84,0.5);
+  --hw-humo:         rgba(70,60,74,0.42);
 }
 
 :root[data-evento="halloween"][data-tema="oscuro"] {
@@ -85,7 +85,7 @@
   --hw-halo-medio:  rgba(255,140,40,0.16);
   --hw-cara-luz:     #ffd36b;
   --hw-cara-apagada: #2a1608;
-  --hw-humo:         rgba(225,215,235,0.45);
+  --hw-humo:         rgba(230,222,240,0.42);
 }
 
 /* ── Movimiento ──────────────────────────────────────────────────────────
@@ -153,22 +153,20 @@
 }
 .hw-halo { animation: hw-halo 2.8s ease-in-out infinite; }
 
-/* El humo al apagar algo: sube, se ensancha y se deshace. */
-@keyframes hw-humo {
-  0%   { opacity: 0; transform: translateY(8px) scale(0.6, 0.4); }
-  18%  { opacity: 0.85; }
-  100% { opacity: 0; transform: translateY(-26px) scale(1.6, 1.3); }
+/* El humo al apagar una vela: cada bocanada sube serpenteando, crece y se
+   deshace. Sin borde: es un degradado (ver Humo en piezas.jsx). */
+@keyframes hw-bocanada {
+  0%   { opacity: 0;    transform: translate(0, 0) scale(0.5); }
+  12%  { opacity: 0.8; }
+  40%  { transform: translate(var(--hw-deriva), -20px) scale(1.7); }
+  70%  { transform: translate(calc(var(--hw-deriva) * -0.7), -40px) scale(2.5); }
+  100% { opacity: 0;    transform: translate(calc(var(--hw-deriva) * 0.4), -58px) scale(3.4); }
 }
-.hw-humo {
-  transform-box: fill-box;
-  transform-origin: 50% 100%;
-  animation: hw-humo 1.6s cubic-bezier(0.2, 0.6, 0.35, 1) both;
-}
-.hw-humo-2 { animation-duration: 1.9s; animation-delay: 0.15s; }
+.hw-bocanada { animation: hw-bocanada 1.7s cubic-bezier(0.25, 0.6, 0.4, 1) both; }
 
 /* Quien pide menos movimiento ve la decoración quieta: murciélagos, llamas y
    luces sin moverse, y sin humo (la regla global de index.css los dejaría dando tirones). */
 @media (prefers-reduced-motion: reduce) {
   .hw-revoloteo, .hw-aleteo, .hw-arana, .hw-vela, .hw-llama, .hw-halo { animation: none !important; }
-  .hw-humo { display: none; }
+  .hw-bocanada { display: none; }
 }

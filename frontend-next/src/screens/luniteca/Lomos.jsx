@@ -702,11 +702,11 @@ export default function Lomos({ entries, onAbrir, fueraId = null, generosDeAutor
           torcidos={torcidos}
         />
         {/* Lo que el evento de temporada apoya entre los libros (src/eventos). */}
-        {EntreLibros && <EntreLibros indice={i} alto={ALTO_FILA} />}
+        {EntreLibros && <EntreLibros indice={i} clave={e.id} alto={ALTO_FILA} />}
         </Fragment>
       ))}
       {/* Lo que el evento de temporada apoya en la balda (src/eventos). */}
-      <Adorno sitio="balda" alto={ALTO_FILA} />
+      <Adorno sitio="balda" alto={ALTO_FILA} clave={`fin-${entries[0]?.id}`} />
     </div>
   )
 }

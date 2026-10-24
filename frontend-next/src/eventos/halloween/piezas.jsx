@@ -1,5 +1,3 @@
-import { useLayoutEffect, useRef, useState } from 'react'
-
 // Los dibujos de Halloween. Siluetas planas y sin degradados, con los colores
 // de la paleta del evento (--hw-*, en halloween.css), para que cada pieza se
 // vea bien con el tema claro y con el oscuro sin tener dos versiones.
@@ -167,63 +165,16 @@ export function Vela({ className = '', style, alto = 26, encendida = true }) {
 // —los lomos vecinos— para que se vea que los ilumina; no se puede tocar.
 // `x`/`y` es el centro, relativo a la caja que lo contiene.
 //
-// `ajustar`: en la estantería las piezas caen donde las deja el reparto de
-// los libros, a veces pegadas al borde de la tarjeta, que recorta lo que se
-// sale: la luz se cortaba en seco. Con esto mide cuánto sitio tiene hasta el
-// borde que la recorta y encoge lo justo para apagarse ANTES de llegar a él.
-// Si casi no tiene sitio, no se enciende.
-const ALCANCE = 0.36      // el degradado llega a transparente al 70% del radio
-const MINIMO = 48
-
-function recortador(el) {
-  for (let p = el.parentElement; p && p !== document.body; p = p.parentElement) {
-    const o = getComputedStyle(p)
-    if (o.overflowX !== 'visible' || o.overflowY !== 'visible') {
-      return { caja: p, desplaza: /(auto|scroll)/.test(o.overflowY) }
-    }
-  }
-  return null
-}
-
-export function Luz({ x = '50%', y = '50%', tam = 120, retraso = 0, ajustar = false }) {
-  const ref = useRef(null)
-  const [escala, setEscala] = useState(1)
-
-  useLayoutEffect(() => {
-    if (!ajustar) return
-    const el = ref.current
-    const r = recortador(el)
-    if (!r) return
-    const medir = () => {
-      const a = el.getBoundingClientRect()
-      const c = r.caja.getBoundingClientRect()
-      const cx = a.left + a.width / 2
-      const cy = a.top + a.height / 2
-      let sitio = Math.min(cx - c.left, c.right - cx)
-      // Arriba y abajo solo cuenta si la caja no hace scroll: si lo hace, lo
-      // que queda fuera es lo que no se ve todavía, no un borde.
-      if (!r.desplaza) sitio = Math.min(sitio, cy - c.top, c.bottom - cy)
-      const t = Math.max(0, sitio) / ALCANCE
-      setEscala(t >= tam ? 1 : t < MINIMO ? 0 : Math.floor((t / tam) * 100) / 100)
-    }
-    medir()
-    // Si cambia el ancho (girar el móvil) los libros se reparten de nuevo.
-    const ro = new ResizeObserver(medir)
-    ro.observe(r.caja)
-    return () => ro.disconnect()
-  }, [ajustar, tam])
-
+// Nada de lo que la rodea en la estantería la recorta (ver Plegable en
+// Luniteca.jsx): si cae junto al borde, asoma un poco sobre la tarjeta, como
+// haría una luz de verdad.
+export function Luz({ x = '50%', y = '50%', tam = 120, retraso = 0 }) {
   return (
     <span
-      ref={ref}
       aria-hidden
       className="hw-halo pointer-events-none absolute rounded-full"
       style={{
         left: x, top: y, width: tam, height: tam, marginLeft: -tam / 2, marginTop: -tam / 2,
-        // Se encoge con scale y no con el tamaño: el centro (que es lo que se
-        // mide) no se mueve, y no hace falta volver a maquetar nada.
-        transform: escala === 1 ? undefined : `scale(${escala})`,
-        visibility: escala === 0 ? 'hidden' : undefined,
         background: 'radial-gradient(circle, var(--hw-halo) 0%, var(--hw-halo-medio) 32%, transparent 70%)',
         animationDelay: `${retraso}s`,
       }}
@@ -232,13 +183,37 @@ export function Luz({ x = '50%', y = '50%', tam = 120, retraso = 0, ajustar = fa
 }
 
 // ── Humo ────────────────────────────────────────────────────────────────
-// Dos hilos de humo que suben, se ensanchan y se deshacen. Se monta al apagar
-// algo y se quita solo al acabar (onFin). Solo transform y opacity.
+// Unas bocanadas que suben desde la mecha, se ensanchan, se ladean y se
+// deshacen. Cada una es un círculo con un degradado que se desvanece hacia
+// fuera, así que no tiene borde: se ve como humo, no como una raya. Se monta
+// al apagar y se quita sola al acabar la última (onFin). Solo transform y
+// opacity.
+// Muchas, pequeñas y seguidas: juntas forman una estela que serpentea (cada
+// una se va hacia un lado distinto) en vez de burbujas sueltas.
+const BOCANADAS = Array.from({ length: 11 }, (_, i) => ({
+  tam: 5 + (i % 3) * 1.5,
+  espera: i * 65,
+  deriva: `${(i % 2 ? 1 : -1) * (3 + (i % 4))}px`,
+  dura: 1500 + (i % 3) * 180,
+}))
+
 export function Humo({ className = '', style, onFin }) {
   return (
-    <svg {...deco} viewBox="0 0 20 48" className={`pointer-events-none ${className}`} style={style}>
-      <path className="hw-humo" d="M10 46C7 40 13 36 10 30C7 24 13 20 10 14" fill="none" stroke="var(--hw-humo)" strokeWidth="1.8" strokeLinecap="round" />
-      <path className="hw-humo hw-humo-2" onAnimationEnd={onFin} d="M10 46C13 41 7 37 10.5 31C14 25 8 21 11 15" fill="none" stroke="var(--hw-humo)" strokeWidth="1.3" strokeLinecap="round" />
-    </svg>
+    <span aria-hidden className={`pointer-events-none absolute ${className}`} style={{ width: 0, height: 0, ...style }}>
+      {BOCANADAS.map((b, i) => (
+        <span
+          key={i}
+          className="hw-bocanada absolute rounded-full"
+          onAnimationEnd={i === BOCANADAS.length - 1 ? onFin : undefined}
+          style={{
+            width: b.tam, height: b.tam, left: -b.tam / 2, top: -b.tam / 2,
+            background: 'radial-gradient(circle, var(--hw-humo) 0%, transparent 70%)',
+            '--hw-deriva': b.deriva,
+            animationDuration: `${b.dura}ms`,
+            animationDelay: `${b.espera}ms`,
+          }}
+        />
+      ))}
+    </span>
   )
 }

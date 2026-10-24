@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { useAuth } from '../../platform/auth'
+import { usarPreferencia } from '../../platform/preferencias'
 import { IconArrow } from '../../ui/icons'
 import { memo, useLayoutEffect, useRef, useState } from 'react'
 import { Arana, Calabaza, Humo, Luz, Murcielago, Sombrero, Telarana, Vela } from './piezas'
@@ -79,7 +80,7 @@ function MenuFondo() {
       {/* z-[2]: por encima de la lista de secciones, que va después y si no
           se quedaría con el toque. */}
       <div className="pointer-events-auto absolute bottom-[84px] right-4 z-[2]" style={{ marginBottom: 'env(safe-area-inset-bottom, 0px)' }}>
-        <CalabazaEncendible ancho={44} luz={2.5} ajustar={false} />
+        <CalabazaEncendible clave="menu" ancho={44} luz={2.5} />
       </div>
     </div>
   )
@@ -107,7 +108,7 @@ function Inicio() {
     >
       <Telarana className="pointer-events-none absolute -right-1 -top-1 h-20 w-20" />
       <div className="absolute bottom-3 right-4">
-        <CalabazaEncendible ancho={68} luz={2.2} ajustar={false} />
+        <CalabazaEncendible clave="inicio" ancho={68} luz={2.2} />
       </div>
       <Calabaza cara={false} className="pointer-events-none absolute bottom-3 right-[72px] h-7 w-[34px] opacity-90" />
       <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-accent">Temporada</p>
@@ -126,43 +127,77 @@ function Inicio() {
 }
 
 // ── Encender y apagar con un toque ──────────────────────────────────────
-// Cada vela y cada calabaza encendida se apaga y se enciende tocándola. No se
-// guarda: al volver a abrir la app están todas encendidas, como al llegar a
-// una fiesta.
+// Cada vela y cada calabaza encendida se apaga y se enciende tocándola, y se
+// queda como la dejaste: va con la cuenta (una lista de las apagadas, en las
+// preferencias), así que también se ve igual en el móvil y en el ordenador.
 //
-// Al apagar: la llama se recoge, la luz se va y sube un hilo de humo. Al
-// encender: la llama prende con un estirón y la luz vuelve. Las dos cosas con
-// un pequeño balanceo de la pieza (Web Animations, solo transform).
-const BALANCEO = {
-  vela: [
-    { transform: 'rotate(0deg)' }, { transform: 'rotate(-5deg)' }, { transform: 'rotate(3deg)' },
-    { transform: 'rotate(-1.5deg)' }, { transform: 'rotate(0deg)' },
-  ],
-  calabaza: [
-    { transform: 'rotate(0deg) scale(1)' }, { transform: 'rotate(-7deg) scale(0.94, 1.04)' },
-    { transform: 'rotate(5deg) scale(1.04, 0.96)' }, { transform: 'rotate(-2deg) scale(1)' },
-    { transform: 'rotate(0deg) scale(1)' },
-  ],
+// Cada pieza tiene una `clave` fija: la del libro detrás del que está (o la
+// estantería, o "inicio"/"menu"). Si ese libro se quita, su vela se va con él.
+//
+// Vela — al apagar, la llama se recoge, la luz se va y sube humo; al
+// encender, la llama prende con un estirón. Con un leve balanceo.
+// Calabaza — al apagar, un escalofrío y la cara se oscurece; al encender, da
+// un saltito y la luz hace un fogonazo antes de quedarse. Sin humo.
+// Todo con Web Animations: solo transform y opacity.
+const CLAVE_APAGADAS = 'apagadas_halloween'
+
+const MOVIMIENTO = {
+  vela: {
+    apagar: [{ transform: 'rotate(0deg)' }, { transform: 'rotate(-5deg)' }, { transform: 'rotate(3deg)' }, { transform: 'rotate(-1.5deg)' }, { transform: 'rotate(0deg)' }],
+    encender: [{ transform: 'rotate(0deg)' }, { transform: 'rotate(3deg)' }, { transform: 'rotate(-2deg)' }, { transform: 'rotate(0deg)' }],
+    dura: 520,
+  },
+  calabaza: {
+    // Un escalofrío: tiembla de lado a lado, cada vez menos, y se encoge un poco.
+    apagar: [
+      { transform: 'translateX(0) scale(1)' }, { transform: 'translateX(-2px) scale(0.97, 0.95)' },
+      { transform: 'translateX(2px) scale(0.97, 0.95)' }, { transform: 'translateX(-1.5px) scale(0.98, 0.96)' },
+      { transform: 'translateX(1px) scale(0.99)' }, { transform: 'translateX(0) scale(1)' },
+    ],
+    // Un saltito: se agacha, sale estirada, cae y se aplasta al tocar la balda.
+    encender: [
+      { transform: 'translateY(0) scale(1, 1)' }, { transform: 'translateY(0) scale(1.08, 0.88)', offset: 0.15 },
+      { transform: 'translateY(-14px) scale(0.94, 1.08)', offset: 0.45 }, { transform: 'translateY(0) scale(1.1, 0.9)', offset: 0.72 },
+      { transform: 'translateY(0) scale(1, 1)' },
+    ],
+    dura: 600,
+  },
 }
 
-function usarEncendida(tipo) {
-  const [encendida, poner] = useState(true)
+function usarEncendida(tipo, clave) {
+  const [apagadas, ponerApagadas] = usarPreferencia(CLAVE_APAGADAS, [])
+  const encendida = !apagadas.includes(clave)
   const [humos, setHumos] = useState([])
   const pieza = useRef(null)
+  const luz = useRef(null)
   const alternar = () => {
     const sigue = !encendida
-    poner(sigue)
-    if (!sigue) setHumos(h => [...h, Date.now()])
-    pieza.current?.animate(BALANCEO[tipo], { duration: 520, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' })
+    ponerApagadas(sigue ? apagadas.filter(c => c !== clave) : [...apagadas, clave])
+    const m = MOVIMIENTO[tipo]
+    pieza.current?.animate(sigue ? m.encender : m.apagar, { duration: m.dura, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' })
+    if (tipo === 'vela' && !sigue) setHumos(h => [...h, Date.now()])
+    // El fogonazo de la calabaza al encenderse: la luz sale más grande y
+    // más fuerte y se asienta.
+    if (tipo === 'calabaza' && sigue) {
+      luz.current?.animate(
+        [{ transform: 'scale(0.4)', opacity: 0 }, { transform: 'scale(1.35)', opacity: 1, offset: 0.4 }, { transform: 'scale(1)', opacity: 1 }],
+        { duration: 700, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' },
+      )
+    }
   }
   const quitarHumo = id => setHumos(h => h.filter(x => x !== id))
-  return { encendida, alternar, humos, quitarHumo, pieza }
+  return { encendida, alternar, humos, quitarHumo, pieza, luz }
 }
 
 // La luz, que entra y sale con un fundido por encima de su propio parpadeo.
-function LuzQueSeApaga({ encendida, ...props }) {
+// Ocupa la caja de la pieza para que el fogonazo crezca desde su centro.
+function LuzQueSeApaga({ encendida, capa, ...props }) {
   return (
-    <span style={{ opacity: encendida ? 1 : 0, transition: `opacity ${encendida ? 520 : 260}ms ease-out` }}>
+    <span
+      ref={capa}
+      className="pointer-events-none absolute inset-0"
+      style={{ opacity: encendida ? 1 : 0, transition: `opacity ${encendida ? 520 : 260}ms ease-out` }}
+    >
       <Luz {...props} />
     </span>
   )
@@ -171,36 +206,33 @@ function LuzQueSeApaga({ encendida, ...props }) {
 const tocable = 'pointer-events-auto relative block h-full w-full origin-bottom [touch-action:manipulation]'
 
 // `cera`: alto de la cera en unidades del dibujo (40 de alto); `h`/`w`, px.
-function VelaEncendible({ cera = 26, h = 52, w = 21, retraso = 0, ajustar = true }) {
-  const { encendida, alternar, humos, quitarHumo, pieza } = usarEncendida('vela')
+function VelaEncendible({ clave, cera = 26, h = 52, w = 21, retraso = 0 }) {
+  const { encendida, alternar, humos, quitarHumo, pieza, luz } = usarEncendida('vela', clave)
   const arriba = 40 - cera
   const llama = Math.round(((arriba - 6) / 40) * h)   // centro de la llama, desde arriba
   const mecha = Math.round(((arriba - 2) / 40) * h)
   return (
     <span className="relative inline-block shrink-0" style={{ width: w, height: h }}>
-      <LuzQueSeApaga encendida={encendida} ajustar={ajustar} x="50%" y={llama} tam={h * 2.4} retraso={retraso} />
+      <LuzQueSeApaga capa={luz} encendida={encendida} x="50%" y={llama} tam={h * 2.4} retraso={retraso} />
       <button ref={pieza} type="button" onClick={alternar} aria-label={encendida ? 'Apagar la vela' : 'Encender la vela'} className={tocable}>
         <Vela alto={cera} encendida={encendida} className="h-full w-full" />
       </button>
       {humos.map(id => (
-        <Humo key={id} onFin={() => quitarHumo(id)} className="absolute left-1/2 h-10 w-4 -translate-x-1/2" style={{ top: mecha - 40 }} />
+        <Humo key={id} onFin={() => quitarHumo(id)} className="left-1/2" style={{ top: mecha }} />
       ))}
     </span>
   )
 }
 
-function CalabazaEncendible({ ancho = 56, retraso = 0, luz = 2.6, ajustar = true }) {
-  const { encendida, alternar, humos, quitarHumo, pieza } = usarEncendida('calabaza')
+function CalabazaEncendible({ clave, ancho = 56, retraso = 0, luz: cuanta = 2.6 }) {
+  const { encendida, alternar, pieza, luz } = usarEncendida('calabaza', clave)
   const h = Math.round(ancho * 40 / 48)
   return (
     <span className="relative inline-block shrink-0" style={{ width: ancho, height: h }}>
-      <LuzQueSeApaga encendida={encendida} ajustar={ajustar} y="58%" tam={ancho * luz} retraso={retraso} />
+      <LuzQueSeApaga capa={luz} encendida={encendida} y="58%" tam={ancho * cuanta} retraso={retraso} />
       <button ref={pieza} type="button" onClick={alternar} aria-label={encendida ? 'Apagar la calabaza' : 'Encender la calabaza'} className={tocable}>
         <Calabaza encendida={encendida} className="h-full w-full" />
       </button>
-      {humos.map(id => (
-        <Humo key={id} onFin={() => quitarHumo(id)} className="absolute left-1/2 h-12 w-5 -translate-x-1/2" style={{ top: -Math.round(h * 0.55) }} />
-      ))}
     </span>
   )
 }
@@ -220,27 +252,27 @@ function Hueco({ alto, children }) {
   )
 }
 
-function DosVelas({ alto, retraso = 0 }) {
+function DosVelas({ alto, clave, retraso = 0 }) {
   return (
     <Hueco alto={alto}>
-      <VelaEncendible cera={26} retraso={retraso} />
-      <VelaEncendible cera={18} retraso={retraso - 0.9} />
+      <VelaEncendible clave={`${clave}-a`} cera={26} retraso={retraso} />
+      <VelaEncendible clave={`${clave}-b`} cera={18} retraso={retraso - 0.9} />
     </Hueco>
   )
 }
 
-function UnaVela({ alto, retraso = 0 }) {
+function UnaVela({ alto, clave, retraso = 0 }) {
   return (
     <Hueco alto={alto}>
-      <VelaEncendible cera={30} h={64} w={26} retraso={retraso} />
+      <VelaEncendible clave={clave} cera={30} h={64} w={26} retraso={retraso} />
     </Hueco>
   )
 }
 
-function CalabazaEnLaBalda({ alto, retraso = 0, ancho = 56 }) {
+function CalabazaEnLaBalda({ alto, clave, retraso = 0, ancho = 56 }) {
   return (
     <Hueco alto={alto}>
-      <CalabazaEncendible ancho={ancho} retraso={retraso} />
+      <CalabazaEncendible clave={clave} ancho={ancho} retraso={retraso} />
     </Hueco>
   )
 }
@@ -251,7 +283,7 @@ function CalabazaEnLaBalda({ alto, retraso = 0, ancho = 56 }) {
 // para ella, y una balda vacía con una calabaza se ve como un hueco raro.
 // Cuando no cabe se saca del reparto (absolute) y no se ve; se vuelve a mirar
 // si cambia el ancho.
-function Balda({ alto }) {
+function Balda({ alto, clave }) {
   const caja = useRef(null)
   const [cabe, setCabe] = useState(true)
   useLayoutEffect(() => {
@@ -276,8 +308,8 @@ function Balda({ alto }) {
   return (
     <div ref={caja} style={cabe ? undefined : { position: 'absolute', visibility: 'hidden' }}>
       <Hueco alto={alto}>
-        <CalabazaEncendible ancho={56} />
-        <span className="-ml-1"><VelaEncendible cera={22} h={44} w={18} retraso={-1.3} /></span>
+        <CalabazaEncendible clave={`${clave}-calabaza`} ancho={56} />
+        <span className="-ml-1"><VelaEncendible clave={`${clave}-vela`} cera={22} h={44} w={18} retraso={-1.3} /></span>
       </Hueco>
     </div>
   )
@@ -287,12 +319,12 @@ function Balda({ alto }) {
 // sitios (sale de la posición del libro, no del azar), para que la balda no
 // cambie cada vez que se abre. Pocas, para que no se coman la estantería.
 // Memo: hay una por libro y casi todas no pintan nada.
-const EntreLibros = memo(function EntreLibros({ indice, alto }) {
+const EntreLibros = memo(function EntreLibros({ indice, alto, clave }) {
   if (indice === 0) return null
   const retraso = -((indice * 0.37) % 2.8)   // que no parpadeen todas a la vez
-  if (indice % 31 === 19) return <CalabazaEnLaBalda alto={alto} ancho={44} retraso={retraso} />
-  if (indice % 14 === 6) return <DosVelas alto={alto} retraso={retraso} />
-  if (indice % 23 === 12) return <UnaVela alto={alto} retraso={retraso} />
+  if (indice % 31 === 19) return <CalabazaEnLaBalda alto={alto} clave={`libro-${clave}`} ancho={44} retraso={retraso} />
+  if (indice % 14 === 6) return <DosVelas alto={alto} clave={`libro-${clave}`} retraso={retraso} />
+  if (indice % 23 === 12) return <UnaVela alto={alto} clave={`libro-${clave}`} retraso={retraso} />
   return null
 })
 
