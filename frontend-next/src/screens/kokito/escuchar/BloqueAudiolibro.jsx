@@ -67,7 +67,7 @@ function BotonLeer({ r, datos }) {
   const etiqueta = leido ? `Seguir leyendo: «${leido.title}»` : 'Leer el libro aquí'
   return (
     <motion.button
-      whileTap={{ transform: tf({ scale: 0.9 }) }}
+      data-pulsa="0.9"
       onClick={() => r.leer(datos)}
       aria-label={etiqueta}
       title={etiqueta}
@@ -160,7 +160,7 @@ function Escuchar({ r, datos, pedido, leer }) {
         {leer && <BotonLeer r={r} datos={datos} />}
         {hayAlgo && (
           <motion.button
-            whileTap={{ transform: tf({ scale: 0.9 }) }}
+            data-pulsa="0.9"
             onClick={play}
             aria-label={sonando ? 'Pausa' : guardado ? 'Seguir escuchando' : 'Escuchar'}
             className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent text-on-accent shadow-sm"
@@ -289,7 +289,7 @@ function Peticion({ bookId, peticion, onCambio }) {
             </span>
           </span>
           <motion.button
-            whileTap={{ transform: tf({ scale: 0.94 }) }}
+            data-pulsa="0.94"
             disabled={enviando}
             onClick={() => hoja.abrir()}
             className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-accent-line bg-accent-soft px-3.5 text-xs font-semibold text-accent disabled:opacity-70"
@@ -463,7 +463,7 @@ function HojaDesde({ peticion, abierta, onCerrar, onGuardar }) {
       onCerrar={onCerrar}
       pie={
         <motion.button
-          whileTap={{ transform: tf({ scale: 0.98 }) }}
+          data-pulsa="0.98"
           onClick={guardar}
           disabled={!vale || enviando}
           className="flex h-12 flex-1 items-center justify-center gap-2 rounded-xl2 bg-accent text-sm font-semibold text-on-accent disabled:opacity-50"

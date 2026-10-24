@@ -11,7 +11,6 @@ import { useDeshacerAlta } from './deshacerAlta'
 import { IconCheck, IconPlus, IconSearch, IconX } from '../../ui/icons'
 import { LLEGADA, enCss } from '../../ui/curvas'
 import { LunaDelPanel, TINTE, usarCabeceraConPanel } from './panel'
-import { tf } from '../../ui/transformar'
 import TinteDePortada from './TinteDePortada'
 
 // Añadir un libro: buscándolo (en lo que ya tiene el club y en Open Library) o
@@ -305,7 +304,7 @@ function BotonAnadir({ estado, onAnadir, etiqueta }) {
     <motion.button
       onClick={onAnadir}
       disabled={estado === 'anadiendo'}
-      whileTap={{ transform: tf({ scale: 0.92 }) }}
+      data-pulsa="0.92"
       aria-label={etiqueta}
       className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border transition-colors ${
         estado === 'error' ? 'border-danger bg-surface text-danger' : 'border-accent-line bg-surface text-accent'

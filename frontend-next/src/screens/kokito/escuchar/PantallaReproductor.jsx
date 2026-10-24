@@ -49,7 +49,7 @@ export default function PantallaReproductor() {
           <motion.button
             onClick={r.pantalla.cerrar}
             aria-label="Cerrar el reproductor"
-            whileTap={{ transform: tf({ scale: 0.92 }) }}
+            data-pulsa="0.92"
             className="pointer-events-auto mt-1 flex h-10 w-10 items-center justify-center rounded-full border border-line bg-surface/90 text-ink shadow-sm backdrop-blur"
           >
             <IconChevron className="h-5 w-5" />
@@ -101,7 +101,7 @@ export default function PantallaReproductor() {
                 <motion.button
                   onClick={r.alternar}
                   aria-label={sonando ? 'Pausa' : 'Reproducir'}
-                  whileTap={{ transform: tf({ scale: 0.93 }) }}
+                  data-pulsa="0.93"
                   className="flex h-[76px] w-[76px] items-center justify-center rounded-full bg-accent text-on-accent shadow-lg"
                 >
                   <AnimatePresence mode="wait" initial={false}>
@@ -208,7 +208,7 @@ export const formatoVelocidad = (v) => `${String(v).replace('.', ',')}×`
 export function Pastilla({ onClick, activa, children }) {
   return (
     <motion.button
-      whileTap={{ transform: tf({ scale: 0.95 }) }}
+      data-pulsa="0.95"
       onClick={onClick}
       className={`inline-flex h-9 items-center gap-1.5 rounded-full border px-3.5 text-[13px] font-semibold tabular-nums transition-colors ${
         activa ? 'border-accent-line bg-accent-soft text-accent' : 'border-line text-ink-dim'
@@ -222,7 +222,7 @@ export function Pastilla({ onClick, activa, children }) {
 export function PastillaIcono({ onClick, activa = false, etiqueta, children }) {
   return (
     <motion.button
-      whileTap={{ transform: tf({ scale: 0.92 }) }}
+      data-pulsa="0.92"
       onClick={onClick}
       aria-label={etiqueta}
       title={etiqueta}
@@ -254,7 +254,7 @@ export function HojaVelocidad({ abierta, onCerrar }) {
           return (
             <motion.button
               key={v}
-              whileTap={{ transform: tf({ scale: 0.95 }) }}
+              data-pulsa="0.95"
               onClick={() => { r.cambiarVelocidad(v); onCerrar() }}
               className={`h-12 rounded-xl2 border text-[15px] font-semibold tabular-nums transition-colors ${
                 activa ? 'border-accent bg-accent text-on-accent' : 'border-line bg-surface text-ink'
@@ -302,7 +302,7 @@ export function HojaDormir({ abierta, onCerrar }) {
       </div>
       {t && (
         <motion.button
-          whileTap={{ transform: tf({ scale: 0.98 }) }}
+          data-pulsa="0.98"
           onClick={() => { r.dormir(null); onCerrar() }}
           className="mt-3 h-12 w-full rounded-xl2 border border-line text-sm font-semibold text-ink-dim active:bg-surface-2"
         >
@@ -318,7 +318,7 @@ function Boton({ onClick, etiqueta, pequeno = false, children }) {
     <motion.button
       onClick={onClick}
       aria-label={etiqueta}
-      whileTap={{ transform: tf({ scale: 0.88 }) }}
+      data-pulsa="0.88"
       className={`flex items-center justify-center rounded-full active:bg-surface-2 ${pequeno ? 'h-11 w-11 text-ink-dim' : 'h-14 w-14 text-ink'}`}
     >
       {children}

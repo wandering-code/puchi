@@ -4,7 +4,6 @@ import { AnimatePresence, motion } from 'motion/react'
 import { usarPreferencia } from '../../platform/preferencias'
 import { proporcionConocida } from './proporcionLomo'
 import { IconCamara, IconImagen, IconLinterna, IconNivel, IconRejilla, IconX } from '../../ui/icons'
-import { tf } from '../../ui/transformar'
 
 // Cámara propia para fotografiar un lomo o una portada, en vez de la del
 // sistema: con la del sistema no se veía si el libro salía recto ni centrado,
@@ -385,7 +384,7 @@ function Visor({ tipo = 'lomo', libro, onFoto, onCerrar, onGaleria, onCamaraSist
             <motion.button
               onClick={disparar}
               disabled={estado !== 'lista' || disparando}
-              whileTap={{ transform: tf({ scale: 0.9 }) }}
+              data-pulsa="0.9"
               aria-label="Hacer la foto"
               className="flex h-[76px] w-[76px] items-center justify-center rounded-full border-[4px] border-white disabled:opacity-40"
             >

@@ -737,7 +737,7 @@ function Cifras({ shelf, onIr }) {
       {cifras.map(c => (
         <motion.button
           key={c.estado}
-          whileTap={{ transform: tf({ scale: 0.95 }) }}
+          data-pulsa="0.95"
           onClick={() => onIr(c.estado)}
           aria-label={`${c.n} ${c.etiqueta || c.texto}`}
           className="inline-flex h-8 items-center gap-1.5 rounded-full border border-line bg-surface pl-2.5 pr-3 text-[13px] text-ink-dim sombra-pastilla"
@@ -805,7 +805,7 @@ export function BotonPlegarAnos({ todosPlegados, onAlternar }) {
   return (
     <motion.button
       onClick={onAlternar}
-      whileTap={{ transform: tf({ scale: 0.9 }) }}
+      data-pulsa="0.9"
       aria-label={todosPlegados ? 'Desplegar todos los años' : 'Plegar todos los años'}
       title={todosPlegados ? 'Desplegar todos los años' : 'Plegar todos los años'}
       className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-ink-mute transition-colors active:bg-surface-2"

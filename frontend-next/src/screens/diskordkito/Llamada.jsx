@@ -6,7 +6,6 @@ import Avatar from '../../ui/Avatar'
 import { LLEGADA, SALIDA } from '../../ui/curvas'
 import { IconColgar, IconEncoger, IconMicro, IconMicroOff, IconVideoCamara, IconVideoCamaraOff } from '../../ui/icons'
 import { CAJA, usarMiTamano } from './miTamano'
-import { tf } from '../../ui/transformar'
 
 // El escenario de la llamada. A pantalla completa y por encima de todo.
 //
@@ -133,7 +132,7 @@ function Cabecera({ conQuien, estado, onEncoger }) {
       {/* Encoger, no cerrar: la llamada sigue y te devuelve Puchi entera. */}
       <motion.button
         onClick={onEncoger}
-        whileTap={{ transform: tf({ scale: 0.9 }) }}
+        data-pulsa="0.9"
         aria-label="Seguir en Puchi con la llamada en marcha"
         className="mt-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur"
       >
@@ -206,7 +205,7 @@ function Mandos({ conVideo, mudo, sinCamara, onMudo, onCamara, onColgar }) {
             vuelta atrás. */}
         <motion.button
           onClick={onColgar}
-          whileTap={{ transform: tf({ scale: 0.9 }) }}
+          data-pulsa="0.9"
           aria-label="Colgar"
           style={{ background: ROJO_COLGAR }}
           className="ml-1 flex h-14 w-14 items-center justify-center rounded-full text-white"
@@ -222,7 +221,7 @@ function Mando({ activo, onClick, etiqueta, children }) {
   return (
     <motion.button
       onClick={onClick}
-      whileTap={{ transform: tf({ scale: 0.9 }) }}
+      data-pulsa="0.9"
       aria-label={etiqueta}
       aria-pressed={!activo}
       className={`flex h-14 w-14 items-center justify-center rounded-full transition-colors ${

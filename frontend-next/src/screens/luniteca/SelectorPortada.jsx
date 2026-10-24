@@ -7,7 +7,6 @@ import HojaInferior from './HojaInferior'
 import RecortarFoto from './RecortarFoto'
 import CamaraGuiada, { pedirSensores, proporcionEsperada } from './CamaraGuiada'
 import { AccionesFoto, Actual, MarcaElegida, Tanda, aparecer } from './FotoLibro'
-import { tf } from '../../ui/transformar'
 
 // Elegir la portada de TU copia del libro. No cambia la del libro compartido:
 // cada jugador ve la que ha elegido (PersonalShelf.cover_url), y lo que se
@@ -205,7 +204,7 @@ function Opcion({ indice, url, pie, elegida, onElegir, onBorrar }) {
           anidados es HTML inválido, y aquí además tocar la cruz no debe
           elegir también la portada. */}
       <div className="relative">
-        <motion.button onClick={onElegir} whileTap={{ transform: tf({ scale: 0.95 }) }} className="relative block w-full" aria-pressed={elegida}>
+        <motion.button onClick={onElegir} data-pulsa="0.95" className="relative block w-full" aria-pressed={elegida}>
           <Cover url={url} />
           {elegida && <MarcaElegida grupo="portada" redondeo={6} />}
         </motion.button>

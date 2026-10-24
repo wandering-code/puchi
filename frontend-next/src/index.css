@@ -386,6 +386,49 @@
   animation: entra var(--entra-dura, 240ms) var(--entra-curva, cubic-bezier(0.22, 1, 0.36, 1)) var(--entra-espera, 0ms) backwards;
 }
 
+/* ── Hundirse al pulsar ──────────────────────────────────────────────────
+   Un botón con `data-pulsa="0.92"` encoge a esa escala mientras el dedo está
+   puesto y vuelve al soltar.
+
+   Antes era `whileTap={{ transform: 'scale(…)' }}` de Motion, y eso dejaba
+   el botón INVISIBLE tras pulsarlo, en todos los navegadores: un botón sin
+   transform propio tiene `none` de partida, y al volver Motion cambia ese
+   `none` por la misma función con los números a cero — `scale(0)`. Pasó en
+   producción el 2026-10-23/24 (el botón del tema "desaparecía").
+
+   Va con la propiedad `scale`, no con `transform`: así se suma a cualquier
+   transform que Motion le esté poniendo al mismo botón para otra cosa, en vez
+   de pisarlo. Y la anima el navegador en la GPU, a la frecuencia de la
+   pantalla.
+
+   El valor sale de una lista cerrada porque `attr()` aún no vale para esto en
+   Safari. Si hace falta otra escala, se añade aquí.
+
+   La transición incluye los colores además de `scale` porque esta regla pisa
+   el `transition-property` de las clases de Tailwind del mismo botón
+   (transition-colors…): sin ellos, esos botones perderían su fundido. No
+   incluye transform ni opacity: esas las anima Motion y una transición CSS
+   encima las frenaría. */
+@layer utilities {
+  [data-pulsa][data-pulsa] {
+    transition-property: scale, color, background-color, border-color, box-shadow, fill, stroke, text-decoration-color;
+    transition-duration: 150ms;
+    transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  [data-pulsa="0.85"]:active  { scale: 0.85; }
+  [data-pulsa="0.88"]:active  { scale: 0.88; }
+  [data-pulsa="0.9"]:active   { scale: 0.9; }
+  [data-pulsa="0.92"]:active  { scale: 0.92; }
+  [data-pulsa="0.93"]:active  { scale: 0.93; }
+  [data-pulsa="0.94"]:active  { scale: 0.94; }
+  [data-pulsa="0.95"]:active  { scale: 0.95; }
+  [data-pulsa="0.96"]:active  { scale: 0.96; }
+  [data-pulsa="0.97"]:active  { scale: 0.97; }
+  [data-pulsa="0.98"]:active  { scale: 0.98; }
+  [data-pulsa="0.985"]:active { scale: 0.985; }
+  [data-pulsa]:disabled:active { scale: none; }
+}
+
 /* ── Safe areas ──────────────────────────────────────────────────────────
    Solo valen algo con viewport-fit=cover en el meta viewport (index.html).
    Instalada en el iPhone no hay barra de Safari debajo: sin esto, la barra de

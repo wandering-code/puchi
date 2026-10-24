@@ -19,7 +19,6 @@ import { CLUB_STATUS_LABEL, CLUB_STATUS_ORDER, fechaCorta } from './clubShelf'
 import ObjetivoDeLectura from './ObjetivoDeLectura'
 import Puntuaciones from './Puntuaciones'
 import Sesiones from './Sesiones'
-import { tf } from '../../ui/transformar'
 
 // La ficha de un libro del club. Misma pantalla y mismos gestos que la ficha
 // de tu estantería (portada grande, pastillas que se tocan para cambiar el
@@ -99,7 +98,7 @@ export default function ClubBookDetail({
           <motion.button
             onClick={onCerrar}
             aria-label="Volver a la estantería del club"
-            whileTap={{ transform: tf({ scale: 0.92 }) }}
+            data-pulsa="0.92"
             className="pointer-events-auto mt-1 flex h-10 w-10 items-center justify-center rounded-full border border-line bg-surface/90 text-ink shadow-sm backdrop-blur"
           >
             <IconArrowLeft className="h-5 w-5" />
@@ -226,7 +225,7 @@ function PortadaDelClub({ libro, esAdmin, onAbrir }) {
   const portada = <Cover url={libro.cover_url} title={libro.title} priority relieve realce={false} className="sombra-portada" />
   if (!esAdmin) return portada
   return (
-    <motion.button onClick={onAbrir} whileTap={{ transform: tf({ scale: 0.97 }) }} className="block w-full" aria-label="Cambiar la portada del club">
+    <motion.button onClick={onAbrir} data-pulsa="0.97" className="block w-full" aria-label="Cambiar la portada del club">
       {portada}
     </motion.button>
   )
@@ -312,7 +311,7 @@ function TamanoDelClub({ abierta, mm, onCerrar, onGuardar }) {
       pie={
         <motion.button
           onClick={() => onGuardar(borrador)}
-          whileTap={{ transform: tf({ scale: 0.98 }) }}
+          data-pulsa="0.98"
           className="h-12 flex-1 rounded-xl2 bg-accent text-[15px] font-semibold text-on-accent"
         >
           Guardar

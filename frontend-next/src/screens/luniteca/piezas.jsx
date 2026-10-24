@@ -3,7 +3,6 @@ import { motion } from 'motion/react'
 import { STATUS_COLOR, STATUS_LABEL, progressPct, totalPages } from './shelf'
 import { IconX } from '../../ui/icons'
 import { proporcionConocida, recordarProporcion } from './proporcionLomo'
-import { tf } from '../../ui/transformar'
 
 // ─── Portada ───────────────────────────────────────────────────────────────
 // Proporción de libro fija (2/3) para que la cuadrícula sea una rejilla de
@@ -161,7 +160,7 @@ export function BotonBorrarEsquina({ etiqueta = 'Borrar', onConfirmar }) {
     <motion.button
       type="button"
       onClick={alPulsar}
-      whileTap={{ transform: tf({ scale: 0.85 }) }}
+      data-pulsa="0.85"
       aria-label={confirmando ? `Confirmar: ${etiqueta}` : etiqueta}
       title={confirmando ? '¿Seguro?' : etiqueta}
       animate={{ opacity: confirmando && !armado ? 0.5 : 1 }}

@@ -8,7 +8,6 @@ import {
 } from './importar'
 import { IconArrowLeft, IconBooks, IconTabla } from '../../ui/icons'
 import { useDeshacerAlta } from './deshacerAlta'
-import { tf } from '../../ui/transformar'
 import Desplegable from '../../ui/Desplegable'
 
 // Traer la biblioteca de golpe, desde un archivo: el export de Goodreads o una
@@ -359,7 +358,7 @@ function Mapeo({ libro, hoja, onHoja, encabezado, filasBrutas, mapeo, setMapeo, 
       <motion.button
         onClick={onConfirmar}
         disabled={!hayTitulo}
-        whileTap={{ transform: tf({ scale: 0.98 }) }}
+        data-pulsa="0.98"
         className="mt-5 h-12 w-full rounded-xl2 bg-accent text-[15px] font-semibold text-on-accent disabled:opacity-60"
       >
         {hayTitulo ? 'Revisar los libros' : 'Falta decir cuál es el título'}
@@ -372,7 +371,7 @@ function Opcion({ titulo, texto, onClick, icono }) {
   return (
     <motion.button
       onClick={onClick}
-      whileTap={{ transform: tf({ scale: 0.98 }) }}
+      data-pulsa="0.98"
       className="mt-3 flex w-full items-start gap-3 rounded-xl2 border border-line bg-surface p-3.5 text-left"
     >
       <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent">

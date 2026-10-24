@@ -52,7 +52,7 @@ export default function Sesiones({ entradaId, sesiones, totalPaginas, esAdmin, o
         {esAdmin && (
           <motion.button
             onClick={abrirNueva}
-            whileTap={{ transform: tf({ scale: 0.9 }) }}
+            data-pulsa="0.9"
             aria-label="Añadir sesión"
             className="flex h-8 w-8 items-center justify-center rounded-full bg-accent-soft text-accent"
           >
@@ -157,7 +157,7 @@ function TarjetaSesion({ sesion, esAdmin, onEditar, onBorrar }) {
         <div className="flex shrink-0 gap-1.5">
           <motion.button
             onClick={onEditar}
-            whileTap={{ transform: tf({ scale: 0.9 }) }}
+            data-pulsa="0.9"
             aria-label="Editar sesión"
             className="flex h-9 w-9 items-center justify-center rounded-full border border-line text-ink-mute"
           >
@@ -291,7 +291,7 @@ function FormularioSesion({ inicial, totalPaginas, onGuardar, onCancelar }) {
         <motion.button
           type="submit"
           disabled={guardando || !dia}
-          whileTap={{ transform: tf({ scale: 0.98 }) }}
+          data-pulsa="0.98"
           className="h-12 flex-[1.4] rounded-xl2 bg-accent text-[15px] font-semibold text-on-accent transition-colors disabled:bg-surface-2 disabled:text-ink-mute"
         >
           {guardando ? 'Guardando…' : 'Guardar sesión'}
