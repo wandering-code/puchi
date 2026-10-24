@@ -1,6 +1,5 @@
 import { motion } from 'motion/react'
 import { IconCamara, IconCheck, IconImagen } from '../../ui/icons'
-import { tf } from '../../ui/transformar'
 import Pastilla from '../../ui/Pastilla'
 
 // Las piezas que comparten las hojas de lomo y portada (SelectorLomo,
@@ -33,7 +32,7 @@ export function AccionesFoto({ tipo, onCamara, onGaleria, desactivado = false })
         type="button"
         onClick={onCamara}
         disabled={desactivado}
-        whileTap={{ transform: tf({ scale: 0.98 }) }}
+        data-pulsa="0.98"
         className="flex items-center gap-3.5 rounded-2xl bg-accent px-4 py-3.5 text-left text-on-accent disabled:opacity-60"
       >
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/15">
@@ -50,7 +49,7 @@ export function AccionesFoto({ tipo, onCamara, onGaleria, desactivado = false })
         type="button"
         onClick={onGaleria}
         disabled={desactivado}
-        whileTap={{ transform: tf({ scale: 0.98 }) }}
+        data-pulsa="0.98"
         className="flex items-center gap-3.5 rounded-2xl border border-line px-4 py-3 text-left disabled:opacity-60"
       >
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-surface-2 text-ink-dim">

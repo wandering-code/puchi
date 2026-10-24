@@ -33,7 +33,6 @@ import Logo from '../ui/Logo'
 import { SECCIONES, puedeVer, seccionesDe } from './secciones'
 import { useChat } from '../platform/chat'
 import { usePendientes } from '../platform/pendientes'
-import { tf } from '../ui/transformar'
 import Pastilla from '../ui/Pastilla'
 
 export default function Shell() {
@@ -401,7 +400,7 @@ function Ajustes() {
       </div>
 
       <motion.button
-        whileTap={{ transform: tf({ scale: 0.97 }) }}
+        data-pulsa="0.97"
         onClick={logout}
         className="mt-6 flex h-12 w-full items-center justify-center gap-2 rounded-xl2 border border-line text-danger"
       >
@@ -448,7 +447,7 @@ function BotonDeTema() {
   }
   return (
     <motion.button
-      whileTap={{ transform: tf({ scale: 0.92 }) }}
+      data-pulsa="0.92"
       onClick={cambiar}
       aria-label={oscuro ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
       className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent"

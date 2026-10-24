@@ -5,7 +5,6 @@ import Interruptor from '../../ui/Interruptor'
 import { FORMATO_LABEL, etiquetaFormato, STATUS_COLOR, STATUS_LABEL, STATUS_ORDER, formatoPrecio, readingDatesLabel, statusPatch } from './shelf'
 import { IconChevron } from '../../ui/icons'
 import HojaInferior, { useHoja } from './HojaInferior'
-import { tf } from '../../ui/transformar'
 import { LLEGADA, SALIDA } from '../../ui/curvas'
 import { deslizar, fotografiar, movimientoReducido } from '../../ui/telon'
 
@@ -25,7 +24,7 @@ export function Pastilla({ children, onClick, color }) {
   return (
     <motion.button
       onClick={onClick}
-      whileTap={{ transform: tf({ scale: 0.96 }) }}
+      data-pulsa="0.96"
       transition={{ type: 'spring', stiffness: 500, damping: 30 }}
       className="inline-flex items-center gap-1.5 rounded-full border bg-accent-soft px-3 py-1.5 text-xs transition-colors"
       style={{

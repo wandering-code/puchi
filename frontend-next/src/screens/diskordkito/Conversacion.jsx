@@ -6,7 +6,6 @@ import PantallaInferior from '../luniteca/PantallaInferior'
 import Avatar from '../../ui/Avatar'
 import { IconArrowLeft, IconClub, IconEnviar, IconTelefono, IconVideoCamara } from '../../ui/icons'
 import { BloqueDeMensajes, PuntoConectado, SeparadorDeDia, agruparMensajes } from './piezas'
-import { tf } from '../../ui/transformar'
 
 // Un botón de llamar de la cabecera. En redondo y del color de la app, como
 // los de la barra de la estantería — no en verde de teléfono, que aquí
@@ -17,7 +16,7 @@ function BotonLlamar({ etiqueta, deshabilitado, onClick, children }) {
     <motion.button
       onClick={onClick}
       disabled={deshabilitado}
-      whileTap={{ transform: tf({ scale: 0.9 }) }}
+      data-pulsa="0.9"
       aria-label={etiqueta}
       title={deshabilitado ? 'Ya estás en una llamada' : etiqueta}
       className="flex h-10 w-10 items-center justify-center rounded-full bg-accent/[0.08] text-accent transition-colors active:bg-accent/20 disabled:bg-surface-2 disabled:text-ink-mute"
@@ -110,7 +109,7 @@ function Tripas({ canalId, abierta, onCerrar, suelta, refCuerpo }) {
           <motion.button
             onClick={onCerrar}
             aria-label="Volver a las conversaciones"
-            whileTap={{ transform: tf({ scale: 0.92 }) }}
+            data-pulsa="0.92"
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-ink transition-colors active:bg-surface-2"
           >
             <IconArrowLeft className="h-5 w-5" />
@@ -145,7 +144,7 @@ function Tripas({ canalId, abierta, onCerrar, suelta, refCuerpo }) {
           grupo.activa && !grupo.dentro ? (
             <motion.button
               onClick={() => grupo.entrar(grupo.tipo)}
-              whileTap={{ transform: tf({ scale: 0.96 }) }}
+              data-pulsa="0.96"
               className="flex h-10 shrink-0 items-center gap-2 rounded-full bg-read px-3.5 text-sm font-semibold text-white"
             >
               <IconVideoCamara className="h-[18px] w-[18px]" />
@@ -220,7 +219,7 @@ function Tripas({ canalId, abierta, onCerrar, suelta, refCuerpo }) {
         <motion.button
           type="submit"
           disabled={!texto.trim()}
-          whileTap={{ transform: tf({ scale: 0.9 }) }}
+          data-pulsa="0.9"
           aria-label="Enviar"
           className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent text-on-accent transition-opacity disabled:bg-surface-2 disabled:text-ink-mute"
         >
