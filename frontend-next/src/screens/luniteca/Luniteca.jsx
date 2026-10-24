@@ -788,14 +788,17 @@ function BotonHerramienta({ activo, principal, agrupado, onClick, etiqueta, clas
   )
 }
 
-// Alto animado con `height: auto`, que motion sí sabe interpolar. Lo que entra
-// y sale se anima; nada aparece de golpe.
+// Una sección que se pliega y despliega con el telón de Desplegable.
+//
+// Ya no lleva `overflow-hidden`: era de cuando se animaba la altura (había que
+// recortar lo que no cabía a media animación). Con el telón la altura cambia de
+// golpe y no hay nada que recortar, y el recorte, que caía unos 17px por dentro
+// del borde de la tarjeta, cortaba en seco lo que tiene que poder asomar un
+// poco: la luz de las velas de Halloween sobre la estantería (src/eventos).
 export function Plegable({ abierta, children }) {
   return (
     <Desplegable abierto={!!abierta}>
-      <div className="overflow-hidden">
-          {children}
-        </div>
+      {children}
     </Desplegable>
   )
 }

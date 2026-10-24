@@ -29,10 +29,24 @@ export function temaGuardado() {
 export function aplicarTema(tema) {
   const elegido = TEMAS.includes(tema) ? tema : 'claro'
   document.documentElement.dataset.tema = elegido
-  const meta = document.querySelector('meta[name="theme-color"]')
-  if (meta) meta.setAttribute('content', BARRA[elegido])
+  pintarBarra()
   try { localStorage.setItem(CLAVE, elegido) } catch { /* ver arriba */ }
   return elegido
+}
+
+// Un evento de temporada (Halloween, Navidad… ver src/eventos) tiñe también la
+// barra: si no, arriba del todo quedaría la franja crema de siempre sobre una
+// app de otro color. Lo registra src/eventos al aplicarse; null es "ninguno".
+let barraDelEvento = null
+export function ponerBarraDelEvento(barra) {
+  barraDelEvento = barra || null
+  pintarBarra()
+}
+
+function pintarBarra() {
+  const tema = document.documentElement.dataset.tema === 'oscuro' ? 'oscuro' : 'claro'
+  const meta = document.querySelector('meta[name="theme-color"]')
+  if (meta) meta.setAttribute('content', barraDelEvento?.[tema] || BARRA[tema])
 }
 
 // El cambio de tema, como encender y apagar la luz desde el propio botón.
@@ -63,7 +77,16 @@ export function aplicarTema(tema) {
 const DURACION = 520
 
 export function cambiarDeTema(tema, origen, alAplicar = () => {}) {
-  const aplicar = () => { aplicarTema(tema); alAplicar() }
+  // Cuál de las dos fotos va encima depende de hacia dónde se va (ver arriba).
+  conCirculo(origen, tema === 'oscuro' ? 'apagando' : 'encendiendo', () => { aplicarTema(tema); alAplicar() })
+}
+
+// El mismo círculo, para cualquier cambio que repinte la app entera de golpe:
+// el tema y, también, encender o apagar la decoración de un evento de
+// temporada (src/eventos). `aplicar` tiene que dejar el documento ya cambiado
+// al volver —con flushSync si pasa por React—, por lo mismo que se explica
+// arriba: si no, las dos fotos salen iguales y no se ve nada.
+export function conCirculo(origen, gesto, aplicar) {
   const menosMovimiento = window.matchMedia('(prefers-reduced-motion: reduce)').matches
   if (!document.startViewTransition || menosMovimiento || !origen) {
     aplicar()
@@ -71,7 +94,6 @@ export function cambiarDeTema(tema, origen, alAplicar = () => {}) {
   }
   // Cuál de las dos fotos va encima lo decide el CSS a partir de esto, porque
   // el z-index de un ::view-transition-* no se puede poner desde JS.
-  const gesto = tema === 'oscuro' ? 'apagando' : 'encendiendo'
   document.documentElement.dataset.transicion = gesto
 
   const transicion = document.startViewTransition(aplicar)

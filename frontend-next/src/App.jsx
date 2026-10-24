@@ -3,6 +3,7 @@ import { useAuth } from './platform/auth'
 import { useMobileViewport } from './platform/viewport'
 import { useLiveConnection } from './platform/live'
 import { usarTema } from './platform/preferencias'
+import { usarEventoEnDocumento } from './eventos/usarEvento'
 import { AvisosProvider } from './platform/avisos'
 import { ChatProvider } from './platform/chat'
 import { PendientesProvider } from './platform/pendientes'
@@ -38,6 +39,8 @@ export default function App() {
   // pantalla que lo cambia, entrar directamente a Luniteca dejaría el tema de
   // la copia local aunque en la cuenta hubiera otro.
   usarTema()
+  // Lo mismo con la decoración de temporada (src/eventos): va con la cuenta.
+  usarEventoEnDocumento()
 
   return (
     <div className="relative h-full w-full overflow-hidden bg-bg">

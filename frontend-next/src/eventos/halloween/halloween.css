@@ -1,0 +1,191 @@
+/* ── Halloween ───────────────────────────────────────────────────────────
+   Una capa encima del tema que tenga cada uno, no un tema aparte: con el claro
+   es un pergamino tostado con calabaza; con el oscuro, la noche morada con la
+   calabaza encendida. Los nombres son los mismos tokens de index.css, así que
+   todo lo que ya pinta con ellos (botones, pastillas, interruptores, fichas,
+   el reproductor…) se disfraza solo.
+
+   Los selectores llevan los dos atributos (o el :not) a propósito: así ganan
+   por especificidad a los de index.css, sin depender de en qué orden acabe el
+   CSS en el build. */
+
+:root[data-evento="halloween"]:not([data-tema="oscuro"]) {
+  --color-bg:        #f3eadb;
+  --color-surface:   #fffaf2;
+  --color-surface-2: #e9d8c0;
+  --color-line:      #ddc8aa;
+  --color-ink:       #241a24;   /* tinta con un punto morado */
+  --color-ink-dim:   #75646f;
+  --color-ink-mute:  #8b7a83;
+  --color-accent:    #c4541a;   /* calabaza; 4.6 sobre el crema */
+  --color-accent-soft: rgba(196,84,26,0.13);
+  --color-accent-line: rgba(196,84,26,0.38);
+  --color-on-accent: #fffaf2;
+  --color-accent-2:  #5c4683;   /* morado bruja */
+  --color-read:      #4c7337;   /* verde poción */
+  --color-danger:    #a3362b;
+  --color-velo: rgba(36,20,40,0.28);
+
+  --balda-cara: #dcc6a6;
+
+  /* Los de las piezas (piezas.jsx). */
+  --hw-silueta:   #3a2a43;      /* murciélagos y araña */
+  --hw-silueta-o: 0.5;
+  --hw-tela:      rgba(58,42,67,0.22);
+  --hw-sombrero:  #3a2a43;
+  --hw-calabaza:  #e07a2c;
+  --hw-calabaza-sombra: #c25f1c;
+  --hw-tallo:     #5f6b2e;
+  --hw-cara:      #3a2210;      /* de día la cara está apagada */
+  --hw-cera:        #f4ead6;
+  --hw-cera-sombra: #e2d2b2;
+  --hw-llama:       #f4a23c;
+  --hw-llama-centro:#fff4cf;
+  /* De día la luz apenas se nota: un velo cálido, no un foco. */
+  --hw-halo:        rgba(255,170,60,0.45);
+  --hw-halo-medio:  rgba(255,170,60,0.18);
+  --hw-cara-luz:     #ffcf55;
+  --hw-cara-apagada: #3a2210;
+  --hw-humo:         rgba(70,60,74,0.42);
+}
+
+:root[data-evento="halloween"][data-tema="oscuro"] {
+  --color-bg:        #120c17;   /* noche morada, no el pardo de siempre */
+  --color-surface:   #1f1627;
+  --color-surface-2: #2e2239;
+  --color-line:      #423350;
+  --color-ink:       #f3ebe7;
+  --color-ink-dim:   #bcaab9;
+  --color-ink-mute:  #8f7e91;
+  --color-accent:    #f28b35;   /* calabaza encendida */
+  --color-accent-soft: rgba(242,139,53,0.16);
+  --color-accent-line: rgba(242,139,53,0.45);
+  --color-on-accent: #1d0f06;
+  --color-accent-2:  #a98bd6;
+  --color-read:      #8cc26a;
+  --color-want:      #8f7e91;
+  --color-danger:    #ec6f5c;
+  --color-velo: rgba(5,0,10,0.6);
+
+  --balda-cara: #2b2033;
+
+  --hw-silueta:   #7d68a0;
+  --hw-silueta-o: 0.55;
+  --hw-tela:      rgba(210,190,235,0.16);
+  --hw-sombrero:  #5a4580;
+  --hw-calabaza:  #e8792a;
+  --hw-calabaza-sombra: #b85a1a;
+  --hw-tallo:     #6f7d36;
+  --hw-cara:      #ffd36b;      /* de noche, la vela dentro */
+  --hw-cera:        #e9dcc0;
+  --hw-cera-sombra: #c9b48e;
+  --hw-llama:       #ffae45;
+  --hw-llama-centro:#fff6d6;
+  --hw-halo:        rgba(255,160,60,0.42);
+  --hw-halo-medio:  rgba(255,140,40,0.16);
+  --hw-cara-luz:     #ffd36b;
+  --hw-cara-apagada: #2a1608;
+  --hw-humo:         rgba(230,222,240,0.42);
+}
+
+/* ── Movimiento ──────────────────────────────────────────────────────────
+   Solo transform y opacity: lo mueve la GPU a la frecuencia de la pantalla y
+   no repinta nada de lo que hay debajo. */
+
+/* La ruta de cada murciélago: un lazo amplio alrededor de su sitio de la
+   página, ladeándose en las curvas. Tres distintas para que no vayan iguales. */
+@keyframes hw-ruta-a {
+  0%, 100% { transform: translate(0, 0) rotate(-4deg); }
+  25%      { transform: translate(70px, -30px) rotate(5deg); }
+  50%      { transform: translate(120px, 10px) rotate(-3deg); }
+  75%      { transform: translate(50px, 40px) rotate(6deg); }
+}
+@keyframes hw-ruta-b {
+  0%, 100% { transform: translate(0, 0) rotate(3deg); }
+  30%      { transform: translate(-40px, -35px) rotate(-5deg); }
+  55%      { transform: translate(30px, -60px) rotate(4deg); }
+  80%      { transform: translate(60px, -10px) rotate(-4deg); }
+}
+@keyframes hw-ruta-c {
+  0%, 100% { transform: translate(0, 0) rotate(0deg); }
+  20%      { transform: translate(50px, 25px) rotate(6deg); }
+  45%      { transform: translate(-10px, 50px) rotate(-5deg); }
+  70%      { transform: translate(-60px, 15px) rotate(4deg); }
+}
+.hw-revoloteo {
+  will-change: transform;
+  animation-duration: var(--hw-dura, 10s);
+  animation-delay: var(--hw-espera, 0s);
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+}
+.hw-ruta-a { animation-name: hw-ruta-a; }
+.hw-ruta-b { animation-name: hw-ruta-b; }
+.hw-ruta-c { animation-name: hw-ruta-c; }
+
+@keyframes hw-aleteo {
+  from { transform: scaleY(1); }
+  to   { transform: scaleY(0.45); }
+}
+.hw-aleteo {
+  /* Es un <g> de SVG: sin fill-box el origen sería la esquina del dibujo. */
+  transform-box: fill-box;
+  transform-origin: 50% 45%;
+  animation: hw-aleteo 0.22s ease-in-out infinite alternate;
+}
+
+/* La araña sube y baja por su hilo. */
+@keyframes hw-arana {
+  0%, 100% { transform: translateY(-14px); }
+  50%      { transform: translateY(10px); }
+}
+.hw-arana { animation: hw-arana 7s cubic-bezier(0.45, 0, 0.55, 1) infinite; }
+
+/* La vela dentro de la calabaza parpadea. Solo de noche: de día está apagada. */
+@keyframes hw-vela {
+  0%, 100% { opacity: 1; }
+  40%      { opacity: 0.7; }
+  55%      { opacity: 0.95; }
+  70%      { opacity: 0.78; }
+}
+:root[data-tema="oscuro"] .hw-vela { animation: hw-vela 2.6s ease-in-out infinite; }
+
+/* La llama de una vela: se estira y se ladea un poco desde su base. */
+@keyframes hw-llama {
+  0%, 100% { transform: scale(1, 1) skewX(0deg); }
+  25%      { transform: scale(0.92, 1.08) skewX(-3deg); }
+  50%      { transform: scale(1.04, 0.94) skewX(2deg); }
+  75%      { transform: scale(0.96, 1.05) skewX(-1deg); }
+}
+.hw-llama {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation: hw-llama 1.7s ease-in-out infinite;
+}
+
+/* El resplandor alrededor de una llama o de una calabaza encendida. */
+@keyframes hw-halo {
+  0%, 100% { opacity: 0.9; }
+  30%      { opacity: 0.65; }
+  45%      { opacity: 1; }
+  70%      { opacity: 0.75; }
+}
+.hw-halo { animation: hw-halo 2.8s ease-in-out infinite; }
+
+/* El humo al apagar una vela: cada bocanada sube serpenteando, crece y se
+   deshace. Sin borde: es un degradado (ver Humo en piezas.jsx). */
+@keyframes hw-bocanada {
+  0%   { opacity: 0;    transform: translate(0, 0) scale(0.5); }
+  12%  { opacity: 0.8; }
+  40%  { transform: translate(var(--hw-deriva), -20px) scale(1.7); }
+  70%  { transform: translate(calc(var(--hw-deriva) * -0.7), -40px) scale(2.5); }
+  100% { opacity: 0;    transform: translate(calc(var(--hw-deriva) * 0.4), -58px) scale(3.4); }
+}
+.hw-bocanada { animation: hw-bocanada 1.7s cubic-bezier(0.25, 0.6, 0.4, 1) both; }
+
+/* Quien pide menos movimiento ve la decoración quieta: murciélagos, llamas y
+   luces sin moverse, y sin humo (la regla global de index.css los dejaría dando tirones). */
+@media (prefers-reduced-motion: reduce) {
+  .hw-revoloteo, .hw-aleteo, .hw-arana, .hw-vela, .hw-llama, .hw-halo { animation: none !important; }
+  .hw-bocanada { display: none; }
+}
