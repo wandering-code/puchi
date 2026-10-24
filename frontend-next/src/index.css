@@ -457,6 +457,14 @@
    la tapaba. Con ratón o trackpad se quedan a 10px del borde derecho, que es
    el sitio de la barra de scroll; el contenido va metido 20px, así que por
    ese hueco solo asoma el fondo. En el móvil no cambia nada. */
+/* En los táctiles, el indicador del sistema de las pantallas se esconde y se
+   pinta uno propio (ui/IndicadorDeScroll.jsx): el de iOS se quedaba debajo
+   de las barras pegadas y no hay forma de subirlo. */
+@media (hover: none) {
+  [data-scroll="pantalla"] { scrollbar-width: none; }
+  [data-scroll="pantalla"]::-webkit-scrollbar { display: none; }
+}
+
 @layer utilities {
   @media (hover: hover) and (pointer: fine) {
     .deja-la-barra { margin-right: -0.625rem; padding-right: 0.625rem; }

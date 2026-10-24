@@ -39,6 +39,7 @@ import { SECCIONES, puedeVer, seccionesDe } from './secciones'
 import { useChat } from '../platform/chat'
 import { usePendientes } from '../platform/pendientes'
 import Pastilla from '../ui/Pastilla'
+import IndicadorDeScroll from '../ui/IndicadorDeScroll'
 
 export default function Shell() {
   const location = useLocation()
@@ -125,7 +126,12 @@ export default function Shell() {
           frames en cada animación que pasara por encima. */}
       <TopBar titulo={seccion?.label} onAbrirMenu={menu.abrir} />
 
-      <main className="relative z-10 flex-1 overflow-hidden">{contenido}</main>
+      <main className="relative z-10 flex-1 overflow-hidden">
+        {contenido}
+        {/* En el móvil, el indicador de scroll propio: el de iOS se quedaba
+            debajo de las barras pegadas (ver ui/IndicadorDeScroll). */}
+        <IndicadorDeScroll />
+      </main>
 
       {/* La decoración de temporada (src/eventos): por encima del contenido
           y por debajo de la barra de arriba y del menú, sin poder tocarse.
