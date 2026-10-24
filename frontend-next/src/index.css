@@ -198,6 +198,26 @@
      de body. */
   input, textarea, [contenteditable] { -webkit-user-select: text; user-select: text; }
 
+  /* La barra de scroll, discreta: fina, translúcida y del tono de la tinta,
+     así que en oscuro es clara y en claro oscura, sin franja de fondo. Es la
+     del ordenador; la del iPhone es la del sistema (aparece solo al
+     desplazar) y Safari no deja tocarla.
+     Las dos formas a la vez: scrollbar-color/width es la estándar (Chrome,
+     Firefox, Safari 18.2+), y ::-webkit-scrollbar la de los Safari de antes.
+     Donde se entienden las dos, manda la estándar. .tira-sin-barra (más
+     abajo, fuera de capa) la sigue quitando del todo donde estorba. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--color-ink) 22%, transparent) transparent;
+  }
+  ::-webkit-scrollbar { width: 6px; height: 6px; background: transparent; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--color-ink) 22%, transparent);
+  }
+  ::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--color-ink) 38%, transparent); }
+
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after {
       animation-duration: 0.01ms !important;
@@ -428,6 +448,58 @@
   [data-pulsa="0.985"]:active { scale: 0.985; }
   [data-pulsa]:disabled:active { scale: none; }
 }
+
+/* ── Barras pegadas y la barra de scroll ─────────────────────────────────
+   Las barras pegadas arriba (la de buscar/filtrar/vista, los títulos de
+   sección…) se estiran con margen negativo hasta el borde mismo de la
+   pantalla. En el ordenador la barra de scroll va superpuesta justo en ese
+   borde, y Safari pinta encima lo que va pegado con nivel propio: la barra
+   la tapaba. Con ratón o trackpad se quedan a 10px del borde derecho, que es
+   el sitio de la barra de scroll; el contenido va metido 20px, así que por
+   ese hueco solo asoma el fondo. En el móvil no cambia nada. */
+/* En los táctiles, el indicador del sistema de las pantallas se esconde y se
+   pinta uno propio (ui/IndicadorDeScroll.jsx): el de iOS se quedaba debajo
+   de las barras pegadas y no hay forma de subirlo. */
+@media (hover: none) {
+  [data-scroll="pantalla"] { scrollbar-width: none; }
+  [data-scroll="pantalla"]::-webkit-scrollbar { display: none; }
+}
+
+@layer utilities {
+  @media (hover: hover) and (pointer: fine) {
+    .deja-la-barra { margin-right: -0.625rem; padding-right: 0.625rem; }
+    .deja-la-barra-ancho { width: calc(100% + 1.875rem); }
+  }
+}
+
+/* ── Sección plegada ─────────────────────────────────────────────────────
+   Una sección de la estantería plegada del todo es solo su franja de título:
+   baja hasta el borde de abajo de la tarjeta (tapando su relleno) y se
+   redondea como ella. Sin esto quedaba una tira de tarjeta bajo la franja, y
+   las esquinas rectas de la franja asomaban por fuera de las redondas.
+   Solo cuando el contenido está plegado DE VERDAD (data-plegado lo pone
+   Desplegable en el último fotograma, y el telón lo tiene en cuenta), y solo
+   el Desplegable de la sección, no el de un año (por eso el `>`). Fuera de
+   capa: tiene que ganar a -mt-4/border-b de las utilidades. */
+[data-caja-seccion]:has(> [data-plegado]) > .titulo-banda {
+  margin-bottom: -1rem;
+  border-bottom-left-radius: inherit;
+  border-bottom-right-radius: inherit;
+  border-bottom-width: 0;
+}
+
+/* ── Secciones de la estantería: capas propias, siempre ──────────────────
+   Cada tarjeta de sección y el contenido que se pliega dentro llevan su capa
+   de la GPU desde el principio. En Safari de iOS, pintar lomos es caro, y al
+   plegar o desplegar el navegador tenía que sacarlos a una capa al empezar la
+   animación y devolverlos al acabar: repintándolos en los dos momentos. Medido
+   en el simulador: tirones de 100-300ms en mitad del movimiento. Con capa
+   propia, lo que se desliza no se repinta, y el contenido que aparece se pinta
+   antes de que arranque la animación (ver cuandoHayaFluidez en Desplegable).
+   Son pocas capas grandes y Safari solo pinta los trozos que están a la
+   vista. */
+[data-caja-seccion] { will-change: transform; }
+[data-caja-seccion] [data-desplegable] { will-change: opacity; }
 
 /* ── Safe areas ──────────────────────────────────────────────────────────
    Solo valen algo con viewport-fit=cover en el meta viewport (index.html).

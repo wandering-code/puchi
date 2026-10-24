@@ -2,6 +2,7 @@ import { Fragment, memo, useEffect, useRef, useState } from 'react'
 import { claveDeAutor, totalPages } from './shelf'
 import { usarPreferencia } from '../../platform/preferencias'
 import Adorno, { usarPiezaDeAdorno } from '../../eventos/Adorno'
+import { progressPct } from './shelf'
 import { colorConocido, colorDePortada } from './colorPortada'
 import { proporcionConocida, proporcionFoto } from './proporcionLomo'
 import { imagenLista as imagenYaLista, imagenRota, precargarImagen, precargarImagenes, usarImagenLista } from './imagenesListas'
@@ -603,7 +604,7 @@ export function usarLomosTorcidos() {
   return [torcidos !== false, poner]
 }
 
-export default function Lomos({ entries, onAbrir, fueraId = null, generosDeAutor = null }) {
+export default function Lomos({ entries, onAbrir, fueraId = null, generosDeAutor = null, progreso = null }) {
   const [torcidos] = usarLomosTorcidos()
   const EntreLibros = usarPiezaDeAdorno('entreLibros')
   // Las medidas del texto dependen de la fuente, y las fuentes propias llegan
@@ -700,6 +701,7 @@ export default function Lomos({ entries, onAbrir, fueraId = null, generosDeAutor
           // bajabas deprisa te topabas con el fondo y el fondo se alejaba.
           conContenido={arrancada && i < pintados}
           torcidos={torcidos}
+          progreso={progreso}
         />
         {/* Lo que el evento de temporada apoya entre los libros (src/eventos). */}
         {EntreLibros && <EntreLibros indice={i} clave={e.id} alto={ALTO_FILA} />}
@@ -814,7 +816,7 @@ function capasDeFondo({ libro, paleta, claro, alto, conNervios, tapaDura }) {
   }
 }
 
-const Lomo = memo(function Lomo({ entry, onAbrir, volando = false, sinPrisa = false, generoDelAutor = null, conContenido = true, torcidos = true }) {
+const Lomo = memo(function Lomo({ entry, onAbrir, volando = false, sinPrisa = false, generoDelAutor = null, conContenido = true, torcidos = true, progreso = null }) {
   // Una sola vez: antes se medía aquí y otra vez dentro de argumentosDeTexto,
   // y con la balda entera montada eso era el doble de trabajo por lomo.
   const medido = medidas(entry, generoDelAutor)
@@ -1038,7 +1040,7 @@ const Lomo = memo(function Lomo({ entry, onAbrir, volando = false, sinPrisa = fa
             // Lo que la cuenta le reservó, para poder compararlo en las
             // pruebas con lo que el navegador le da de verdad.
             data-largo={Math.round(texto.largoTitulo)}
-            className={`shrink-0 ${claro ? 'text-[#241f19] drop-shadow-[0_1px_1px_rgba(255,255,255,.5)]' : 'text-white drop-shadow-[0_1px_2px_rgba(0,0,0,.55)]'}`}
+            className={`shrink-0 ${claro ? 'text-[#241f19] [text-shadow:0_1px_1px_rgba(255,255,255,.5)]' : 'text-white [text-shadow:0_1px_2px_rgba(0,0,0,.55)]'}`}
             style={{
               // El color de la portada, si lo hay y se lee; si no, manda la
               // clase (el blanco o el negro de siempre).
@@ -1072,7 +1074,7 @@ const Lomo = memo(function Lomo({ entry, onAbrir, volando = false, sinPrisa = fa
             // impreso: se lee después del título, no compite con él.
             <span
               data-parte="subtitulo"
-              className={`shrink-0 whitespace-nowrap leading-tight ${claro ? 'text-[#241f19]/80 drop-shadow-[0_1px_1px_rgba(255,255,255,.5)]' : 'text-white/85 drop-shadow-[0_1px_2px_rgba(0,0,0,.55)]'}`}
+              className={`shrink-0 whitespace-nowrap leading-tight ${claro ? 'text-[#241f19]/80 [text-shadow:0_1px_1px_rgba(255,255,255,.5)]' : 'text-white/85 [text-shadow:0_1px_2px_rgba(0,0,0,.55)]'}`}
               style={{
                 fontFamily: tipografia.familia,
                 fontWeight: tipografia.peso,
@@ -1087,7 +1089,7 @@ const Lomo = memo(function Lomo({ entry, onAbrir, volando = false, sinPrisa = fa
           {texto.autor && (
             <span
               data-parte="autor"
-              className={`shrink-0 whitespace-nowrap leading-tight ${claro ? 'text-[#241f19]/85 drop-shadow-[0_1px_1px_rgba(255,255,255,.6)]' : 'text-white/90 drop-shadow-[0_1px_2px_rgba(0,0,0,.7)]'}`}
+              className={`shrink-0 whitespace-nowrap leading-tight ${claro ? 'text-[#241f19]/85 [text-shadow:0_1px_1px_rgba(255,255,255,.6)]' : 'text-white/90 [text-shadow:0_1px_2px_rgba(0,0,0,.7)]'}`}
               style={{ fontFamily: tipografia.familiaAutor || tipografia.familia, fontSize: texto.tamanoAutor }}
             >
               {texto.autor}
@@ -1102,8 +1104,37 @@ const Lomo = memo(function Lomo({ entry, onAbrir, volando = false, sinPrisa = fa
             <span className="h-1.5 w-1.5 rounded-full bg-accent ring-1 ring-black/20" />
           </span>
         )}
+        {progreso && <CantoLeido entry={entry} />}
         </>)}
       </button>
     </div>
   )
 })
+
+// ─── «Leyendo» en la vista de lomos ─────────────────────────────────────
+// Cuando «Leyendo» se ve como el resto (Ajustes), cada libro que estás leyendo
+// lleva por dónde vas en una línea en el canto del lomo que sube desde abajo
+// hasta lo leído, para comparar de un vistazo. Nada más: se probó con un
+// marcapáginas asomando por arriba, con y sin número, y recargaba la balda;
+// el número exacto está en la ficha.
+
+// La línea del canto: el lomo entero de alto, encogida con scaleY hasta lo
+// leído (transform: GPU, y se anima sola si cambia el progreso). Más clara
+// que el acento y algo translúcida, para que acompañe al lomo sin gritar.
+function CantoLeido({ entry }) {
+  const pct = progressPct(entry)
+  return (
+    <span aria-hidden className="pointer-events-none absolute inset-y-0 right-0 w-[3px] bg-black/15">
+      <span
+        className="absolute inset-0 origin-bottom"
+        style={{
+          background: 'color-mix(in srgb, var(--color-accent) 60%, white)',
+          opacity: 0.75,
+          transform: `scaleY(${pct / 100})`,
+          transition: 'transform 500ms cubic-bezier(0.22, 1, 0.36, 1)',
+          boxShadow: '0 0 4px color-mix(in srgb, var(--color-accent) 50%, transparent)',
+        }}
+      />
+    </span>
+  )
+}

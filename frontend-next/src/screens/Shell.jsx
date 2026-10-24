@@ -24,6 +24,7 @@ import Avatar from '../ui/Avatar'
 import Interruptor from '../ui/Interruptor'
 import { SelectorSeparacion, usarSeparacion } from './luniteca/separacion'
 import { usarLomosTorcidos } from './luniteca/Lomos'
+import { usarLeyendoComoLaVista } from './luniteca/Luniteca'
 import { usarPreferencia, usarTema } from '../platform/preferencias'
 import { cambiarDeTema } from '../platform/tema'
 import { IconExit, IconLuna, IconMenu, IconSol } from '../ui/icons'
@@ -38,6 +39,7 @@ import { SECCIONES, puedeVer, seccionesDe } from './secciones'
 import { useChat } from '../platform/chat'
 import { usePendientes } from '../platform/pendientes'
 import Pastilla from '../ui/Pastilla'
+import IndicadorDeScroll from '../ui/IndicadorDeScroll'
 
 export default function Shell() {
   const location = useLocation()
@@ -86,7 +88,11 @@ export default function Shell() {
         // overflow-x-hidden: la pantalla nunca se arrastra de lado. Lo que asome
         // un poco por el borde (la luz de una vela de Halloween junto al filo)
         // se recorta ahí, en vez de convertirse en un scroll horizontal falso.
-        className={`absolute inset-0 overflow-y-auto overflow-x-hidden overscroll-contain px-5 pb-kb ${navegado.current ? 'entra' : ''}`}
+        // [overflow-anchor:none]: el anclaje de scroll de Chrome movía el
+        // scroll por su cuenta al desplegar una sección y se peleaba con el
+        // telón (ui/telon.js), que ya coloca lo de debajo: lo de abajo salía
+        // disparado hacia arriba y volvía. Safari no lo tiene; así van igual.
+        className={`absolute inset-0 overflow-y-auto overflow-x-hidden overscroll-contain [overflow-anchor:none] px-5 pb-kb ${navegado.current ? 'entra' : ''}`}
         style={{ '--entra-desde': 'translateY(10px)' }}
         exit={{ opacity: 0, transform: 'translateY(-6px)' }}
         transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
@@ -124,7 +130,12 @@ export default function Shell() {
           frames en cada animación que pasara por encima. */}
       <TopBar titulo={seccion?.label} onAbrirMenu={menu.abrir} />
 
-      <main className="relative z-10 flex-1 overflow-hidden">{contenido}</main>
+      <main className="relative z-10 flex-1 overflow-hidden">
+        {contenido}
+        {/* En el móvil, el indicador de scroll propio: el de iOS se quedaba
+            debajo de las barras pegadas (ver ui/IndicadorDeScroll). */}
+        <IndicadorDeScroll />
+      </main>
 
       {/* La decoración de temporada (src/eventos): por encima del contenido
           y por debajo de la barra de arriba y del menú, sin poder tocarse.
@@ -409,6 +420,8 @@ function Ajustes() {
 
       <SeparacionDeSecciones />
 
+      <ComoSeVeLeyendo />
+
       <VistaDeLomos />
 
       {CON_AUDIOLIBROS && <AvisosEnAjustes />}
@@ -607,6 +620,29 @@ function SeparacionDeSecciones() {
       <p className="border-t border-line px-4 py-2.5 text-xs text-ink-mute">
         Vuelve a Luniteca para verlo. Cuando decidas, quito lo que sobre.
       </p>
+    </div>
+  )
+}
+
+// «Leyendo» con sus tarjetas grandes o con la misma vista que el resto de la
+// estantería (cuadrícula, lista o lomos), sin perder por dónde vas: ver
+// LibrosLeyendo en Luniteca.jsx. Vale para tu estantería y para la de los
+// demás cuando te asomas, como la vista.
+function ComoSeVeLeyendo() {
+  const [comoLaVista, poner] = usarLeyendoComoLaVista()
+  return (
+    <div className="mt-6 overflow-hidden rounded-xl2 border border-line bg-surface">
+      <p className="border-b border-line px-4 py-2 text-xs uppercase tracking-wider text-ink-mute">
+        Leyendo
+      </p>
+      <div className="px-4 py-3">
+        <Interruptor
+          puesto={comoLaVista}
+          onCambiar={poner}
+          etiqueta="Con la misma vista que el resto"
+          nota="Cuadrícula, lista o lomos, con por dónde vas encima de cada libro. Apagado, las tarjetas grandes de siempre."
+        />
+      </div>
     </div>
   )
 }

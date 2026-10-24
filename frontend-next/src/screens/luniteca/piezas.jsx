@@ -378,3 +378,49 @@ export function PagesLabel({ entry, modo = 'paginas' }) {
   const actual = entry.current_page ?? Math.round((entry.progress || 0) * total)
   return <>{actual} / {total} pág.</>
 }
+
+// ─── Progreso de lo que se está leyendo, en las vistas de siempre ─────────
+// Cuando «Leyendo» se ve como el resto de la estantería (ver Ajustes →
+// «Leyendo»), cada libro lleva por dónde va sin necesitar la tarjeta grande:
+// en la cuadrícula, una barra sobre la portada y una pastilla; en la lista,
+// la barra y la etiqueta; en los lomos, ver Lomos.jsx.
+
+// La pastilla con el porcentaje o las páginas. En tinta y no en el acento:
+// la de la nota (NotaBadge) es naranja y va en la misma esquina, y un «83%»
+// del mismo color se confundía con una puntuación.
+// Tocarla cambia de una forma a
+// la otra (la misma preferencia que en las tarjetas). Es un <span>, no un
+// <button>: va DENTRO del botón que abre el libro, y el stopPropagation es lo
+// que evita que el toque abra la ficha.
+// `compacta`: «120/300» en vez de «120 / 300 pág.», para encima de un lomo.
+export function PastillaProgreso({ entry, porcentaje, onAlternar, compacta = false, className = '' }) {
+  const total = totalPages(entry)
+  if (!total) return null
+  const actual = entry.current_page ?? Math.round((entry.progress || 0) * total)
+  return (
+    <span
+      role="button"
+      tabIndex={-1}
+      onClick={e => { e.stopPropagation(); onAlternar?.() }}
+      title={porcentaje ? 'Ver las páginas' : 'Ver el porcentaje'}
+      className={`cursor-pointer rounded-full bg-ink/85 px-1.5 py-0.5 text-[10px] font-semibold leading-none tabular-nums text-bg shadow-sm ${className}`}
+    >
+      {compacta && !porcentaje ? `${actual}/${total}` : <PagesLabel entry={entry} modo={porcentaje ? 'porcentaje' : 'paginas'} />}
+    </span>
+  )
+}
+
+// La barra encima de la portada, pegada abajo y por dentro: una pista oscura
+// translúcida (se lee sobre cualquier portada) y lo leído en el acento.
+// Con translateX, como ProgressBar: va en la GPU.
+export function BarraSobrePortada({ entry }) {
+  const pct = progressPct(entry)
+  return (
+    <span className="pointer-events-none absolute inset-x-1 bottom-1 h-[3px] overflow-hidden rounded-full bg-black/40">
+      <span
+        className="block h-full w-full rounded-full bg-accent"
+        style={{ transform: `translateX(${pct - 100}%)`, transition: 'transform 400ms cubic-bezier(0.22, 1, 0.36, 1)' }}
+      />
+    </span>
+  )
+}

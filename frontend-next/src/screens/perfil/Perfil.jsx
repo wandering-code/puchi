@@ -3,7 +3,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api } from '../../platform/api'
 import { useAuth } from '../../platform/auth'
 import { EMPTY_FILTERS, agruparEstanteria, copiarAMiEstanteria, generosDeAutores, opcionesDeFiltro } from '../luniteca/shelf'
-import { BotonPlegarAnos, Coleccion, Herramientas, Plegable, TarjetaLeyendo } from '../luniteca/Luniteca'
+import { BotonPlegarAnos, Coleccion, Herramientas, LibrosLeyendo, Plegable } from '../luniteca/Luniteca'
 import BookDetail from '../luniteca/BookDetail'
 import HojaFiltros from '../luniteca/HojaFiltros'
 import { useHoja } from '../luniteca/HojaInferior'
@@ -202,11 +202,7 @@ export default function Perfil() {
           {grupos.reading.length > 0 && (
             <CajaSeccion variante={variante}>
               <TituloSeccion variante={variante} label="Leyendo" cuenta={grupos.reading.length} estado="reading" />
-              <div className="mt-3 space-y-2">
-                {grupos.reading.map(e => (
-                  <TarjetaLeyendo key={e.id} entry={e} onAbrir={abrirLibro} fuera={e.id === fueraId} />
-                ))}
-              </div>
+              <LibrosLeyendo entries={grupos.reading} vista={vista} onAbrir={abrirLibro} fueraId={fueraId} generosDeAutor={generosDeAutor} />
             </CajaSeccion>
           )}
 

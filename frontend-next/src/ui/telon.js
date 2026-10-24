@@ -44,6 +44,22 @@ function hijoDe(padre, nodo) {
   return n
 }
 
+// Hasta dónde llega de verdad lo desplazable. No vale scrollHeight a secas:
+// lo que va marcado con data-fuera-del-alto (la capa de adornos que se estira
+// hasta el final del contenido, ver CapaDeContenido en eventos/Adorno) va un
+// fotograma por detrás de lo que mide, y al medir cómo quedará plegado aún
+// tiene el alto de antes. Con él contado, el telón creía que el scroll no
+// tendría que moverse y al acabar todo saltaba de golpe (medido: 581px).
+function finDelContenido(zona) {
+  if (zona === document.scrollingElement) return zona.scrollHeight
+  let fin = 0
+  for (const h of zona.children) {
+    if (h.hasAttribute('data-fuera-del-alto')) continue
+    fin = Math.max(fin, h.offsetTop + h.offsetHeight)
+  }
+  return Math.max(zona.clientHeight, fin + (parseFloat(getComputedStyle(zona).paddingBottom) || 0))
+}
+
 // Dónde empieza lo desplazable de la zona, en la pantalla: lo de dentro se
 // mide contra esto, así que no cuenta cuánto esté desplazado (y da igual si el
 // navegador mueve el scroll mientras se mide).
@@ -79,7 +95,17 @@ export function fotografiar(nodo) {
 // plegado (`plegar(true)` / `plegar(false)`) sin que llegue a pintarse.
 // Devuelve las animaciones (con fill: 'both': se quedan en su último
 // fotograma hasta que se cancelan, justo al plegar de verdad).
-export function deslizar(foto, { abriendo, plegar, t }) {
+//
+// `encoge` (opcional, al cerrar): cuánto va a encoger exactamente lo que se
+// pliega, si quien llama lo sabe. Entonces no hace falta plegar de mentira
+// para medir dónde acabará todo: lo de debajo sube eso mismo. Plegar y
+// desplegar de mentira obliga al navegador a recolocar la página entera dos
+// veces más dentro del mismo toque; con la estantería de lomos era lo que se
+// comía el primer fotograma (medido: 64 de 81ms, CPU frenada x4) y el
+// plegado parecía instantáneo. Solo vale dentro de una pantalla que hace
+// scroll (la capa que lo contiene no cambia de tamaño); en una hoja que se
+// ajusta a su contenido se sigue midiendo.
+export function deslizar(foto, { abriendo, plegar, t, encoge = null }) {
   const { zona, contenido } = foto
   const ahora = posiciones(foto)
   let plegado = null
@@ -88,11 +114,15 @@ export function deslizar(foto, { abriendo, plegar, t }) {
   // golpe al acabar. Así que eso se hace durante la animación: el contenido
   // entero baja poco a poco lo que vaya a subir el scroll.
   let bajada = 0
-  if (!abriendo) {
+  if (!abriendo && encoge != null && foto.ancla === zona) {
+    const scroll = zona.scrollTop
+    plegado = { ancla: ahora.ancla, tops: ahora.tops.map(top => top - encoge) }
+    bajada = Math.max(0, scroll - (Math.max(zona.clientHeight, finDelContenido(zona) - encoge) - zona.clientHeight))
+  } else if (!abriendo) {
     const scroll = zona.scrollTop
     plegar(true)
     plegado = posiciones(foto)
-    bajada = Math.max(0, scroll - (zona.scrollHeight - zona.clientHeight))
+    bajada = Math.max(0, scroll - (finDelContenido(zona) - zona.clientHeight))
     plegar(false)
     zona.scrollTop = scroll   // por si medirlo ya lo había movido
   }
@@ -117,7 +147,19 @@ export function deslizar(foto, { abriendo, plegar, t }) {
   const enLista = new Set(foto.lista)
   if (bajada > 0.5) {
     for (const hijo of zona === document.scrollingElement ? [contenido] : zona.children) {
-      if (hijo && !enLista.has(hijo)) mover(hijo, 0, bajada)
+      if (!hijo || enLista.has(hijo)) continue
+      mover(hijo, 0, bajada)
+      // La capa de adornos (los murciélagos, ver CapaDeContenido) va pegada a
+      // la página y tiene que bajar con ella, porque al acabar el scroll se
+      // recoloca. Pero vista bajando, un murciélago recorría 2.000px en un
+      // cuarto de segundo, como un bicho rarísimo. Así que se desvanece
+      // mientras dura el viaje y reaparece ya en su sitio.
+      if (hijo.hasAttribute('data-fuera-del-alto')) {
+        hechas.push(hijo.animate(
+          [{ opacity: 1 }, { opacity: 0, offset: 0.15 }, { opacity: 0, offset: 0.8 }, { opacity: 1 }],
+          opciones,
+        ))
+      }
     }
   }
   foto.lista.forEach((n, i) => {

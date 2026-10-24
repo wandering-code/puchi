@@ -1,4 +1,4 @@
-import { memo, startTransition, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { createContext, memo, startTransition, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { AnimatePresence, motion } from 'motion/react'
 import { useAuth } from '../../platform/auth'
@@ -6,7 +6,7 @@ import { api } from '../../platform/api'
 import { useLiveUpdates } from '../../platform/live'
 import { usarPreferencia } from '../../platform/preferencias'
 import { EMPTY_FILTERS, FORMATO_LABEL, agruparEstanteria, generosDeAutores, opcionesDeFiltro, readingDatesLabel, subirLomo, subirPortada } from './shelf'
-import { Cover, NotaBadge, PagesLabel, ProgressBar, StarRating } from './piezas'
+import { BarraSobrePortada, Cover, NotaBadge, PagesLabel, PastillaProgreso, ProgressBar, StarRating } from './piezas'
 import BookDetail from './BookDetail'
 import {
   IconChevron, IconEreader, IconFilter, IconGrid, IconList, IconLibroFisico, IconLomos, IconPlegarTodo,
@@ -20,7 +20,7 @@ import { precargarProporciones } from './proporcionLomo'
 import { generarYSubirLomo } from './generarLomo'
 import { usarVuelo } from './usarVuelo'
 import { LunaDelPanel, usarPanel } from './panel'
-import { COLOR_DE_ESTADO, CajaSeccion, TituloSeccion, huecoEntreSecciones, usarSeparacion } from './separacion'
+import { COLOR_DE_ESTADO, CajaSeccion, MarcoDeSeccion, TituloSeccion, huecoEntreSecciones, usarSeparacion } from './separacion'
 import { LLEGADA, enCss } from '../../ui/curvas'
 import { useHoja } from './HojaInferior'
 import { useCapa } from '../../platform/capas'
@@ -349,11 +349,7 @@ export default function Luniteca() {
         {grupos.reading.length > 0 && (
           <CajaSeccion variante={separacion} estado="reading">
             <TituloSeccion variante={separacion} desde={desdeTitulos} label="Leyendo" cuenta={grupos.reading.length} estado="reading" />
-            <div className="mt-3 space-y-2">
-              {grupos.reading.map(e => (
-                <TarjetaLeyendo key={e.id} entry={e} onAbrir={abrirLibro} fuera={e.id === fueraId} />
-              ))}
-            </div>
+            <LibrosLeyendo entries={grupos.reading} vista={vista} onAbrir={abrirLibro} fueraId={fueraId} generosDeAutor={generosDeAutor} />
           </CajaSeccion>
         )}
 
@@ -533,7 +529,7 @@ export function Herramientas({
   // Se queda pegada arriba al bajar por una estantería larga: con 300 libros,
   // volver arriba solo para filtrar es la diferencia entre usarlo y no usarlo.
   return (
-    <div className={`sticky top-0 z-20 -mx-5 px-5 py-2 ${panel ? `${panel} pb-3` : 'border-b border-line bg-bg/85 backdrop-blur-xl'}`}>
+    <div className={`deja-la-barra sticky top-0 z-20 -mx-5 px-5 py-2 ${panel ? `${panel} pb-3` : 'border-b border-line bg-bg/85 backdrop-blur-xl'}`}>
       {/* Al buscar, el campo ocupa la fila entera y el resto de botones se
           van: antes la barra se desplegaba DEBAJO y empujaba la estantería,
           que es el mismo salto que ya se quitó de los filtros. La lupa se
@@ -795,10 +791,25 @@ function BotonHerramienta({ activo, principal, agrupado, onClick, etiqueta, clas
 // golpe y no hay nada que recortar, y el recorte, que caía unos 17px por dentro
 // del borde de la tarjeta, cortaba en seco lo que tiene que poder asomar un
 // poco: la luz de las velas de Halloween sobre la estantería (src/eventos).
+//
+// Lleva consigo el marco de la tarjeta en la que va (MarcoDeSeccion), para que
+// la tarjeta encoja y crezca con el telón. La de la sección entera suma lo que
+// encoge además la franja del título al quedar plegada (`extra`); la de un año,
+// dentro de otra, no.
+const DentroDePlegable = createContext(false)
+
 export function Plegable({ abierta, children }) {
+  const caja = useContext(MarcoDeSeccion)
+  const anidada = useContext(DentroDePlegable)
+  const extra = caja && !anidada ? caja.extra : 0
+  const onTelon = useMemo(() => (caja
+    ? t => caja.marco.current?.telon({ ...t, delta: t.delta + extra }) || []
+    : null), [caja, extra])
+  // Lo de debajo sube lo que mide el contenido más la franja (si la hay): se
+  // le dice al telón para que no tenga que medirlo (ver ui/telon.js).
   return (
-    <Desplegable abierto={!!abierta}>
-      {children}
+    <Desplegable abierto={!!abierta} onTelon={onTelon} extraAlPlegar={extra}>
+      <DentroDePlegable.Provider value={true}>{children}</DentroDePlegable.Provider>
     </Desplegable>
   )
 }
@@ -832,15 +843,49 @@ const SeccionPlegable = memo(function SeccionPlegable({ variante, desde = 'top-1
   )
 })
 
-export const Coleccion = memo(function Coleccion({ entries, vista, onAbrir, fueraId = null, generosDeAutor = null }) {
+// «Leyendo»: con las tarjetas grandes de siempre o, si así se ha elegido en
+// Ajustes, con la misma vista que el resto de la estantería y su progreso
+// encima de cada libro. Lo usan tu estantería y la de otra persona.
+export function usarLeyendoComoLaVista() {
+  return usarPreferencia('leyendoComoLaVista', false)
+}
+
+export function LibrosLeyendo({ entries, vista, onAbrir, fueraId = null, generosDeAutor = null }) {
+  const [comoLaVista] = usarLeyendoComoLaVista()
+  if (comoLaVista) {
+    return (
+      <div className="mt-3">
+        <Coleccion entries={entries} vista={vista} onAbrir={onAbrir} fueraId={fueraId} generosDeAutor={generosDeAutor} conProgreso />
+      </div>
+    )
+  }
+  return (
+    <div className="mt-3 space-y-2">
+      {entries.map(e => (
+        <TarjetaLeyendo key={e.id} entry={e} onAbrir={onAbrir} fuera={e.id === fueraId} />
+      ))}
+    </div>
+  )
+}
+
+export const Coleccion = memo(function Coleccion({ entries, vista, onAbrir, fueraId = null, generosDeAutor = null, conProgreso = false }) {
+  // Páginas o porcentaje: la misma preferencia que las tarjetas de «Leyendo».
+  // Solo llega a los libros cuando se pinta su progreso; al resto se les pasa
+  // null, que no cambia, para que no se repinten por esto.
+  const [porcentaje, setPorcentaje] = usarPreferencia('progresoEnPorcentaje', false)
+  const progreso = useMemo(
+    () => (conProgreso ? { porcentaje, alternar: () => setPorcentaje(!porcentaje) } : null),
+    [conProgreso, porcentaje, setPorcentaje],
+  )
+
   // Vista de estantería: los libros de canto. Es una vista aparte y aislada —
   // si no acaba de convencer se quita ella sola, sin tocar las otras dos.
-  if (vista === 'lomos') return <Lomos entries={entries} onAbrir={onAbrir} fueraId={fueraId} generosDeAutor={generosDeAutor} />
+  if (vista === 'lomos') return <Lomos entries={entries} onAbrir={onAbrir} fueraId={fueraId} generosDeAutor={generosDeAutor} progreso={progreso} />
 
   if (vista === 'list') {
     return (
       <div className="divide-y divide-[color:var(--color-line)]">
-        {entries.map(e => <FilaLibro key={e.id} entry={e} onAbrir={onAbrir} fuera={e.id === fueraId} />)}
+        {entries.map(e => <FilaLibro key={e.id} entry={e} onAbrir={onAbrir} fuera={e.id === fueraId} progreso={progreso} />)}
       </div>
     )
   }
@@ -858,7 +903,7 @@ export const Coleccion = memo(function Coleccion({ entries, vista, onAbrir, fuer
   // ancho llega justo al siguiente salto de columna.
   return (
     <div className="grid grid-cols-[repeat(auto-fill,minmax(68px,1fr))] gap-3">
-      {entries.map(e => <PortadaLibro key={e.id} entry={e} onAbrir={onAbrir} fuera={e.id === fueraId} />)}
+      {entries.map(e => <PortadaLibro key={e.id} entry={e} onAbrir={onAbrir} fuera={e.id === fueraId} progreso={progreso} />)}
     </div>
   )
 })
@@ -871,7 +916,7 @@ export const Coleccion = memo(function Coleccion({ entries, vista, onAbrir, fuer
 // que su sitio se queda vacío. Se deja el hueco, no se quita de la lista: lo
 // que se ha sacado de la balda es ESTE libro, y al cerrarlo vuelve al mismo
 // sitio. Si desapareciera del todo, los demás se moverían para taparlo.
-const PortadaLibro = memo(function PortadaLibro({ entry, onAbrir, fuera = false }) {
+const PortadaLibro = memo(function PortadaLibro({ entry, onAbrir, fuera = false, progreso = null }) {
   return (
     /* Sin título debajo: la portada ya dice qué libro es, y quien quiera
        comprobarlo entra en la ficha. De paso, todas las celdas miden
@@ -892,13 +937,20 @@ const PortadaLibro = memo(function PortadaLibro({ entry, onAbrir, fuera = false 
             la portada ya en /uploads local, pedirlas todas de una vez al abrir
             la vista es barato, y así el scroll nunca las pilla a medias. */}
         <Cover url={entry.book.cover_url} title={entry.book.title} priority />
-        <NotaBadge rating={entry.rating} />
+        {progreso ? (
+          // Leyendo: por dónde va, sobre la propia portada. La pastilla ocupa
+          // la esquina de la nota (un libro a medias aún no la tiene).
+          <>
+            <BarraSobrePortada entry={entry} />
+            <PastillaProgreso entry={entry} porcentaje={progreso.porcentaje} onAlternar={progreso.alternar} className="absolute right-1 top-1" />
+          </>
+        ) : <NotaBadge rating={entry.rating} />}
       </div>
     </button>
   )
 })
 
-const FilaLibro = memo(function FilaLibro({ entry, onAbrir, fuera = false }) {
+const FilaLibro = memo(function FilaLibro({ entry, onAbrir, fuera = false, progreso = null }) {
   // Las fechas de lectura, cuando las hay: en la lista hay sitio para ellas y
   // es lo que se viene a mirar cuando se pasa a esta vista. Van en su propia
   // línea y no pegadas al autor, para que un autor largo no se las coma al
@@ -917,10 +969,14 @@ const FilaLibro = memo(function FilaLibro({ entry, onAbrir, fuera = false }) {
       <div className="min-w-0 flex-1">
         <p className="truncate text-[15px] leading-tight">{entry.book.title}</p>
         <p className="mt-0.5 truncate text-xs text-ink-mute">{entry.book.author || 'Sin autor'}</p>
-        {fechas && <p className="mt-0.5 truncate text-[10px] leading-tight text-ink-mute/80">{fechas}</p>}
+        {progreso
+          // Leyendo: la barra en lugar de las fechas.
+          ? <ProgressBar entry={entry} className="mt-1.5 max-w-[220px]" />
+          : fechas && <p className="mt-0.5 truncate text-[10px] leading-tight text-ink-mute/80">{fechas}</p>}
       </div>
       <div className="flex shrink-0 items-center gap-2">
         <IconosFormato formato={entry.reading_format} />
+        {progreso && <PastillaProgreso entry={entry} porcentaje={progreso.porcentaje} onAlternar={progreso.alternar} />}
         {/* La puntuación en estrellas, con las medias de verdad (el relleno se
             recorta al porcentaje, no se redondea al entero). Aquí sí caben y se
             leen; en la cuadrícula sigue siendo un número porque sobre una
