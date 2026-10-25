@@ -313,9 +313,23 @@ function Balda({ alto, clave }) {
       setCabe(libre >= el.offsetWidth)
     }
     medir()
+    // No basta con vigilar la estantería: los lomos cambian de ancho cuando
+    // llega su imagen, y la estantería puede seguir midiendo lo mismo. Pasaba
+    // al abrir: con los anchos provisionales los libros ocupaban dos filas y
+    // la calabaza cabía en la segunda; al llegar las imágenes cabían todos en
+    // la primera y ella se quedaba sola abajo, sin que nada avisara (mismo
+    // alto, mismo ancho). Así que se vigila también cada libro, y se vuelven
+    // a vigilar si cambian (filtros, libros nuevos).
     const ro = new ResizeObserver(medir)
-    ro.observe(padre)
-    return () => ro.disconnect()
+    const vigilar = () => {
+      ro.disconnect()
+      ro.observe(padre)
+      for (const hijo of padre.children) if (hijo !== el) ro.observe(hijo)
+    }
+    vigilar()
+    const mo = new MutationObserver(() => { vigilar(); medir() })
+    mo.observe(padre, { childList: true })
+    return () => { ro.disconnect(); mo.disconnect() }
   }, [])
   return (
     <div ref={caja} style={cabe ? undefined : { position: 'absolute', visibility: 'hidden' }}>
