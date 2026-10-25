@@ -29,6 +29,7 @@ import halloween from './halloween'
 //   balda      lo que se apoya al final de la estantería de lomos.
 //   entreLibros  se llama detrás de CADA lomo con su `indice`; devuelve algo
 //              solo en los sitios que quiera (velas cada tantos libros…).
+//              Detrás del último libro no se llama: ese sitio es de `balda`.
 // Un evento no tiene por qué llenarlos todos: el que no traiga, no se pinta.
 export const EVENTOS = [halloween]
 
