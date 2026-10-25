@@ -703,8 +703,13 @@ export default function Lomos({ entries, onAbrir, fueraId = null, generosDeAutor
           torcidos={torcidos}
           progreso={progreso}
         />
-        {/* Lo que el evento de temporada apoya entre los libros (src/eventos). */}
-        {EntreLibros && <EntreLibros indice={i} clave={e.id} alto={ALTO_FILA} />}
+        {/* Lo que el evento de temporada apoya entre los libros (src/eventos).
+            Nunca detrás del último: si no cabía en su fila bajaba solo a una
+            balda nueva, y el adorno de `balda`, que se mide contra lo que
+            tiene delante, se apuntaba a su lado (una balda vacía con velas y
+            calabazas). El final de la estantería es cosa de `balda`, que solo
+            sale si cabe junto al último libro. */}
+        {EntreLibros && i < entries.length - 1 && <EntreLibros indice={i} clave={e.id} alto={ALTO_FILA} />}
         </Fragment>
       ))}
       {/* Lo que el evento de temporada apoya en la balda (src/eventos). */}
