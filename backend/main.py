@@ -2613,7 +2613,8 @@ async def search_books(q: str, db: Session = Depends(get_db), current: Player = 
         rows = (
             db.query(PersonalShelf.book_id, Player.id, Player.name)
             .join(Player, Player.id == PersonalShelf.player_id)
-            .filter(PersonalShelf.book_id.in_([b.id for b in local_books]))
+            .filter(PersonalShelf.book_id.in_([b.id for b in local_books]),
+                    or_(Player.status == "approved", Player.id == current.id))
             .all()
         )
         for book_id, player_id, name in rows:
@@ -3199,6 +3200,12 @@ def get_personal_shelf(
     current: Player = Depends(get_current_player),
 ):
     target_id = player_id or current.id
+    # La estantería de una cuenta desactivada (o rechazada) no se enseña a
+    # nadie más: igual que su actividad, se oculta sin borrar nada.
+    if target_id != current.id:
+        target = db.query(Player).filter(Player.id == target_id).first()
+        if not target or target.status != "approved":
+            raise HTTPException(status_code=404, detail="Jugadora no encontrada")
     # Sin ORDER BY, Postgres no promete ningún orden concreto — normalmente
     # sale por dónde caen las filas en el disco, y un UPDATE (poner el
     # formato de lectura, cambiar de carpeta, lo que sea) puede reescribir
@@ -3650,9 +3657,13 @@ def get_book_readers(
     Las notas privadas solo salen en la entrada de quien pregunta, igual que
     en /shelf/personal (hide_notes).
     """
+    # Solo cuentas activas (y siempre la tuya): las desactivadas se ocultan
+    # sin borrar nada, igual que en la actividad.
     entries = (
         db.query(PersonalShelf)
-        .filter(PersonalShelf.book_id == book_id)
+        .join(Player, Player.id == PersonalShelf.player_id)
+        .filter(PersonalShelf.book_id == book_id,
+                or_(Player.status == "approved", Player.id == current.id))
         .all()
     )
     return [
@@ -3671,7 +3682,7 @@ def get_rankings(
     db: Session = Depends(get_db),
     current: Player = Depends(get_current_player),
 ):
-    players = db.query(Player).all()
+    players = db.query(Player).filter(Player.status == "approved").all()
     result = []
     for p in players:
         entries = db.query(PersonalShelf).filter_by(player_id=p.id).all()
@@ -3907,7 +3918,11 @@ def get_club_logs_summary(
     current: Player = Depends(require_club_member),
 ):
     """Devuelve los logs del club para mostrar rating medio y participación. Las notas son privadas."""
-    logs = db.query(ClubReadingLog).filter_by(club_shelf_id=entry_id).all()
+    logs = (db.query(ClubReadingLog)
+            .join(Player, Player.id == ClubReadingLog.player_id)
+            .filter(ClubReadingLog.club_shelf_id == entry_id,
+                    or_(Player.status == "approved", Player.id == current.id))
+            .all())
     ratings = [l.rating for l in logs if l.rating is not None]
     avg = round(sum(ratings) / len(ratings), 2) if ratings else None
     return {
@@ -3976,7 +3991,10 @@ def list_votes(
     db: Session = Depends(get_db),
     _: Player = Depends(require_club_member),
 ):
-    votes = db.query(Vote).filter(Vote.club_shelf_id == entry_id).order_by(Vote.voted_at.asc()).all()
+    # Sin las de cuentas desactivadas: se ocultan, no se borran.
+    votes = (db.query(Vote).join(Player, Player.id == Vote.player_id)
+             .filter(Vote.club_shelf_id == entry_id, Player.status == "approved")
+             .order_by(Vote.voted_at.asc()).all())
     return [
         {"player": _player_out(v.player), "rating": v.rating, "voted_at": v.voted_at.isoformat() + 'Z'}
         for v in votes

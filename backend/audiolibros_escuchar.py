@@ -277,7 +277,8 @@ def catalogo(db: Session = Depends(get_db), p: Player = Depends(get_current_play
     mios = {e.book_id: e for e in db.query(PersonalShelf)
             .filter(PersonalShelf.player_id == p.id, PersonalShelf.book_id.in_(todos)).all()} if todos else {}
     cuantos = dict(db.query(PersonalShelf.book_id, func.count(PersonalShelf.id))
-                   .filter(PersonalShelf.book_id.in_(todos)).group_by(PersonalShelf.book_id).all()) if todos else {}
+                   .join(Player, Player.id == PersonalShelf.player_id)
+                   .filter(PersonalShelf.book_id.in_(todos), Player.status == "approved").group_by(PersonalShelf.book_id).all()) if todos else {}
     progresos = {g.audiobook_id: g for g in db.query(AudiobookProgress)
                  .filter(AudiobookProgress.player_id == p.id, AudiobookProgress.audiobook_id.in_(caps)).all()}
 
