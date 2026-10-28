@@ -1407,8 +1407,30 @@ async def turn_credentials(player: Player = Depends(get_current_player)):
     ]
 
 
+def _esperar_bd(intentos=60, pausa=2):
+    """Espera a que Postgres acepte conexiones (issue #56).
+
+    Tras un corte de luz Docker levanta todos los contenedores a la vez, y
+    Postgres tarda unos segundos en recuperarse. Sin esta espera el arranque
+    fallaba y, con --reload, el contenedor seguía "Up" pero sin servir (502).
+    """
+    from sqlalchemy import text
+    from sqlalchemy.exc import OperationalError
+    for n in range(1, intentos + 1):
+        try:
+            with engine.connect() as conn:
+                conn.execute(text("SELECT 1"))
+            return
+        except OperationalError:
+            if n == intentos:
+                raise
+            logging.warning("La base de datos aún no está lista (intento %d/%d)", n, intentos)
+            time.sleep(pausa)
+
+
 @app.on_event("startup")
 def startup():
+    _esperar_bd()
     crear_tablas()
     _migrate()
     audiolibros.migrar(engine)
