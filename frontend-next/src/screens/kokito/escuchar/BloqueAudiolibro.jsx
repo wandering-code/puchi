@@ -169,7 +169,11 @@ function Escuchar({ r, datos, pedido, leer }) {
           </motion.button>
         )}
       </div>
+      {/* El contenido se monta aunque esté cerrado: sin lectura (un libro ya
+          leído no la trae) `lectura.page` tumbaba la app entera. Desplegable
+          sigue enseñando lo último mientras se pliega. */}
       <Desplegable abierto={!!(noCoincide && capLectura)}>
+        {lectura && capLectura && (
         <div className="overflow-hidden">
             <div className="mt-2 flex items-center gap-3 rounded-xl2 border border-line bg-surface px-3 py-2.5 text-left">
               <IconLibroAbierto className="h-4 w-4 shrink-0 text-ink-mute" />
@@ -191,6 +195,7 @@ function Escuchar({ r, datos, pedido, leer }) {
               )}
             </div>
           </div>
+        )}
       </Desplegable>
     </motion.div>
   )
