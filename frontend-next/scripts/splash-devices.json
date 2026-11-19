@@ -1,5 +1,5 @@
 {
-  "_": "iPhones en vertical para las imágenes de arranque de iOS: [ancho CSS, alto CSS, densidad, modelos]. Lo leen scripts/splash.py (genera los PNG) y vite.config.js (mete los <link>). Fondo y logo, los mismos que el splash de index.html y de App.jsx.",
+  "_": "iPhones en vertical para las imágenes de arranque de iOS: [ancho CSS, alto CSS, densidad, modelos]. Lo leen scripts/splash.py (genera los PNG) y vite.config.js (mete los <link>). Fondo y logo, los mismos que el splash de index.html.",
   "fondo": "#f5f0e7",
   "logo": 48,
   "dispositivos": [

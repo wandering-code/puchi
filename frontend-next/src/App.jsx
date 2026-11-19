@@ -1,5 +1,6 @@
+import { useRef } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
-import { useAuth } from './platform/auth'
+import { SesionAlSalir, useAuth } from './platform/auth'
 import { useMobileViewport } from './platform/viewport'
 import { useLiveConnection } from './platform/live'
 import { usarTema } from './platform/preferencias'
@@ -18,7 +19,6 @@ import PastillaLlamada from './screens/diskordkito/PastillaLlamada'
 import LoginScreen from './screens/LoginScreen'
 import Shell from './screens/Shell'
 import UpdatePrompt from './ui/UpdatePrompt'
-import Logo from './ui/Logo'
 import { CON_AUDIOLIBROS } from './platform/variante'
 import { ReproductorProvider } from './platform/reproductor'
 import { NotificacionesProvider } from './platform/notificaciones'
@@ -28,7 +28,18 @@ import MiniReproductor from './screens/kokito/escuchar/MiniReproductor'
 import PantallaLectura from './screens/kokito/lectura/PantallaLectura'
 
 export default function App() {
-  const { player, checking } = useAuth()
+  const { player } = useAuth()
+  // La app entra animada (.entra) cuando llega del login, pero no cuando es
+  // lo primero que se ve: al abrir con la sesión guardada se pasa del splash
+  // de index.html a la app de un fotograma al siguiente, como una app nativa,
+  // sin que nada crezca ni se funda. Se fija al montar el Shell; tras cerrar
+  // sesión, la siguiente entrada vuelve a animarse.
+  const entraAnimada = useRef(!player)
+  if (!player) entraAnimada.current = true
+  // El último jugador con sesión: la app que sale al cerrarla lo sigue viendo
+  // durante su animación de salida (ver SesionAlSalir).
+  const ultimo = useRef(player)
+  if (player) ultimo.current = player
   useMobileViewport()
   // Un solo WebSocket para toda la app, mientras haya sesión: es el que hace
   // que un cambio hecho en otro dispositivo (o en la Puchi actual, que comparte
@@ -47,11 +58,9 @@ export default function App() {
       <UpdatePrompt />
       {/* mode="wait" para que la pantalla que se va termine antes de que
           entre la siguiente: solapadas se ven las dos a la vez medio segundo
-          y el cambio parece un parpadeo. */}
+          y el cambio parece un parpadeo. Solo pasa entre el login y la app. */}
       <AnimatePresence mode="wait" initial={false}>
-        {checking ? (
-          <Splash key="splash" />
-        ) : !player ? (
+        {!player ? (
           <motion.div
             key="login"
             className="h-full w-full"
@@ -68,7 +77,7 @@ export default function App() {
             // La entrada, en CSS (.entra en index.css): con scale Motion la
             // movía desde JavaScript, y con `transform` dejaría uno puesto en
             // el contenedor de toda la app al acabar.
-            className="entra h-full w-full"
+            className={`${entraAnimada.current ? 'entra' : ''} h-full w-full`}
             style={{ '--entra-desde': 'scale(1.02)', '--entra-dura': '400ms' }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
@@ -78,6 +87,7 @@ export default function App() {
                 una llamada) te llegue estés en la Luniteca, en el club o donde
                 sea — y que la pantalla de Diskordkito pueda estar cerrada sin
                 que nadie se quede sin enterarse. */}
+            <SesionAlSalir player={ultimo.current}>
             <AvisosProvider>
               <ChatProvider>
                 <LlamadasProvider>
@@ -114,33 +124,10 @@ export default function App() {
                 </LlamadasProvider>
               </ChatProvider>
             </AvisosProvider>
+            </SesionAlSalir>
           </motion.div>
         )}
       </AnimatePresence>
     </div>
-  )
-}
-
-// Lo que se ve mientras /auth/me confirma que la sesión guardada sigue viva.
-//
-// Es EXACTAMENTE el splash de index.html (y el de las imágenes de arranque de
-// iOS, public/splash/): fondo liso, logo de 48px al centro, quieto. Así se
-// pasa de uno a otro sin que cambie ni un píxel. Antes latía desde opacidad
-// 0,5, y el relevo del splash de HTML a este se veía como un parpadeo.
-// Si la espera se alarga, empieza a latir (solo opacidad, en la GPU), y
-// arranca desde el mismo estado quieto.
-function Splash() {
-  return (
-    <motion.div
-      key="splash"
-      className="fixed inset-0 flex items-center justify-center bg-bg"
-      initial={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.25 }}
-    >
-      <div className="latido">
-        <Logo className="h-12 w-12" />
-      </div>
-    </motion.div>
   )
 }

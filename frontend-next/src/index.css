@@ -427,16 +427,6 @@
   animation: entra var(--entra-dura, 240ms) var(--entra-curva, cubic-bezier(0.22, 1, 0.36, 1)) var(--entra-espera, 0ms) backwards;
 }
 
-/* El latido del logo del splash (App.jsx) cuando la espera se alarga. Empieza
-   y acaba en opacidad 1, que es como lo deja el splash de index.html: el
-   relevo no se nota. */
-@keyframes latido {
-  50% { opacity: 0.5; }
-}
-.latido {
-  animation: latido 1.6s ease-in-out 1s infinite;
-}
-
 /* ── Hundirse al pulsar ──────────────────────────────────────────────────
    Un botón con `data-pulsa="0.92"` encoge a esa escala mientras el dedo está
    puesto y vuelve al soltar.

@@ -4,8 +4,8 @@
 # iOS no fabrica el splash con el manifest: si no hay una imagen que encaje
 # EXACTAMENTE con la pantalla, abre la app instalada en blanco. Cada imagen es
 # el fondo crema con el logo centrado al mismo tamaño que el splash de
-# index.html y de App.jsx, así que se pasa de la imagen de iOS al splash HTML
-# y de ahí a React sin ningún cambio visible.
+# index.html, así que se pasa de la imagen de iOS al splash HTML sin ningún
+# cambio visible, y de ahí directamente a la app.
 import json, os
 from PIL import Image
 
