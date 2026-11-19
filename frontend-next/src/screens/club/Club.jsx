@@ -1,4 +1,5 @@
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { recordado, recordar } from '../../platform/memoria'
 import { AnimatePresence } from 'motion/react'
 import { api } from '../../platform/api'
 import { esAdmin as esElAdmin, useAuth } from '../../platform/auth'
@@ -40,7 +41,11 @@ export default function Club() {
   const { player } = useAuth()
   const admin = esElAdmin(player)
 
-  const [entradas, setEntradas] = useState(null)   // null = cargando
+  // Como en la Luniteca: con lo de la última vez en esta sesión, si la hubo
+  // (platform/memoria), y refrescado por detrás. null = cargando.
+  const [entradas, setEntradas] = useState(() => recordado('club') ?? null)
+  useEffect(() => { if (entradas) recordar('club', entradas) }, [entradas])
+  const huboEspera = useRef(entradas === null)
   const [error, setError] = useState(null)
 
   // La misma forma de mirar que tengas puesta en tu estantería: es tuya, no de
@@ -175,7 +180,10 @@ export default function Club() {
           </CajaSeccion>
         </div>
       ) : (
-      <div className={`mt-5 ${huecoEntreSecciones(variante)}`}>
+      <div
+        className={`mt-5 ${huecoEntreSecciones(variante)} ${huboEspera.current ? 'entra' : ''}`}
+        style={{ '--entra-desde': 'none', '--entra-dura': '220ms' }}
+      >
         {grupos.actual.length > 0 && (
           <CajaSeccion variante={variante} estado="reading">
             <TituloSeccion variante={variante} desde={panel.desdeTitulos} label="Lectura actual" cuenta={grupos.actual.length} estado="reading" />

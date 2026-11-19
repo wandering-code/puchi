@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, useMemo } from 'react'
+import { olvidarTodo } from './memoria'
 
 // Portado de frontend/src/utils/auth.jsx sin cambios de comportamiento.
 // Comparte a propósito la clave de localStorage y la cookie de sesión con la
@@ -26,6 +27,8 @@ export function AuthProvider({ children }) {
 
   function logout() {
     localStorage.removeItem('luni_player')
+    // Lo que recordaban las pantallas era de esta cuenta (platform/memoria).
+    olvidarTodo()
     setPlayer(null)
   }
 

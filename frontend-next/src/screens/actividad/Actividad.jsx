@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { recordado, recordar } from '../../platform/memoria'
 import { AnimatePresence, motion } from 'motion/react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../../platform/api'
@@ -75,13 +76,17 @@ function haceCuanto(iso) {
 export default function Actividad() {
   const { player } = useAuth()
   const navegar = useNavigate()
-  const [items, setItems] = useState(null)
-  const [hayMas, setHayMas] = useState(false)
+  // Lo último que se vio de cada lista (todos, o filtrado por alguien) en esta
+  // sesión: se pinta al entrar y se refresca por detrás (platform/memoria).
+  const claveDe = quien => `actividad:${quien?.id ?? 'todos'}`
+  const [items, setItems] = useState(() => recordado(claveDe(null))?.items ?? null)
+  const [hayMas, setHayMas] = useState(() => recordado(claveDe(null))?.hayMas ?? false)
   const [cargandoMas, setCargandoMas] = useState(false)
   const [error, setError] = useState(null)
   // null mientras llegan: así se sabe si hay que reservar el hueco de la fila
   // de caras (ver abajo) o si de verdad no hay nadie más.
-  const [jugadores, setJugadores] = useState(null)
+  const [jugadores, setJugadores] = useState(() => recordado('actividad:jugadores') ?? null)
+  useEffect(() => { if (jugadores) recordar('actividad:jugadores', jugadores) }, [jugadores])
   const [filtro, setFiltro] = useState(null)     // jugador por el que se filtra
   // Tocar la cara de alguien no hace una sola cosa: pregunta. Filtrar y entrar
   // en su estantería son igual de esperables desde ahí, y adivinar cuál quiere
@@ -155,10 +160,14 @@ export default function Actividad() {
 
   useEffect(() => {
     let vigente = true
-    setItems(null)
+    const antes = recordado(claveDe(filtro))
+    setItems(antes?.items ?? null)
+    if (antes) setHayMas(antes.hayMas)
     cargar(0).catch(e => { if (vigente) setError(e.message) })
     return () => { vigente = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cargar])
+  useEffect(() => { if (items) recordar(claveDe(filtro), { items, hayMas }) }, [items, hayMas, filtro])
 
   const cargarJugadores = useCallback(() => {
     api('/players').then(setJugadores).catch(() => setJugadores([]))
