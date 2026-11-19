@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from 'react'
+import { createContext, useContext, useState, useEffect, useMemo } from 'react'
 
 // Portado de frontend/src/utils/auth.jsx sin cambios de comportamiento.
 // Comparte a propósito la clave de localStorage y la cookie de sesión con la
@@ -13,9 +13,11 @@ export function AuthProvider({ children }) {
     const saved = localStorage.getItem('luni_player')
     return saved ? JSON.parse(saved) : null
   })
-  // Hasta que /auth/me conteste no se sabe si la sesión guardada sigue viva.
-  // Sin esto se pinta la app entera y se cae al login medio segundo después.
-  const [checking, setChecking] = useState(!!localStorage.getItem('luni_player'))
+  // Con una sesión guardada se arranca YA con ella, sin esperar a /auth/me:
+  // esa espera era un splash de ~480ms (medido con red lenta) en cada
+  // apertura. La sesión se comprueba por detrás (abajo). El precio, asumido:
+  // si la sesión ya no vale (la han cerrado desde fuera, algo raro), se ve la
+  // app un momento antes de caer al login.
 
   function login(playerData) {
     localStorage.setItem('luni_player', JSON.stringify(playerData))
@@ -44,13 +46,12 @@ export function AuthProvider({ children }) {
       })
       .then(fresh => login({ ...fresh, token: player.token }))
       .catch(e => { if (e?.fuera) logout() })
-      .finally(() => setChecking(false))
     // Solo al montar.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   return (
-    <AuthContext.Provider value={{ player, checking, login, logout }}>
+    <AuthContext.Provider value={{ player, login, logout }}>
       {children}
     </AuthContext.Provider>
   )
@@ -58,6 +59,17 @@ export function AuthProvider({ children }) {
 
 export function useAuth() {
   return useContext(AuthContext)
+}
+
+// Para la app que se está yendo tras cerrar la sesión: durante su animación
+// de salida sigue montada y se repinta, y sus pantallas dan por hecho que hay
+// jugador (player.id). Con esto siguen viendo el último que hubo hasta que
+// desaparecen. Pasó de verdad: con la sesión caducada en el servidor, la
+// Luniteca se quedaba en blanco en vez de caer al login.
+export function SesionAlSalir({ player, children }) {
+  const ctx = useContext(AuthContext)
+  const valor = useMemo(() => ({ ...ctx, player: ctx.player || player }), [ctx, player])
+  return <AuthContext.Provider value={valor}>{children}</AuthContext.Provider>
 }
 
 // Quién es el admin, en un solo sitio. El backend lo decide igual —por el

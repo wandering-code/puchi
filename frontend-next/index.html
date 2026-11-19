@@ -40,15 +40,16 @@
     <style>
       html, body { margin: 0; background: #f5f0e7; }
       html[data-tema="oscuro"], html[data-tema="oscuro"] body { background: #141009; }
-      /* El splash: el mismo que pinta App.jsx y el mismo que las imágenes de
-         arranque de iOS (public/splash/). Fondo liso y logo de 48px al centro. */
+      /* El splash: el mismo que las imágenes de arranque de iOS
+         (public/splash/). Fondo liso y logo de 48px al centro. */
       .splash { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: #f5f0e7; }
       html[data-tema="oscuro"] .splash { background: #141009; }
       .splash img { width: 48px; height: 48px; object-fit: contain; }
     </style>
   </head>
   <body>
-    <!-- React sustituye este splash en su primer render. -->
+    <!-- React sustituye este splash en su primer render, ya con la app: con
+         la sesión guardada no se espera al servidor (platform/auth.jsx). -->
     <div id="root"><div class="splash"><img src="/icons/splash-logo.webp" alt="" fetchpriority="high" /></div></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
