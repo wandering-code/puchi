@@ -78,7 +78,7 @@ export default function Shell() {
     /* Cada ruta es su propia capa a pantalla completa con su scroll: así el
        scroll de una no arrastra al de la otra durante la transición. */
     // Sin mode="wait" y sin salida: la pantalla que se va desaparece al
-    // momento y la nueva entra con un fundido corto, solo de opacidad. Con
+    // momento y la nueva entra con un fundido corto. Con
     // "wait" la vieja tardaba 240ms en irse y después quedaba la pantalla
     // VACÍA otros 100-170ms antes de que asomara la nueva (medido en
     // capturas): era ese hueco, más que la animación, lo que se notaba.
@@ -98,8 +98,11 @@ export default function Shell() {
         // telón (ui/telon.js), que ya coloca lo de debajo: lo de abajo salía
         // disparado hacia arriba y volvía. Safari no lo tiene; así van igual.
         className={`absolute inset-0 overflow-y-auto overflow-x-hidden overscroll-contain [overflow-anchor:none] px-5 pb-kb ${navegado.current ? 'entra' : ''}`}
-        // Sin desplazamiento: moviéndose, el contenido parecía ir llegando.
-        style={{ '--entra-desde': 'none', '--entra-dura': '160ms' }}
+        // Un fundido con un pelín de subida, como el de antes: solo con
+        // opacidad se veía demasiado seco. Ahora que la pantalla llega ya con
+        // su contenido (platform/memoria) se lee como una transición, no como
+        // cosas llegando.
+        style={{ '--entra-desde': 'translateY(8px)', '--entra-dura': '220ms' }}
       >
         <Routes location={location}>
           <Route path="/"           element={<Inicio />} />

@@ -1,4 +1,5 @@
 import { createContext, memo, startTransition, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { recordado, recordar } from '../../platform/memoria'
 import { useSearchParams } from 'react-router-dom'
 import { AnimatePresence, motion } from 'motion/react'
 import { useAuth } from '../../platform/auth'
@@ -36,7 +37,14 @@ const VISTAS = [['grid', IconGrid, 'Cuadrícula'], ['list', IconList, 'Lista'], 
 
 export default function Luniteca() {
   const { player } = useAuth()
-  const [shelf, setShelf] = useState(null)      // null = cargando
+  // Si ya se estuvo aquí en esta sesión, se arranca con lo de entonces (ver
+  // platform/memoria) y cargar() lo refresca por detrás. null = cargando.
+  const claveMemoria = `luniteca:${player.id}`
+  const [shelf, setShelf] = useState(() => recordado(claveMemoria) ?? null)
+  useEffect(() => { if (shelf) recordar(claveMemoria, shelf) }, [shelf, claveMemoria])
+  // Si se llegó a enseñar la pantalla vacía, lo que llega entra con un fundido
+  // de todo el bloque, no de golpe.
+  const huboEspera = useRef(shelf === null)
   const ficha = useCapa(null)            // la entrada abierta, o null
   const abierto = ficha.abierta
   // La última ficha que se ha abierto: sigue puesta mientras se cierra y
@@ -360,7 +368,10 @@ export default function Luniteca() {
           <SeccionCargando variante={separacion} desde={desdeTitulos} vista={vista} />
         </div>
       ) : (
-      <div className={`mt-5 ${huecoEntreSecciones(separacion)}`}>
+      <div
+        className={`mt-5 ${huecoEntreSecciones(separacion)} ${huboEspera.current ? 'entra' : ''}`}
+        style={{ '--entra-desde': 'none', '--entra-dura': '220ms' }}
+      >
         {grupos.reading.length > 0 && (
           <CajaSeccion variante={separacion} estado="reading">
             <TituloSeccion variante={separacion} desde={desdeTitulos} label="Leyendo" cuenta={grupos.reading.length} estado="reading" />
