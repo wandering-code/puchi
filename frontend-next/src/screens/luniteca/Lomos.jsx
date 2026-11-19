@@ -31,7 +31,7 @@ import { alCargarFuentes, anchoDeRenglonPorPunto, anchoPorPunto, fuenteLista } f
 // de 700 páginas nunca es más fino que uno de 300—, lo que cambia es la escala
 // entera; el alto va aparte, que dos libros del mismo grosor pueden tener
 // formatos distintos.
-const ALTO_FILA = 190        // alto de cada balda, en px
+export const ALTO_FILA = 190        // alto de cada balda, en px
 const ALTO_MAX = 180         // el libro más alto
 const ALTO_MIN = 134         // el más bajo
 const ANCHO_MIN = 26         // un libro finito
@@ -68,17 +68,31 @@ const TOQUE_MIN = 14
 // cuenta: la balda, la vista previa de la ficha al cambiar el lomo y la del
 // alta a mano. `activo` en false deja el hook quieto (la balda no lee la
 // proporción de los libros que todavía no se ven).
-export function usarAnchoLomo(url, anchoBase, alto, activo = true) {
-  const [anchoFoto, setAnchoFoto] = useState(null)
+const anchoDeFoto = (alto, r) => Math.round(Math.min(ANCHO_FOTO_MAX, Math.max(ANCHO_FOTO_MIN, alto * r)))
+
+// `activo`: si este lomo va con foto (si no, su ancho es siempre `anchoBase`).
+// `pedir`: si ya puede descargar la foto para medirla. La balda no la pide
+// para los lomos que aún no se llenan, pero si la proporción YA se conoce
+// (memoria o localStorage) se usa siempre, desde el primer render: antes el
+// lomo nacía con `anchoBase` hasta llenarse, y al llenarse cambiaba de ancho
+// y movía a los de al lado (medido: 20px en la balda de 2026 al abrir).
+export function usarAnchoLomo(url, anchoBase, alto, activo = true, pedir = true) {
+  const [anchoFoto, setAnchoFoto] = useState(() => {
+    const r = activo && url ? proporcionConocida(url) : null
+    return r ? anchoDeFoto(alto, r) : null
+  })
   useEffect(() => {
     if (!activo || !url) { setAnchoFoto(null); return }
+    const conocida = proporcionConocida(url)
+    if (conocida) { setAnchoFoto(anchoDeFoto(alto, conocida)); return }
+    if (!pedir) return
     let vigente = true
     proporcionFoto(url).then(r => {
       if (!vigente || !r) return
-      setAnchoFoto(Math.round(Math.min(ANCHO_FOTO_MAX, Math.max(ANCHO_FOTO_MIN, alto * r))))
+      setAnchoFoto(anchoDeFoto(alto, r))
     })
     return () => { vigente = false }
-  }, [url, alto, activo])
+  }, [url, alto, activo, pedir])
   return (activo && url && anchoFoto) ? anchoFoto : anchoBase
 }
 
@@ -838,7 +852,7 @@ const Lomo = memo(function Lomo({ entry, onAbrir, volando = false, sinPrisa = fa
   // la imagen (ver generarLomo.js).
   const tieneLomoPropio = !!libro.spine_url
   const esFoto = tieneLomoPropio && libro.spine_custom
-  const anchoEfectivo = usarAnchoLomo(libro.spine_url, ancho, alto, conContenido && esFoto)
+  const anchoEfectivo = usarAnchoLomo(libro.spine_url, ancho, alto, esFoto, conContenido)
   // El color de la portada llega después (hay que cargarla y leerla), así que
   // el lomo nace con su color de reserva y cambia al de verdad en cuanto está.
   // Con una foto de verdad no hace falta: no hay texto al que decidirle la

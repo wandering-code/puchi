@@ -14,7 +14,7 @@ import {
 } from '../../ui/icons'
 import HojaFiltros from './HojaFiltros'
 import AnadirLibro from './AnadirLibro'
-import Lomos from './Lomos'
+import Lomos, { ALTO_FILA as ALTO_BALDA } from './Lomos'
 import { precargarColores } from './colorPortada'
 import { precargarProporciones } from './proporcionLomo'
 import { generarYSubirLomo } from './generarLomo'
@@ -59,7 +59,10 @@ export default function Luniteca() {
   // Cómo se separan las secciones: se está probando cuál gusta (ver separacion.jsx).
   const [separacion] = usarSeparacion()
   // La cabecera con panel, si está puesta (prueba, ver panel.jsx).
-  const panel = usarPanel(shelf !== null)
+  // Con `true` desde el primer render: mientras carga se pinta la misma
+  // cabecera (ver más abajo), así que la raíz ya existe y el fondo del rebote
+  // tiene que estar puesto desde el principio, no cambiar al llegar los datos.
+  const panel = usarPanel(true)
   const desdeTitulos = panel.desdeTitulos
 
   const cargar = useCallback(async () => {
@@ -304,7 +307,12 @@ export default function Luniteca() {
     })
   }
 
-  if (shelf === null) return <Cargando />
+  // Mientras carga se pinta LA MISMA pantalla, no un esqueleto aparte: la
+  // cabecera, las cifras y la barra con su altura final desde el primer
+  // fotograma, y las secciones con su caja. Antes era una rejilla de nueve
+  // portadas que no se parecía en nada, y al llegar los datos se recolocaba
+  // la pantalla entera (medido con capturas, a 440 ms de cada apertura).
+  const cargando = shelf === null
 
   return (
     <div ref={panel.raiz} className={panel.claseRaiz}>
@@ -312,11 +320,13 @@ export default function Luniteca() {
         <LunaDelPanel conPanel={panel.conPanel} />
         <h2 className="relative font-display text-[1.75rem] font-bold tracking-[-0.02em]">Luniteca</h2>
         <p className="relative mt-1 text-sm text-ink-dim">
-          {grupos.vacia
-            ? 'Tu estantería está vacía'
-            : `${shelf.length} ${shelf.length === 1 ? 'libro' : 'libros'} en tu estantería`}
+          {cargando
+            ? '\u00a0'
+            : grupos.vacia
+              ? 'Tu estantería está vacía'
+              : `${shelf.length} ${shelf.length === 1 ? 'libro' : 'libros'} en tu estantería`}
         </p>
-        {!grupos.vacia && <Cifras shelf={shelf} onIr={irASeccion} />}
+        {cargando ? <CifrasCargando /> : !grupos.vacia && <Cifras shelf={shelf} onIr={irASeccion} />}
       </header>
 
       <Herramientas
@@ -331,20 +341,25 @@ export default function Luniteca() {
 
       {error && <p className="mt-4 text-sm text-danger">{error}</p>}
 
-      {grupos.vacia && !error && (
+      {!cargando && grupos.vacia && !error && (
         <Aviso
           titulo="Todavía no hay nada aquí"
           texto="Toca el + de arriba para buscar un libro y añadirlo. También aparecen aquí los que añadas desde la Puchi actual."
         />
       )}
 
-      {grupos.ningunoVisible && (
+      {!cargando && grupos.ningunoVisible && (
         <Aviso
           titulo="Ningún libro coincide"
           texto="Prueba a quitar algún filtro o a cambiar la búsqueda."
         />
       )}
 
+      {cargando ? (
+        <div className={`mt-5 ${huecoEntreSecciones(separacion)}`}>
+          <SeccionCargando variante={separacion} desde={desdeTitulos} vista={vista} />
+        </div>
+      ) : (
       <div className={`mt-5 ${huecoEntreSecciones(separacion)}`}>
         {grupos.reading.length > 0 && (
           <CajaSeccion variante={separacion} estado="reading">
@@ -419,6 +434,7 @@ export default function Luniteca() {
           generosDeAutor={generosDeAutor}
         />
       </div>
+      )}
 
       {/* La estantería va con él: los modos que traen muchos libros de golpe
           (escáner e importación) la necesitan para avisar de lo que ya tienes
@@ -431,7 +447,7 @@ export default function Luniteca() {
             onCerrar={hojaAnadir.cerrar}
             onAnadido={libroAnadido}
             onImportado={cargar}
-            estanteria={shelf}
+            estanteria={shelf ?? []}
           />
         )}
       </AnimatePresence>
@@ -475,16 +491,54 @@ export default function Luniteca() {
   )
 }
 
-function Cargando() {
+// Lo que ocupa el sitio de las cifras mientras carga: pastillas con la misma
+// caja que las de verdad (h-8, mismo borde y sombra), vacías. Así la cabecera
+// mide lo mismo antes y después.
+function CifrasCargando() {
   return (
-    <div className="py-6">
-      <div className="h-8 w-40 animate-pulse rounded-md bg-surface-2" />
-      <div className="mt-6 grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-6">
-        {Array.from({ length: 9 }).map((_, i) => (
-          <div key={i} className="aspect-[2/3] animate-pulse rounded-md bg-surface-2" />
-        ))}
-      </div>
+    <div className="mt-3 flex flex-wrap gap-1.5" aria-hidden>
+      {[92, 96, 104].map(ancho => (
+        <span key={ancho} className="inline-flex h-8 rounded-full border border-line bg-surface sombra-pastilla" style={{ width: ancho }} />
+      ))}
     </div>
+  )
+}
+
+// La primera sección mientras carga: su caja y su título de verdad, con el
+// alto de lo que va dentro según la vista. Casi siempre es «Leyendo».
+export function SeccionCargando({ variante, desde, vista, label = 'Leyendo', estado = 'reading' }) {
+  const [comoLaVista] = usarLeyendoComoLaVista()
+  const forma = estado !== 'reading' || comoLaVista ? vista : 'tarjetas'
+  return (
+    <CajaSeccion variante={variante} estado={estado}>
+      <TituloSeccion variante={variante} desde={desde} label={label} cuenta={'\u00a0'} estado={estado} />
+      <div className="mt-3" aria-hidden>
+        {forma === 'lomos' ? (
+          // Una balda vacía: el mismo alto que una fila de lomos.
+          <div style={{ height: ALTO_BALDA }} />
+        ) : forma === 'list' ? (
+          <div className="divide-y divide-[color:var(--color-line)]">
+            {[0, 1, 2].map(i => (
+              <div key={i} className="flex items-center gap-3 py-2.5">
+                <div className="aspect-[2/3] w-10 shrink-0 rounded-md bg-surface-2" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-[15px] leading-tight">&nbsp;</p>
+                  <p className="mt-0.5 text-xs">&nbsp;</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : forma === 'tarjetas' ? (
+          <div className="space-y-2">
+            {[0, 1].map(i => <div key={i} className="h-[104px] rounded-xl2 bg-surface-2/60" />)}
+          </div>
+        ) : (
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(68px,1fr))] gap-3">
+            {Array.from({ length: 5 }).map((_, i) => <div key={i} className="aspect-[2/3] rounded-md bg-surface-2" />)}
+          </div>
+        )}
+      </div>
+    </CajaSeccion>
   )
 }
 

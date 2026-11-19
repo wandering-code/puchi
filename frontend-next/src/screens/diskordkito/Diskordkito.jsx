@@ -104,7 +104,7 @@ export default function Diskordkito() {
   }, [abrir, abrirDM])
 
   if (!player?.club_member) return <SinAcceso />
-  if (!cargado) return <Cargando />
+  if (!cargado) return <Cargando ancha={ancha} />
 
   const conectados = otros.filter(p => estaOnline(p.id)).length
 
@@ -290,15 +290,52 @@ function cuando(iso) {
   return fecha.toLocaleDateString('es', { day: 'numeric', month: 'short' })
 }
 
-function Cargando() {
-  return (
-    <div className="py-6">
-      <div className="h-8 w-48 animate-pulse rounded-md bg-surface-2" />
-      <div className="mt-6 space-y-2">
-        {Array.from({ length: 5 }).map((_, i) => (
-          <div key={i} className="h-16 animate-pulse rounded-xl2 bg-surface-2" />
-        ))}
+// Mientras llega el chat: la misma cabecera (título de verdad y la línea de
+// conectados con un espacio duro) y filas con la forma de las de verdad
+// (FILA, avatar de 44px, dos líneas). Antes eran bloques de otro alto y con
+// otro hueco, y al llegar los datos se recolocaba todo.
+function Cargando({ ancha }) {
+  const filas = (
+    <div aria-hidden>
+      <FilaCargando />
+      <div className="mt-1">
+        {[0, 1, 2, 3].map(i => <FilaCargando key={i} />)}
       </div>
+    </div>
+  )
+  if (ancha) {
+    return (
+      <div className="flex h-full min-h-0 flex-col py-5">
+        <header className="mx-auto mb-3 w-full max-w-[1180px] shrink-0">
+          <h2 className="font-display text-[1.6rem] font-bold leading-none tracking-[-0.02em]">Diskordkito</h2>
+          <p className="mt-1 text-sm text-ink-dim">&nbsp;</p>
+        </header>
+        <div className="mx-auto grid min-h-0 w-full max-w-[1180px] flex-1 grid-cols-[minmax(260px,320px)_1fr] gap-4">
+          <div className="flex min-h-0 flex-col">{filas}</div>
+          <PanelVacio />
+        </div>
+      </div>
+    )
+  }
+  return (
+    <div className="flex h-full min-h-0 flex-col py-6">
+      <header className="mb-4 shrink-0">
+        <h2 className="font-display text-[1.75rem] font-bold tracking-[-0.02em]">Diskordkito</h2>
+        <p className="mt-1 text-sm text-ink-dim">&nbsp;</p>
+      </header>
+      {filas}
+    </div>
+  )
+}
+
+function FilaCargando() {
+  return (
+    <div className={FILA}>
+      <span className="h-11 w-11 shrink-0 animate-pulse rounded-full bg-surface-2" />
+      <span className="min-w-0 flex-1">
+        <span className="block"><span className="inline-block h-3 w-24 animate-pulse rounded bg-surface-2 align-middle" />&nbsp;</span>
+        <span className="mt-0.5 block text-xs"><span className="inline-block h-2.5 w-36 animate-pulse rounded bg-surface-2 align-middle" />&nbsp;</span>
+      </span>
     </div>
   )
 }
