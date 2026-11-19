@@ -6,6 +6,23 @@ import fs from 'fs'
 import { execSync } from 'child_process'
 import { resolve } from 'path'
 
+// Las imágenes de arranque de iOS (public/splash/, las genera
+// scripts/splash.py): un <link> por iPhone, cada uno con su media exacta. Sin
+// la que encaja con la pantalla, iOS abre la app instalada en blanco.
+const SPLASH = JSON.parse(fs.readFileSync(new URL('./scripts/splash-devices.json', import.meta.url), 'utf8'))
+const imagenesDeArranque = {
+  name: 'imagenes-de-arranque',
+  transformIndexHtml: () => SPLASH.dispositivos.map(([w, h, r]) => ({
+    tag: 'link',
+    attrs: {
+      rel: 'apple-touch-startup-image',
+      href: `/splash/launch-${w * r}x${h * r}.png`,
+      media: `(device-width: ${w}px) and (device-height: ${h}px) and (-webkit-device-pixel-ratio: ${r}) and (orientation: portrait)`,
+    },
+    injectTo: 'head',
+  })),
+}
+
 // Sello de versión, visible en Ajustes. Sirve para saber de un vistazo QUÉ
 // código está viendo un dispositivo: con el service worker de la PWA por medio,
 // un móvil puede quedarse en una versión vieja sin que se note, y entonces las
@@ -153,6 +170,7 @@ export default defineConfig(({ mode }) => {
         .replace('content="Puchi" />', 'content="Kokito" />')
         .replace('<title>Puchi</title>', '<title>Puchi · Kokito</title>'),
     },
+    imagenesDeArranque,
     selloEnCaliente,
     limpiezaDeCachés,
     react(),
@@ -164,7 +182,9 @@ export default defineConfig(({ mode }) => {
       // avisa (ver useUpdatePrompt en platform/pwa.js). Sin esto, iOS sigue
       // sirviendo de su caché el arranque de la app guardada en inicio,
       // aunque el servidor mande Cache-Control: no-cache.
-      includeAssets: ['icons/apple-touch-icon.png'],
+      // splash-logo.webp: el logo del splash de index.html; sin él en la
+      // caché, abrir la app sin red enseñaría el splash sin logo.
+      includeAssets: ['icons/apple-touch-icon.png', 'icons/splash-logo.webp'],
       manifest: {
         // /kokito es otra app instalable para el sistema operativo: su propio
         // icono en la pantalla de inicio, que no pisa el de la Puchi normal.
@@ -181,8 +201,9 @@ export default defineConfig(({ mode }) => {
         start_url: BASE,
         display: 'standalone',
         orientation: 'portrait',
-        background_color: '#f7f3ee',
-        theme_color: '#f7f3ee',
+        // El --color-bg del tema claro (index.css), como el splash.
+        background_color: '#f5f0e7',
+        theme_color: '#f5f0e7',
         lang: 'es',
         icons: [
           { src: 'icons/icon-192.png', sizes: '192x192', type: 'image/png' },
@@ -195,6 +216,9 @@ export default defineConfig(({ mode }) => {
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
+        // Las imágenes de arranque las pide iOS al instalar la app, no la
+        // app: precachearlas serían ~160 KB descargados sin usarse.
+        globIgnores: ['splash/**'],
         // Las notificaciones push de los avisos de audiolibros (#69): el
         // service worker que genera Workbox carga además public/push-sw.js.
         // En las dos desde que los audiolibros pasaron a producción.
