@@ -53,10 +53,10 @@ export default function HojaInferior({ abierta, titulo, onCerrar, children, pie 
   return createPortal(
     <>
           <motion.div
-            // Mismo velo difuminado que la pantalla completa (ver
-            // PantallaInferior): lo de detrás se reconoce sin competir con lo
-            // que hay delante.
-            className="fixed inset-0 z-[60] bg-velo backdrop-blur-[6px]"
+            // Mismo velo que la pantalla completa (ver PantallaInferior): lo
+            // de detrás se reconoce sin competir con lo que hay delante. Sin
+            // backdrop-blur, por lo mismo que allí.
+            className="fixed inset-0 z-[60] bg-velo"
             initial={false}
             animate={{ opacity: abierta ? 1 : 0 }}
             transition={{ duration: 0.2 }}

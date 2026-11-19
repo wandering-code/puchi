@@ -112,7 +112,7 @@ function Tarjeta({ aviso, onCerrar }) {
       dragConstraints={{ top: 0, bottom: 0 }}
       dragElastic={{ top: 0.5, bottom: 0 }}
       onDragEnd={(_, info) => { if (info.offset.y < -40 || info.velocity.y < -400) onCerrar() }}
-      className="pointer-events-auto relative mt-2 w-full max-w-md overflow-hidden rounded-xl3 border border-line bg-surface/95 sombra-panel backdrop-blur-xl"
+      className="pointer-events-auto relative mt-2 w-full max-w-md overflow-hidden rounded-xl3 border border-line bg-surface/95 sombra-panel"
       style={{
         // Teñida del color de quien la manda: reconocer de quién es un aviso
         // sin leer el nombre es la mitad de para qué sirve.

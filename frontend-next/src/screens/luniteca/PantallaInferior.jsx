@@ -158,10 +158,12 @@ export default function PantallaInferior({
 
   return createPortal(
     <>
-      {/* La franja que queda a la vista, difuminada: lo de detrás se reconoce
+      {/* La franja que queda a la vista, oscurecida: lo de detrás se reconoce
           pero no compite con lo que hay delante. */}
       <motion.div
-        className="fixed inset-0 bg-velo backdrop-blur-[6px]"
+        // Sin backdrop-blur: bajo el velo oscuro casi no se notaba, y en el
+        // iPhone desenfocar la pantalla entera cuesta GPU en cada fotograma.
+        className="fixed inset-0 bg-velo"
         initial={false}
         animate={{ opacity: abierta && !estreno ? 1 : 0 }}
         exit={{ opacity: 0 }}
