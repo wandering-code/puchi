@@ -6,7 +6,7 @@ import { progressPct } from './shelf'
 import { colorConocido, colorDePortada } from './colorPortada'
 import { proporcionConocida, proporcionFoto } from './proporcionLomo'
 import { imagenLista as imagenYaLista, imagenRota, precargarImagen, precargarImagenes, usarImagenLista } from './imagenesListas'
-import { alCargarFuentes, anchoDeRenglonPorPunto, anchoPorPunto, fuenteLista } from './medirTexto'
+import { alCargarFuentes, anchoDeRenglonPorPunto, anchoPorPunto, cargarFuente, fuenteLista } from './medirTexto'
 
 // Vista de estantería: los libros de canto, como en una balda de verdad.
 //
@@ -611,6 +611,36 @@ const TANDA = 60
 const PRIMEROS_JUNTOS = 24
 const ESPERA_MAX = 1500
 
+// El lote de arranque compartido por todas las baldas que se montan en el
+// mismo render (ver `arrancada` en Lomos): la primera que llega lo abre, las
+// demás se suman antes del siguiente fotograma, y todas se sueltan juntas
+// cuando está todo listo o, como mucho, a los ESPERA_MAX.
+//
+// Solo se espera a los PRIMEROS_JUNTOS primeros lomos contando todas las
+// baldas en orden (lo que se ve al abrir): esperar también a las de más
+// abajo retrasaba la salida de las de arriba (medido: hasta un segundo).
+// `cupo` dice cuántos de los suyos puede sumar cada balda; las que llegan sin
+// cupo esperan igual y salen a la vez, pero sin hacer esperar a nadie.
+let lote = null
+function cupoDelLote() {
+  return lote ? lote.cupo : PRIMEROS_JUNTOS
+}
+function unirseAlLote(promesas, cuantos) {
+  if (!lote) {
+    let soltar
+    const nuevo = { promesas: [], cupo: PRIMEROS_JUNTOS, listo: new Promise(r => { soltar = r }) }
+    lote = nuevo
+    requestAnimationFrame(() => {
+      if (lote === nuevo) lote = null
+      const tope = new Promise(r => setTimeout(r, ESPERA_MAX))
+      Promise.race([Promise.all(nuevo.promesas.map(p => Promise.resolve(p).catch(() => {}))), tope]).then(() => soltar())
+    })
+  }
+  lote.promesas.push(...promesas)
+  lote.cupo = Math.max(0, lote.cupo - cuantos)
+  return lote.listo
+}
+
 // ¿Algunos libros torcidos (uno de cada siete, ver medidas) o todos rectos?
 // Lo elige cada uno en Ajustes y va con su cuenta.
 export function usarLomosTorcidos() {
@@ -646,22 +676,34 @@ export default function Lomos({ entries, onAbrir, fueraId = null, generosDeAutor
     precargarImagenes(entries.map(e => e.book?.cover_url))
   }, [entries])
 
-  // Al abrir, la primera tanda de lomos espera a tener sus imágenes (y el
-  // color de su portada) para salir TODA A LA VEZ, en vez de ir apareciendo
-  // uno a uno. Con un tope: si la red va lenta, más vale ir enseñando que
-  // dejar la balda vacía.
-  const [arrancada, setArrancada] = useState(() =>
-    entries.slice(0, PRIMEROS_JUNTOS).every(e => imagenYaLista(e.book?.spine_url) && (e.book?.spine_custom || !e.book?.cover_url || colorConocido(e.book.cover_url) !== undefined)))
+  // Al abrir, la primera tanda de lomos espera a tenerlo TODO —su imagen, el
+  // color de su portada y la letra de su título— para salir entera a la vez,
+  // en vez de ir apareciendo por partes. Y no solo la de esta balda: todas las
+  // baldas que se montan juntas (Leyendo, cada año, Por leer…) se suman al
+  // mismo lote y salen en el mismo fotograma. Antes la letra no entraba en la
+  // espera y cada balda esperaba por su cuenta: medido, la balda salía en dos
+  // tandas separadas ~80ms, cada una con su fundido. Con un tope: si la red va
+  // lenta, más vale ir enseñando que dejar la balda vacía.
+  const primerosListos = () => entries.slice(0, PRIMEROS_JUNTOS).every(e => {
+    const foto = !!e.book?.spine_custom
+    return imagenYaLista(e.book?.spine_url)
+      && (foto || !e.book?.cover_url || colorConocido(e.book.cover_url) !== undefined)
+      && (foto || fuenteLista(tipografiaDe(e, generosDeAutor?.get(claveAutor(e.book?.author)) || null)))
+      && (!foto || !e.book?.spine_url || proporcionConocida(e.book.spine_url) != null)
+  })
+  const [arrancada, setArrancada] = useState(primerosListos)
   useEffect(() => {
     if (arrancada) return
     let vivo = true
-    const tope = setTimeout(() => { if (vivo) setArrancada(true) }, ESPERA_MAX)
-    const primeros = entries.slice(0, PRIMEROS_JUNTOS)
-    Promise.all([
+    const primeros = entries.slice(0, cupoDelLote())
+    unirseAlLote([
       ...primeros.map(e => precargarImagen(e.book?.spine_url, { urgente: true })),
       ...primeros.filter(e => !e.book?.spine_custom).map(e => colorDePortada(e.book?.cover_url, { urgente: true })),
-    ]).then(() => { if (vivo) setArrancada(true) })
-    return () => { vivo = false; clearTimeout(tope) }
+      ...primeros.filter(e => !e.book?.spine_custom).map(e => cargarFuente(tipografiaDe(e, generosDeAutor?.get(claveAutor(e.book?.author)) || null))),
+      // Los de foto, además, su forma: sin ella el lomo no se llena (formaLista).
+      ...primeros.filter(e => e.book?.spine_custom && e.book?.spine_url).map(e => proporcionFoto(e.book.spine_url)),
+    ], primeros.length).then(() => { if (vivo) setArrancada(true) })
+    return () => { vivo = false }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -859,8 +901,14 @@ const Lomo = memo(function Lomo({ entry, onAbrir, volando = false, sinPrisa = fa
   // tinta ni relieve al que teñir.
   // Si ya se sabe (guardado de otra vez), se toma al montar, sin esperar.
   const conocido = esFoto ? null : colorConocido(libro.cover_url)
-  const [paleta, setPaleta] = useState(conocido || null)
-  const [paletaLista, setPaletaLista] = useState(esFoto || !libro.cover_url || conocido !== undefined)
+  const [paletaLeida, setPaleta] = useState(conocido || null)
+  const [paletaLeidaLista, setPaletaLista] = useState(esFoto || !libro.cover_url || conocido !== undefined)
+  // Lo que ya se sepa en este render manda: si la espera de la balda acaba de
+  // leer este color, el lomo lo usa YA y no un render después, cuando
+  // resuelve su propio efecto. Eso desfasaba unos lomos de otros al soltarse
+  // la primera tanda.
+  const paleta = paletaLeida || conocido || null
+  const paletaLista = paletaLeidaLista || esFoto || !libro.cover_url || conocido !== undefined
   useEffect(() => {
     // Solo el que se va a llenar: leer la portada cuesta cargarla y mirarla
     // píxel a píxel, y con la balda entera montada eran trescientas a la vez.
