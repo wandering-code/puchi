@@ -629,3 +629,49 @@
     inset 0 1px 0 rgb(255 255 255 / 0.08),
     0 14px 34px -8px rgb(0 0 0 / 0.6);
 }
+
+
+/* ── Aspecto: acento, textura y portadas ────────────────────────────────
+   Los elige cada uno en Ajustes y van con su cuenta; los pone platform/tema.js
+   (aplicarAspecto) en <html>, antes del primer pintado. Al final del archivo a
+   propósito: tienen la misma especificidad que los bloques de tema y tienen
+   que ganarles. El terracota es el de por defecto y vive en @theme. Los
+   valores, con su contraste comprobado, están en ACENTOS (tema.js). */
+:root[data-acento="ocre"] {
+  --color-accent: #8a6118; --color-accent-soft: rgba(138,97,24,0.12); --color-accent-line: rgba(138,97,24,0.35);
+}
+:root[data-tema="oscuro"][data-acento="ocre"] {
+  --color-accent: #d9a54f; --color-accent-soft: rgba(217,165,79,0.16); --color-accent-line: rgba(217,165,79,0.42);
+}
+:root[data-acento="rosa"] {
+  --color-accent: #a8455a; --color-accent-soft: rgba(168,69,90,0.12); --color-accent-line: rgba(168,69,90,0.35);
+}
+:root[data-tema="oscuro"][data-acento="rosa"] {
+  --color-accent: #e58a9b; --color-accent-soft: rgba(229,138,155,0.16); --color-accent-line: rgba(229,138,155,0.42);
+}
+:root[data-acento="ciruela"] {
+  --color-accent: #80496d; --color-accent-soft: rgba(128,73,109,0.12); --color-accent-line: rgba(128,73,109,0.35);
+}
+:root[data-tema="oscuro"][data-acento="ciruela"] {
+  --color-accent: #c98fb6; --color-accent-soft: rgba(201,143,182,0.16); --color-accent-line: rgba(201,143,182,0.42);
+}
+:root[data-acento="azul"] {
+  --color-accent: #3e5f8a; --color-accent-soft: rgba(62,95,138,0.12); --color-accent-line: rgba(62,95,138,0.35);
+}
+:root[data-tema="oscuro"][data-acento="azul"] {
+  --color-accent: #86a8d4; --color-accent-soft: rgba(134,168,212,0.16); --color-accent-line: rgba(134,168,212,0.42);
+}
+:root[data-acento="pino"] {
+  --color-accent: #2f6a6a; --color-accent-soft: rgba(47,106,106,0.12); --color-accent-line: rgba(47,106,106,0.35);
+}
+:root[data-tema="oscuro"][data-acento="pino"] {
+  --color-accent: #6fb3ae; --color-accent-soft: rgba(111,179,174,0.16); --color-accent-line: rgba(111,179,174,0.42);
+}
+/* Sin el grano del papel: el fondo, liso. */
+:root[data-textura="no"] { --textura-papel: none; }
+
+/* El ancho mínimo de cada portada en la cuadrícula (ver Coleccion): con 68px
+   salen 4 columnas en casi cualquier móvil; pequeñas, 5; grandes, 3. */
+:root { --portada-min: 68px; }
+:root[data-portadas="pequenas"] { --portada-min: 56px; }
+:root[data-portadas="grandes"]  { --portada-min: 92px; }

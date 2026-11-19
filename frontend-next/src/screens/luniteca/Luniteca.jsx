@@ -537,7 +537,7 @@ export function SeccionCargando({ variante, desde, vista, label = 'Leyendo', est
             {[0, 1].map(i => <div key={i} className="h-[104px] rounded-xl2 bg-surface-2/60" />)}
           </div>
         ) : (
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(68px,1fr))] gap-3">
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(var(--portada-min),1fr))] gap-3">
             {Array.from({ length: 5 }).map((_, i) => <div key={i} className="aspect-[2/3] rounded-md bg-surface-2" />)}
           </div>
         )}
@@ -848,7 +848,7 @@ export function Herramientas({
 // leyendo, lo leído este año y lo pendiente. Cada una lleva a su sección. Se
 // cuenta sobre la estantería entera, no sobre lo filtrado: es el resumen de
 // tu estantería, no de la búsqueda.
-function Cifras({ shelf, onIr }) {
+export function Cifras({ shelf, onIr }) {
   const ano = String(new Date().getFullYear())
   const cifras = [
     { estado: 'reading', n: shelf.filter(e => e.status === 'reading' || e.status === 'rereading').length, texto: 'leyendo' },
@@ -1030,7 +1030,7 @@ export const Coleccion = memo(function Coleccion({ entries, vista, onAbrir, fuer
   // que la app se vea igual en cualquier móvil en vez de depender de si el
   // ancho llega justo al siguiente salto de columna.
   return (
-    <div className="grid grid-cols-[repeat(auto-fill,minmax(68px,1fr))] gap-3">
+    <div className="grid grid-cols-[repeat(auto-fill,minmax(var(--portada-min),1fr))] gap-3">
       {entries.map(e => <PortadaLibro key={e.id} entry={e} onAbrir={onAbrir} fuera={e.id === fueraId} progreso={progreso} />)}
     </div>
   )

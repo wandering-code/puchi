@@ -5,7 +5,7 @@ import './index.css'
 import App from './App'
 import { AuthProvider } from './platform/auth'
 import { PreferenciasProvider } from './platform/preferencias'
-import { aplicarTema, temaGuardado } from './platform/tema'
+import { ASPECTO, aplicarAspecto, aplicarTema, aspectoGuardado, temaGuardado } from './platform/tema'
 import { EVENTO_DE_TEMPORADA, aplicarEvento, decoracionGuardada } from './eventos'
 import { puedeVer } from './screens/secciones'
 
@@ -13,6 +13,8 @@ import { puedeVer } from './screens/secciones'
 // El que manda es el de la cuenta, pero esa tarda en llegar del servidor, así
 // que se arranca con la copia local y el proveedor lo corrige si no coincide.
 aplicarTema(temaGuardado())
+// Y el resto del aspecto (acento, textura, portadas), por lo mismo.
+for (const que of Object.keys(ASPECTO)) aplicarAspecto(que, aspectoGuardado(que))
 // Y la decoración de temporada (Halloween…), por lo mismo: que el splash y el
 // login ya salgan disfrazados, o sin disfrazar si alguien la apagó.
 if (EVENTO_DE_TEMPORADA) aplicarEvento(EVENTO_DE_TEMPORADA, decoracionGuardada(EVENTO_DE_TEMPORADA))

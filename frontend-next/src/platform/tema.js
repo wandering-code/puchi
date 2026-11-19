@@ -127,3 +127,43 @@ export function conCirculo(origen, gesto, aplicar) {
   const limpiar = () => { delete document.documentElement.dataset.transicion }
   transicion.finished.then(limpiar, limpiar)
 }
+
+// ── El resto del aspecto ───────────────────────────────────────────────────
+// Lo que no es el tema pero también se pinta desde :root: el color de acento,
+// el grano del papel y el tamaño de las portadas en la cuadrícula. Igual que
+// el tema: lo que manda es la cuenta (platform/preferencias, usarAspecto),
+// pero se guarda una copia local para ponerlo antes del primer pintado
+// (main.jsx) y que no se vea un instante el de por defecto.
+//
+// Los acentos: todos con más contraste que el terracota de siempre, en claro
+// y en oscuro, tanto como texto sobre la tarjeta como con el texto de un botón
+// encima (calculado con la fórmula WCAG). Ninguno es verde: el verde es el de
+// «leído», y la sección de «Leyendo» lleva el acento. Sus valores CSS viven en
+// index.css (:root[data-acento=...]); estos solo pintan las muestras.
+export const ACENTOS = [
+  { id: 'terracota', nombre: 'Terracota', claro: '#b5603c', oscuro: '#d97a4f' },
+  { id: 'ocre',      nombre: 'Ocre',      claro: '#8a6118', oscuro: '#d9a54f' },
+  { id: 'rosa',      nombre: 'Rosa',      claro: '#a8455a', oscuro: '#e58a9b' },
+  { id: 'ciruela',   nombre: 'Ciruela',   claro: '#80496d', oscuro: '#c98fb6' },
+  { id: 'azul',      nombre: 'Azul tinta', claro: '#3e5f8a', oscuro: '#86a8d4' },
+  { id: 'pino',      nombre: 'Pino',      claro: '#2f6a6a', oscuro: '#6fb3ae' },
+]
+
+export const ASPECTO = {
+  acento:   { clave: 'luni_acento',   valores: ACENTOS.map(a => a.id), porDefecto: 'terracota' },
+  textura:  { clave: 'luni_textura',  valores: ['si', 'no'], porDefecto: 'si' },
+  portadas: { clave: 'luni_portadas', valores: ['pequenas', 'normales', 'grandes'], porDefecto: 'normales' },
+}
+
+const valido = (que, v) => (ASPECTO[que].valores.includes(v) ? v : ASPECTO[que].porDefecto)
+
+export function aspectoGuardado(que) {
+  try { return valido(que, localStorage.getItem(ASPECTO[que].clave)) } catch { return ASPECTO[que].porDefecto }
+}
+
+export function aplicarAspecto(que, valor) {
+  const v = valido(que, valor)
+  document.documentElement.dataset[que] = v
+  try { localStorage.setItem(ASPECTO[que].clave, v) } catch { /* Safari en privado */ }
+  return v
+}

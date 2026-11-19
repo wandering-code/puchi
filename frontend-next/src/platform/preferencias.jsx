@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { api } from './api'
 import { useAuth } from './auth'
-import { aplicarTema, temaGuardado } from './tema'
+import { aplicarAspecto, aplicarTema, aspectoGuardado, temaGuardado } from './tema'
 
 // Los gustos de cada uno viajan con la CUENTA, no con el navegador.
 //
@@ -61,6 +61,13 @@ export function usarTema() {
   const [tema, poner] = usarPreferencia('tema', temaGuardado())
   useEffect(() => { aplicarTema(tema) }, [tema])
   return [tema, poner]
+}
+
+// Lo mismo para el resto del aspecto (acento, textura, portadas: ver tema.js).
+export function usarAspecto(que) {
+  const [valor, poner] = usarPreferencia(que, aspectoGuardado(que))
+  useEffect(() => { aplicarAspecto(que, valor) }, [que, valor])
+  return [valor, poner]
 }
 
 // Una preferencia suelta, con su valor por defecto. Se usa como useState.
