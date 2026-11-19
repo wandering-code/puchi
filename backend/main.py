@@ -4514,6 +4514,16 @@ async def websocket_endpoint(ws: WebSocket, token: str = Query(...), device_id: 
             await manager.send_to_device(player_id, device_id, elsewhere)
 
         while True:
+            # Soltar la conexión a la BBDD mientras se espera el siguiente
+            # mensaje (#110). La sesión de arriba se queda abierta toda la vida
+            # del socket, y una sesión que ya ha consultado algo retiene su
+            # conexión hasta que acaba la transacción: con 15 sockets abiertos
+            # (5 + 10 del pool) el backend entero se quedaba sin conexiones y
+            # dejaba de responder. Con esto, un socket quieto no retiene
+            # ninguna; cada mensaje que necesita la BBDD coge una y la suelta
+            # aquí, en la siguiente vuelta (también tras un `continue`). No
+            # deshace nada: lo que escribe (mensajes, leídos) ya hace su commit.
+            db.rollback()
             data = await ws.receive_json()
             msg_type = data.get("type")
 
