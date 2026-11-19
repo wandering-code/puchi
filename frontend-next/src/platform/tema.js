@@ -127,3 +127,63 @@ export function conCirculo(origen, gesto, aplicar) {
   const limpiar = () => { delete document.documentElement.dataset.transicion }
   transicion.finished.then(limpiar, limpiar)
 }
+
+// ── El resto del aspecto ───────────────────────────────────────────────────
+// Lo que no es el tema pero también se pinta desde :root: el color de acento,
+// el grano del papel y el tamaño de las portadas en la cuadrícula. Igual que
+// el tema: lo que manda es la cuenta (platform/preferencias, usarAspecto),
+// pero se guarda una copia local para ponerlo antes del primer pintado
+// (main.jsx) y que no se vea un instante el de por defecto.
+//
+// Los acentos: todos con más contraste que el terracota de siempre, en claro
+// y en oscuro, tanto como texto sobre la tarjeta como con el texto de un botón
+// encima (calculado con la fórmula WCAG). Ninguno es verde: el verde es el de
+// «leído», y la sección de «Leyendo» lleva el acento. Sus valores CSS viven en
+// index.css (:root[data-acento=...]); estos solo pintan las muestras.
+export const ACENTOS = [
+  { id: 'terracota', nombre: 'Terracota', claro: '#b5603c', oscuro: '#d97a4f' },
+  { id: 'ocre',      nombre: 'Ocre',      claro: '#8a6118', oscuro: '#d9a54f' },
+  { id: 'rosa',      nombre: 'Rosa',      claro: '#a8455a', oscuro: '#e58a9b' },
+  { id: 'ciruela',   nombre: 'Ciruela',   claro: '#80496d', oscuro: '#c98fb6' },
+  { id: 'azul',      nombre: 'Azul tinta', claro: '#3e5f8a', oscuro: '#86a8d4' },
+  { id: 'pino',      nombre: 'Pino',      claro: '#2f6a6a', oscuro: '#6fb3ae' },
+]
+
+// Los colores que puede llevar cada sección de la estantería (Leyendo,
+// Leídos, Por leer, Dropeados): el acento, los mismos seis de arriba y los
+// tres de siempre de los estados (verde, gris y rojo). Sus valores en cada
+// tema son variables --paleta-* de index.css.
+export const COLORES_SECCION = [
+  { id: 'acento', nombre: 'El de la app' },
+  ...ACENTOS.map(a => ({ id: a.id, nombre: a.nombre, claro: a.claro, oscuro: a.oscuro })),
+  { id: 'verde', nombre: 'Verde', claro: '#3f6b52', oscuro: '#6fae88' },
+  { id: 'gris',  nombre: 'Gris',  claro: '#9a9184', oscuro: '#8d8375' },
+  { id: 'rojo',  nombre: 'Rojo',  claro: '#a4432b', oscuro: '#e07a5f' },
+]
+const IDS_SECCION = COLORES_SECCION.map(c => c.id)
+
+export const ASPECTO = {
+  acento:   { clave: 'luni_acento',   valores: ACENTOS.map(a => a.id), porDefecto: 'terracota' },
+  textura:  { clave: 'luni_textura',  valores: ['si', 'no'], porDefecto: 'si' },
+  portadas: { clave: 'luni_portadas', valores: ['pequenas', 'normales', 'grandes'], porDefecto: 'normales' },
+  // El color de cada sección (data-color-reading, etc.). Por defecto, los de
+  // siempre: Leyendo con el acento, Leídos en verde, Por leer en gris y
+  // Dropeados en rojo.
+  colorReading: { clave: 'luni_color_reading', valores: IDS_SECCION, porDefecto: 'acento' },
+  colorRead:    { clave: 'luni_color_read',    valores: IDS_SECCION, porDefecto: 'verde' },
+  colorWant:    { clave: 'luni_color_want',    valores: IDS_SECCION, porDefecto: 'gris' },
+  colorDropped: { clave: 'luni_color_dropped', valores: IDS_SECCION, porDefecto: 'rojo' },
+}
+
+const valido = (que, v) => (ASPECTO[que].valores.includes(v) ? v : ASPECTO[que].porDefecto)
+
+export function aspectoGuardado(que) {
+  try { return valido(que, localStorage.getItem(ASPECTO[que].clave)) } catch { return ASPECTO[que].porDefecto }
+}
+
+export function aplicarAspecto(que, valor) {
+  const v = valido(que, valor)
+  document.documentElement.dataset[que] = v
+  try { localStorage.setItem(ASPECTO[que].clave, v) } catch { /* Safari en privado */ }
+  return v
+}

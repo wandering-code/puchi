@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'motion/react'
 import { SesionAlSalir, useAuth } from './platform/auth'
 import { useMobileViewport } from './platform/viewport'
 import { useLiveConnection } from './platform/live'
-import { usarTema } from './platform/preferencias'
+import { usarAspecto, usarTema } from './platform/preferencias'
 import { usarEventoEnDocumento } from './eventos/usarEvento'
 import { AvisosProvider } from './platform/avisos'
 import { ChatProvider } from './platform/chat'
@@ -50,6 +50,14 @@ export default function App() {
   // pantalla que lo cambia, entrar directamente a Luniteca dejaría el tema de
   // la copia local aunque en la cuenta hubiera otro.
   usarTema()
+  // Y el resto del aspecto (acento, textura, tamaño de portadas).
+  usarAspecto('acento')
+  usarAspecto('textura')
+  usarAspecto('portadas')
+  usarAspecto('colorReading')
+  usarAspecto('colorRead')
+  usarAspecto('colorWant')
+  usarAspecto('colorDropped')
   // Lo mismo con la decoración de temporada (src/eventos): va con la cuenta.
   usarEventoEnDocumento()
 

@@ -1,4 +1,4 @@
-import { createContext, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from 'react'
+import { Fragment, createContext, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { recordado, recordar } from '../../platform/memoria'
 import { useSearchParams } from 'react-router-dom'
 import { AnimatePresence, motion } from 'motion/react'
@@ -21,7 +21,7 @@ import { precargarProporciones } from './proporcionLomo'
 import { generarYSubirLomo } from './generarLomo'
 import { usarVuelo } from './usarVuelo'
 import { LunaDelPanel, usarPanel } from './panel'
-import { COLOR_DE_ESTADO, CajaSeccion, MarcoDeSeccion, TituloSeccion, huecoEntreSecciones, usarSeparacion } from './separacion'
+import { COLOR_DE_ESTADO, CajaSeccion, MarcoDeSeccion, SECCIONES_ESTANTERIA, TituloSeccion, huecoEntreSecciones, usarOrdenDeSecciones, usarSeparacion } from './separacion'
 import { LLEGADA, enCss } from '../../ui/curvas'
 import { useHoja } from './HojaInferior'
 import { useCapa } from '../../platform/capas'
@@ -66,6 +66,7 @@ export default function Luniteca() {
   const [anosPlegados, setAnosPlegados] = useState(() => new Set())
   // Cómo se separan las secciones: se está probando cuál gusta (ver separacion.jsx).
   const [separacion] = usarSeparacion()
+  const [secciones] = usarOrdenDeSecciones()
   // La cabecera con panel, si está puesta (prueba, ver panel.jsx).
   // Con `true` desde el primer render: mientras carga se pinta la misma
   // cabecera (ver más abajo), así que la raíz ya existe y el fondo del rebote
@@ -325,7 +326,7 @@ export default function Luniteca() {
               ? 'Tu estantería está vacía'
               : `${shelf.length} ${shelf.length === 1 ? 'libro' : 'libros'} en tu estantería`}
         </p>
-        {cargando ? <CifrasCargando /> : !grupos.vacia && <Cifras shelf={shelf} onIr={irASeccion} />}
+        {cargando ? <CifrasCargando /> : !grupos.vacia && <Cifras shelf={shelf} onIr={irASeccion} ocultas={secciones.ocultas} />}
       </header>
 
       <Herramientas
@@ -357,21 +358,29 @@ export default function Luniteca() {
       <ZonaDeVista vista={vista} cambiando={cambiando}>
       {cargando ? (
         <div className={`mt-5 ${huecoEntreSecciones(separacion)}`}>
-          <SeccionCargando variante={separacion} desde={desdeTitulos} vista={vista} />
+          {secciones.visibles.length > 0 && (
+            <SeccionCargando
+              variante={separacion} desde={desdeTitulos} vista={vista}
+              estado={secciones.visibles[0]}
+              label={SECCIONES_ESTANTERIA.find(x => x.id === secciones.visibles[0]).nombre}
+            />
+          )}
         </div>
       ) : (
       <div
         className={`mt-5 ${huecoEntreSecciones(separacion)} ${huboEspera.current ? 'entra' : ''}`}
         style={{ '--entra-desde': 'none', '--entra-dura': '220ms' }}
       >
-        {grupos.reading.length > 0 && (
+        {/* En el orden elegido en Ajustes, y sin las que se hayan ocultado. */}
+        {secciones.visibles.map(id => <Fragment key={id}>{{
+        reading: grupos.reading.length > 0 && (
           <CajaSeccion variante={separacion} estado="reading">
             <TituloSeccion variante={separacion} desde={desdeTitulos} label="Leyendo" cuenta={grupos.reading.length} estado="reading" />
             <LibrosLeyendo entries={grupos.reading} vista={vista} onAbrir={abrirLibro} fueraId={fueraId} generosDeAutor={generosDeAutor} />
           </CajaSeccion>
-        )}
+        ),
 
-        {grupos.readYearGroups.length > 0 && (
+        read: grupos.readYearGroups.length > 0 && (
           <CajaSeccion variante={separacion} estado="read">
             <TituloSeccion
               variante={separacion}
@@ -413,8 +422,9 @@ export default function Luniteca() {
               </div>
             </Plegable>
           </CajaSeccion>
-        )}
+        ),
 
+        want: (
         <SeccionPlegable
           variante={separacion}
           desde={desdeTitulos}
@@ -425,7 +435,9 @@ export default function Luniteca() {
           fueraId={fueraId}
           generosDeAutor={generosDeAutor}
         />
+        ),
 
+        dropped: (
         <SeccionPlegable
           variante={separacion}
           desde={desdeTitulos}
@@ -436,6 +448,8 @@ export default function Luniteca() {
           fueraId={fueraId}
           generosDeAutor={generosDeAutor}
         />
+        ),
+        }[id]}</Fragment>)}
       </div>
       )}
       </ZonaDeVista>
@@ -537,7 +551,7 @@ export function SeccionCargando({ variante, desde, vista, label = 'Leyendo', est
             {[0, 1].map(i => <div key={i} className="h-[104px] rounded-xl2 bg-surface-2/60" />)}
           </div>
         ) : (
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(68px,1fr))] gap-3">
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(var(--portada-min),1fr))] gap-3">
             {Array.from({ length: 5 }).map((_, i) => <div key={i} className="aspect-[2/3] rounded-md bg-surface-2" />)}
           </div>
         )}
@@ -848,13 +862,15 @@ export function Herramientas({
 // leyendo, lo leído este año y lo pendiente. Cada una lleva a su sección. Se
 // cuenta sobre la estantería entera, no sobre lo filtrado: es el resumen de
 // tu estantería, no de la búsqueda.
-function Cifras({ shelf, onIr }) {
+// `ocultas`: las secciones que se han quitado de la estantería en Ajustes; su
+// cifra no sale, porque tocarla no llevaría a ningún sitio.
+export function Cifras({ shelf, onIr, ocultas = [] }) {
   const ano = String(new Date().getFullYear())
   const cifras = [
     { estado: 'reading', n: shelf.filter(e => e.status === 'reading' || e.status === 'rereading').length, texto: 'leyendo' },
     { estado: 'read', n: shelf.filter(e => e.status === 'read' && e.finished_at?.startsWith(ano)).length, texto: `en ${ano}`, etiqueta: `leídos en ${ano}` },
     { estado: 'want', n: shelf.filter(e => e.status === 'want_to_read').length, texto: 'por leer' },
-  ].filter(c => c.n > 0)
+  ].filter(c => c.n > 0 && !ocultas.includes(c.estado))
   if (!cifras.length) return null
   return (
     <div className="mt-3 flex flex-wrap gap-1.5">
@@ -1030,7 +1046,7 @@ export const Coleccion = memo(function Coleccion({ entries, vista, onAbrir, fuer
   // que la app se vea igual en cualquier móvil en vez de depender de si el
   // ancho llega justo al siguiente salto de columna.
   return (
-    <div className="grid grid-cols-[repeat(auto-fill,minmax(68px,1fr))] gap-3">
+    <div className="grid grid-cols-[repeat(auto-fill,minmax(var(--portada-min),1fr))] gap-3">
       {entries.map(e => <PortadaLibro key={e.id} entry={e} onAbrir={onAbrir} fuera={e.id === fueraId} progreso={progreso} />)}
     </div>
   )

@@ -629,3 +629,106 @@
     inset 0 1px 0 rgb(255 255 255 / 0.08),
     0 14px 34px -8px rgb(0 0 0 / 0.6);
 }
+
+
+/* ── Aspecto: acento, textura y portadas ────────────────────────────────
+   Los elige cada uno en Ajustes y van con su cuenta; los pone platform/tema.js
+   (aplicarAspecto) en <html>, antes del primer pintado. Al final del archivo a
+   propósito: tienen la misma especificidad que los bloques de tema y tienen
+   que ganarles. El terracota es el de por defecto y vive en @theme. Los
+   valores, con su contraste comprobado, están en ACENTOS (tema.js). */
+:root[data-acento="ocre"] {
+  --color-accent: #8a6118; --color-accent-soft: rgba(138,97,24,0.12); --color-accent-line: rgba(138,97,24,0.35);
+}
+:root[data-tema="oscuro"][data-acento="ocre"] {
+  --color-accent: #d9a54f; --color-accent-soft: rgba(217,165,79,0.16); --color-accent-line: rgba(217,165,79,0.42);
+}
+:root[data-acento="rosa"] {
+  --color-accent: #a8455a; --color-accent-soft: rgba(168,69,90,0.12); --color-accent-line: rgba(168,69,90,0.35);
+}
+:root[data-tema="oscuro"][data-acento="rosa"] {
+  --color-accent: #e58a9b; --color-accent-soft: rgba(229,138,155,0.16); --color-accent-line: rgba(229,138,155,0.42);
+}
+:root[data-acento="ciruela"] {
+  --color-accent: #80496d; --color-accent-soft: rgba(128,73,109,0.12); --color-accent-line: rgba(128,73,109,0.35);
+}
+:root[data-tema="oscuro"][data-acento="ciruela"] {
+  --color-accent: #c98fb6; --color-accent-soft: rgba(201,143,182,0.16); --color-accent-line: rgba(201,143,182,0.42);
+}
+:root[data-acento="azul"] {
+  --color-accent: #3e5f8a; --color-accent-soft: rgba(62,95,138,0.12); --color-accent-line: rgba(62,95,138,0.35);
+}
+:root[data-tema="oscuro"][data-acento="azul"] {
+  --color-accent: #86a8d4; --color-accent-soft: rgba(134,168,212,0.16); --color-accent-line: rgba(134,168,212,0.42);
+}
+:root[data-acento="pino"] {
+  --color-accent: #2f6a6a; --color-accent-soft: rgba(47,106,106,0.12); --color-accent-line: rgba(47,106,106,0.35);
+}
+:root[data-tema="oscuro"][data-acento="pino"] {
+  --color-accent: #6fb3ae; --color-accent-soft: rgba(111,179,174,0.16); --color-accent-line: rgba(111,179,174,0.42);
+}
+/* Sin el grano del papel: el fondo, liso. */
+:root[data-textura="no"] { --textura-papel: none; }
+
+/* El ancho mínimo de cada portada en la cuadrícula (ver Coleccion): con 68px
+   salen 4 columnas en casi cualquier móvil; pequeñas, 5; grandes, 3. */
+:root { --portada-min: 68px; }
+:root[data-portadas="pequenas"] { --portada-min: 56px; }
+:root[data-portadas="grandes"]  { --portada-min: 92px; }
+
+/* ── Colores de cada sección ─────────────────────────────────────────────
+   La paleta entre la que elige cada sección (COLORES_SECCION en tema.js), en
+   claro y en oscuro, y qué color lleva cada una (data-color-reading… en
+   <html>, puesto antes del primer pintado). COLOR_DE_ESTADO (separacion.jsx)
+   lee las --color-seccion-*, así que la estantería no sabe nada de esto. */
+:root {
+  --paleta-terracota: #b5603c; --paleta-ocre: #8a6118; --paleta-rosa: #a8455a; --paleta-ciruela: #80496d; --paleta-azul: #3e5f8a; --paleta-pino: #2f6a6a; --paleta-verde: #3f6b52; --paleta-gris: #9a9184; --paleta-rojo: #a4432b;
+  --paleta-acento: var(--color-accent);
+  --color-seccion-reading: var(--color-accent);
+  --color-seccion-read: var(--color-read);
+  --color-seccion-want: var(--color-want);
+  --color-seccion-dropped: var(--color-danger);
+}
+:root[data-tema="oscuro"] {
+  --paleta-terracota: #d97a4f; --paleta-ocre: #d9a54f; --paleta-rosa: #e58a9b; --paleta-ciruela: #c98fb6; --paleta-azul: #86a8d4; --paleta-pino: #6fb3ae; --paleta-verde: #6fae88; --paleta-gris: #8d8375; --paleta-rojo: #e07a5f;
+}
+:root[data-color-reading="acento"] { --color-seccion-reading: var(--paleta-acento); }
+:root[data-color-reading="terracota"] { --color-seccion-reading: var(--paleta-terracota); }
+:root[data-color-reading="ocre"] { --color-seccion-reading: var(--paleta-ocre); }
+:root[data-color-reading="rosa"] { --color-seccion-reading: var(--paleta-rosa); }
+:root[data-color-reading="ciruela"] { --color-seccion-reading: var(--paleta-ciruela); }
+:root[data-color-reading="azul"] { --color-seccion-reading: var(--paleta-azul); }
+:root[data-color-reading="pino"] { --color-seccion-reading: var(--paleta-pino); }
+:root[data-color-reading="verde"] { --color-seccion-reading: var(--paleta-verde); }
+:root[data-color-reading="gris"] { --color-seccion-reading: var(--paleta-gris); }
+:root[data-color-reading="rojo"] { --color-seccion-reading: var(--paleta-rojo); }
+:root[data-color-read="acento"] { --color-seccion-read: var(--paleta-acento); }
+:root[data-color-read="terracota"] { --color-seccion-read: var(--paleta-terracota); }
+:root[data-color-read="ocre"] { --color-seccion-read: var(--paleta-ocre); }
+:root[data-color-read="rosa"] { --color-seccion-read: var(--paleta-rosa); }
+:root[data-color-read="ciruela"] { --color-seccion-read: var(--paleta-ciruela); }
+:root[data-color-read="azul"] { --color-seccion-read: var(--paleta-azul); }
+:root[data-color-read="pino"] { --color-seccion-read: var(--paleta-pino); }
+:root[data-color-read="verde"] { --color-seccion-read: var(--paleta-verde); }
+:root[data-color-read="gris"] { --color-seccion-read: var(--paleta-gris); }
+:root[data-color-read="rojo"] { --color-seccion-read: var(--paleta-rojo); }
+:root[data-color-want="acento"] { --color-seccion-want: var(--paleta-acento); }
+:root[data-color-want="terracota"] { --color-seccion-want: var(--paleta-terracota); }
+:root[data-color-want="ocre"] { --color-seccion-want: var(--paleta-ocre); }
+:root[data-color-want="rosa"] { --color-seccion-want: var(--paleta-rosa); }
+:root[data-color-want="ciruela"] { --color-seccion-want: var(--paleta-ciruela); }
+:root[data-color-want="azul"] { --color-seccion-want: var(--paleta-azul); }
+:root[data-color-want="pino"] { --color-seccion-want: var(--paleta-pino); }
+:root[data-color-want="verde"] { --color-seccion-want: var(--paleta-verde); }
+:root[data-color-want="gris"] { --color-seccion-want: var(--paleta-gris); }
+:root[data-color-want="rojo"] { --color-seccion-want: var(--paleta-rojo); }
+:root[data-color-dropped="acento"] { --color-seccion-dropped: var(--paleta-acento); }
+:root[data-color-dropped="terracota"] { --color-seccion-dropped: var(--paleta-terracota); }
+:root[data-color-dropped="ocre"] { --color-seccion-dropped: var(--paleta-ocre); }
+:root[data-color-dropped="rosa"] { --color-seccion-dropped: var(--paleta-rosa); }
+:root[data-color-dropped="ciruela"] { --color-seccion-dropped: var(--paleta-ciruela); }
+:root[data-color-dropped="azul"] { --color-seccion-dropped: var(--paleta-azul); }
+:root[data-color-dropped="pino"] { --color-seccion-dropped: var(--paleta-pino); }
+:root[data-color-dropped="verde"] { --color-seccion-dropped: var(--paleta-verde); }
+:root[data-color-dropped="gris"] { --color-seccion-dropped: var(--paleta-gris); }
+:root[data-color-dropped="rojo"] { --color-seccion-dropped: var(--paleta-rojo); }
