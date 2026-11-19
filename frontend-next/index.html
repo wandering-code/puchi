@@ -36,6 +36,17 @@
       } catch (e) { document.documentElement.dataset.tema = 'claro' }
       if (document.documentElement.dataset.tema === 'oscuro')
         document.querySelector('meta[name="theme-color"]').setAttribute('content', '#141009')
+      // El logo, en el mismo punto que en la imagen de arranque de iOS. Esa
+      // imagen ocupa la pantalla ENTERA, barra de estado incluida, y lleva el
+      // logo en su centro; la página empieza DEBAJO de la barra (status-bar
+      // "default"), así que su centro queda media barra más abajo y el logo
+      // bajaba de golpe al pasar de una a otra. La diferencia entre el alto de
+      // la pantalla y el de la página es esa barra, sea cual sea el iPhone.
+      // Solo con la app instalada: en Safari no hay imagen de arranque.
+      if (navigator.standalone) {
+        var barra = screen.height - window.innerHeight
+        if (barra > 0 && barra < 100) document.documentElement.style.setProperty('--splash-dy', (-barra / 2) + 'px')
+      }
     </script>
     <style>
       html, body { margin: 0; background: #f5f0e7; }
@@ -44,7 +55,7 @@
          (public/splash/). Fondo liso y logo de 48px al centro. */
       .splash { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: #f5f0e7; }
       html[data-tema="oscuro"] .splash { background: #141009; }
-      .splash img { width: 48px; height: 48px; object-fit: contain; }
+      .splash img { width: 48px; height: 48px; object-fit: contain; transform: translateY(var(--splash-dy, 0px)); }
     </style>
   </head>
   <body>
