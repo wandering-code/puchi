@@ -559,6 +559,9 @@ function snapshot() {
     'safe top':    safe.top,
     'safe bottom': safe.bottom,
     viewport:   vv ? `${Math.round(vv.width)}×${Math.round(vv.height)}` : '—',
+    // Con el viewport, para ver cuánto ocupa la barra de estado (el splash
+    // de index.html sube el logo la mitad de esa diferencia).
+    pantalla:   `${screen.width}×${screen.height}`,
     dpr:        window.devicePixelRatio,
     '--kb':     cs.getPropertyValue('--kb').trim() || '0px',
     '--vvh':    cs.getPropertyValue('--vvh').trim() || '—',
