@@ -1,15 +1,14 @@
-import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api } from '../../platform/api'
 import { useAuth } from '../../platform/auth'
 import { EMPTY_FILTERS, agruparEstanteria, copiarAMiEstanteria, generosDeAutores, opcionesDeFiltro } from '../luniteca/shelf'
-import { BotonPlegarAnos, Coleccion, Herramientas, LibrosLeyendo, Plegable } from '../luniteca/Luniteca'
+import { BotonPlegarAnos, Coleccion, Herramientas, LibrosLeyendo, Plegable, ZonaDeVista, usarCambioDeVista } from '../luniteca/Luniteca'
 import BookDetail from '../luniteca/BookDetail'
 import HojaFiltros from '../luniteca/HojaFiltros'
 import { useHoja } from '../luniteca/HojaInferior'
 import { useCapa } from '../../platform/capas'
 import { usarVuelo } from '../luniteca/usarVuelo'
-import { usarPreferencia } from '../../platform/preferencias'
 import { CajaSeccion, TituloSeccion, huecoEntreSecciones, usarSeparacion } from '../luniteca/separacion'
 import { IconArrowLeft } from '../../ui/icons'
 import Avatar from '../../ui/Avatar'
@@ -38,7 +37,7 @@ export default function Perfil() {
   // La misma vista que tengas puesta en la tuya: es tu forma de mirar una
   // estantería, no algo de cada estantería. Y cambiarla aquí te la cambia
   // también en la tuya, por lo mismo.
-  const [vista, setVista] = usarPreferencia('vista', 'grid')
+  const { vista, vistaPedida, cambiando, cambiarVista } = usarCambioDeVista()
   const [variante] = usarSeparacion()
   // Filtrar y ordenar aquí es cosa del momento: vive en la pantalla y se
   // deshace al salir, que lo que se busca en la estantería de otra persona no
@@ -166,8 +165,8 @@ export default function Perfil() {
           tres vistas, en el mismo sitio y con la misma pinta. Sin el botón de
           añadir, que aquí no hay nada que añadir. */}
       <Herramientas
-        vista={vista}
-        onVista={v => startTransition(() => setVista(v))}
+        vista={vistaPedida}
+        onVista={cambiarVista}
         query={query}
         onQuery={setQuery}
         onAbrirHoja={hojaFiltros.abrir}
@@ -191,6 +190,7 @@ export default function Perfil() {
         </p>
       )}
 
+      <ZonaDeVista vista={vista} cambiando={cambiando}>
       {grupos?.visible?.length > 0 && (
         <div className={`mt-5 ${huecoEntreSecciones(variante)}`}>
           {/* El `mt-5` es el mismo respiro bajo la barra de herramientas que en
@@ -272,6 +272,7 @@ export default function Perfil() {
           ))}
         </div>
       )}
+      </ZonaDeVista>
 
       <HojaFiltros
         abierta={hojaFiltros.abierta}

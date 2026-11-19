@@ -1,13 +1,12 @@
-import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { recordado, recordar } from '../../platform/memoria'
 import { AnimatePresence } from 'motion/react'
 import { api } from '../../platform/api'
 import { esAdmin as esElAdmin, useAuth } from '../../platform/auth'
 import { useLiveUpdates } from '../../platform/live'
-import { usarPreferencia } from '../../platform/preferencias'
 import { useCapa } from '../../platform/capas'
 import { EMPTY_FILTERS, generosDeAutores, opcionesDeFiltro } from '../luniteca/shelf'
-import { BotonPlegarAnos, Coleccion, Herramientas, Plegable } from '../luniteca/Luniteca'
+import { BotonPlegarAnos, Coleccion, Herramientas, Plegable, ZonaDeVista, usarCambioDeVista } from '../luniteca/Luniteca'
 import { CajaSeccion, TituloSeccion, huecoEntreSecciones, usarSeparacion } from '../luniteca/separacion'
 import { Cover } from '../luniteca/piezas'
 import { precargarColores } from '../luniteca/colorPortada'
@@ -50,7 +49,7 @@ export default function Club() {
 
   // La misma forma de mirar que tengas puesta en tu estantería: es tuya, no de
   // cada estantería (ver platform/preferencias).
-  const [vista, setVista] = usarPreferencia('vista', 'grid')
+  const { vista, vistaPedida, cambiando, cambiarVista } = usarCambioDeVista()
   const [variante] = usarSeparacion()
   // La misma cabecera que tengas puesta en tu Luniteca (prueba, ver panel.jsx).
   // `true` desde el principio: mientras carga se pinta la misma cabecera.
@@ -147,8 +146,8 @@ export default function Club() {
           hacer cualquier miembro, no solo el admin. */}
       <Herramientas
         panel={panel.barra}
-        vista={vista}
-        onVista={v => startTransition(() => setVista(v))}
+        vista={vistaPedida}
+        onVista={cambiarVista}
         query={query}
         onQuery={setQuery}
         onAbrirHoja={hojaFiltros.abrir}
@@ -171,6 +170,7 @@ export default function Club() {
         <Aviso titulo="Ningún libro coincide" texto="Prueba a quitar algún filtro o a cambiar la búsqueda." />
       )}
 
+      <ZonaDeVista vista={vista} cambiando={cambiando}>
       {cargando ? (
         <div className={`mt-5 ${huecoEntreSecciones(variante)}`}>
           <CajaSeccion variante={variante} estado="reading">
@@ -266,6 +266,7 @@ export default function Club() {
         )}
       </div>
       )}
+      </ZonaDeVista>
 
       <AnimatePresence>
         {hojaProponer.abierta && (
