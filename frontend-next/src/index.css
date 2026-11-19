@@ -392,12 +392,25 @@
 }
 
 /* Un lomo que llega cuando ya se estaba viendo su hueco (ver Lomos.jsx):
-   entra con un fundido corto, entero de una vez. */
+   fundido CRUZADO del hueco al lomo. El lomo ya está puesto debajo y encima
+   va una capa del color del hueco que se desvanece. Antes era el lomo entero
+   el que entraba desde opacidad 0, así que en el primer fotograma el hueco
+   desaparecía y la balda se quedaba vacía un instante (visto en capturas). El
+   color es el del hueco (--color-line al 55%) sobre la tarjeta de la
+   sección; solo se anima la opacidad. */
 @keyframes lomo-llega {
-  from { opacity: 0; }
-  to   { opacity: 1; }
+  from { opacity: 1; }
+  to   { opacity: 0; }
 }
-.lomo-llega { animation: lomo-llega 240ms ease-out; }
+.lomo-llega::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  pointer-events: none;
+  background: color-mix(in srgb, var(--color-line) 55%, var(--color-surface));
+  animation: lomo-llega 260ms ease-out forwards;
+}
 
 /* La barrita de un aviso con tiempo (ver `progreso` en platform/avisos.jsx):
    se vacía hacia la izquierda en lo que tarda el aviso en irse. Con scaleX y

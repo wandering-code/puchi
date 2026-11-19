@@ -33,7 +33,7 @@ const BASE = 100
 // fuente concreta. Hasta entonces se usa la estimación de siempre, sin
 // guardarla, y al llegar la fuente se avisa para repintar con la medida buena.
 const listas = new Set()
-const pedidas = new Set()
+const pedidas = new Map()   // spec → promesa de nuestro fonts.load
 const avisos = new Set()
 
 // Solo el primer nombre de la lista: el resto son las de reserva.
@@ -46,15 +46,23 @@ function disponible(tipografia) {
   const spec = `${tipografia.peso} ${BASE}px "${familiaPrincipal(tipografia.familia)}"`
   if (listas.has(spec)) return true
   if (!pedidas.has(spec)) {
-    pedidas.add(spec)
-    document.fonts.load(spec).then(() => {
+    pedidas.set(spec, document.fonts.load(spec).then(() => {
       listas.add(spec)
       // Fuera lo medido a ojo mientras no había fuente.
       CACHE.clear()
       avisos.forEach(fn => fn())
-    }).catch(() => {})
+    }).catch(() => {}))
   }
   return false
+}
+
+// La promesa de que la fuente de esta tipografía esté lista (y medible). La
+// usa la balda para que la primera tanda de lomos espere también a su letra
+// y salga entera a la vez (ver `arrancada` en Lomos.jsx).
+export function cargarFuente(tipografia) {
+  if (disponible(tipografia)) return Promise.resolve()
+  const spec = `${tipografia.peso} ${BASE}px "${familiaPrincipal(tipografia.familia)}"`
+  return pedidas.get(spec) || Promise.resolve()
 }
 
 // ¿Está ya la fuente de esta tipografía? Además de contestar, la pide si no se
