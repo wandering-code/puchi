@@ -10,7 +10,7 @@
          ninguna franja que ningún elemento pueda pintar. Las dos vienen de lo
          aprendido en la Puchi actual (issue #13); no se reabren sin motivo. -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content" />
-    <meta name="theme-color" content="#f7f3ee" />
+    <meta name="theme-color" content="#f5f0e7" />
     <!-- iOS 17.4+ ya respeta el manifest, pero las versiones anteriores solo
          miran estas dos metas para abrir sin barra de navegador. -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -24,9 +24,32 @@
     <title>Puchi</title>
     <link rel="icon" type="image/png" sizes="64x64" href="/icons/favicon-64.png" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <!-- Lo justo para el primer fotograma, antes de que llegue ningún CSS ni
+         JS: el tema guardado puesto ya (la misma clave que platform/tema.js)
+         y el fondo de ese tema, para que nunca haya un destello blanco ni uno
+         claro antes del oscuro. Los colores son los --color-bg de index.css;
+         si cambian allí, aquí también (y en scripts/splash-devices.json). -->
+    <script>
+      try {
+        var t = localStorage.getItem('luni_tema')
+        document.documentElement.dataset.tema = t === 'oscuro' ? 'oscuro' : 'claro'
+      } catch (e) { document.documentElement.dataset.tema = 'claro' }
+      if (document.documentElement.dataset.tema === 'oscuro')
+        document.querySelector('meta[name="theme-color"]').setAttribute('content', '#141009')
+    </script>
+    <style>
+      html, body { margin: 0; background: #f5f0e7; }
+      html[data-tema="oscuro"], html[data-tema="oscuro"] body { background: #141009; }
+      /* El splash: el mismo que pinta App.jsx y el mismo que las imágenes de
+         arranque de iOS (public/splash/). Fondo liso y logo de 48px al centro. */
+      .splash { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: #f5f0e7; }
+      html[data-tema="oscuro"] .splash { background: #141009; }
+      .splash img { width: 48px; height: 48px; object-fit: contain; }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <!-- React sustituye este splash en su primer render. -->
+    <div id="root"><div class="splash"><img src="/icons/splash-logo.webp" alt="" fetchpriority="high" /></div></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

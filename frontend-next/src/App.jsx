@@ -122,23 +122,25 @@ export default function App() {
 }
 
 // Lo que se ve mientras /auth/me confirma que la sesión guardada sigue viva.
-// Es el mismo fondo que el resto para que no haya ningún destello de otro
-// color al arrancar desde el icono de inicio.
+//
+// Es EXACTAMENTE el splash de index.html (y el de las imágenes de arranque de
+// iOS, public/splash/): fondo liso, logo de 48px al centro, quieto. Así se
+// pasa de uno a otro sin que cambie ni un píxel. Antes latía desde opacidad
+// 0,5, y el relevo del splash de HTML a este se veía como un parpadeo.
+// Si la espera se alarga, empieza a latir (solo opacidad, en la GPU), y
+// arranca desde el mismo estado quieto.
 function Splash() {
   return (
     <motion.div
       key="splash"
-      className="flex h-full w-full items-center justify-center bg-bg"
+      className="fixed inset-0 flex items-center justify-center bg-bg"
       initial={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.25 }}
     >
-      <motion.div
-        animate={{ transform: ['scale(1)', 'scale(1.08)', 'scale(1)'], opacity: [0.5, 1, 0.5] }}
-        transition={{ duration: 1.6, repeat: Infinity, ease: 'easeInOut' }}
-      >
+      <div className="latido">
         <Logo className="h-12 w-12" />
-      </motion.div>
+      </div>
     </motion.div>
   )
 }

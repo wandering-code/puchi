@@ -14,7 +14,10 @@ const CLAVE = 'luni_tema'
 // El color con el que iOS pinta la barra de estado y el fondo de la app
 // instalada. Es una meta, no una variable CSS, así que hay que moverla a mano
 // cuando cambia el tema; si no, la barra se queda del color del otro.
-const BARRA = { claro: '#f7f3ee', oscuro: '#16120e' }
+// Son exactamente los --color-bg de index.css: con otro tono, aunque sea un
+// punto, la barra de estado se ve como una franja aparte sobre la cabecera, y
+// el splash (index.html, imágenes de arranque de iOS) no casaría con la app.
+const BARRA = { claro: '#f5f0e7', oscuro: '#141009' }
 
 export function temaGuardado() {
   try {

@@ -6,12 +6,23 @@
    guarda estos .woff2 en su caché (globPatterns incluye woff2). Son las dos
    variables completas, así que un solo archivo cubre todos los grosores.
    El unicode-range hace que latin-ext (acentos raros de títulos y autores
-   extranjeros) solo se descargue si de verdad aparece alguno. */
+   extranjeros) solo se descargue si de verdad aparece alguno.
+   font-display: optional en las dos de la interfaz (latin): si no están en
+   los primeros instantes, se queda la de reserva TODA la visita en vez de
+   cambiarla a mitad, que es lo que hacía que los textos cambiaran de ancho y
+   todo se recolocara (medido: la lista de Inicio bajaba 21px al llegar Inter).
+   Van precargadas en index.html y con la PWA salen del service worker, así
+   que en la práctica siempre llegan a tiempo. latin-ext sigue en swap: no se
+   puede precargar (solo se pide si aparece un carácter raro) y con optional
+   casi nunca llegaría a usarse.
+   Las de reserva, debajo, ocupan lo mismo que las de verdad: size-adjust y
+   ascent/descent calculados con fontTools sobre estos .woff2, a 400 y a 700,
+   contra Arial (que está en iOS, macOS y Windows). */
 @font-face {
   font-family: 'Public Sans';
   font-style: normal;
   font-weight: 400 800;
-  font-display: swap;
+  font-display: optional;
   src: url('/fonts/public-sans-latin.woff2') format('woff2');
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
@@ -58,7 +69,7 @@
   font-family: 'Inter';
   font-style: normal;
   font-weight: 400 700;
-  font-display: swap;
+  font-display: optional;
   src: url('/fonts/inter-latin.woff2') format('woff2');
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
@@ -70,6 +81,16 @@
   src: url('/fonts/inter-latin-ext.woff2') format('woff2');
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
 }
+
+/* Reservas con las métricas de Inter y Public Sans (ver arriba). */
+@font-face { font-family: 'Inter Reserva'; font-weight: 400; src: local('Arial'), local('ArialMT');
+  size-adjust: 106.13%; ascent-override: 91.28%; descent-override: 22.73%; line-gap-override: 0%; }
+@font-face { font-family: 'Inter Reserva'; font-weight: 700; src: local('Arial Bold'), local('Arial-BoldMT');
+  size-adjust: 101.5%; ascent-override: 95.44%; descent-override: 23.76%; line-gap-override: 0%; }
+@font-face { font-family: 'Public Sans Reserva'; font-weight: 400; src: local('Arial'), local('ArialMT');
+  size-adjust: 103.83%; ascent-override: 91.49%; descent-override: 21.67%; line-gap-override: 0%; }
+@font-face { font-family: 'Public Sans Reserva'; font-weight: 700; src: local('Arial Bold'), local('Arial-BoldMT');
+  size-adjust: 98.89%; ascent-override: 96.07%; descent-override: 22.75%; line-gap-override: 0%; }
 
 /* ── Tokens ──────────────────────────────────────────────────────────────
    Toda la estética nueva sale de aquí. Están como variables de @theme (no
@@ -132,8 +153,8 @@
      peso y por el espaciado apretado, no por ser de otra familia. Inter se
      queda para el resto, que es donde mejor está (textos pequeños de interfaz).
      El fallback del sistema va detrás, para el primer pintado. */
-  --font-display: 'Public Sans', system-ui, -apple-system, sans-serif;
-  --font-sans: 'Inter', system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --font-display: 'Public Sans', 'Public Sans Reserva', system-ui, -apple-system, sans-serif;
+  --font-sans: 'Inter', 'Inter Reserva', system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
 
   /* Una sola curva para todo lo que se mueve. Que todo comparta easing es la
      mitad de que una interfaz parezca cuidada. */
@@ -404,6 +425,16 @@
 }
 .entra {
   animation: entra var(--entra-dura, 240ms) var(--entra-curva, cubic-bezier(0.22, 1, 0.36, 1)) var(--entra-espera, 0ms) backwards;
+}
+
+/* El latido del logo del splash (App.jsx) cuando la espera se alarga. Empieza
+   y acaba en opacidad 1, que es como lo deja el splash de index.html: el
+   relevo no se nota. */
+@keyframes latido {
+  50% { opacity: 0.5; }
+}
+.latido {
+  animation: latido 1.6s ease-in-out 1s infinite;
 }
 
 /* ── Hundirse al pulsar ──────────────────────────────────────────────────

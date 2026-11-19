@@ -1,0 +1,18 @@
+{
+  "_": "iPhones en vertical para las imágenes de arranque de iOS: [ancho CSS, alto CSS, densidad, modelos]. Lo leen scripts/splash.py (genera los PNG) y vite.config.js (mete los <link>). Fondo y logo, los mismos que el splash de index.html y de App.jsx.",
+  "fondo": "#f5f0e7",
+  "logo": 48,
+  "dispositivos": [
+    [440, 956, 3, "16/17 Pro Max"],
+    [430, 932, 3, "14 Pro Max, 15/16 Plus y Pro Max"],
+    [428, 926, 3, "12/13 Pro Max, 14 Plus"],
+    [420, 912, 3, "Air"],
+    [414, 896, 3, "XS Max, 11 Pro Max"],
+    [414, 896, 2, "XR, 11"],
+    [402, 874, 3, "16/17 Pro, 17"],
+    [393, 852, 3, "14 Pro, 15, 16"],
+    [390, 844, 3, "12, 13, 14, 16e"],
+    [375, 812, 3, "X, XS, 11 Pro, 12/13 mini"],
+    [375, 667, 2, "SE, 8"]
+  ]
+}
