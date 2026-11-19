@@ -79,7 +79,9 @@ export default function Actividad() {
   const [hayMas, setHayMas] = useState(false)
   const [cargandoMas, setCargandoMas] = useState(false)
   const [error, setError] = useState(null)
-  const [jugadores, setJugadores] = useState([])
+  // null mientras llegan: así se sabe si hay que reservar el hueco de la fila
+  // de caras (ver abajo) o si de verdad no hay nadie más.
+  const [jugadores, setJugadores] = useState(null)
   const [filtro, setFiltro] = useState(null)     // jugador por el que se filtra
   // Tocar la cara de alguien no hace una sola cosa: pregunta. Filtrar y entrar
   // en su estantería son igual de esperables desde ahí, y adivinar cuál quiere
@@ -159,7 +161,7 @@ export default function Actividad() {
   }, [cargar])
 
   const cargarJugadores = useCallback(() => {
-    api('/players').then(setJugadores).catch(() => {})
+    api('/players').then(setJugadores).catch(() => setJugadores([]))
   }, [])
   useEffect(cargarJugadores, [cargarJugadores])
 
@@ -176,10 +178,16 @@ export default function Actividad() {
   useLiveUpdates(['players'], alCambiarCuentas)
   // Si se desactiva justo la persona por la que se filtra, fuera el filtro.
   useEffect(() => {
-    if (filtro && jugadores.length > 0 && !jugadores.some(j => j.id === filtro.id)) setFiltro(null)
+    if (filtro && jugadores?.length > 0 && !jugadores.some(j => j.id === filtro.id)) setFiltro(null)
   }, [filtro, jugadores])
 
-  const otros = jugadores.filter(j => j.id !== player?.id)
+  const otros = (jugadores || []).filter(j => j.id !== player?.id)
+
+  // Las entradas que ya estaban al llegar la lista salen todas a la vez, sin
+  // animar: entrando una a una se veían llegar a destiempo. Solo se anima lo
+  // que llega después (en vivo, o al pedir más).
+  const listaPintada = useRef(false)
+  useEffect(() => { listaPintada.current = items !== null }, [items])
 
   return (
     <div className="py-6">
@@ -190,6 +198,18 @@ export default function Actividad() {
 
       {/* Los demás, para filtrar por uno. Tú no estás: para lo tuyo ya está
           Luniteca. */}
+      {/* Mientras llegan las caras, su hueco: con la misma caja que la fila de
+          verdad, para que la lista de debajo no baje al llegar (medido: 45px). */}
+      {jugadores === null && (
+        <div className="-mx-5 mb-5 flex gap-3 overflow-hidden px-5 pb-1" aria-hidden>
+          {[0, 1, 2].map(i => (
+            <span key={i} className="flex w-14 shrink-0 flex-col items-center gap-1.5">
+              <span className="h-11 w-11 rounded-full border-2 border-line bg-surface-2" />
+              <span className="text-[11px]">&nbsp;</span>
+            </span>
+          ))}
+        </div>
+      )}
       {otros.length > 0 && (
         <div className="-mx-5 mb-5 flex gap-3 overflow-x-auto px-5 pb-1">
           {otros.map(j => {
@@ -220,7 +240,8 @@ export default function Actividad() {
       {items === null && !error && (
         <div className="space-y-2.5">
           {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="h-[70px] animate-pulse rounded-xl2 bg-surface-2" />
+            // 82px: lo que mide una entrada de verdad (portada de 36px + 3 líneas).
+            <div key={i} className="h-[82px] animate-pulse rounded-xl2 bg-surface-2" />
           ))}
         </div>
       )}
@@ -238,7 +259,7 @@ export default function Actividad() {
             return (
               <motion.button
                 key={item.id}
-                initial={{ opacity: 0, transform: tf({ y: 6 }) }}
+                initial={listaPintada.current ? { opacity: 0, transform: tf({ y: 6 }) } : false}
                 animate={{ opacity: 1, transform: tf({ y: 0 }) }}
                 transition={{ duration: 0.18 }}
                 onClick={() => abrirElLibro(item, tuyo)}

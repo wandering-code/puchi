@@ -77,13 +77,18 @@ export default function Shell() {
   const contenido = useMemo(() => (
     /* Cada ruta es su propia capa a pantalla completa con su scroll: así el
        scroll de una no arrastra al de la otra durante la transición. */
-    <AnimatePresence mode="wait" initial={false}>
+    // Sin mode="wait" y sin salida: la pantalla que se va desaparece al
+    // momento y la nueva entra con un fundido corto, solo de opacidad. Con
+    // "wait" la vieja tardaba 240ms en irse y después quedaba la pantalla
+    // VACÍA otros 100-170ms antes de que asomara la nueva (medido en
+    // capturas): era ese hueco, más que la animación, lo que se notaba.
+    // AnimatePresence se queda por su initial={false}: lo que hay dentro de
+    // la primera pantalla de la sesión no anima su entrada.
+    <AnimatePresence initial={false}>
       <motion.div
         key={location.pathname}
         data-scroll="pantalla"
-        // La entrada va por CSS (.entra, en index.css) y la salida por Motion
-        // con `transform` entero, las dos en la GPU. Con y: 10 / y: -6 Motion
-        // la movía desde JavaScript, y en Safari eso va a 60 fotogramas.
+        // La entrada va por CSS (.entra, en index.css), en la GPU.
         // La primera sección de la sesión no entra: llega con la app.
         // overflow-x-hidden: la pantalla nunca se arrastra de lado. Lo que asome
         // un poco por el borde (la luz de una vela de Halloween junto al filo)
@@ -93,9 +98,8 @@ export default function Shell() {
         // telón (ui/telon.js), que ya coloca lo de debajo: lo de abajo salía
         // disparado hacia arriba y volvía. Safari no lo tiene; así van igual.
         className={`absolute inset-0 overflow-y-auto overflow-x-hidden overscroll-contain [overflow-anchor:none] px-5 pb-kb ${navegado.current ? 'entra' : ''}`}
-        style={{ '--entra-desde': 'translateY(10px)' }}
-        exit={{ opacity: 0, transform: 'translateY(-6px)' }}
-        transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+        // Sin desplazamiento: moviéndose, el contenido parecía ir llegando.
+        style={{ '--entra-desde': 'none', '--entra-dura': '160ms' }}
       >
         <Routes location={location}>
           <Route path="/"           element={<Inicio />} />
@@ -202,11 +206,14 @@ function TopBar({ titulo, onAbrirMenu }) {
 
         {/* La sección actual, en el centro. Con el menú escondido detrás de un
             botón hace falta algo que diga dónde estás. */}
-        <div className="min-w-0 flex-1 text-center">
-          <AnimatePresence mode="wait" initial={false}>
+        {/* Los dos títulos a la vez en la misma celda de la rejilla, uno
+            yéndose y otro llegando: con mode="wait" había un instante sin
+            ninguno. */}
+        <div className="grid min-w-0 flex-1 text-center">
+          <AnimatePresence initial={false}>
             <motion.p
               key={titulo}
-              className="truncate text-sm text-ink-dim"
+              className="col-start-1 row-start-1 truncate text-sm text-ink-dim"
               initial={{ opacity: 0, transform: 'translateY(4px)' }}
               animate={{ opacity: 1, transform: 'translateY(0px)' }}
               exit={{ opacity: 0, transform: 'translateY(-4px)' }}

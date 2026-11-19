@@ -48,7 +48,8 @@ export default function Club() {
   const [vista, setVista] = usarPreferencia('vista', 'grid')
   const [variante] = usarSeparacion()
   // La misma cabecera que tengas puesta en tu Luniteca (prueba, ver panel.jsx).
-  const panel = usarPanel(entradas !== null)
+  // `true` desde el principio: mientras carga se pinta la misma cabecera.
+  const panel = usarPanel(true)
   // Filtrar, ordenar y buscar aquí es cosa del momento: vive en la pantalla y
   // se deshace al salir, igual que en la estantería de otra persona.
   const [query, setQuery] = useState('')
@@ -117,7 +118,10 @@ export default function Club() {
 
   if (!player?.club_member) return <SinAcceso />
 
-  if (entradas === null) return <Cargando />
+  // Mientras carga, la misma pantalla con su cabecera, su barra y la caja de
+  // «Lectura actual»: nada se recoloca al llegar los datos (como en la
+  // Luniteca).
+  const cargando = entradas === null
 
   return (
     <div ref={panel.raiz} className={panel.claseRaiz}>
@@ -125,9 +129,11 @@ export default function Club() {
         <LunaDelPanel conPanel={panel.conPanel} />
         <h2 className="relative font-display text-[1.75rem] font-bold tracking-[-0.02em]">Club de lectura</h2>
         <p className="relative mt-1 text-sm text-ink-dim">
-          {grupos.vacia
-            ? 'Todavía no hay ningún libro en el club'
-            : resumen(grupos)}
+          {cargando
+            ? '\u00a0'
+            : grupos.vacia
+              ? 'Todavía no hay ningún libro en el club'
+              : resumen(grupos)}
         </p>
       </header>
 
@@ -149,17 +155,26 @@ export default function Club() {
 
       {error && <p className="mt-4 text-sm text-danger">{error}</p>}
 
-      {grupos.vacia && !error && (
+      {!cargando && grupos.vacia && !error && (
         <Aviso
           titulo="El club está por estrenar"
           texto="Toca el + de arriba para proponer el primer libro. Cualquiera del club puede proponer; el admin decide cuál se lee."
         />
       )}
 
-      {grupos.ningunoVisible && (
+      {!cargando && grupos.ningunoVisible && (
         <Aviso titulo="Ningún libro coincide" texto="Prueba a quitar algún filtro o a cambiar la búsqueda." />
       )}
 
+      {cargando ? (
+        <div className={`mt-5 ${huecoEntreSecciones(variante)}`}>
+          <CajaSeccion variante={variante} estado="reading">
+            <TituloSeccion variante={variante} desde={panel.desdeTitulos} label="Lectura actual" cuenta={'\u00a0'} estado="reading" />
+            {/* El alto de una TarjetaLecturaActual (medido). */}
+            <div className="mt-3 h-[128px] rounded-xl2 bg-surface-2/60" aria-hidden />
+          </CajaSeccion>
+        </div>
+      ) : (
       <div className={`mt-5 ${huecoEntreSecciones(variante)}`}>
         {grupos.actual.length > 0 && (
           <CajaSeccion variante={variante} estado="reading">
@@ -242,10 +257,11 @@ export default function Club() {
           </CajaSeccion>
         )}
       </div>
+      )}
 
       <AnimatePresence>
         {hojaProponer.abierta && (
-          <AnadirLibro destino="club" onCerrar={hojaProponer.cerrar} onAnadido={propuesto} estanteria={entradas} />
+          <AnadirLibro destino="club" onCerrar={hojaProponer.cerrar} onAnadido={propuesto} estanteria={entradas ?? []} />
         )}
       </AnimatePresence>
 
@@ -376,20 +392,6 @@ function resumen(grupos) {
   if (leidos) partes.push(`${leidos} ${leidos === 1 ? 'libro leído' : 'libros leídos'}`)
   if (grupos.propuestos.length) partes.push(`${grupos.propuestos.length} propuesto${grupos.propuestos.length === 1 ? '' : 's'}`)
   return partes.join(' · ') || 'Sin libros que enseñar con estos filtros'
-}
-
-function Cargando() {
-  return (
-    <div className="py-6">
-      <div className="h-8 w-52 animate-pulse rounded-md bg-surface-2" />
-      <div className="mt-6 h-24 animate-pulse rounded-xl2 bg-surface-2" />
-      <div className="mt-4 grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-6">
-        {Array.from({ length: 6 }).map((_, i) => (
-          <div key={i} className="aspect-[2/3] animate-pulse rounded-md bg-surface-2" />
-        ))}
-      </div>
-    </div>
-  )
 }
 
 function Aviso({ titulo, texto }) {
