@@ -1,4 +1,4 @@
-import { createContext, memo, startTransition, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { createContext, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { recordado, recordar } from '../../platform/memoria'
 import { useSearchParams } from 'react-router-dom'
 import { AnimatePresence, motion } from 'motion/react'
@@ -56,7 +56,7 @@ export default function Luniteca() {
 
   // La vista es de la cuenta, no del navegador: si eliges lomos, los ves aquí
   // y en la estantería de cualquiera, entres desde donde entres.
-  const [vista, setVista] = usarPreferencia('vista', 'grid')
+  const { vista, vistaPedida, cambiando, cambiarVista } = usarCambioDeVista()
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState({ field: '', dir: 'asc' })
   const [filters, setFilters] = useState(EMPTY_FILTERS)
@@ -270,15 +270,6 @@ export default function Luniteca() {
   }, [shelf])
 
 
-  function cambiarVista(modo) {
-    // En transición, y no a secas: dibujar la estantería de lomos con muchos
-    // libros bloquea el hilo, y la pastilla del selector se quedaba sin
-    // animar —saltaba de un botón al otro— justo al pasar a esa vista, no al
-    // revés. Marcado como no urgente, React pinta antes el gesto y luego la
-    // vista nueva.
-    startTransition(() => setVista(modo))
-  }
-
   // Todos estos van con useCallback porque se pasan a componentes memoizados
   // (las secciones y las tarjetas): si fueran flechas inline, serían una
   // referencia nueva en cada render de esta pantalla y el memo no serviría de
@@ -339,7 +330,7 @@ export default function Luniteca() {
 
       <Herramientas
         panel={panel.barra}
-        vista={vista} onVista={cambiarVista}
+        vista={vistaPedida} onVista={cambiarVista}
         query={query} onQuery={setQuery}
         onAbrirHoja={hojaFiltros.abrir}
         onAnadir={hojaAnadir.abrir}
@@ -363,6 +354,7 @@ export default function Luniteca() {
         />
       )}
 
+      <ZonaDeVista vista={vista} cambiando={cambiando}>
       {cargando ? (
         <div className={`mt-5 ${huecoEntreSecciones(separacion)}`}>
           <SeccionCargando variante={separacion} desde={desdeTitulos} vista={vista} />
@@ -446,6 +438,7 @@ export default function Luniteca() {
         />
       </div>
       )}
+      </ZonaDeVista>
 
       {/* La estantería va con él: los modos que traen muchos libros de golpe
           (escáner e importación) la necesitan para avisar de lo que ya tienes
@@ -569,6 +562,76 @@ function Aviso({ titulo, texto }) {
 // igual. Lo único que cambia es qué hace el botón de añadir: en la de otra
 // persona no hay nada que añadir (sin `onAnadir` no se pinta) y en la del club
 // lo que se añade es una propuesta, así que su etiqueta también cambia.
+// Cambiar de vista (cuadrícula, lista, estantería) sin que la pantalla se
+// quede quieta. Pintar la vista nueva con cien libros lleva su rato (medido:
+// ~400ms con la CPU a 1/4, uno o dos segundos en el iPhone), y como la
+// pastilla del selector iba en la misma transición, durante ese rato no
+// cambiaba NADA y parecía que el toque no había entrado. Ahora hay dos
+// vistas: la pedida, que mueve la pastilla al instante, y la pintada, que
+// llega en una transición de React (no urgente, así el gesto no se bloquea).
+// `cambiando` dice que la segunda aún no ha llegado (ver ZonaDeVista).
+export function usarCambioDeVista() {
+  const [vista, setVista] = usarPreferencia('vista', 'grid')
+  const [pedida, setPedida] = useState(null)
+  const [cambiando, empezar] = useTransition()
+  useEffect(() => { if (!cambiando) setPedida(null) }, [cambiando])
+  const cambiarVista = useCallback(modo => {
+    setPedida(modo)
+    // Con llaves, sin devolver nada: setVista devuelve la promesa de guardarla
+    // en la cuenta, y si la transición la recibiera, React 19 la trataría
+    // como una acción asíncrona y daría la vista por "cambiando" hasta que
+    // contestara el servidor (sin cobertura, atenuada para siempre).
+    empezar(() => { setVista(modo) })
+  }, [setVista])
+  return { vista, vistaPedida: pedida ?? vista, cambiando, cambiarVista }
+}
+
+// Donde van los libros. Mientras se prepara la vista nueva, lo que había se
+// atenúa y, si tarda, aparece un indicador girando: es una animación CSS de
+// transform, la mueve la GPU, y sigue girando aunque el hilo esté ocupado
+// pintando. Va fijo en la pantalla, no arriba de la lista: con la estantería
+// desplazada, arriba no se vería. Al llegar la vista nueva, vuelve a la
+// opacidad entera con un fundido. El indicador espera 300ms antes de asomar:
+// solo sale si de verdad tarda, y en un cambio rápido no parpadea.
+export function ZonaDeVista({ vista, cambiando, children }) {
+  // La vista nueva entra siempre con un fundido corto (WAAPI, solo opacidad),
+  // también cuando llega tan rápido que no ha dado tiempo a atenuar nada: si
+  // no, se cambiaba de golpe.
+  const zona = useRef(null)
+  const primera = useRef(true)
+  useLayoutEffect(() => {
+    if (primera.current) { primera.current = false; return }
+    zona.current?.animate([{ opacity: 0.35 }, { opacity: 1 }], { duration: 220, easing: 'ease-out' })
+  }, [vista])
+  return (
+    <div className="relative">
+      {/* El atenuado espera 100ms: un cambio rápido no llega a verse apagarse. */}
+      <div ref={zona} data-zona-vista={cambiando ? 'cambiando' : 'lista'} className={`transition-opacity ${cambiando ? 'opacity-40 delay-100 duration-150' : 'opacity-100 duration-200'}`}>
+        {children}
+      </div>
+      <div
+        aria-hidden={!cambiando}
+        role={cambiando ? 'status' : undefined}
+        className={`pointer-events-none fixed inset-x-0 top-[42%] z-30 flex justify-center transition-opacity ${cambiando ? 'opacity-100 delay-300 duration-200' : 'opacity-0 duration-100'}`}
+      >
+        <span className="flex h-10 w-10 items-center justify-center rounded-full border border-line bg-surface sombra-pastilla text-accent">
+          <Girando className="h-5 w-5" />
+          <span className="sr-only">Cambiando de vista</span>
+        </span>
+      </div>
+    </div>
+  )
+}
+
+function Girando({ className }) {
+  return (
+    <svg viewBox="0 0 24 24" className={`${className} animate-spin`} fill="none" aria-hidden>
+      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeOpacity="0.3" strokeWidth="2.4" />
+      <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" />
+    </svg>
+  )
+}
+
 export function Herramientas({
   vista, onVista, query, onQuery,
   onAbrirHoja, onAnadir, etiquetaAnadir = 'Añadir libro', ordenActivo, filtrosActivos,
