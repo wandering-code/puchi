@@ -5,19 +5,21 @@ import { useAuth } from '../../platform/auth'
 import { useVersion } from '../../platform/version'
 import { isIOS, isStandalone, safeInsets } from '../../platform/pwa'
 import { usarAspecto, usarPreferencia, usarTema } from '../../platform/preferencias'
-import { ACENTOS, cambiarDeTema, conCirculo } from '../../platform/tema'
+import { ACENTOS, COLORES_SECCION, cambiarDeTema, conCirculo } from '../../platform/tema'
 import { CON_AUDIOLIBROS } from '../../platform/variante'
 import { EVENTO_DE_TEMPORADA } from '../../eventos'
 import { usarDecoracion } from '../../eventos/usarEvento'
 import { AvisosEnAjustes } from '../kokito/avisos/Avisos'
 import { usarCabeceraConPanel } from '../luniteca/panel'
-import { SelectorSeparacion, usarSeparacion } from '../luniteca/separacion'
+import { CAJAS, DENSIDADES, SECCIONES_ESTANTERIA, TITULOS, usarOrdenDeSecciones, usarSeparacion } from '../luniteca/separacion'
 import { usarLomosTorcidos } from '../luniteca/Lomos'
 import { usarLeyendoComoLaVista } from '../luniteca/Luniteca'
 import { seccionesDe } from '../secciones'
 import Interruptor from '../../ui/Interruptor'
 import Pastilla from '../../ui/Pastilla'
-import { IconExit, IconLuna, IconSol } from '../../ui/icons'
+import { IconChevron, IconExit, IconLuna, IconOjo, IconOjoTachado, IconSol } from '../../ui/icons'
+import Desplegable from '../../ui/Desplegable'
+import Lista from '../../ui/Lista'
 import Vistazo from './Vistazo'
 
 // Ajustes, en tres partes:
@@ -64,8 +66,11 @@ export default function Ajustes() {
             <div className="px-4 py-3"><ComoSeVeLeyendo /></div>
             <div className="px-4 py-3"><LomosTorcidos /></div>
           </Tarjeta>
-          <Tarjeta titulo="Secciones" nota="Cómo se separan Leyendo, Leídos, Por leer… y los años.">
-            <Secciones />
+          <Tarjeta titulo="Bloques" nota="Cómo se ve cada sección de la estantería, y los años dentro de Leídos.">
+            <Bloques />
+          </Tarjeta>
+          <Tarjeta titulo="Secciones" nota="El orden en que salen, su color y cuáles se ven. Las ocultas no se borran: sus libros siguen en tu cuenta.">
+            <OrdenDeSecciones />
           </Tarjeta>
         </Apartado>
       </section>
@@ -314,9 +319,142 @@ function LomosTorcidos() {
   )
 }
 
-function Secciones() {
-  const [elegida, poner] = usarSeparacion()
-  return <SelectorSeparacion elegida={elegida} onElegir={poner} />
+// «Construye tu bloque»: las cuatro piezas (ver separacion.jsx).
+function Bloques() {
+  const [forma, cambiar] = usarSeparacion()
+  return (
+    <>
+      <Segmentado etiqueta="Caja" grupo="ajustes-caja" opciones={CAJAS} elegida={forma.caja} onElegir={id => cambiar({ caja: id })} />
+      <Segmentado etiqueta="Título" grupo="ajustes-titulo" opciones={TITULOS} elegida={forma.titulo} onElegir={id => cambiar({ titulo: id })} />
+      <div className="px-4 py-3">
+        <Interruptor
+          puesto={forma.pegado}
+          onCambiar={v => cambiar({ pegado: v })}
+          etiqueta="Título pegado arriba al bajar"
+          nota="Al recorrer una sección larga, su nombre se queda arriba hasta que empieza la siguiente."
+        />
+      </div>
+      <Segmentado
+        etiqueta="Densidad"
+        nota="Cuánto aire queda entre un bloque y el siguiente."
+        grupo="ajustes-densidad"
+        opciones={DENSIDADES}
+        elegida={forma.densidad}
+        onElegir={id => cambiar({ densidad: id })}
+      />
+    </>
+  )
+}
+
+const CLAVE_COLOR = { reading: 'colorReading', read: 'colorRead', want: 'colorWant', dropped: 'colorDropped' }
+
+// El orden de las secciones, cuáles se ven y el color de cada una. Las filas
+// van en una Lista: al subir o bajar una, se desliza a su sitio (FLIP, solo
+// transform) en vez de saltar.
+function OrdenDeSecciones() {
+  const [{ orden, ocultas }, cambiar] = usarOrdenDeSecciones()
+  const [conColores, setConColores] = useState(null)
+  const mover = (id, d) => {
+    const i = orden.indexOf(id)
+    const j = i + d
+    if (j < 0 || j >= orden.length) return
+    const nuevo = [...orden]
+    ;[nuevo[i], nuevo[j]] = [nuevo[j], nuevo[i]]
+    cambiar({ orden: nuevo })
+  }
+  const alternar = id => cambiar({ ocultas: ocultas.includes(id) ? ocultas.filter(x => x !== id) : [...ocultas, id] })
+  return (
+    <Lista className="flex flex-col divide-y divide-[color:var(--color-line)]">
+      {orden.map((id, i) => (
+        <FilaSeccion
+          key={id}
+          id={id}
+          nombre={SECCIONES_ESTANTERIA.find(x => x.id === id).nombre}
+          primera={i === 0}
+          ultima={i === orden.length - 1}
+          oculta={ocultas.includes(id)}
+          onSubir={() => mover(id, -1)}
+          onBajar={() => mover(id, 1)}
+          onAlternar={() => alternar(id)}
+          coloresAbiertos={conColores === id}
+          onColores={() => setConColores(conColores === id ? null : id)}
+        />
+      ))}
+    </Lista>
+  )
+}
+
+function FilaSeccion({ id, nombre, primera, ultima, oculta, onSubir, onBajar, onAlternar, coloresAbiertos, onColores }) {
+  const [color, poner] = usarAspecto(CLAVE_COLOR[id])
+  const elegido = COLORES_SECCION.find(c => c.id === color)
+  const Ojo = oculta ? IconOjoTachado : IconOjo
+  return (
+    <div>
+      <div className="flex items-center gap-3 px-4 py-2.5">
+        {/* La muestra es el color de verdad de la sección (su variable CSS). */}
+        <button
+          onClick={onColores}
+          aria-label={`Color de ${nombre}: ${elegido?.nombre || ''}`}
+          aria-expanded={coloresAbiertos}
+          data-pulsa="0.9"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-line"
+        >
+          <span className="h-5 w-5 rounded-full" style={{ background: `var(--color-seccion-${id})` }} />
+        </button>
+        <span className={`min-w-0 flex-1 truncate text-sm font-semibold transition-opacity ${oculta ? 'text-ink-mute opacity-60' : 'text-ink'}`}>
+          {nombre}
+          {oculta && <span className="ml-1.5 text-xs font-normal">· oculta</span>}
+        </span>
+        <BotonFila onClick={onSubir} desactivado={primera} etiqueta={`Subir ${nombre}`}>
+          <IconChevron className="h-4 w-4 rotate-180" />
+        </BotonFila>
+        <BotonFila onClick={onBajar} desactivado={ultima} etiqueta={`Bajar ${nombre}`}>
+          <IconChevron className="h-4 w-4" />
+        </BotonFila>
+        <BotonFila onClick={onAlternar} etiqueta={oculta ? `Mostrar ${nombre}` : `Ocultar ${nombre}`} activo={!oculta}>
+          <Ojo className="h-[17px] w-[17px]" />
+        </BotonFila>
+      </div>
+      <Desplegable abierto={coloresAbiertos}>
+        <div role="radiogroup" aria-label={`Color de ${nombre}`} className="flex flex-wrap gap-2.5 px-4 pb-3.5 pt-0.5">
+          {COLORES_SECCION.map(c => {
+            const activo = c.id === color
+            return (
+              <button
+                key={c.id}
+                role="radio"
+                aria-checked={activo}
+                aria-label={c.nombre}
+                data-pulsa="0.9"
+                onClick={() => poner(c.id)}
+                className="relative flex h-9 w-9 items-center justify-center rounded-full"
+              >
+                <span
+                  className={`absolute inset-0 rounded-full border-2 transition-opacity duration-200 ${activo ? 'opacity-100' : 'opacity-0'}`}
+                  style={{ borderColor: `var(--paleta-${c.id})` }}
+                />
+                <span className="h-6 w-6 rounded-full" style={{ background: `var(--paleta-${c.id})` }} />
+              </button>
+            )
+          })}
+        </div>
+      </Desplegable>
+    </div>
+  )
+}
+
+function BotonFila({ onClick, desactivado = false, activo = false, etiqueta, children }) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={desactivado}
+      aria-label={etiqueta}
+      data-pulsa="0.88"
+      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-colors disabled:opacity-30 ${activo ? 'text-accent' : 'text-ink-dim'}`}
+    >
+      {children}
+    </button>
+  )
 }
 
 // ── General ──────────────────────────────────────────────────────────────

@@ -1,11 +1,11 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useAuth } from '../../platform/auth'
 import { api } from '../../platform/api'
 import { recordado, recordar } from '../../platform/memoria'
 import { usarPreferencia } from '../../platform/preferencias'
 import { Cifras, Coleccion, Herramientas, LibrosLeyendo } from '../luniteca/Luniteca'
 import { LunaDelPanel, usarPanel } from '../luniteca/panel'
-import { CajaSeccion, TituloSeccion, huecoEntreSecciones, usarSeparacion } from '../luniteca/separacion'
+import { CajaSeccion, SECCIONES_ESTANTERIA, TituloSeccion, huecoEntreSecciones, usarOrdenDeSecciones, usarSeparacion } from '../luniteca/separacion'
 import { generosDeAutores } from '../luniteca/shelf'
 
 // La vista previa de Ajustes: un trozo de TU Luniteca, con tus libros, pintado
@@ -77,13 +77,16 @@ function MiniLuniteca({ shelf }) {
   const [separacion] = usarSeparacion()
   const [vista] = usarPreferencia('vista', 'grid')
   const generos = useMemo(() => generosDeAutores(shelf), [shelf])
-  const { leyendo, leidos } = useMemo(() => {
-    const leyendo = shelf.filter(e => e.status === 'reading' || e.status === 'rereading').slice(0, 6)
-    const leidos = shelf
-      .filter(e => e.status === 'read')
-      .sort((a, b) => String(b.finished_at || '').localeCompare(String(a.finished_at || '')))
-      .slice(0, 10)
-    return { leyendo, leidos }
+  const [secciones] = usarOrdenDeSecciones()
+  // Una muestra de cada sección, en el orden y con las que se vean.
+  const muestra = useMemo(() => {
+    const de = (...estados) => shelf.filter(e => estados.includes(e.status))
+    return {
+      reading: de('reading', 'rereading').slice(0, 6),
+      read: de('read').sort((a, b) => String(b.finished_at || '').localeCompare(String(a.finished_at || ''))).slice(0, 10),
+      want: de('want_to_read').slice(0, 10),
+      dropped: de('dropped').slice(0, 8),
+    }
   }, [shelf])
 
   return (
@@ -94,7 +97,7 @@ function MiniLuniteca({ shelf }) {
         <p className="relative mt-1 text-sm text-ink-dim">
           {shelf.length} {shelf.length === 1 ? 'libro' : 'libros'} en tu estantería
         </p>
-        {shelf.length > 0 && <Cifras shelf={shelf} onIr={nada} />}
+        {shelf.length > 0 && <Cifras shelf={shelf} onIr={nada} ocultas={secciones.ocultas} />}
       </header>
       <Herramientas
         panel={panel.barra}
@@ -104,20 +107,27 @@ function MiniLuniteca({ shelf }) {
         ordenActivo={false} filtrosActivos={false}
       />
       <div className={`mt-5 ${huecoEntreSecciones(separacion)}`}>
-        {leyendo.length > 0 && (
-          <CajaSeccion variante={separacion} estado="reading">
-            <TituloSeccion variante={separacion} desde={panel.desdeTitulos} label="Leyendo" cuenta={leyendo.length} estado="reading" />
-            <LibrosLeyendo entries={leyendo} vista={vista} onAbrir={nada} generosDeAutor={generos} />
-          </CajaSeccion>
-        )}
-        {leidos.length > 0 && (
-          <CajaSeccion variante={separacion} estado="read">
-            <TituloSeccion variante={separacion} desde={panel.desdeTitulos} label="Leídos" cuenta={leidos.length} estado="read" plegada={false} onAlternar={nada} />
-            <div className="pt-3">
-              <Coleccion entries={leidos} vista={vista} onAbrir={nada} generosDeAutor={generos} />
-            </div>
-          </CajaSeccion>
-        )}
+        {secciones.visibles.filter(id => muestra[id].length > 0).map(id => (
+          <Fragment key={id}>
+            <CajaSeccion variante={separacion} estado={id}>
+              <TituloSeccion
+                variante={separacion}
+                desde={panel.desdeTitulos}
+                label={SECCIONES_ESTANTERIA.find(x => x.id === id).nombre}
+                cuenta={muestra[id].length}
+                estado={id}
+                {...(id === 'reading' ? {} : { plegada: false, onAlternar: nada })}
+              />
+              {id === 'reading'
+                ? <LibrosLeyendo entries={muestra.reading} vista={vista} onAbrir={nada} generosDeAutor={generos} />
+                : (
+                  <div className="pt-3">
+                    <Coleccion entries={muestra[id]} vista={vista} onAbrir={nada} generosDeAutor={generos} />
+                  </div>
+                )}
+            </CajaSeccion>
+          </Fragment>
+        ))}
       </div>
     </div>
   )

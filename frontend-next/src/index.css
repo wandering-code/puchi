@@ -675,3 +675,60 @@
 :root { --portada-min: 68px; }
 :root[data-portadas="pequenas"] { --portada-min: 56px; }
 :root[data-portadas="grandes"]  { --portada-min: 92px; }
+
+/* ── Colores de cada sección ─────────────────────────────────────────────
+   La paleta entre la que elige cada sección (COLORES_SECCION en tema.js), en
+   claro y en oscuro, y qué color lleva cada una (data-color-reading… en
+   <html>, puesto antes del primer pintado). COLOR_DE_ESTADO (separacion.jsx)
+   lee las --color-seccion-*, así que la estantería no sabe nada de esto. */
+:root {
+  --paleta-terracota: #b5603c; --paleta-ocre: #8a6118; --paleta-rosa: #a8455a; --paleta-ciruela: #80496d; --paleta-azul: #3e5f8a; --paleta-pino: #2f6a6a; --paleta-verde: #3f6b52; --paleta-gris: #9a9184; --paleta-rojo: #a4432b;
+  --paleta-acento: var(--color-accent);
+  --color-seccion-reading: var(--color-accent);
+  --color-seccion-read: var(--color-read);
+  --color-seccion-want: var(--color-want);
+  --color-seccion-dropped: var(--color-danger);
+}
+:root[data-tema="oscuro"] {
+  --paleta-terracota: #d97a4f; --paleta-ocre: #d9a54f; --paleta-rosa: #e58a9b; --paleta-ciruela: #c98fb6; --paleta-azul: #86a8d4; --paleta-pino: #6fb3ae; --paleta-verde: #6fae88; --paleta-gris: #8d8375; --paleta-rojo: #e07a5f;
+}
+:root[data-color-reading="acento"] { --color-seccion-reading: var(--paleta-acento); }
+:root[data-color-reading="terracota"] { --color-seccion-reading: var(--paleta-terracota); }
+:root[data-color-reading="ocre"] { --color-seccion-reading: var(--paleta-ocre); }
+:root[data-color-reading="rosa"] { --color-seccion-reading: var(--paleta-rosa); }
+:root[data-color-reading="ciruela"] { --color-seccion-reading: var(--paleta-ciruela); }
+:root[data-color-reading="azul"] { --color-seccion-reading: var(--paleta-azul); }
+:root[data-color-reading="pino"] { --color-seccion-reading: var(--paleta-pino); }
+:root[data-color-reading="verde"] { --color-seccion-reading: var(--paleta-verde); }
+:root[data-color-reading="gris"] { --color-seccion-reading: var(--paleta-gris); }
+:root[data-color-reading="rojo"] { --color-seccion-reading: var(--paleta-rojo); }
+:root[data-color-read="acento"] { --color-seccion-read: var(--paleta-acento); }
+:root[data-color-read="terracota"] { --color-seccion-read: var(--paleta-terracota); }
+:root[data-color-read="ocre"] { --color-seccion-read: var(--paleta-ocre); }
+:root[data-color-read="rosa"] { --color-seccion-read: var(--paleta-rosa); }
+:root[data-color-read="ciruela"] { --color-seccion-read: var(--paleta-ciruela); }
+:root[data-color-read="azul"] { --color-seccion-read: var(--paleta-azul); }
+:root[data-color-read="pino"] { --color-seccion-read: var(--paleta-pino); }
+:root[data-color-read="verde"] { --color-seccion-read: var(--paleta-verde); }
+:root[data-color-read="gris"] { --color-seccion-read: var(--paleta-gris); }
+:root[data-color-read="rojo"] { --color-seccion-read: var(--paleta-rojo); }
+:root[data-color-want="acento"] { --color-seccion-want: var(--paleta-acento); }
+:root[data-color-want="terracota"] { --color-seccion-want: var(--paleta-terracota); }
+:root[data-color-want="ocre"] { --color-seccion-want: var(--paleta-ocre); }
+:root[data-color-want="rosa"] { --color-seccion-want: var(--paleta-rosa); }
+:root[data-color-want="ciruela"] { --color-seccion-want: var(--paleta-ciruela); }
+:root[data-color-want="azul"] { --color-seccion-want: var(--paleta-azul); }
+:root[data-color-want="pino"] { --color-seccion-want: var(--paleta-pino); }
+:root[data-color-want="verde"] { --color-seccion-want: var(--paleta-verde); }
+:root[data-color-want="gris"] { --color-seccion-want: var(--paleta-gris); }
+:root[data-color-want="rojo"] { --color-seccion-want: var(--paleta-rojo); }
+:root[data-color-dropped="acento"] { --color-seccion-dropped: var(--paleta-acento); }
+:root[data-color-dropped="terracota"] { --color-seccion-dropped: var(--paleta-terracota); }
+:root[data-color-dropped="ocre"] { --color-seccion-dropped: var(--paleta-ocre); }
+:root[data-color-dropped="rosa"] { --color-seccion-dropped: var(--paleta-rosa); }
+:root[data-color-dropped="ciruela"] { --color-seccion-dropped: var(--paleta-ciruela); }
+:root[data-color-dropped="azul"] { --color-seccion-dropped: var(--paleta-azul); }
+:root[data-color-dropped="pino"] { --color-seccion-dropped: var(--paleta-pino); }
+:root[data-color-dropped="verde"] { --color-seccion-dropped: var(--paleta-verde); }
+:root[data-color-dropped="gris"] { --color-seccion-dropped: var(--paleta-gris); }
+:root[data-color-dropped="rojo"] { --color-seccion-dropped: var(--paleta-rojo); }

@@ -149,10 +149,30 @@ export const ACENTOS = [
   { id: 'pino',      nombre: 'Pino',      claro: '#2f6a6a', oscuro: '#6fb3ae' },
 ]
 
+// Los colores que puede llevar cada sección de la estantería (Leyendo,
+// Leídos, Por leer, Dropeados): el acento, los mismos seis de arriba y los
+// tres de siempre de los estados (verde, gris y rojo). Sus valores en cada
+// tema son variables --paleta-* de index.css.
+export const COLORES_SECCION = [
+  { id: 'acento', nombre: 'El de la app' },
+  ...ACENTOS.map(a => ({ id: a.id, nombre: a.nombre, claro: a.claro, oscuro: a.oscuro })),
+  { id: 'verde', nombre: 'Verde', claro: '#3f6b52', oscuro: '#6fae88' },
+  { id: 'gris',  nombre: 'Gris',  claro: '#9a9184', oscuro: '#8d8375' },
+  { id: 'rojo',  nombre: 'Rojo',  claro: '#a4432b', oscuro: '#e07a5f' },
+]
+const IDS_SECCION = COLORES_SECCION.map(c => c.id)
+
 export const ASPECTO = {
   acento:   { clave: 'luni_acento',   valores: ACENTOS.map(a => a.id), porDefecto: 'terracota' },
   textura:  { clave: 'luni_textura',  valores: ['si', 'no'], porDefecto: 'si' },
   portadas: { clave: 'luni_portadas', valores: ['pequenas', 'normales', 'grandes'], porDefecto: 'normales' },
+  // El color de cada sección (data-color-reading, etc.). Por defecto, los de
+  // siempre: Leyendo con el acento, Leídos en verde, Por leer en gris y
+  // Dropeados en rojo.
+  colorReading: { clave: 'luni_color_reading', valores: IDS_SECCION, porDefecto: 'acento' },
+  colorRead:    { clave: 'luni_color_read',    valores: IDS_SECCION, porDefecto: 'verde' },
+  colorWant:    { clave: 'luni_color_want',    valores: IDS_SECCION, porDefecto: 'gris' },
+  colorDropped: { clave: 'luni_color_dropped', valores: IDS_SECCION, porDefecto: 'rojo' },
 }
 
 const valido = (que, v) => (ASPECTO[que].valores.includes(v) ? v : ASPECTO[que].porDefecto)

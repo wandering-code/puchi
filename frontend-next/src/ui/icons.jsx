@@ -114,6 +114,13 @@ export const IconTabla = (p) => (
 export const IconChevron = (p) => (
   <svg {...base} {...p}><path d="m6 9 6 6 6-6" /></svg>
 )
+// Un ojo abierto y el mismo tachado: si una sección se ve o no en la estantería.
+export const IconOjo = (p) => (
+  <svg {...base} {...p}><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z" /><circle cx="12" cy="12" r="2.75" /></svg>
+)
+export const IconOjoTachado = (p) => (
+  <svg {...base} {...p}><path d="M4 4l16 16M9.9 6.2A9.6 9.6 0 0 1 12 5.5c6 0 9.5 6.5 9.5 6.5a17 17 0 0 1-2.9 3.7M6.1 7.9A17 17 0 0 0 2.5 12s3.5 6.5 9.5 6.5a9.4 9.4 0 0 0 4-.9" /><path d="M10.1 10.1a2.75 2.75 0 0 0 3.8 3.8" /></svg>
+)
 export const IconX = (p) => (
   <svg {...base} {...p}><path d="m6 6 12 12M18 6 6 18" /></svg>
 )

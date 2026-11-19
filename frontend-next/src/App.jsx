@@ -54,6 +54,10 @@ export default function App() {
   usarAspecto('acento')
   usarAspecto('textura')
   usarAspecto('portadas')
+  usarAspecto('colorReading')
+  usarAspecto('colorRead')
+  usarAspecto('colorWant')
+  usarAspecto('colorDropped')
   // Lo mismo con la decoración de temporada (src/eventos): va con la cuenta.
   usarEventoEnDocumento()
 
