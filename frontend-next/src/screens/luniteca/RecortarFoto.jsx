@@ -722,7 +722,7 @@ export default function RecortarFoto({
       // la isla dinámica — el resto de overlays a pantalla completa de la
       // app (HojaInferior, Shell, UpdatePrompt…) ya los llevan, a este se le
       // había olvidado.
-      className="fixed inset-0 z-[80] flex items-center justify-center bg-velo p-4 pt-safe pb-safe backdrop-blur-[6px]"
+      className="fixed inset-0 z-[80] flex items-center justify-center bg-velo p-4 pt-safe pb-safe"
     >
       <motion.div
         initial={{ transform: 'translateY(8px) scale(0.94)', opacity: 0 }} animate={{ transform: 'translateY(0px) scale(1)', opacity: 1 }} exit={{ transform: 'translateY(8px) scale(0.94)', opacity: 0 }}

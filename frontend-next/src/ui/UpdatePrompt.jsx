@@ -23,7 +23,7 @@ export default function UpdatePrompt() {
           exit={{ transform: 'translateY(-80px)', opacity: 0 }}
           transition={{ type: 'spring', stiffness: 420, damping: 34 }}
         >
-          <div className="pointer-events-auto m-3 flex items-center gap-3 rounded-xl2 border border-line bg-surface-2/95 px-4 py-3 shadow-lg backdrop-blur">
+          <div className="pointer-events-auto m-3 flex items-center gap-3 rounded-xl2 border border-line bg-surface-2/95 px-4 py-3 shadow-lg">
             <IconRefresh className="h-5 w-5 shrink-0 text-accent" />
             <span className="text-sm text-ink">Hay una versión nueva</span>
             <button

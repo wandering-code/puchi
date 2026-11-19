@@ -56,7 +56,7 @@ export default function AvisoDeNovedades() {
       {actual && (
         <motion.div
           key="novedades"
-          className="fixed inset-0 z-[70] flex items-center justify-center bg-velo px-5 backdrop-blur-[6px]"
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-velo px-5"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}

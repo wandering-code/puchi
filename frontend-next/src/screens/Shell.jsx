@@ -189,8 +189,11 @@ function usarPantallaDeArranque(location) {
 
 function TopBar({ titulo, onAbrirMenu }) {
   const { player } = useAuth()
+  // Sin backdrop-blur: la cabecera es una fila aparte y el contenido no pasa
+  // por debajo, así que solo emborronaba el fondo de papel. No se veía, y le
+  // costaba GPU a todas las pantallas todo el rato.
   return (
-    <header className="relative z-20 shrink-0 border-b border-line bg-bg/85 backdrop-blur-xl pt-safe">
+    <header className="relative z-20 shrink-0 border-b border-line bg-bg/85 pt-safe">
       <div className="flex h-14 items-center gap-3 px-3">
         <button
           onClick={onAbrirMenu}
